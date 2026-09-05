@@ -135,8 +135,28 @@ func runUninstall(yes, dry bool) int {
 	if len(installed) == 0 {
 		fmt.Println("no ryoku packages installed")
 	} else if confirm(rd, "remove "+strings.Join(installed, " ")+"?", yes) {
-		if err := run("sudo", append([]string{"-n", "pacman", "-R", "--noconfirm"}, installed...)...); err != nil {
-			fmt.Println("warning: package removal failed; fix pacman and re-run (continuing with restore)")
+		if err := run("sudo", append(append([]string{"-n"}, activeDistro.removeCmd...), installed...)...); err != nil {
+			fmt.Println("warning: package removal failed (continuing with restore)")
+		}
+	}
+
+	if activeDistro.fromSource {
+		if confirm(rd, "remove Ryoku binaries and QML plugins from ~/.local?", yes) {
+			if dry {
+				fmt.Println("DRYRUN: remove ~/.local/bin/ryo* and ~/.local/lib/qt6/qml/Ryoku")
+			} else {
+				bins, _ := filepath.Glob(filepath.Join(home, ".local/bin/ryoku*"))
+				bins2, _ := filepath.Glob(filepath.Join(home, ".local/bin/ryo*"))
+				for _, b := range append(bins, bins2...) {
+					_ = os.Remove(b)
+				}
+				_ = os.RemoveAll(filepath.Join(home, ".local/lib/qt6/qml/Ryoku"))
+				services, _ := filepath.Glob(filepath.Join(home, ".config/systemd/user/ryoku-*.service"))
+				for _, s := range services {
+					_ = os.Remove(s)
+				}
+				_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+			}
 		}
 	}
 

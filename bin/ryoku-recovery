@@ -15,7 +15,13 @@ CHANNEL="main"
 # recovery never track different trees; legacy checkouts are consolidated below.
 DATA_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/ryoku"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku"
-RECOVERY_DIR="${RYOKU_RECOVERY_DIR:-$HOME/ryoku-arch}"
+if [[ -n ${RYOKU_RECOVERY_DIR:-} ]]; then
+  RECOVERY_DIR="$RYOKU_RECOVERY_DIR"
+elif git -C "$DATA_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  RECOVERY_DIR="$DATA_ROOT"
+else
+  RECOVERY_DIR="$DATA_ROOT/repo"
+fi
 ASSUME_YES=0
 DO_PACKAGES=1
 
@@ -162,10 +168,10 @@ say "rebuilding and redeploying the desktop (overwrites Ryoku configs)"
 # packaged box goes back on the pacman channel; the home-deployed desktop
 # carries it until the next `ryoku update`, whose doctor then clears the
 # leftover home artifacts once the packages are current.
-if pacman -Q ryoku-desktop >/dev/null 2>&1; then
+if (command -v pacman >/dev/null 2>&1 && pacman -Q ryoku-desktop >/dev/null 2>&1) || (command -v rpm >/dev/null 2>&1 && rpm -q ryoku-desktop >/dev/null 2>&1); then
   state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku"
   rm -f "$state_dir/repo" "$state_dir/deployed"
-  say "packaged install detected: staying on the pacman update channel"
+  say "packaged install detected: staying on the package update channel"
 fi
 
 # Consolidate: drop the retired dev-switch switcher and any stray recovery/ISO

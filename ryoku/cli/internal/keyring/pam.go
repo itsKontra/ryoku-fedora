@@ -34,7 +34,7 @@ func pamFilePath() string {
 func pamHasKeyring(content, kind string) bool {
 	for _, l := range strings.Split(content, "\n") {
 		f := strings.Fields(l)
-		if len(f) > 0 && f[0] == kind && strings.Contains(l, "pam_gnome_keyring.so") {
+		if len(f) > 0 && (f[0] == kind || f[0] == "-"+kind) && strings.Contains(l, "pam_gnome_keyring.so") {
 			return true
 		}
 	}
@@ -47,13 +47,13 @@ func pamPresent(content string) bool {
 }
 
 // insertAfterInclude puts line immediately after the `<kind> include
-// system-login` anchor. Returns the new content and whether the anchor existed;
+// system-login` or `password-auth` anchor. Returns the new content and whether the anchor existed;
 // a missing anchor leaves the content untouched so the caller can report it.
 func insertAfterInclude(content, kind, line string) (string, bool) {
 	lines := strings.Split(content, "\n")
 	for i, l := range lines {
 		f := strings.Fields(l)
-		if len(f) >= 3 && f[0] == kind && f[1] == "include" && f[2] == "system-login" {
+		if len(f) >= 3 && strings.TrimPrefix(f[0], "-") == kind && (f[1] == "include" || f[1] == "substack") && (f[2] == "system-login" || f[2] == "password-auth") {
 			out := append([]string{}, lines[:i+1]...)
 			out = append(out, line)
 			out = append(out, lines[i+1:]...)

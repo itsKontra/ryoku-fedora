@@ -44,7 +44,7 @@ Item {
     Process {
         id: idp
         running: true
-        command: ["sh", "-c", "id=$(cat /etc/machine-id 2>/dev/null); echo $id; b=$(stat -c %W / 2>/dev/null); if [ ${b:-0} -gt 0 ]; then date -d @$b +%Y%m%d; else head -1 /var/log/pacman.log 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 | tr -d -; fi"]
+        command: ["sh", "-c", "id=$(cat /etc/machine-id 2>/dev/null); echo $id; b=$(stat -c %W / 2>/dev/null); if [ ${b:-0} -gt 0 ]; then date -d @$b +%Y%m%d; elif [ -f /var/log/pacman.log ]; then head -1 /var/log/pacman.log 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 | tr -d -; elif [ -f /var/log/dnf.log ]; then head -1 /var/log/dnf.log 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 | tr -d -; else stat -c %Y /etc/machine-id 2>/dev/null | xargs -I{} date -d @{} +%Y%m%d; fi"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const l = text.split("\n");

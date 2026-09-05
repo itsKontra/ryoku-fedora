@@ -85,7 +85,7 @@ var sudoLike = map[string]bool{"sudo": true, "doas": true, "pkexec": true, "run0
 
 // systemLevel change packages, services, or machine state.
 var systemLevel = map[string]bool{
-	"pacman": true, "yay": true, "paru": true, "systemctl": true, "mount": true,
+	"pacman": true, "yay": true, "paru": true, "dnf": true, "rpm": true, "apt-get": true, "apt": true, "systemctl": true, "mount": true,
 	"umount": true, "modprobe": true, "sysctl": true, "timedatectl": true,
 	"hostnamectl": true, "localectl": true, "mkinitcpio": true, "grub-mkconfig": true,
 	"useradd": true, "usermod": true, "groupadd": true, "passwd": true,
@@ -206,6 +206,17 @@ func classifyArgv(argv []string) (dangerTier, string) {
 		}
 		for _, read := range []string{"-Q", "-F", "-Ss", "-Si", "-T", "-h", "--query", "--help"} {
 			if strings.HasPrefix(op, read) {
+				return tierRead, ""
+			}
+		}
+		return tierSystem, "changes installed packages"
+	case name == "dnf" || name == "rpm":
+		op := ""
+		if len(argv) > 1 {
+			op = argv[1]
+		}
+		for _, read := range []string{"-q", "--query", "repoquery", "search", "info", "check-update", "list"} {
+			if op == read || strings.HasPrefix(op, read) {
 				return tierRead, ""
 			}
 		}

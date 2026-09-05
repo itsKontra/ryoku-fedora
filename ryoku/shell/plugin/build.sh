@@ -17,7 +17,13 @@ build="${RYOKU_BLOBS_BUILD:-$here/build}"
 
 for tool in cmake ninja; do
   command -v "$tool" >/dev/null 2>&1 || {
-    printf 'build.sh: error: %s is required (pacman -S cmake ninja qt6-shadertools)\n' "$tool" >&2
+    if command -v dnf >/dev/null 2>&1; then
+      printf 'build.sh: error: %s is required (sudo dnf install cmake ninja-build qt6-qtshadertools-devel)\n' "$tool" >&2
+    elif command -v apt-get >/dev/null 2>&1; then
+      printf 'build.sh: error: %s is required (sudo apt-get install cmake ninja-build qt6-shadertools-dev)\n' "$tool" >&2
+    else
+      printf 'build.sh: error: %s is required (sudo pacman -S cmake ninja qt6-shadertools)\n' "$tool" >&2
+    fi
     exit 1
   }
 done

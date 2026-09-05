@@ -1,10 +1,13 @@
 package doctor
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"ryoku-cli/internal/sys"
 )
@@ -145,8 +148,30 @@ func reconcileProwlAgent(checkOnly bool) recResult {
 		}
 		return okRes("prowl-agent is present for the rashin agent index")
 	}
+	fix := "sudo pacman -S prowl-agent"
+	if !sys.Has("pacman") {
+		fix = "curl -fsSL https://github.com/neur0map/prowl-agent/releases/latest/download/prowl-agent-linux-amd64 -o ~/.local/bin/prowl-agent && chmod +x ~/.local/bin/prowl-agent"
+		if !checkOnly {
+			if installProwlAgent() {
+				return fixedRes("installed prowl-agent for rashin agent index")
+			}
+		}
+	}
 	return warnRes("rashin is enabled but prowl-agent is missing; the vault code index and agent skills will not refresh").
-		withFix("sudo pacman -S prowl-agent")
+		withFix("%s", fix)
+}
+
+func installProwlAgent() bool {
+	binDir := filepath.Join(sys.Home(), ".local", "bin")
+	_ = os.MkdirAll(binDir, 0o755)
+	dst := filepath.Join(binDir, "prowl-agent")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := fmt.Sprintf(`curl -fsSL https://github.com/neur0map/prowl-agent/releases/latest/download/prowl-agent-linux-amd64 -o %q && chmod +x %q`, dst, dst)
+	if err := exec.CommandContext(ctx, "sh", "-c", cmd).Run(); err == nil && sys.Has("prowl-agent") {
+		return true
+	}
+	return false
 }
 
 // prowlAgentNeeded reports whether a box should be told to install prowl-agent:

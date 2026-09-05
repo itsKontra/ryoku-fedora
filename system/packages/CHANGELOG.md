@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- `base.packages`: **`inotify-tools` for snapshot sync.** `inotify-tools` joins
+  the boot chain so `limine-snapper-watcher` (`limine-snapper-sync.service`) has
+  `inotifywait` to monitor `/.snapshots` and automatically synchronize new snapshots
+  into the Limine boot menu.
+
 - `hardware.packages`: **Intel gets the iHD VA-API video-decode driver.**
   `intel-media-driver` joins the `[intel]` section so the live video wallpaper
   and media players hardware-decode on Gen8+ Intel instead of burning a CPU

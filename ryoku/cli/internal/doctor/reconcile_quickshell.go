@@ -63,8 +63,15 @@ func reconcileQuickshell(checkOnly bool) recResult {
 	}
 
 	if !foreign {
-		return warnRes("quickshell will not start: %s", reason).
-			withFix("sudo pacman -Syu (the renderer and Qt are from different updates)")
+		fix := "sudo pacman -Syu (the renderer and Qt are from different updates)"
+		if !sys.Has("pacman") {
+			if sys.Has("dnf") {
+				fix = "sudo dnf upgrade quickshell (the renderer and Qt are from different updates)"
+			} else {
+				fix = "rebuild or upgrade quickshell against the current Qt"
+			}
+		}
+		return warnRes("quickshell will not start: %s", reason).withFix(fix)
 	}
 	if checkOnly {
 		return wouldRes("quickshell (%s) was built against another Qt and will not start: %s", owner, reason).
@@ -141,6 +148,9 @@ func staleQmlModule(out string) string {
 }
 
 func pkgOwning(bin string) string {
+	if !sys.Has("pacman") {
+		return ""
+	}
 	path, err := exec.LookPath(bin)
 	if err != nil {
 		return ""
@@ -153,6 +163,9 @@ func pkgOwning(bin string) string {
 }
 
 func pkgIsForeign(name string) bool {
+	if !sys.Has("pacman") {
+		return false
+	}
 	out, err := exec.Command("pacman", "-Qmq").Output()
 	if err != nil {
 		return false

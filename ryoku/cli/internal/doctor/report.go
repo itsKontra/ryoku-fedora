@@ -80,14 +80,25 @@ func gatherReport(findings []finding) string {
 	cmd("sudo", "-n", "btrfs", "filesystem", "usage", "/")
 	cmd("sudo", "-n", "btrfs", "device", "stats", "/")
 	line("/proc/swaps:\n%s", readFileSafe("/proc/swaps"))
-	line("/etc/conf.d/snapper:\n%s", readFileSafe("/etc/conf.d/snapper"))
+	if sys.Exists("/etc/sysconfig/snapper") {
+		line("/etc/sysconfig/snapper:\n%s", readFileSafe("/etc/sysconfig/snapper"))
+	}
+	if sys.Exists("/etc/conf.d/snapper") {
+		line("/etc/conf.d/snapper:\n%s", readFileSafe("/etc/conf.d/snapper"))
+	}
 
 	section("packages")
-	cmd("pacman", append([]string{"-Q"}, diagnosticPackages...)...)
-	cmd("pacman", "-Qtdq")
-	cmd("pacman", "-Dk")
-	line(".pacnew files:\n%s", captureOut("find", "/etc", "-name", "*.pacnew"))
-	line("pacman.log (tail):\n%s", tailLines(readFileSafe("/var/log/pacman.log"), 25))
+	if sys.Has("pacman") {
+		cmd("pacman", append([]string{"-Q"}, diagnosticPackages...)...)
+		cmd("pacman", "-Qtdq")
+		cmd("pacman", "-Dk")
+		line(".pacnew files:\n%s", captureOut("find", "/etc", "-name", "*.pacnew"))
+		line("pacman.log (tail):\n%s", tailLines(readFileSafe("/var/log/pacman.log"), 25))
+	} else if sys.Has("rpm") {
+		cmd("rpm", append([]string{"-q"}, diagnosticPackages...)...)
+	} else if sys.Has("dpkg-query") {
+		cmd("dpkg-query", append([]string{"-l"}, diagnosticPackages...)...)
+	}
 
 	section("services")
 	cmd("systemctl", "--failed", "--no-legend", "--plain")

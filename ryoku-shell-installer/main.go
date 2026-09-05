@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -723,13 +724,21 @@ func main() {
 	payload := flag.String("payload", os.Getenv("RYOKU_SHELL_PAYLOAD"), "use a local ryoku-arch checkout as the payload")
 	flag.Parse()
 
+	if *payload == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			if _, err := os.Stat(filepath.Join(cwd, "ryoku/lockscreen/install-qylock")); err == nil {
+				*payload = cwd
+			}
+		}
+	}
+
 	initGlyphs()
 
 	if os.Geteuid() == 0 {
 		die("run as your normal user, not root; sudo is used where needed")
 	}
 	if detectHostDistro() == nil {
-		die("unsupported distribution: Ryoku installs on Arch-based and Debian-based systems")
+		die("unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems")
 	}
 	if out("uname", "-m") != "x86_64" {
 		die("Ryoku ships x86_64 builds only")

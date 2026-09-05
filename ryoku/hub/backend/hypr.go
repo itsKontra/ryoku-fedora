@@ -901,6 +901,12 @@ func pluginSoPath(soName string) string {
 			return user
 		}
 	}
+	for _, dir := range []string{"/usr/lib64/hyprland/plugins", "/usr/lib/hyprland/plugins"} {
+		p := filepath.Join(dir, name)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			return p
+		}
+	}
 	return pluginDir + "/" + name
 }
 

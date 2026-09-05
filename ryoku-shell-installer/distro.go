@@ -110,6 +110,92 @@ var debianLinux = &distro{
 	},
 }
 
+// Package names verified against Fedora repositories (dnf repoquery).
+var fedoraLinux = &distro{
+	id:         "fedora",
+	name:       "Fedora",
+	fromSource: true,
+	installCmd: []string{"dnf", "-y", "install", "--skip-unavailable", "--allowerasing"},
+	removeCmd:  []string{"dnf", "-y", "remove"},
+	updateCmd:  []string{"dnf", "-y", "upgrade"},
+	refreshCmd: []string{"dnf", "makecache"},
+	queryCmd:   []string{"rpm", "-q", "--quiet"},
+	build: []string{
+		"gcc", "gcc-c++", "cmake", "ninja-build", "pkgconf-pkg-config", "golang",
+		"qt6-qtbase-devel", "qt6-qtdeclarative-devel", "qt6-qtmultimedia-devel",
+		"qt6-qtshadertools-devel", "qt6-qtsvg-devel", "qt6-qt5compat-devel", "qt6-qtwayland-devel",
+	},
+	rename: map[string]string{
+		"base":                          "",
+		"base-devel":                    "@development-tools",
+		"bluez-utils":                   "bluez",
+		"docker":                        "moby-engine",
+		"edk2-ovmf":                     "edk2-ovmf",
+		"fd":                            "fd-find",
+		"ffmpeg":                        "ffmpeg-free",
+		"github-cli":                    "gh",
+		"gst-libav":                     "gstreamer1-plugin-libav",
+		"gst-plugins-bad":               "gstreamer1-plugins-bad-free",
+		"gst-plugins-base":              "gstreamer1-plugins-base",
+		"gst-plugins-good":              "gstreamer1-plugins-good",
+		"gst-plugins-ugly":              "gstreamer1-plugins-ugly-free",
+		"imagemagick":                   "ImageMagick",
+		"inter-font":                    "rsms-inter-fonts",
+		"linux":                         "kernel",
+		"linux-headers":                 "kernel-devel",
+		"mesa":                          "mesa-dri-drivers",
+		"networkmanager":                "NetworkManager",
+		"noto-fonts":                    "google-noto-sans-fonts",
+		"noto-fonts-cjk":                "google-noto-sans-cjk-fonts",
+		"noto-fonts-emoji":              "google-noto-emoji-fonts",
+		"pipewire-audio":                "pipewire-utils",
+		"pipewire-pulse":                "pipewire-pulseaudio",
+		"polkit":                        "polkit",
+		"python":                        "python3",
+		"qemu-desktop":                  "qemu-system-x86",
+		"qt5-wayland":                   "qt5-qtwayland",
+		"qt6-5compat":                   "qt6-qt5compat",
+		"qt6-declarative":               "qt6-qtdeclarative",
+		"qt6-multimedia":                "qt6-qtmultimedia",
+		"qt6-multimedia-ffmpeg":         "qt6-qtmultimedia",
+		"qt6-svg":                       "qt6-qtsvg",
+		"qt6-wayland":                   "qt6-qtwayland",
+		"rust":                          "rust",
+		"tesseract-data-eng":            "tesseract-langpack-eng",
+		"ttf-firacode-nerd":             "fira-code-fonts",
+		"ttf-hack-nerd":                 "source-foundry-hack-fonts",
+		"ttf-jetbrains-mono-nerd":       "jetbrains-mono-fonts",
+		"vulkan-icd-loader":             "vulkan-loader",
+		"xorg-xwayland":                 "xorg-x11-server-Xwayland",
+
+		// Absent from official Fedora repos or pacman/Arch-specific.
+		// Handled directly as zero-compile prebuilt releases (installDesktopExtras):
+		"awww":                          "awww",
+		"blesh":                         "",
+		"broadcom-bt-firmware":          "",
+		"game-devices-udev":             "",
+		"gnome-themes-extra":            "",
+		"gpu-screen-recorder":           "",
+		"limine":                        "",
+		"limine-mkinitcpio-hook":        "",
+		"limine-snapper-sync":           "",
+		"matugen":                       "",
+		"mkinitcpio":                    "",
+		"otf-space-grotesk":             "",
+		"snap-pac":                      "",
+		"songrec":                       "",
+		"spicetify-cli":                 "",
+		"spicetify-marketplace":         "",
+		"spotify-launcher":              "",
+		"ttf-maple-mono-nf":             "",
+		"ttf-material-symbols-variable": "",
+		"vimix-cursors":                 "",
+		"waifu2x-ncnn-vulkan":           "",
+		"xpadneo-dkms":                  "",
+		"zsh-history-substring-search":  "",
+	},
+}
+
 // activeDistro is set once by detectFacts; installed() reads it from the
 // detection paths that have no engine to hand.
 var activeDistro = archLinux
@@ -120,6 +206,8 @@ func detectDistro(id, like string) *distro {
 		return archLinux
 	case id == "debian" || strings.Contains(like, "debian"):
 		return debianLinux
+	case id == "fedora" || strings.Contains(like, "fedora"):
+		return fedoraLinux
 	}
 	return nil
 }
@@ -144,10 +232,16 @@ func (d *distro) localAll(pkgs []string) []string {
 }
 
 func (d *distro) installArgs(pkgs []string) []string {
+	if len(pkgs) == 0 {
+		return nil
+	}
 	return append(append([]string{}, d.installCmd...), pkgs...)
 }
 
 func (d *distro) removeArgs(pkgs []string) []string {
+	if len(pkgs) == 0 {
+		return nil
+	}
 	return append(append([]string{}, d.removeCmd...), pkgs...)
 }
 

@@ -34,7 +34,7 @@ var appRoleDefs = []struct {
 	Cands                 [][2]string
 }{
 	{"browser", "Browser", "chromium", [][2]string{
-		{"Firefox", "firefox"}, {"Chromium", "chromium"}, {"Chrome", "google-chrome-stable"},
+		{"Firefox", "firefox"}, {"Chromium", "chromium|chromium-browser"}, {"Chrome", "google-chrome-stable|google-chrome"},
 		{"Brave", "brave"}, {"Vivaldi", "vivaldi-stable"}, {"Zen", "zen|zen-browser"},
 		{"LibreWolf", "librewolf"}, {"Qutebrowser", "qutebrowser"},
 	}},
@@ -94,6 +94,8 @@ func appRoles() []appRole {
 		// tarball name `zen` or the AUR `zen-browser`), else the shipped Chromium.
 		if d.Role == "browser" {
 			if cmd, ok := resolveCandidate("zen|zen-browser"); ok {
+				fallback = cmd
+			} else if cmd, ok := resolveCandidate("chromium|chromium-browser"); ok {
 				fallback = cmd
 			}
 		}

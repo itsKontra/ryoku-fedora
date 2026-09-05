@@ -101,14 +101,43 @@ func runCapped(ctx context.Context, cap int, name string, args ...string) string
 	return strings.TrimSpace(s)
 }
 
+func hasCmd(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
 func toolSystemQuery(ctx context.Context, topic, arg string) string {
 	switch topic {
 	case "packages":
 		if arg != "" {
-			return runCapped(ctx, 4096, "pacman", "-Qi", arg)
+			if hasCmd("pacman") {
+				return runCapped(ctx, 4096, "pacman", "-Qi", arg)
+			}
+			if hasCmd("rpm") {
+				return runCapped(ctx, 4096, "rpm", "-qi", arg)
+			}
+			if hasCmd("dpkg-query") {
+				return runCapped(ctx, 4096, "dpkg-query", "-s", arg)
+			}
+			return "error: no supported package manager found"
 		}
-		return runCapped(ctx, 2048, "sh", "-c", "pacman -Qq | wc -l")
+		if hasCmd("pacman") {
+			return runCapped(ctx, 2048, "sh", "-c", "pacman -Qq | wc -l")
+		}
+		if hasCmd("rpm") {
+			return runCapped(ctx, 2048, "sh", "-c", "rpm -qa --nodigest --nosignature | wc -l")
+		}
+		if hasCmd("dpkg-query") {
+			return runCapped(ctx, 2048, "sh", "-c", "dpkg-query -f '${binary:Package}\\n' -W | wc -l")
+		}
+		return "0"
 	case "updates":
+		if hasCmd("checkupdates") {
+			return runCapped(ctx, 4096, "sh", "-c", "checkupdates 2>/dev/null | head -50 || echo 'no updates or checkupdates unavailable'")
+		}
+		if hasCmd("dnf") {
+			return runCapped(ctx, 4096, "sh", "-c", "dnf check-update 2>/dev/null | head -50 || echo 'no updates'")
+		}
 		return runCapped(ctx, 4096, "sh", "-c", "checkupdates 2>/dev/null | head -50 || echo 'no updates or checkupdates unavailable'")
 	case "service":
 		if arg == "" {

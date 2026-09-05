@@ -8,6 +8,10 @@
   (stock `linux`), so a fresh CachyOS box booted the Arch kernel; it now prefers the
   linux-cachyos entry when present, matching `limineDefaultKernelPath` and
   `reconcileLimineAutoboot` in the doctor (#140).
+- `snapshots`: **take clean-install root snapshot and sync to Limine.**
+  `ryoku_snapshots` now takes an initial numbered root snapshot (`snapper --no-dbus -c root create -t single -c number -d "Ryoku clean install"`)
+  and syncs it to Limine via `limine-snapper-sync`, ensuring rollback is immediately
+  available and the Limine Snapshots submenu is populated upon install.
 - `deploy`/`bootloader`: **the Plymouth splash no longer breaks the install.**
   `ryoku-desktop` (installed in the configure stage) already owns
   `/usr/share/plymouth/themes/ryoku/`, but `bootloader` then laid a second,

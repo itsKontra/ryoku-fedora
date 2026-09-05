@@ -16,7 +16,9 @@ func TestDetectDistro(t *testing.T) {
 		{"debian", "", "debian"},
 		{"ubuntu", "debian", "debian"},
 		{"linuxmint", "ubuntu debian", "debian"},
-		{"fedora", "", ""},
+		{"fedora", "", "fedora"},
+		{"nobara", "fedora", "fedora"},
+		{"bazzite", "fedora", "fedora"},
 		{"void", "", ""},
 	} {
 		d := detectDistro(c.id, c.like)
@@ -35,15 +37,20 @@ func TestLocalAllRenamesAndDrops(t *testing.T) {
 	got := debianLinux.localAll(in)
 	want := []string{"git", "network-manager", "fd-find", "kitty"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Fatalf("localAll = %v, want %v", got, want)
+		t.Fatalf("localAll (debian) = %v, want %v", got, want)
+	}
+	gotFedora := fedoraLinux.localAll(in)
+	wantFedora := []string{"git", "NetworkManager", "fd-find", "kitty"}
+	if strings.Join(gotFedora, ",") != strings.Join(wantFedora, ",") {
+		t.Fatalf("localAll (fedora) = %v, want %v", gotFedora, wantFedora)
 	}
 	if archLinux.local("networkmanager") != "networkmanager" {
 		t.Error("arch must pass base.packages names through unchanged")
 	}
 }
 
-// The Arch step list is the contract that must not drift; the Debian one swaps
-// the pacman-only steps for the source build.
+// The Arch step list is the contract that must not drift; the Debian and Fedora
+// ones swap the pacman-only steps for the source build.
 func TestStepsPerDistro(t *testing.T) {
 	ids := func(f *facts) []string {
 		e := newEngine(f, &plan{}, true, "", "")
@@ -65,6 +72,12 @@ func TestStepsPerDistro(t *testing.T) {
 	if deb != wantDeb {
 		t.Errorf("debian steps = %q, want %q", deb, wantDeb)
 	}
+
+	fed := strings.Join(ids(&facts{distro: fedoraLinux}), " ")
+	wantFed := "sysupgrade tools payload backup repo conflicts packages build session configs shell doctor verify"
+	if fed != wantFed {
+		t.Errorf("fedora steps = %q, want %q", fed, wantFed)
+	}
 }
 
 func TestInstallArgs(t *testing.T) {
@@ -79,6 +92,20 @@ func TestInstallArgs(t *testing.T) {
 	got = strings.Join(debianLinux.removeArgs([]string{"dunst"}), " ")
 	if got != "apt-get -y remove dunst" {
 		t.Errorf("debian removeArgs = %q", got)
+	}
+	got = strings.Join(fedoraLinux.installArgs([]string{"git"}), " ")
+	if got != "dnf -y install --skip-unavailable --allowerasing git" {
+		t.Errorf("fedora installArgs = %q", got)
+	}
+	got = strings.Join(fedoraLinux.removeArgs([]string{"dunst"}), " ")
+	if got != "dnf -y remove dunst" {
+		t.Errorf("fedora removeArgs = %q", got)
+	}
+	if got := fedoraLinux.installArgs(nil); len(got) != 0 {
+		t.Errorf("fedora installArgs(nil) = %v, want empty/nil", got)
+	}
+	if got := fedoraLinux.removeArgs([]string{}); len(got) != 0 {
+		t.Errorf("fedora removeArgs([]) = %v, want empty/nil", got)
 	}
 }
 

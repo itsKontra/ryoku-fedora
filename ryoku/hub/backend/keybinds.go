@@ -272,7 +272,7 @@ func describeExec(cmd string) string {
 		return "terminal"
 	case cmd == "nautilus":
 		return "files"
-	case cmd == "chromium":
+	case cmd == "chromium" || cmd == "chromium-browser":
 		return "browser"
 	case strings.Contains(cmd, "hyprpicker"):
 		return "pick a color"
