@@ -35,9 +35,19 @@ func Has(name string) bool { _, err := exec.LookPath(name); return err == nil }
 // Exists reports whether the path exists.
 func Exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
-// PkgInstalled reports whether a pacman package is installed.
+// PkgInstalled reports whether a package is installed on the host.
 func PkgInstalled(name string) bool {
-	return exec.Command("pacman", "-Q", name).Run() == nil
+	if Has("pacman") {
+		return exec.Command("pacman", "-Q", name).Run() == nil
+	}
+	if Has("rpm") {
+		return exec.Command("rpm", "-q", "--quiet", name).Run() == nil
+	}
+	if Has("dpkg-query") {
+		out, err := exec.Command("dpkg-query", "-W", "-f=${Status}", name).Output()
+		return err == nil && strings.Contains(string(out), "install ok installed")
+	}
+	return false
 }
 
 // UnitEnabled reports whether a systemd unit is enabled (or static/alias --
@@ -48,13 +58,24 @@ func UnitEnabled(unit string) bool {
 
 // InstalledVersion is the installed ryoku-desktop package version, or "".
 func InstalledVersion() string {
-	out, err := RunOut("pacman", "-Q", "ryoku-desktop")
-	if err != nil {
-		return ""
-	}
-	f := strings.Fields(strings.TrimSpace(out))
-	if len(f) == 2 {
-		return f[1]
+	if Has("pacman") {
+		out, err := RunOut("pacman", "-Q", "ryoku-desktop")
+		if err == nil {
+			f := strings.Fields(strings.TrimSpace(out))
+			if len(f) == 2 {
+				return f[1]
+			}
+		}
+	} else if Has("rpm") {
+		out, err := RunOut("rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", "ryoku-desktop")
+		if err == nil && !strings.Contains(out, "not installed") {
+			return strings.TrimSpace(out)
+		}
+	} else if Has("dpkg-query") {
+		out, err := RunOut("dpkg-query", "-W", "-f=${Version}", "ryoku-desktop")
+		if err == nil {
+			return strings.TrimSpace(out)
+		}
 	}
 	return ""
 }

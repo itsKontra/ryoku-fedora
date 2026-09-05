@@ -14,7 +14,7 @@ import (
 // wantedSnapperHelpers gates the offer. no btrfs+snapper -> nothing,
 // limine-snapper-sync only on Limine.
 func TestWantedSnapperHelpers(t *testing.T) {
-	ready := snapHelpers{rootBtrfs: true, snapper: true}
+	ready := snapHelpers{rootBtrfs: true, snapper: true, pacman: true}
 
 	both := ready
 	both.limine = true
@@ -37,11 +37,14 @@ func TestWantedSnapperHelpers(t *testing.T) {
 		t.Fatalf("all present: got %v, want nil", got)
 	}
 
-	if got := wantedSnapperHelpers(snapHelpers{snapper: true}); got != nil {
+	if got := wantedSnapperHelpers(snapHelpers{snapper: true, pacman: true}); got != nil {
 		t.Fatalf("non-btrfs root must offer nothing, got %v", got)
 	}
-	if got := wantedSnapperHelpers(snapHelpers{rootBtrfs: true}); got != nil {
+	if got := wantedSnapperHelpers(snapHelpers{rootBtrfs: true, pacman: true}); got != nil {
 		t.Fatalf("snapper absent must offer nothing (a separate doctor warn), got %v", got)
+	}
+	if got := wantedSnapperHelpers(snapHelpers{rootBtrfs: true, snapper: true, pacman: false}); got != nil {
+		t.Fatalf("non-pacman system must not offer snap-pac, got %v", got)
 	}
 }
 
@@ -155,14 +158,14 @@ func TestPackagedStatusUpToDateOfflineEmptyRecent(t *testing.T) {
 // whole -Syu and blocks every user update; dropping any of them from the glob
 // silently reintroduces that outage, so pin them here.
 func TestSystemUpgradeAdoptsSeededRyokuFiles(t *testing.T) {
-	args := systemUpgradeArgs(false)
+	args := pacmanUpgradeArgs(false)
 	joined := strings.Join(args, " ")
 	for _, want := range []string{"pacman -Syu", "--noconfirm", "--overwrite"} {
 		if !strings.Contains(joined, want) {
-			t.Errorf("systemUpgradeArgs missing %q: %v", want, args)
+			t.Errorf("pacmanUpgradeArgs missing %q: %v", want, args)
 		}
 	}
-	if !strings.Contains(strings.Join(systemUpgradeArgs(true), " "), "pacman -Syyu") {
+	if !strings.Contains(strings.Join(pacmanUpgradeArgs(true), " "), "pacman -Syyu") {
 		t.Error("a channel move must force the db refresh (-Syyu); a frozen release is older than the cached db")
 	}
 	var glob string

@@ -25,6 +25,7 @@ EOF
   ryoku_snap_config
   ryoku_snap_services
   ryoku_snap_updatedb
+  ryoku_snap_initial
 }
 
 # drop the snapper "root" config by hand. `snapper create-config` wants
@@ -113,5 +114,27 @@ ryoku_snap_updatedb() {
     run sed -i 's|^PRUNEPATHS="|PRUNEPATHS="/.snapshots |' "$conf"
   else
     printf 'PRUNEPATHS="/.snapshots"\n' | run tee -a "$conf" >/dev/null
+  fi
+}
+
+# create the clean-install snapshot #1 and sync it into Limine's boot menu.
+# snapper can run inside the chroot with --no-dbus (no D-Bus daemon running);
+# limine-snapper-sync populates the //Snapshots submenu in /boot/limine.conf so
+# rollback is available right away at first boot.
+ryoku_snap_initial() {
+  if [[ -n ${RYOKU_DRYRUN:-} ]]; then
+    log "DRYRUN: arch-chroot /mnt snapper --no-dbus -c root create -t single -c number -d 'Ryoku clean install'"
+    log "DRYRUN: arch-chroot /mnt limine-snapper-sync"
+    return 0
+  fi
+  if [[ -x /mnt/usr/bin/snapper ]]; then
+    log "snapshots: creating clean-install root snapshot"
+    arch-chroot /mnt snapper --no-dbus -c root create -t single -c number -d "Ryoku clean install" \
+      || log "snapshots: warning, could not create initial snapshot (continuing)"
+  fi
+  if [[ -x /mnt/usr/bin/limine-snapper-sync || -x /mnt/usr/lib/limine/limine-snapper-sync ]]; then
+    log "snapshots: syncing initial snapshot to Limine boot menu"
+    arch-chroot /mnt limine-snapper-sync \
+      || log "snapshots: warning, could not sync snapshots to Limine (continuing)"
   fi
 }

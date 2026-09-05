@@ -373,10 +373,22 @@ func packagesBody() string {
 	var b strings.Builder
 	if out, ok := probe(5, "pacman", "-Qq"); ok {
 		fmt.Fprintf(&b, "## Total installed\n\n%d packages\n\n", len(nonEmptyLines(out)))
+	} else if out, ok := probe(5, "rpm", "-qa", "--nodigest", "--nosignature"); ok {
+		fmt.Fprintf(&b, "## Total installed\n\n%d packages\n\n", len(nonEmptyLines(out)))
+	} else if out, ok := probe(5, "dpkg-query", "-f", "${binary:Package}\n", "-W"); ok {
+		fmt.Fprintf(&b, "## Total installed\n\n%d packages\n\n", len(nonEmptyLines(out)))
 	} else {
-		b.WriteString("## Total installed\n\n(pacman unavailable)\n\n")
+		b.WriteString("## Total installed\n\n(package manager unavailable)\n\n")
 	}
 	if out, ok := probe(5, "pacman", "-Qqe"); ok {
+		lines := nonEmptyLines(out)
+		b.WriteString("## Explicitly installed\n\n")
+		fmt.Fprintf(&b, "<details><summary>%d explicit packages</summary>\n\n", len(lines))
+		for _, l := range lines {
+			fmt.Fprintf(&b, "- %s\n", l)
+		}
+		b.WriteString("\n</details>\n\n")
+	} else if out, ok := probe(5, "dnf", "repoquery", "--userinstalled", "-q"); ok {
 		lines := nonEmptyLines(out)
 		b.WriteString("## Explicitly installed\n\n")
 		fmt.Fprintf(&b, "<details><summary>%d explicit packages</summary>\n\n", len(lines))
@@ -388,6 +400,8 @@ func packagesBody() string {
 	// checkupdates exits non-zero (2) when nothing is pending; skip the section
 	// on any error or a missing tool rather than reporting a misleading zero.
 	if out, ok := probe(5, "checkupdates"); ok {
+		fmt.Fprintf(&b, "## Pending updates\n\n%d packages\n", len(nonEmptyLines(out)))
+	} else if out, ok := probe(5, "dnf", "check-update"); ok {
 		fmt.Fprintf(&b, "## Pending updates\n\n%d packages\n", len(nonEmptyLines(out)))
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n"
@@ -485,13 +499,19 @@ func diskRows() []string {
 }
 
 func pacmanVersion(pkg string) string {
-	out, ok := probe(5, "pacman", "-Q", pkg)
-	if !ok {
-		return ""
+	if out, ok := probe(5, "pacman", "-Q", pkg); ok {
+		fields := strings.Fields(strings.TrimSpace(out))
+		if len(fields) >= 2 {
+			return fields[1]
+		}
 	}
-	fields := strings.Fields(strings.TrimSpace(out))
-	if len(fields) >= 2 {
-		return fields[1]
+	if out, ok := probe(5, "rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", pkg); ok {
+		if !strings.Contains(out, "not installed") {
+			return strings.TrimSpace(out)
+		}
+	}
+	if out, ok := probe(5, "dpkg-query", "-W", "-f=${Version}", pkg); ok {
+		return strings.TrimSpace(out)
 	}
 	return ""
 }

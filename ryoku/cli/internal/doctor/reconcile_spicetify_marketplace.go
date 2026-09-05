@@ -84,8 +84,12 @@ func reconcileSpicetifyMarketplace(checkOnly bool) recResult {
 			return okRes("spicetify-cli was removed by hand; the Marketplace stays off")
 		}
 		if !present {
+			fix := "install it by hand (`sudo pacman -S spicetify-cli`, it ships in [ryoku]), then run `ryoku doctor`"
+			if !sys.Has("pacman") {
+				fix = "install it by hand (`curl -fsSL https://raw.githubusercontent.com/spicetify/cli/main/install.sh | sh`), then run `ryoku doctor`"
+			}
 			return warnRes("Spotify is installed but spicetify-cli is missing and could not be installed").
-				withFix("install it by hand (`sudo pacman -S spicetify-cli`, it ships in [ryoku]), then run `ryoku doctor`")
+				withFix("%s", fix)
 		}
 		did = append(did, "installed spicetify-cli")
 	}

@@ -3,6 +3,7 @@ package doctor
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -116,8 +117,12 @@ func reconcileSpicetifyCanvas(checkOnly bool) recResult {
 			return okRes("spicetify-cli was removed by hand; the Canvas setup stays off")
 		}
 		if !present {
+			fix := "install it by hand (`sudo pacman -S spicetify-cli`, it ships in [ryoku]), then run `ryoku doctor`"
+			if !sys.Has("pacman") {
+				fix = "install it by hand (`curl -fsSL https://raw.githubusercontent.com/spicetify/cli/main/install.sh | sh`), then run `ryoku doctor`"
+			}
 			return warnRes("Spotify is installed but spicetify-cli is missing and could not be installed").
-				withFix("install it by hand (`sudo pacman -S spicetify-cli`, it ships in [ryoku]), then run `ryoku doctor`")
+				withFix("%s", fix)
 		}
 		did = append(did, "installed spicetify-cli")
 	}
@@ -190,11 +195,13 @@ var spicetifyExtensionEnabled = func() bool {
 // at all, which is every offline install, and it is what makes this reachable
 // from `ryoku update` instead of only from a manual `yay -S`.
 func installSpicetifyCli() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	err := exec.CommandContext(ctx, "sudo", "pacman", "-S", "--needed", "--noconfirm", "spicetify-cli").Run()
-	cancel()
-	if err == nil && sys.Has("spicetify") {
-		return true
+	if sys.Has("pacman") {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		err := exec.CommandContext(ctx, "sudo", "pacman", "-S", "--needed", "--noconfirm", "spicetify-cli").Run()
+		cancel()
+		if err == nil && sys.Has("spicetify") {
+			return true
+		}
 	}
 	for _, helper := range []string{"yay", "paru"} {
 		if !sys.Has(helper) {
@@ -207,6 +214,20 @@ func installSpicetifyCli() bool {
 			return true
 		}
 	}
+	if !sys.Has("pacman") && sys.Has("curl") && sys.Has("tar") {
+		home := sys.Home()
+		spicetifyDir := filepath.Join(home, ".spicetify")
+		binDir := filepath.Join(home, ".local", "bin")
+		_ = os.MkdirAll(spicetifyDir, 0o755)
+		_ = os.MkdirAll(binDir, 0o755)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		cmd := fmt.Sprintf(`curl -fsSL https://github.com/spicetify/cli/releases/download/v2.44.0/spicetify-2.44.0-linux-amd64.tar.gz | tar -xz -C %q && chmod +x %q && ln -sf %q %q`,
+			spicetifyDir, filepath.Join(spicetifyDir, "spicetify"), filepath.Join(spicetifyDir, "spicetify"), filepath.Join(binDir, "spicetify"))
+		if err := exec.CommandContext(ctx, "sh", "-c", cmd).Run(); err == nil && sys.Has("spicetify") {
+			return true
+		}
+	}
 	return false
 }
 
@@ -215,11 +236,13 @@ func installSpicetifyCli() bool {
 // fallback for a box whose mirror list is stale. Mirrors installSpicetifyCli so
 // the writable client Ryoku ships reaches `ryoku update`, not just a manual pacman.
 var installSpotifyLauncher = func() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	err := exec.CommandContext(ctx, "sudo", "pacman", "-S", "--needed", "--noconfirm", "spotify-launcher").Run()
-	cancel()
-	if err == nil && sys.PkgInstalled("spotify-launcher") {
-		return true
+	if sys.Has("pacman") {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		err := exec.CommandContext(ctx, "sudo", "pacman", "-S", "--needed", "--noconfirm", "spotify-launcher").Run()
+		cancel()
+		if err == nil && sys.PkgInstalled("spotify-launcher") {
+			return true
+		}
 	}
 	for _, helper := range []string{"yay", "paru"} {
 		if !sys.Has(helper) {
@@ -242,6 +265,9 @@ var installSpotifyLauncher = func() bool {
 // the launcher. A per-user flatpak or a writable /opt is patchable as it is, and
 // an installed launcher is already the writable path.
 var onlyUnpatchableSpotify = func() bool {
+	if !sys.Has("pacman") {
+		return false
+	}
 	if sys.PkgInstalled("spotify-launcher") {
 		return false
 	}
@@ -329,13 +355,38 @@ var spotifyLauncherUnlaunched = func() bool {
 	return sys.PkgInstalled("spotify-launcher") && !sys.Exists(spotifyLauncherDir())
 }
 
+func userFlatpakSpotifyDir() string {
+	data := os.Getenv("XDG_DATA_HOME")
+	if data == "" {
+		data = filepath.Join(os.Getenv("HOME"), ".local", "share")
+	}
+	for _, sub := range []string{
+		filepath.Join("flatpak", "app", "com.spotify.Client", "current", "active", "files", "extra", "share", "spotify"),
+		filepath.Join("flatpak", "app", "com.spotify.Client", "x86_64", "stable", "active", "files", "extra", "share", "spotify"),
+	} {
+		p := filepath.Join(data, sub)
+		if sys.Exists(p) {
+			return p
+		}
+	}
+	return ""
+}
+
 // spicetifyPointAtLauncher aims spicetify at a spotify-launcher install, which
 // lives per-user under $XDG_DATA_HOME (not root-owned /opt), so `apply` needs no
-// root. spicetify does not auto-detect that path, so set it when it exists; a
-// no-op for /opt or flatpak clients, which spicetify finds itself. Best-effort.
+// root. It also detects per-user Flatpak Spotify installations and configures
+// the sandbox prefs location for Flatpak Spotify. Best-effort.
 func spicetifyPointAtLauncher() {
 	if dir := spotifyLauncherDir(); sys.Exists(dir) {
 		_ = spicetifyRun(30*time.Second, "config", "spotify_path", dir)
+	} else if dir := userFlatpakSpotifyDir(); dir != "" {
+		_ = spicetifyRun(30*time.Second, "config", "spotify_path", dir)
+	}
+	if systemFlatpakSpotify() || userFlatpakSpotify() {
+		prefs := filepath.Join(sys.Home(), ".var", "app", "com.spotify.Client", "config", "spotify", "prefs")
+		if sys.Exists(prefs) {
+			_ = spicetifyRun(30*time.Second, "config", "prefs_path", prefs)
+		}
 	}
 }
 
@@ -388,7 +439,13 @@ func sameBytes(a, b string) bool {
 // The shipped per-user launcher is the safe default in both.
 func spicetifyUnwritableFix(path string) string {
 	if strings.Contains(path, "flatpak") {
+		if !sys.Has("pacman") {
+			return fmt.Sprintf("your Spotify is a system-wide flatpak (root-owned), which spicetify cannot patch without root. Reinstall it per-user so its tree is writable (`flatpak uninstall --system com.spotify.Client && flatpak install --user flathub com.spotify.Client`), or grant write permissions to the flatpak directory (`sudo chmod a+wr -R %s %s`), or switch to spotify-launcher (Arch)", path, filepath.Join(path, "Apps"))
+		}
 		return "your Spotify is a system-wide flatpak (root-owned), which spicetify cannot patch without root. Reinstall it per-user so its tree is writable (`flatpak uninstall --system com.spotify.Client && flatpak install --user flathub com.spotify.Client`), or switch to the shipped per-user `spotify-launcher` (`sudo pacman -S --needed spotify-launcher`), which spicetify patches without root"
+	}
+	if !sys.Has("pacman") {
+		return "make your Spotify install writable (`sudo chmod a+wr -R /opt/spotify /opt/spotify/Apps`), or switch to spotify-launcher (Arch)"
 	}
 	return "install the shipped client instead (`sudo pacman -S --needed spotify-launcher`), which unpacks a per-user tree spicetify can patch without root; a native /opt client needs `sudo chmod a+wr -R /opt/spotify /opt/spotify/Apps`"
 }

@@ -1023,7 +1023,7 @@ Item {
     Process {
         id: pacTail
         running: root.active && root.reactorMode7 && root.ownsGlobalHelpers7
-        command: ["bash", "-c", "tail -n 0 -F /var/log/pacman.log 2>/dev/null"]
+        command: ["bash", "-c", "if [ -f /var/log/pacman.log ]; then exec tail -n 0 -F /var/log/pacman.log; elif [ -f /var/log/dnf5.log ]; then exec tail -n 0 -F /var/log/dnf5.log; elif [ -f /var/log/dnf.log ]; then exec tail -n 0 -F /var/log/dnf.log; else sleep infinity; fi 2>/dev/null"]
         property int pkgN: 0
         onRunningChanged: if (!running) pkgN = 0
         stdout: SplitParser {

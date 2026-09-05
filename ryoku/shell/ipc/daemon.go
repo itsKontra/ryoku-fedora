@@ -307,8 +307,17 @@ func setupQmlImportPath() {
 	exe, _ := os.Executable()
 	if strings.HasPrefix(exe, home+string(os.PathSeparator)) {
 		dirs = append(dirs, filepath.Join(home, ".local", "lib", "qt6", "qml"))
-	} else if _, err := os.Stat("/usr/lib/qt6/qml/Ryoku/Blobs/qmldir"); err != nil {
-		dirs = append(dirs, filepath.Join(home, ".local", "lib", "qt6", "qml"))
+	} else {
+		systemHasBlobs := false
+		for _, sysQml := range []string{"/usr/lib64/qt6/qml/Ryoku/Blobs/qmldir", "/usr/lib/qt6/qml/Ryoku/Blobs/qmldir"} {
+			if _, err := os.Stat(sysQml); err == nil {
+				systemHasBlobs = true
+				break
+			}
+		}
+		if !systemHasBlobs {
+			dirs = append(dirs, filepath.Join(home, ".local", "lib", "qt6", "qml"))
+		}
 	}
 	prefix := strings.Join(dirs, string(os.PathListSeparator))
 	for _, name := range []string{"QML2_IMPORT_PATH", "QML_IMPORT_PATH"} {

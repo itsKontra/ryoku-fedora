@@ -275,7 +275,7 @@ func liveFit(contentFit string) string {
 // machine has no amdgpu card or no radeonsi backend: with a hybrid layout the
 // default libva probe walks into the NVIDIA shim, which cannot encode.
 func vaapiRenderNode() string {
-	if !fileExists("/usr/lib/dri/radeonsi_drv_video.so") {
+	if !fileExists("/usr/lib/dri/radeonsi_drv_video.so") && !fileExists("/usr/lib64/dri/radeonsi_drv_video.so") {
 		return ""
 	}
 	nodes, _ := filepath.Glob("/sys/class/drm/renderD*/device/driver")

@@ -69,6 +69,9 @@ func enableILoveCandy(conf []byte) (out []byte, changed, ok bool) {
 // rewrites it wholesale.
 func reconcilePacmanCandy(checkOnly bool) recResult {
 	const conf = "/etc/pacman.conf"
+	if !sys.Has("pacman") {
+		return okRes("pacman not used on this system")
+	}
 	marker := pacmanCandyMarker()
 	if sys.Exists(marker) {
 		return okRes("pacman progress bar already seeded (yours to change)")

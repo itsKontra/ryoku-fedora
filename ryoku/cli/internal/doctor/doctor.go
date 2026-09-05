@@ -176,6 +176,7 @@ func reconcilers() []reconciler {
 		{"rashin agent daemon", reconcileRashinDaemon},
 		{"prowl-agent for rashin", reconcileProwlAgent},
 		{"recordings directory", reconcileRecordingsDir},
+		{"NVIDIA Wayland autostart", reconcileNvidiaAutostart},
 		{"failed services", reconcileFailedUnits},
 		{"btrfs device health", reconcileBtrfsHealth},
 		{"wireless regulatory domain", reconcileWifiRegdom},
@@ -473,6 +474,19 @@ const snapperConfdRoot = `## Path: System/Snapper
 SNAPPER_CONFIGS="root"
 `
 
+// snapperGlobalConfPath returns the path to the system snapper configuration
+// file where SNAPPER_CONFIGS is declared. On Fedora/openSUSE/RHEL this is
+// /etc/sysconfig/snapper; on Debian/Ubuntu /etc/default/snapper; on Arch /etc/conf.d/snapper.
+func snapperGlobalConfPath() string {
+	if sys.Exists("/etc/sysconfig/snapper") || sys.Exists("/etc/sysconfig") || sys.Has("dnf") || sys.Has("dnf5") {
+		return "/etc/sysconfig/snapper"
+	}
+	if sys.Exists("/etc/default/snapper") || (sys.Exists("/etc/default") && !sys.Exists("/etc/conf.d")) {
+		return "/etc/default/snapper"
+	}
+	return "/etc/conf.d/snapper"
+}
+
 // snapperOutcome: what planSnapper hands to reconcileSnapper. ok = leave the
 // box alone; the two warn variants surface as-is; create writes the canonical
 // layout.
@@ -497,9 +511,11 @@ type snapperState struct {
 	snapshotsExists     bool
 	snapshotsIsSubvol   bool
 	snapshotsMode       os.FileMode
+	confdPath           string
 	confdExists         bool
 	confdContents       string
 	snapperInstalled    bool
+	pacmanInstalled     bool
 	snapPacInstalled    bool
 	limineInstalled     bool
 	limineSyncInstalled bool
@@ -533,13 +549,17 @@ func planSnapper(s snapperState) (snapperOutcome, []string) {
 	if s.snapshotsExists && s.snapshotsMode != 0o750 {
 		problems = append(problems, fmt.Sprintf("/.snapshots is mode %04o, expected 0750", s.snapshotsMode))
 	}
+	confPath := s.confdPath
+	if confPath == "" {
+		confPath = "/etc/conf.d/snapper"
+	}
 	if s.confdExists && !strings.Contains(s.confdContents, "root") {
-		problems = append(problems, "/etc/conf.d/snapper does not list the root config (timers and hooks will skip it)")
+		problems = append(problems, fmt.Sprintf("%s does not list the root config (timers and hooks will skip it)", confPath))
 	}
 	if !s.snapperInstalled {
 		problems = append(problems, "snapper is not installed; the root config exists but cannot be used (sudo pacman -S snapper)")
 	}
-	if !s.snapPacInstalled {
+	if s.pacmanInstalled && !s.snapPacInstalled {
 		problems = append(problems, "snap-pac is not installed, so pacman transactions are not auto-snapshotted (sudo pacman -S snap-pac)")
 	}
 	// only meaningful under Limine; a GRUB box (converted CachyOS and the
@@ -566,17 +586,19 @@ func gatherSnapperState() snapperState {
 		configExists:        sys.Exists("/etc/snapper/configs/root"),
 		optedOut:            sys.Exists("/etc/ryoku/snapshots-disabled"),
 		snapperInstalled:    sys.Has("snapper"),
+		pacmanInstalled:     sys.Has("pacman"),
 		snapPacInstalled:    sys.PkgInstalled("snap-pac"),
 		limineInstalled:     sys.PkgInstalled("limine"),
 		limineSyncInstalled: sys.PkgInstalled("limine-snapper-sync"),
 		limineSyncEnabled:   sys.UnitEnabled("limine-snapper-sync.service"),
+		confdPath:           snapperGlobalConfPath(),
 	}
 	if fi, err := os.Stat("/.snapshots"); err == nil {
 		s.snapshotsExists = true
 		s.snapshotsMode = fi.Mode().Perm()
 		s.snapshotsIsSubvol = sys.IsBtrfsSubvolumeRoot("/.snapshots")
 	}
-	if b, err := os.ReadFile("/etc/conf.d/snapper"); err == nil {
+	if b, err := os.ReadFile(s.confdPath); err == nil {
 		s.confdExists = true
 		s.confdContents = string(b)
 	}
@@ -593,8 +615,12 @@ func reconcileSnapper(checkOnly bool) recResult {
 	case snapperWarnNotBtrfs:
 		return warnRes("root filesystem is not btrfs; snapshot and rollback are unavailable on this machine")
 	case snapperWarnMissingPkgs:
+		fix := "sudo pacman -S snapper snap-pac, then ryoku doctor"
+		if !sys.Has("pacman") {
+			fix = "install snapper, then ryoku doctor"
+		}
 		return warnRes("root is btrfs but snapper is not installed; snapshots and rollback are off").
-			withFix("sudo pacman -S snapper snap-pac, then ryoku doctor")
+			withFix(fix)
 	case snapperOptedOut:
 		return okRes("snapshots were declined at install (/etc/ryoku/snapshots-disabled); delete the marker and run `ryoku doctor` to enable them")
 	case snapperCreate:
@@ -604,6 +630,34 @@ func reconcileSnapper(checkOnly bool) recResult {
 		}
 		return createSnapperRootConfig(st)
 	case snapperWarnInconsistent:
+		confPath := st.confdPath
+		if confPath == "" {
+			confPath = snapperGlobalConfPath()
+		}
+		if st.confdExists && !strings.Contains(st.confdContents, "root") {
+			if checkOnly {
+				return wouldRes("%s does not list the root config (timers and hooks will skip it)", confPath).
+					withFix("ryoku doctor (adds root to %s)", confPath)
+			}
+			newConfd, changed := mergedConfdRoot(st.confdExists, st.confdContents)
+			if changed {
+				if err := writeRootFile(confPath, newConfd, "0644"); err != nil {
+					return failRes("writing %s: %v", confPath, err)
+				}
+				_ = sys.Run("sudo", "systemctl", "try-restart", "snapperd.service")
+				var other []string
+				for _, p := range problems {
+					if !strings.Contains(p, "does not list the root config") {
+						other = append(other, p)
+					}
+				}
+				if len(other) > 0 {
+					return warnRes("updated %s with root, but remaining issues: %s", confPath, strings.Join(other, "; ")).
+						withFix("see https://wiki.archlinux.org/title/Snapper")
+				}
+				return fixedRes("registered root config in %s", confPath)
+			}
+		}
 		return warnRes("%s", strings.Join(problems, "; ")).
 			withFix("see https://wiki.archlinux.org/title/Snapper")
 	}
@@ -614,7 +668,7 @@ func reconcileSnapper(checkOnly bool) recResult {
 // mirrors installation/backend/lib/snapshots.sh:
 //   - /.snapshots = btrfs subvolume, owned root:root, mode 0750.
 //   - write /etc/snapper/configs/root.
-//   - register "root" in /etc/conf.d/snapper without dropping siblings.
+//   - register "root" in the global snapper conf file without dropping siblings.
 //   - best-effort enable snapper-cleanup.timer (+ limine-snapper-sync.service
 //     when its unit is present).
 //
@@ -648,12 +702,16 @@ func createSnapperRootConfig(st snapperState) recResult {
 	}
 	actions = append(actions, "/etc/snapper/configs/root")
 
+	confPath := st.confdPath
+	if confPath == "" {
+		confPath = snapperGlobalConfPath()
+	}
 	newConfd, changed := mergedConfdRoot(st.confdExists, st.confdContents)
 	if changed {
-		if err := writeRootFile("/etc/conf.d/snapper", newConfd, "0644"); err != nil {
-			return failRes("writing /etc/conf.d/snapper: %v", err)
+		if err := writeRootFile(confPath, newConfd, "0644"); err != nil {
+			return failRes("writing %s: %v", confPath, err)
 		}
-		actions = append(actions, "/etc/conf.d/snapper")
+		actions = append(actions, confPath)
 	}
 
 	// services: best-effort. a healthy install has both; an offline AUR install
@@ -663,6 +721,7 @@ func createSnapperRootConfig(st snapperState) recResult {
 	if sys.Exists("/usr/lib/systemd/system/limine-snapper-sync.service") {
 		_ = sys.Run("sudo", "systemctl", "enable", "--now", "limine-snapper-sync.service")
 	}
+	_ = sys.Run("sudo", "systemctl", "try-restart", "snapperd.service")
 
 	return fixedRes("created snapper root config: %s", strings.Join(actions, ", "))
 }
@@ -683,7 +742,7 @@ func mergedConfdRoot(present bool, current string) (string, bool) {
 		if !strings.HasPrefix(trimmed, "SNAPPER_CONFIGS=") {
 			continue
 		}
-		value := strings.Trim(strings.TrimPrefix(trimmed, "SNAPPER_CONFIGS="), `"`)
+		value := strings.Trim(strings.TrimPrefix(trimmed, "SNAPPER_CONFIGS="), `"'`)
 		configs := strings.Fields(value)
 		for _, c := range configs {
 			if c == "root" {
@@ -933,6 +992,9 @@ func reconcileRyokuChannel(checkOnly bool) recResult {
 	if !sys.PkgInstalled("ryoku-desktop") {
 		return okRes("not a packaged install (desktop runs from a checkout)")
 	}
+	if !sys.Has("pacman") {
+		return okRes("pacman not used on this system")
+	}
 	conf, err := os.ReadFile("/etc/pacman.conf")
 	if err != nil {
 		return warnRes("could not read /etc/pacman.conf: %v", err)
@@ -1037,6 +1099,33 @@ func reconcileIconFont(checkOnly bool) recResult {
 	}
 	if anyPkgInstalled("ttf-material-symbols-variable", "ttf-material-symbols-variable-git") {
 		return okRes("Material Symbols icon font installed")
+	}
+	userFont := filepath.Join(sys.Home(), ".local", "share", "fonts", "MaterialSymbolsRounded.ttf")
+	fontPaths := []string{
+		userFont,
+		"/usr/share/fonts/TTF/MaterialSymbolsRounded.ttf",
+		"/usr/share/fonts/material-symbols/MaterialSymbolsRounded.ttf",
+	}
+	for _, fp := range fontPaths {
+		if sys.Exists(fp) {
+			return okRes("Material Symbols icon font installed")
+		}
+	}
+	if !sys.Has("pacman") {
+		if checkOnly {
+			return wouldRes("Material Symbols font missing; every shell icon renders as its ligature name").
+				withFix("ryoku doctor downloads Material Symbols font to ~/.local/share/fonts")
+		}
+		fontsDir := filepath.Join(sys.Home(), ".local", "share", "fonts")
+		if err := os.MkdirAll(fontsDir, 0o755); err != nil {
+			return failRes("could not create font directory: %v", err)
+		}
+		cmd := fmt.Sprintf(`curl -fsSL --connect-timeout 10 -m 30 "https://raw.githubusercontent.com/google/material-design-icons/master/variablefont/MaterialSymbolsRounded%%%%5BFILL%%%%2CGRAD%%%%2Copsz%%%%2Cwght%%%%5D.ttf" -o %q 2>/dev/null && fc-cache -f %q`, userFont, fontsDir)
+		if err := exec.Command("sh", "-c", cmd).Run(); err != nil {
+			return failRes("could not download Material Symbols font: %v", err).
+				withFix("%s", `curl -fsSL -o ~/.local/share/fonts/MaterialSymbolsRounded.ttf "https://raw.githubusercontent.com/google/material-design-icons/master/variablefont/MaterialSymbolsRounded%5BFILL%2CGRAD%2Copsz%2Cwght%5D.ttf"`)
+		}
+		return fixedRes("installed the Material Symbols icon font; `ryoku reload` picks it up")
 	}
 	if checkOnly {
 		return wouldRes("Material Symbols font missing; every shell icon renders as its ligature name").
@@ -1843,18 +1932,38 @@ func reconcileSessionComponents(_ bool) recResult {
 		return okRes("not a Hyprland desktop")
 	}
 	checks := []struct {
-		role, fix string
+		role, pkg string
 		any       []string
 	}{
-		{"authentication agent", "sudo pacman -S hyprpolkitagent", []string{"hyprpolkitagent", "polkit-gnome", "polkit-kde-agent", "lxsession"}},
-		{"desktop portal", "sudo pacman -S xdg-desktop-portal-hyprland", []string{"xdg-desktop-portal-hyprland"}},
-		{"audio server", "sudo pacman -S pipewire wireplumber", []string{"pipewire"}},
-		{"network manager", "sudo pacman -S networkmanager", []string{"networkmanager"}},
+		{"authentication agent", "hyprpolkitagent", []string{"hyprpolkitagent", "polkit-gnome", "polkit-kde-agent", "polkit-kde", "lxsession"}},
+		{"desktop portal", "xdg-desktop-portal-hyprland", []string{"xdg-desktop-portal-hyprland"}},
+		{"audio server", "pipewire", []string{"pipewire"}},
+		{"network manager", "networkmanager", []string{"networkmanager", "NetworkManager"}},
 	}
 	var missing []string
 	for _, c := range checks {
 		if !anyPkgInstalled(c.any...) {
-			missing = append(missing, fmt.Sprintf("%s [%s]", c.role, c.fix))
+			pkg := c.pkg
+			if !sys.Has("pacman") {
+				if sys.Has("dnf") {
+					if c.role == "authentication agent" {
+						pkg = "polkit-kde"
+					}
+					fix := "sudo dnf install " + pkg
+					missing = append(missing, fmt.Sprintf("%s [%s]", c.role, fix))
+					continue
+				} else if sys.Has("apt-get") {
+					fix := "sudo apt-get install " + pkg
+					missing = append(missing, fmt.Sprintf("%s [%s]", c.role, fix))
+					continue
+				} else {
+					fix := "install " + pkg
+					missing = append(missing, fmt.Sprintf("%s [%s]", c.role, fix))
+					continue
+				}
+			}
+			fix := "sudo pacman -S " + pkg
+			missing = append(missing, fmt.Sprintf("%s [%s]", c.role, fix))
 		}
 	}
 	if len(missing) == 0 {
@@ -3536,6 +3645,18 @@ func trimTrailing(b []byte) []byte { return bytes.TrimRight(b, " \t\r\n") }
 // packaged default. genuine merges are reported for `sudo pacdiff`. idempotent:
 // once the safe ones are gone a re-run only sees (and reports) the conflicts.
 func reconcilePacnew(checkOnly bool) recResult {
+	if !sys.Has("pacman") {
+		if sys.Has("rpm") {
+			out, _ := sys.RunOut("find", "/etc", "-name", "*.rpmnew", "-o", "-name", "*.rpmsave")
+			files := nonEmptyLines(out)
+			if len(files) == 0 {
+				return okRes("no pending config updates (.rpmnew/.rpmsave)")
+			}
+			return noteRes("%d pending config update(s) (.rpmnew/.rpmsave)", len(files)).
+				withFix("review differences and merge manually or with rpmconf")
+		}
+		return okRes("no pending config updates")
+	}
 	out, _ := sys.RunOut("find", "/etc", "-name", "*.pacnew")
 	files := nonEmptyLines(out)
 	if len(files) == 0 {
@@ -3580,13 +3701,25 @@ func reconcilePacnew(checkOnly bool) recResult {
 // ---- reconciler: orphaned packages -------------------------------------------
 
 func reconcileOrphans(_ bool) recResult {
-	out, err := sys.RunOut("pacman", "-Qtdq")
-	orphans := nonEmptyLines(out)
-	if err != nil || len(orphans) == 0 {
-		return okRes("no orphaned packages")
+	if sys.Has("pacman") {
+		out, err := sys.RunOut("pacman", "-Qtdq")
+		orphans := nonEmptyLines(out)
+		if err != nil || len(orphans) == 0 {
+			return okRes("no orphaned packages")
+		}
+		return noteRes("%d orphaned package(s)", len(orphans)).
+			withFix("review `pacman -Qtd`, then `sudo pacman -Rns $(pacman -Qtdq)` if unneeded")
 	}
-	return noteRes("%d orphaned package(s)", len(orphans)).
-		withFix("review `pacman -Qtd`, then `sudo pacman -Rns $(pacman -Qtdq)` if unneeded")
+	if sys.Has("dnf") {
+		out, err := sys.RunOut("dnf", "repoquery", "--unneeded", "-q")
+		orphans := nonEmptyLines(out)
+		if err != nil || len(orphans) == 0 {
+			return okRes("no orphaned packages")
+		}
+		return noteRes("%d orphaned package(s)", len(orphans)).
+			withFix("review `dnf repoquery --unneeded`, remove with `sudo dnf autoremove` if unneeded")
+	}
+	return okRes("no orphaned packages")
 }
 
 // ---- swap helpers ------------------------------------------------------------
@@ -3738,10 +3871,17 @@ var ryokuSystemGlobs = []string{
 	"/usr/share/ryoku/boot/*",
 }
 
-// pkgOwnsFile reports whether an installed package owns path. A var so tests stub
-// the probe without a real pacman database.
 var pkgOwnsFile = func(path string) bool {
-	return sys.Run("pacman", "-Qo", path) == nil
+	if sys.Has("pacman") {
+		return sys.Run("pacman", "-Qo", path) == nil
+	}
+	if sys.Has("rpm") {
+		return sys.Run("rpm", "-qf", path) == nil
+	}
+	if sys.Has("dpkg-query") {
+		return sys.Run("dpkg-query", "-S", path) == nil
+	}
+	return false
 }
 
 // strayRyokuFiles returns the files matching globs that pacman does not own: the

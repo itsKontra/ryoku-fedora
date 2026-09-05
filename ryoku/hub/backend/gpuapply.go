@@ -200,7 +200,12 @@ const kvmfrStaticMB = 128
 // the passthrough stack. core packages are official, install as one
 // transaction; the Looking Glass pieces live in [ryoku] (or the AUR on plain
 // Arch) and install best-effort, so their absence never blocks the core set.
-var corePassthroughPkgs = []string{"qemu-desktop", "libvirt", "edk2-ovmf", "swtpm", "dnsmasq"}
+func corePkgs() []string {
+	if hasCommand("dnf") && !hasCommand("pacman") {
+		return []string{"qemu-kvm", "libvirt-daemon-kvm", "edk2-ovmf", "swtpm", "dnsmasq"}
+	}
+	return []string{"qemu-desktop", "libvirt", "edk2-ovmf", "swtpm", "dnsmasq"}
+}
 var extraPassthroughPkgs = []string{"looking-glass", "looking-glass-module-dkms"}
 
 func applyPlan(action, user, exe string, dryRun bool) error {
@@ -209,10 +214,11 @@ func applyPlan(action, user, exe string, dryRun bool) error {
 	say := func(s string) { fmt.Println(planPrefix(dryRun) + s) }
 
 	if action == "enable" {
-		say("install packages: " + strings.Join(corePassthroughPkgs, " "))
+		pkgs := corePkgs()
+		say("install packages: " + strings.Join(pkgs, " "))
 		if !dryRun {
 			snapshot("ryoku gpu passthrough enable")
-			if err := pacmanInstall(corePassthroughPkgs); err != nil {
+			if err := pacmanInstall(pkgs); err != nil {
 				return fmt.Errorf("installing the passthrough stack failed: %w (update the system with `ryoku update`, then retry)", err)
 			}
 		}
@@ -300,14 +306,39 @@ func etcRoot() string {
 	return "/"
 }
 
+func hasCommand(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
 func pacmanInstall(pkgs []string) error {
-	cmd := exec.Command("pacman", append([]string{"-S", "--needed", "--noconfirm"}, pkgs...)...)
+	var cmd *exec.Cmd
+	if hasCommand("pacman") {
+		cmd = exec.Command("pacman", append([]string{"-S", "--needed", "--noconfirm"}, pkgs...)...)
+	} else if hasCommand("dnf") {
+		cmd = exec.Command("dnf", append([]string{"install", "-y"}, pkgs...)...)
+	} else if hasCommand("apt-get") {
+		cmd = exec.Command("apt-get", append([]string{"install", "-y"}, pkgs...)...)
+	} else {
+		return fmt.Errorf("no supported package manager found")
+	}
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return cmd.Run()
 }
 
 // pkgInstalled: is this package locally installed? stays quiet (output discarded).
-func pkgInstalled(p string) bool { return exec.Command("pacman", "-Q", p).Run() == nil }
+func pkgInstalled(p string) bool {
+	if hasCommand("pacman") {
+		return exec.Command("pacman", "-Q", p).Run() == nil
+	}
+	if hasCommand("rpm") {
+		return exec.Command("rpm", "-q", "--quiet", p).Run() == nil
+	}
+	if hasCommand("dpkg-query") {
+		return exec.Command("dpkg-query", "-W", "-f=${Status}", p).Run() == nil
+	}
+	return false
+}
 
 func snapshot(desc string) {
 	if _, err := exec.LookPath("snapper"); err != nil {

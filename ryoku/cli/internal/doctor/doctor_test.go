@@ -531,6 +531,7 @@ func TestPlanSnapper(t *testing.T) {
 		confdExists:         true,
 		confdContents:       "SNAPPER_CONFIGS=\"root\"\n",
 		snapperInstalled:    true,
+		pacmanInstalled:     true,
 		snapPacInstalled:    true,
 		limineInstalled:     true,
 		limineSyncInstalled: true,
@@ -552,6 +553,7 @@ func TestPlanSnapper(t *testing.T) {
 		return s
 	}
 	syncDisabled := func() snapperState { s := consistent; s.limineSyncEnabled = false; return s }
+	withConfdPath := func(path, c string) snapperState { s := consistent; s.confdPath = path; s.confdContents = c; return s }
 
 	cases := []struct {
 		name        string
@@ -567,8 +569,10 @@ func TestPlanSnapper(t *testing.T) {
 		{"present + consistent reads ok", consistent, snapperOK, ""},
 		{"/.snapshots wrong mode warns inconsistent", withMode(0o755), snapperWarnInconsistent, "mode 0755"},
 		{"conf.d missing root warns inconsistent", withConfd("SNAPPER_CONFIGS=\"home\"\n"), snapperWarnInconsistent, "does not list the root config"},
+		{"sysconfig missing root warns inconsistent", withConfdPath("/etc/sysconfig/snapper", "SNAPPER_CONFIGS=\"\"\n"), snapperWarnInconsistent, "/etc/sysconfig/snapper does not list the root config"},
 		{"/.snapshots is plain dir warns inconsistent", plainSnapshotsDir(), snapperWarnInconsistent, "plain directory"},
 		{"configured but snap-pac missing recommends it", noSnapPac(), snapperWarnInconsistent, "snap-pac"},
+		{"configured without pacman does not warn snap-pac", func() snapperState { s := consistent; s.pacmanInstalled = false; s.snapPacInstalled = false; return s }(), snapperOK, ""},
 		{"configured but limine-snapper-sync missing recommends it", noLimineSync(), snapperWarnInconsistent, "limine-snapper-sync"},
 		{"sync installed but service disabled tells the exact enable", syncDisabled(), snapperWarnInconsistent, "limine-snapper-sync.service is disabled"},
 		{"non-limine box is healthy without the sync package", nonLimine(), snapperOK, ""},
@@ -607,6 +611,13 @@ func TestMergedConfdRoot(t *testing.T) {
 	in := "SNAPPER_CONFIGS=\"root\"\n"
 	if out, changed := mergedConfdRoot(true, in); changed || out != in {
 		t.Errorf("present+root: changed=%v out=%q, want unchanged", changed, out)
+	}
+
+	// empty SNAPPER_CONFIGS="": replace with root (Fedora default)
+	in = "## Default: \"\"\nSNAPPER_CONFIGS=\"\"\n"
+	out, changed = mergedConfdRoot(true, in)
+	if !changed || !strings.Contains(out, `SNAPPER_CONFIGS="root"`) {
+		t.Errorf("empty SNAPPER_CONFIGS: changed=%v out=%q, want SNAPPER_CONFIGS=\"root\"", changed, out)
 	}
 
 	// lists another config: append root, keep the existing one.

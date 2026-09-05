@@ -55,10 +55,16 @@ check_renderer() {
   fi
   say "ryoku-shell NOT restarted: quickshell cannot start"
   printf '%s\n' "$out" | sed 's/^/    /' >&2
-  cat >&2 <<'EOF'
+  local hint="sudo pacman -S quickshell"
+  if command -v dnf >/dev/null 2>&1; then
+    hint="sudo dnf install quickshell"
+  elif command -v apt-get >/dev/null 2>&1; then
+    hint="sudo apt-get install quickshell"
+  fi
+  cat >&2 <<EOF
     Quickshell links Qt's private API, so a build made against another Qt will
     not load. The repo package is rebuilt with Qt; quickshell-git is not:
-        sudo pacman -S quickshell
+        $hint
     Then run this deploy again. The desktop you have now was left running.
 EOF
   return 1
@@ -132,7 +138,13 @@ fi
 # bare "go: command not found"; name the problem and the fix.
 if ! command -v go >/dev/null 2>&1; then
   printf '  the Go toolchain is required to build the desktop from a checkout, but go is not installed.\n' >&2
-  printf '    install it:  sudo pacman -S --needed go\n' >&2
+  if command -v dnf >/dev/null 2>&1; then
+    printf '    install it:  sudo dnf install golang\n' >&2
+  elif command -v apt-get >/dev/null 2>&1; then
+    printf '    install it:  sudo apt-get install golang\n' >&2
+  else
+    printf '    install it:  sudo pacman -S --needed go\n' >&2
+  fi
   printf '    (a packaged install updates through pacman and does not build from source; check ryoku status.)\n' >&2
   exit 1
 fi
@@ -271,11 +283,15 @@ if command -v sudo >/dev/null 2>&1; then
   bootsrc="$here/../../system/boot"
   sudo install -d /usr/share/plymouth/themes/ryoku
   sudo cp -a "$bootsrc/plymouth/ryoku/." /usr/share/plymouth/themes/ryoku/
-  sudo install -Dm644 "$bootsrc/limine/limine.conf" /usr/share/ryoku/boot/limine.conf
-  sudo install -Dm644 "$bootsrc/limine/default.conf" /usr/share/ryoku/boot/default.conf
-  sudo install -Dm755 "$bootsrc/ryoku-boot-apply" /usr/bin/ryoku-boot-apply
-  sudo ryoku-boot-apply || true
-  say "installed and applied the boot splash + Limine theme"
+  if command -v limine >/dev/null 2>&1 || [[ -d /boot/limine ]]; then
+    sudo install -Dm644 "$bootsrc/limine/limine.conf" /usr/share/ryoku/boot/limine.conf
+    sudo install -Dm644 "$bootsrc/limine/default.conf" /usr/share/ryoku/boot/default.conf
+    sudo install -Dm755 "$bootsrc/ryoku-boot-apply" /usr/bin/ryoku-boot-apply
+    sudo ryoku-boot-apply || true
+    say "installed and applied the boot splash + Limine theme"
+  else
+    say "installed boot splash (Limine theme skipped: Limine not present)"
+  fi
 fi
 
 # Record the checkout this deploy came from and the commit it laid down, so the
@@ -310,7 +326,16 @@ fi
 # module built against another Qt fails to load and takes the whole surface with
 # it, so a Qt update has to force a rebuild.
 qmldir="$HOME/.local/lib/qt6/qml"
-qtver="$(pacman -Q qt6-base 2>/dev/null | awk '{print $2}')"
+qtver=""
+if command -v pacman >/dev/null 2>&1; then
+  qtver="$(pacman -Q qt6-base 2>/dev/null | awk '{print $2}')"
+elif command -v rpm >/dev/null 2>&1; then
+  qtver="$(rpm -q --qf "%{VERSION}" qt6-qtbase 2>/dev/null || true)"
+elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists Qt6Core 2>/dev/null; then
+  qtver="$(pkg-config --modversion Qt6Core 2>/dev/null || true)"
+elif command -v dpkg-query >/dev/null 2>&1; then
+  qtver="$(dpkg-query -W -f='${Version}' libqt6core6 2>/dev/null || true)"
+fi
 qtstamp="$qmldir/Ryoku/Blobs/.qt-version"
 if command -v cmake >/dev/null 2>&1 && command -v ninja >/dev/null 2>&1; then
   if [ -n "$qtver" ] && [ "$(cat "$qtstamp" 2>/dev/null)" = "$qtver" ] \
@@ -376,8 +401,48 @@ if command -v makepkg >/dev/null 2>&1 && pkg-config --exists hyprland 2>/dev/nul
   done
   printf '%s\n' "$_hv" > "$_stamp"
   (( _built )) && say "installed Hyprland compositor plugins -> $hplugins" || true
+elif pkg-config --exists hyprland 2>/dev/null && command -v git >/dev/null 2>&1 && command -v make >/dev/null 2>&1; then
+  _hv="$(pkg-config --modversion hyprland)"
+  _stamp="$hplugins/.hyprland-version"
+  _prev="$(cat "$_stamp" 2>/dev/null || true)"
+  _srccache="$HOME/.cache/ryoku/hypr-plugins-src"
+  mkdir -p "$hplugins" "$_srccache"
+  _built=0
+  for _entry in "hypr-dynamic-cursors:https://github.com/VirtCode/hypr-dynamic-cursors.git:dynamic-cursors:out/dynamic-cursors.so:make all" \
+                "hyprglass:https://github.com/VirtCode/hyprglass.git:hyprglass:hyprglass.so:make" \
+                "ryoku-hypr-plugins:https://github.com/hyprwm/hyprland-plugins.git:hyprbars:hyprbars/hyprbars.so:make -C hyprbars all" \
+                "ryoku-hypr-plugins:https://github.com/hyprwm/hyprland-plugins.git:hyprfocus:hyprfocus/hyprfocus.so:make -C hyprfocus all"; do
+    _pkg="${_entry%%:*}"; _rest="${_entry#*:}"
+    _url="${_rest%%:*}"; _rest="${_rest#*:}"
+    _name="${_rest%%:*}"; _rest="${_rest#*:}"
+    _so="${_rest%%:*}"; _cmd="${_rest#*:}"
+    _need=0
+    [[ "$_prev" != "$_hv" ]] && _need=1
+    [[ ! -f "$hplugins/$_name.so" ]] && _need=1
+    (( _need )) || continue
+    say "building Hyprland plugin $_name (Hyprland $_hv)"
+    _clone="$_srccache/$_pkg"
+    if [[ ! -d "$_clone/.git" ]]; then
+      git clone -q "$_url" "$_clone" >/dev/null 2>&1 || true
+    fi
+    if [[ -d "$_clone" ]]; then
+      (
+        cd "$_clone"
+        if [[ -f hyprpm.toml ]]; then
+          _c="$(grep -F "$_hv" hyprpm.toml 2>/dev/null | grep -oE '[0-9a-f]{40}' | sed -n 2p || true)"
+          [[ -n "$_c" ]] && git checkout -q "$_c" 2>/dev/null || true
+        fi
+        eval "$_cmd" >/dev/null 2>&1 || true
+      )
+      if [[ -f "$_clone/$_so" ]]; then
+        mv -f "$_clone/$_so" "$hplugins/$_name.so" && _built=1
+      fi
+    fi
+  done
+  printf '%s\n' "$_hv" > "$_stamp"
+  (( _built )) && say "installed Hyprland compositor plugins -> $hplugins" || true
 else
-  say "skipping Hyprland compositor plugins (makepkg or Hyprland headers not found)"
+  say "skipping Hyprland compositor plugins (Hyprland headers not found)"
 fi
 
 # Install the Ryoku.Ui QML module: the design system every surface imports --
@@ -627,7 +692,7 @@ seed_once() { [[ -e $2 ]] || cp -a "$1" "$2"; }
 
 # Palette generation, per-app config, and the user session target.
 mkdir -p "$cfg/matugen"; cp -a "$here/matugen/." "$cfg/matugen/"
-cp -a "$here/../apps/fish/config.fish" "$cfg/fish/config.fish"
+mkdir -p "$cfg/fish"; cp -a "$here/../apps/fish/config.fish" "$cfg/fish/config.fish"
 mkdir -p "$cfg/fish/conf.d"; cp -a "$here/../apps/fish/conf.d/." "$cfg/fish/conf.d/"
 mkdir -p "$cfg/ryoku-terminal"; cp -a "$here/../apps/terminal-shell/." "$cfg/ryoku-terminal/"
 mkdir -p "$cfg/bash"; cp -a "$here/../apps/bash/." "$cfg/bash/"
@@ -640,12 +705,28 @@ mkdir -p "$cfg/gtk-4.0"; cp -a "$here/gtk-4.0/settings.ini" "$cfg/gtk-4.0/settin
 mkdir -p "$cfg/btop"; cp -a "$here/../apps/btop/btop.conf" "$cfg/btop/btop.conf"
 mkdir -p "$cfg/fastfetch"
 seed_once "$here/../apps/fastfetch/config.jsonc" "$cfg/fastfetch/config.jsonc"
+seed_once "$here/../assets/brand/fastfetch-emblem.png" "$cfg/fastfetch/fastfetch-emblem.png"
 install -m755 "$here/../apps/fastfetch/ryoku-fastfetch" "$bindir/ryoku-fastfetch"
 mkdir -p "$cfg/kitty"
 cp -a "$here/../apps/kitty/kitty.conf" "$cfg/kitty/kitty.conf"
 seed_once "$here/../apps/kitty/current-theme.conf" "$cfg/kitty/current-theme.conf"
 mkdir -p "$cfg/wireplumber"; cp -a "$here/../apps/wireplumber/." "$cfg/wireplumber/"
 mkdir -p "$cfg/systemd/user"; cp -a "$here/systemd/user/." "$cfg/systemd/user/"
+# On Wayland, nvidia-settings -l fails (NV-CONTROL is X11-only). If the
+# distro ships nvidia-settings-user.desktop in /etc/xdg/autostart (e.g. Fedora),
+# mask it in ~/.config/autostart so systemd-xdg-autostart-generator skips it.
+if [[ -f /etc/xdg/autostart/nvidia-settings-user.desktop && ! -f "$cfg/autostart/nvidia-settings-user.desktop" ]]; then
+  mkdir -p "$cfg/autostart"
+  cat <<'EOF' > "$cfg/autostart/nvidia-settings-user.desktop"
+[Desktop Entry]
+Type=Application
+Name=nvidia-settings
+Exec=nvidia-settings -l
+Hidden=true
+X-systemd-skip=true
+EOF
+  say "masked nvidia-settings X11 autostart for Wayland -> $cfg/autostart"
+fi
 # dev deploy runs the daemon from ~/.local/bin; the package ships /usr/bin.
 sed -i -e "s|^ExecStart=.*|ExecStart=$bindir/ryoku-shell daemon|" \
   -e "s|^ExecStartPre=.*|ExecStartPre=-$bindir/ryoku-shell quit|" "$cfg/systemd/user/ryoku-shell.service"
@@ -685,6 +766,48 @@ fi
 # lay the one source to both (GNOME keyring password store + native Wayland).
 cp -a "$here/../apps/chromium-flags.conf" "$cfg/chromium-flags.conf"
 cp -a "$here/../apps/chromium-flags.conf" "$cfg/chrome-flags.conf"
+# On Fedora/RHEL, Chromium installs as /usr/bin/chromium-browser and does not read ~/.config/chromium-flags.conf.
+# Furthermore, gnome-keyring PAM auto-unlock is absent and libsecret prompts deadlock Chromium's network service.
+is_fedora=0
+if [[ -r /etc/os-release ]]; then
+  # shellcheck source=/dev/null
+  . /etc/os-release
+  case "${ID:-} ${ID_LIKE:-}" in
+    *fedora*) is_fedora=1 ;;
+  esac
+fi
+if (( is_fedora )) || command -v chromium-browser >/dev/null 2>&1; then
+  sed -i 's/--password-store=gnome-libsecret/--password-store=basic/' "$cfg/chromium-flags.conf"
+  sed -i 's/--password-store=gnome-libsecret/--password-store=basic/' "$cfg/chrome-flags.conf"
+fi
+# Provide a ~/.local/bin/chromium wrapper that reads flags and execs chromium-browser.
+if ! command -v chromium >/dev/null 2>&1 || [[ "$(command -v chromium)" == "$bindir/chromium" ]]; then
+  if command -v chromium-browser >/dev/null 2>&1; then
+    cat > "$bindir/chromium" <<'EOF'
+#!/usr/bin/env bash
+flags=()
+flags_file="${XDG_CONFIG_HOME:-$HOME/.config}/chromium-flags.conf"
+if [[ -r "$flags_file" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="$(echo "$line" | xargs)"
+    [[ -n "$line" ]] && flags+=("$line")
+  done < "$flags_file"
+fi
+exec /usr/bin/chromium-browser "${flags[@]}" "$@"
+EOF
+    chmod +x "$bindir/chromium"
+    ln -sf chromium "$bindir/chromium-browser"
+  fi
+fi
+if [[ -f /usr/share/applications/chromium-browser.desktop ]]; then
+  mkdir -p "$appshare/applications"
+  if [[ ! -f "$appshare/applications/chromium-browser.desktop" ]]; then
+    sed 's|^Exec=/usr/bin/chromium-browser|Exec=chromium|g; s|^Exec=chromium-browser|Exec=chromium|g' \
+      /usr/share/applications/chromium-browser.desktop > "$appshare/applications/chromium-browser.desktop"
+  fi
+  ln -sf chromium-browser.desktop "$appshare/applications/chromium.desktop"
+fi
 # the screen-share source chooser xdph launches (hypr/xdph.conf names it). Its
 # stylesheet is matugen's, rendered to ~/.cache/ryoku/share-picker.css.
 mkdir -p "$cfg/hyprland-preview-share-picker"

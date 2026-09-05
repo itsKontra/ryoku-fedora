@@ -16,7 +16,12 @@ type asusAuraStatus struct {
 var (
 	readAsusAuraStatus = probeAsusAuraStatus
 	installAsusAura    = func() error {
-		return sys.Sudo("pacman", "-S", "--needed", "--noconfirm", "asusctl")
+		if sys.Has("pacman") {
+			return sys.Sudo("pacman", "-S", "--needed", "--noconfirm", "asusctl")
+		} else if sys.Has("dnf") {
+			return sys.Sudo("dnf", "-y", "install", "asusctl")
+		}
+		return nil
 	}
 	startAsusAura = func() error {
 		return sys.Sudo("systemctl", "start", "asusd.service")

@@ -70,3 +70,33 @@ func TestReadBasePackagesSkipsBootChain(t *testing.T) {
 		}
 	}
 }
+
+func TestReadBasePackagesBtrfsRootKeepsSnapper(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "system/packages"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	base := "# a comment\nlimine\nlimine-mkinitcpio-hook\nlimine-snapper-sync\nmkinitcpio\nsnapper\nsnap-pac\nkitty\nryoku-desktop\n"
+	if err := os.WriteFile(filepath.Join(dir, "system/packages/base.packages"), []byte(base), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e := &engine{payload: dir, f: &facts{btrfsRoot: true}}
+	got, err := e.readBasePackages()
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := map[string]bool{}
+	for _, p := range got {
+		set[p] = true
+	}
+	for _, keep := range []string{"snapper", "snap-pac", "kitty", "ryoku-desktop"} {
+		if !set[keep] {
+			t.Errorf("%s must install on btrfs root, missing from %v", keep, got)
+		}
+	}
+	for _, skip := range []string{"limine", "limine-mkinitcpio-hook", "limine-snapper-sync", "mkinitcpio"} {
+		if set[skip] {
+			t.Errorf("%s must still be skipped on btrfs root, got %v", skip, got)
+		}
+	}
+}

@@ -31,8 +31,10 @@ main() {
     ryoku_family=arch
   elif command -v apt-get > /dev/null 2>&1; then
     ryoku_family=debian
+  elif command -v dnf > /dev/null 2>&1 || command -v dnf5 > /dev/null 2>&1; then
+    ryoku_family=fedora
   else
-    die "unsupported distribution: Ryoku installs on Arch-based and Debian-based systems"
+    die "unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems"
   fi
   [[ $(uname -m) == x86_64 ]] || die "Ryoku ships x86_64 builds only"
   # the binary refuses non-systemd boots much later (session + services are
@@ -45,12 +47,14 @@ main() {
     # shellcheck source=/dev/null
     . /etc/os-release
     case "${ID:-} ${ID_LIKE:-}" in
-      *arch*|*debian*) ;;
+      *arch*|*debian*|*fedora*) ;;
       *) say "warning: ${PRETTY_NAME:-unknown distro} is not recognised; continuing as ${ryoku_family}" ;;
     esac
   fi
   if [[ $ryoku_family == debian ]]; then
     say "Debian detected: the desktop is built from source, which takes a few minutes"
+  elif [[ $ryoku_family == fedora ]]; then
+    say "Fedora detected: the desktop is built from source, which takes a few minutes"
   fi
 
   local work
