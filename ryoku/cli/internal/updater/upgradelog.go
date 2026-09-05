@@ -69,6 +69,78 @@ func renderUpgrade(phase string, argv []string) error {
 	return werr
 }
 
+// runUpgradeCollecting runs a package transaction sleep-inhibited and rendered
+// (or streamed raw for pipes/--verbose) exactly like renderUpgrade, and returns
+// the "exists in filesystem" conflict paths pacman reported, so a failed upgrade
+// can clear the strays no package owns and retry. Both views scan the same
+// stream, so the collection is identical on a TTY and in a log.
+func runUpgradeCollecting(phase, why string, argv []string) ([]string, error) {
+	full := argv
+	if sys.Has("systemd-inhibit") {
+		full = append([]string{"systemd-inhibit", "--what=sleep:idle",
+			"--who=ryoku update", "--why=" + why, "--mode=block"}, argv...)
+	}
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		return nil, sys.Run(full[0], full[1:]...)
+	}
+	cmd := exec.Command(full[0], full[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, pw, pw
+	if err := cmd.Start(); err != nil {
+		pw.Close()
+		pr.Close()
+		return nil, err
+	}
+	pw.Close()
+	rendered := !verboseLog && sys.StdoutIsTTY()
+	var r *upgradeRenderer
+	if rendered {
+		r = newUpgradeRenderer(os.Stdout, phase, true)
+	}
+	var conflicts []string
+	sc := bufio.NewScanner(pr)
+	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	sc.Split(scanLinesCR)
+	for sc.Scan() {
+		line := sc.Text()
+		logRaw(line)
+		if p := conflictPath(line); p != "" {
+			conflicts = append(conflicts, p)
+		}
+		if rendered {
+			r.feed(line)
+		} else {
+			fmt.Fprintln(os.Stdout, line)
+		}
+	}
+	pr.Close()
+	werr := cmd.Wait()
+	if rendered {
+		r.finish(werr == nil)
+	}
+	return conflicts, werr
+}
+
+// conflictPath pulls the path from a pacman file-conflict line, e.g.
+// "noto-fonts: /usr/share/fontconfig/conf.avail/46-noto-sans.conf exists in
+// filesystem" -> the path. Empty for any other line.
+func conflictPath(line string) string {
+	const marker = " exists in filesystem"
+	i := strings.Index(line, marker)
+	if i < 0 {
+		return ""
+	}
+	head := strings.TrimSpace(line[:i])
+	c := strings.LastIndex(head, ": ")
+	if c < 0 {
+		return ""
+	}
+	if p := strings.TrimSpace(head[c+2:]); strings.HasPrefix(p, "/") {
+		return p
+	}
+	return ""
+}
+
 // rawLog, set for the duration of an update, receives every unstyled line the
 // renderers consume, so the full firehose is preserved for review even though
 // the terminal shows only the curated view.

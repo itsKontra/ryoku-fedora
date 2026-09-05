@@ -79,7 +79,11 @@ func reconcileSpicetifyMarketplace(checkOnly bool) recResult {
 
 	var did []string
 	if needCli {
-		if !installSpicetifyCli() {
+		present, skipped := provision("spicetify-cli", installSpicetifyCli)
+		if skipped {
+			return okRes("spicetify-cli was removed by hand; the Marketplace stays off")
+		}
+		if !present {
 			return warnRes("Spotify is installed but spicetify-cli is missing and could not be installed").
 				withFix("install it by hand (`sudo pacman -S spicetify-cli`, it ships in [ryoku]), then run `ryoku doctor`")
 		}

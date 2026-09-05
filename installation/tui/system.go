@@ -116,6 +116,36 @@ func sysLocales() []item {
 	return promote(items, []string{"en_US.UTF-8", "en_GB.UTF-8", "de_DE.UTF-8", "fr_FR.UTF-8", "es_ES.UTF-8"})
 }
 
+func localeTerritory(locale string) string {
+	v := locale
+	if i := strings.IndexAny(v, ".@"); i >= 0 {
+		v = v[:i]
+	}
+	parts := strings.SplitN(v, "_", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	return strings.ToUpper(parts[1])
+}
+
+// promoteKbLocales floats the keyboard's own country to the top: "be" is the
+// Belgian layout and the Belarusian language, and be_BY sorted ahead of
+// fr_BE, which handed Belgians a Cyrillic locale.
+func promoteKbLocales(items []item, keymap string) []item {
+	lay, _ := xkbFromKeymap(keymap)
+	terr := strings.ToUpper(lay)
+	if terr == "" || terr == "US" {
+		return items // us is already the promoted default; nothing to disambiguate
+	}
+	var prefer []string
+	for _, it := range items {
+		if localeTerritory(it.key) == terr {
+			prefer = append(prefer, it.key)
+		}
+	}
+	return promote(items, prefer)
+}
+
 // sysTimezones lists time zones, with the auto-detect entry first.
 func sysTimezones() []item {
 	out, ok := run("timedatectl", "list-timezones")

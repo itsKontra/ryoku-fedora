@@ -14,6 +14,31 @@
   this root installer). Honors `RYOKU_DRYRUN`; `ryoku keyring` changes it later.
 
 ### Fixed
+- **Pressing Enter on an empty password no longer strands the in-session lock
+  on a white screen, taking the reboot and shutdown buttons with it.** The
+  clockwork/orbital submit runs a windup that ends in a full-screen blast (white
+  in the shipped dark theme) held up until PAM answers, and the shell drops the
+  whole HUD -- clock, password field, reboot and shutdown -- while it is raised.
+  An empty submit reached `sddm.login(user, "")`, but the shim never feeds an
+  empty key to PAM (the sensor keeps scanning instead), so the conversation
+  never completed, `loginFailed` never fired, and the blast never fell: a white
+  surface with no controls, reported both as "stuck on a white screen" and as
+  "the reboot and shutdown buttons are white on white." An empty Enter is now a
+  no-op that keeps the field; the shim will not start a response-less
+  conversation; a conversation that dies mid-auth now reports failure; and a
+  watchdog clears the flash if auth ever goes silent, so no submit -- empty,
+  wrong, or hung -- can hold the lock (`themes/clockwork/orbital/Main.qml`,
+  `quickshell-lockscreen/shim/SddmShim.qml`).
+- **The login screen uses the same keyboard layout as the session, so a non-US
+  password is accepted.** Moving the greeter to a Wayland weston kiosk left it on
+  weston's built-in `us` map: `/etc/X11/xorg.conf.d/00-keyboard.conf` (which the
+  installer and `localectl` write for the session and console) is X11-only, and a
+  bare weston reads neither it nor the console keymap. An AZERTY password typed at
+  the login field then failed on a QWERTY map while the same password worked on a
+  tty, which has the vconsole keymap. `sddm/ryoku-greeter` now reads that file and
+  hands weston the primary layout through the libxkbcommon defaults
+  (`XKB_DEFAULT_LAYOUT`/`_VARIANT`/`_OPTIONS`), which weston honours when its own
+  config names no keymap. Delivered by the package to fresh and existing boxes.
 - **The login screen always shows a mouse pointer.** Pinning
   `XCURSOR_THEME=Bibata-Modern-Ice` in `GreeterEnvironment` only helps clients
   that honor it; SDDM's Wayland greeter ignores it and, like weston's own

@@ -10,12 +10,8 @@ ShellRoot {
 
     property bool configLoaded: Config.configLoaded
     onConfigLoadedChanged: {
-        if (configLoaded) {
-            Qt.callLater(function() {
-                root._beginSelectorTiming()
-                wallpaperSelectorLoader.active = true
-            })
-        }
+        if (configLoaded && (root._pendingShow || root._startVisible))
+            Qt.callLater(root._load)
     }
 
     property double selectorOpenRequestedMs: 0
@@ -51,8 +47,8 @@ ShellRoot {
     function _logWithRam(label) {
         _ramProbeLabel = label
         _ramProbe.command = ["bash", "-c",
-            "awk '/^(VmSize|VmRSS):/{print $2}' /proc/self/status; " +
-            "awk '/^Pss:/{s+=$2} END{print s}' /proc/self/smaps_rollup"
+            "awk '/^(VmSize|VmRSS):/{print $2}' /proc/$PPID/status; " +
+            "awk '/^Pss:/{s+=$2} END{print s}' /proc/$PPID/smaps_rollup"
         ]
         _ramProbe.running = true
     }
@@ -81,25 +77,54 @@ ShellRoot {
         id: colors
     }
 
-    // The picker preloads hidden at daemon boot and stays resident (like the
-    // shell's overview): Super+W only flips the surface through the daemon's
-    // wallpaperToggle event, so a press never pays a cold QML boot. A crashed
-    // instance relaunched by the verb starts visible (RYOGAMI_START_VISIBLE).
+    // The process stays resident so Super+W never pays a quickshell boot, but
+    // the picker's QML tree (thumbnails, browsers, previews: several hundred
+    // MB) is built on show and torn down once the hide animation is over. A
+    // rebuild costs about a quarter of a second; holding it costs that memory
+    // all day. A crashed instance relaunched by the verb starts visible
+    // (RYOGAMI_START_VISIBLE).
     property bool _startVisible: Quickshell.env("RYOGAMI_START_VISIBLE") === "1"
     property bool _pendingShow: false
 
+    function _load() {
+        if (wallpaperSelectorLoader.active || !Config.configLoaded)
+            return
+        root._beginSelectorTiming()
+        wallpaperSelectorLoader.active = true
+    }
+
     function _setShowing(on) {
-        if (wallpaperSelectorLoader.item)
-            wallpaperSelectorLoader.item.showing = on
-        else
-            root._pendingShow = on
+        if (on) {
+            unloadTimer.stop()
+            root._pendingShow = true
+            if (wallpaperSelectorLoader.item) {
+                wallpaperSelectorLoader.item.showing = true
+                root._pendingShow = false
+            } else {
+                root._load()
+            }
+            return
+        }
+        root._pendingShow = false
+        if (wallpaperSelectorLoader.item) {
+            wallpaperSelectorLoader.item.showing = false
+            unloadTimer.restart()
+        }
     }
 
     function _toggleShowing() {
-        if (wallpaperSelectorLoader.item)
-            wallpaperSelectorLoader.item.showing = !wallpaperSelectorLoader.item.showing
-        else
-            root._pendingShow = true
+        var item = wallpaperSelectorLoader.item
+        root._setShowing(!(item && item.showing))
+    }
+
+    Timer {
+        id: unloadTimer
+        interval: 900
+        onTriggered: {
+            var item = wallpaperSelectorLoader.item
+            if (item && !item.showing)
+                wallpaperSelectorLoader.active = false
+        }
     }
 
     Connections {
@@ -120,7 +145,12 @@ ShellRoot {
             }
             item.colors = Qt.binding(() => colors)
             item.showing = root._startVisible || root._pendingShow
+            root._startVisible = false
             root._pendingShow = false
+            item.showingChanged.connect(function() {
+                if (!item.showing)
+                    unloadTimer.restart()
+            })
             item.uiReady.connect(function() {
                 if (!root.selectorTimingPending) return
                 var elapsed = Date.now() - root.selectorOpenRequestedMs

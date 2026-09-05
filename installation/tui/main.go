@@ -909,6 +909,11 @@ func (m *model) loadStep() {
 				disabled = map[string]bool{"alongside": true}
 			}
 		}
+		if s.key == "locale" {
+			// keep the keyboard's own country's locales in front so the intended
+			// pick leads, not the Belarusian be_BY that shares the "be" prefix.
+			items = promoteKbLocales(items, m.picks["keyboard"])
+		}
 		m.pick = newPicker(items, s.numbered)
 		m.pick.disabled = disabled
 		m.pick.height = m.listRows()

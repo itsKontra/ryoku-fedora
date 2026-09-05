@@ -12,10 +12,14 @@ import (
 // on error. dir "" runs without -C (for clone/init that take an explicit path).
 func mustGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	full := args
+	// -c gc.auto=0 / maintenance.auto=false: git commit can fork a background gc
+	// that keeps .git busy, so t.TempDir's RemoveAll flakes with "directory not
+	// empty" on a loaded CI runner. Disable it for every test git invocation.
+	gopts := []string{"-c", "gc.auto=0", "-c", "maintenance.auto=false"}
 	if dir != "" {
-		full = append([]string{"-C", dir}, args...)
+		gopts = append(gopts, "-C", dir)
 	}
+	full := append(gopts, args...)
 	cmd := exec.Command("git", full...)
 	cmd.Env = append(os.Environ(),
 		"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",

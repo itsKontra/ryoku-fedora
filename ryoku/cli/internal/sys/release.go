@@ -154,6 +154,15 @@ func SetPackagedChannel(channel string) error {
 	// the cached sync db describes the server the box just left; pacman only
 	// refetches a db it thinks is newer, so a stale copy against a frozen
 	// (older) release fails its signature check until it is gone.
+	return DropRyokuSyncDB()
+}
+
+// DropRyokuSyncDB removes the cached [ryoku] sync db, its signature, and the
+// files db. pacman refetches a db only when it thinks the server's is newer, so
+// a cached db whose bytes no longer match its ryoku.db.sig wedges every
+// transaction on "invalid or corrupted database (PGP signature)"; dropping it
+// lets the next -Sy pull a matched pair. Callers refresh afterwards.
+func DropRyokuSyncDB() error {
 	return Sudo("rm", "-f", "/var/lib/pacman/sync/ryoku.db", "/var/lib/pacman/sync/ryoku.db.sig",
 		"/var/lib/pacman/sync/ryoku.files", "/var/lib/pacman/sync/ryoku.files.sig")
 }

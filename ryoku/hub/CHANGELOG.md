@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+- **`ryoku-hub gpu vm` builds and runs the passthrough VM.** A new subcommand
+  generates a performance-tuned libvirt domain named `ryoku-<name>` from an
+  install ISO (host-passthrough CPU with vCPU pinning off the caps engine's
+  topology, Hyper-V enlightenments + hidden KVM for Windows, virtio disk, the
+  dGPU and its sibling functions as `managed='no'` vfio hostdevs so the existing
+  hook binds them, the kvmfr 128 MiB Looking Glass shmem via `qemu:commandline`,
+  swtpm, UEFI), then defines/starts/stops/removes it via virsh and launches
+  `looking-glass-client` on start. Readiness reuses the caps verdict. Ryoport's
+  Looking Glass lane and `ryovm lg` drive it (`backend/gpuvm.go`,
+  `backend/gpudomain.go`).
 - **Add-ons warns on a community plugin.** A plugin whose manifest is not
   `official: true` opens with the same warning the Store and QS Bar Settings
   print, before its placement controls (`pages/AddonsPage.qml`).

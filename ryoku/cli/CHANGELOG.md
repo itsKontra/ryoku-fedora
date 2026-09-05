@@ -2,7 +2,90 @@
 
 ## Unreleased
 
+### Changed
+- **An edit to a shipped file survives the update as a fork.** `ryoku
+  materialize` re-lays every shipped config on each update, so a hand edit
+  to, say, `hypr/modules/window_rules.lua` was thrown away. The manifest now
+  records the bytes each update left on disk; a shipped file whose live
+  bytes match neither those nor the new shipped ones was edited by hand and
+  is copied to `~/.config/ryoku/user_edits/<path>` before the base is laid,
+  where it wins on top, and the update lists the files it kept. Deleting the
+  fork takes Ryoku's version again. The shell's own QML tree is never forked
+  (`internal/updater/materialize.go`).
+
 ### Fixed
+- **`ryoku update` clears an unowned file that blocks the upgrade, then
+  retries.** A `pacman -Syu` aborts the whole transaction when any package (not
+  just a Ryoku one) is about to install a file that already exists on disk owned
+  by no package -- an installer or deploy stray, a partial extraction. The
+  update now reads the "exists in filesystem" paths pacman reports, removes the
+  ones no package owns (a file another package ships is a real conflict and is
+  left for the user), and retries once, in both the packaged update path and the
+  checkout `deploy.sh` upgrade (`internal/updater/update.go`,
+  `internal/updater/upgradelog.go`, `ryoku/shell/deploy.sh`).
+- **An unowned Ryoku system file no longer freezes every package update.** When
+  `ryoku-desktop` began owning paths the ISO installer and `deploy.sh` had
+  seeded unowned -- the `ryoku-*` systemd units and the boot configs under
+  `/usr/share/ryoku/boot`, on top of the helpers, polkit rules and Plymouth
+  theme already covered -- `pacman -Syu` aborted the whole transaction with
+  "exists in filesystem", so no package (including the new `ryotunes` app that
+  replaces the Chromium wrapper) ever installed and the box silently stopped
+  updating. The overwrite set now covers those two families in the packaged
+  update path, the checkout `deploy.sh` upgrade, and the doctor's stray-file
+  cleanup (`internal/updater/update.go`, `internal/doctor/doctor.go`,
+  `ryoku/shell/deploy.sh`).
+- **A rejected package database no longer wedges updates.** A box could cache
+  a `[ryoku]` sync db whose bytes no longer matched its signature (the mirror
+  briefly serves a db and `.sig` from different builds, and pacman refetches a
+  db's signature even when it keeps the db), after which every `pacman -S`
+  failed with "invalid or corrupted database (PGP signature)" and `-Sy` would
+  not replace a db it thought current. `ryoku update` now drops the cached db
+  and forces one full refresh when the upgrade is rejected, and `ryoku doctor`
+  detects and heals the same wedge (`internal/updater/update.go`,
+  `internal/doctor/doctor.go`, `internal/sys/release.go`).
+- **Zen scrolls and switches workspaces smoothly.** The shipped Zen policy
+  already turned on WebRender and hardware decoding; it now also sets the
+  Wayland vsync prefs that issue zen-browser/desktop#5588 identifies as the
+  scroll and compositing fix (`layout.frame_rate` -1,
+  `widget.wayland.vsync.enabled`, `keep-firing-at-idle`,
+  `fractional-scale.enabled`), as unlocked defaults a user can still override
+  (`internal/doctor/zen_policies.json`).
+- **A package you removed stays removed.** The doctor installed
+  spotify-launcher, spicetify-cli and asusctl on its own whenever it saw a
+  reason (a flatpak Spotify, an ASUS laptop), so removing them by hand lasted
+  until the next `ryoku update`. It now records what it provisioned
+  (`~/.local/state/ryoku/provisioned`) and treats a recorded package that is
+  gone as your decision; delete its line to let the doctor bring it back
+  (`internal/doctor/provision.go`).
+- **The Zen policy lands on a packaged Zen.** The doctor wrote
+  `<root>/distribution/policies.json` as the user, which fails with
+  "permission denied" under `/opt/zen-browser-bin` and `/usr/lib/zen-browser`
+  (the AUR and repo installs) on every update. It now writes through sudo when
+  the install dir is root's and as the user when it is a tarball under `~`
+  (`internal/doctor/reconcile_zen.go`).
+- **The CachyOS kernel entry no longer lands in emergency mode after an update.**
+  A limine box boots each kernel from a self-contained UKI, and nothing re-checked
+  that a kernel's image still matched its module tree. When an update left the
+  linux-cachyos image stale -- built for a version no longer installed, missing, or
+  older than the kernel -- booting it dropped to an emergency shell while the stock
+  linux entry stayed fine (#140). A new `reconcileLimineKernelImages` rebuilds any
+  installed kernel's stale or missing boot image on every `ryoku update`, and
+  reports and prunes a boot entry for a kernel the box no longer has, so a dead
+  second entry stops lingering (`internal/doctor/reconcile_limine_images.go`).
+- **A CachyOS install boots the CachyOS kernel by default.** The autoboot default
+  pointed at the first kernel the tool listed -- stock `linux` -- so a CachyOS box
+  silently booted the Arch kernel (the "it says Arch, not CachyOS" half of #140).
+  The default now prefers the linux-cachyos entry when the menu carries one, in the
+  doctor and the installer alike; a default the user set by hand is left untouched
+  (`internal/doctor/reconcile_limine.go`).
+- **`ryoku update` stops resetting hand-edited `/boot/limine.conf` globals.** The
+  limine reconcilers rewrote the branding header and the autoboot default on every
+  update, clobbering a changed timeout, menu colour, wallpaper, or default kernel.
+  They now add a Ryoku global only when it is missing and force just the boot
+  identity (`interface_branding`) and the snapshot-safety flag
+  (`hash_mismatch_panic`); every other global -- timeout, default_entry,
+  remember_last_entry, and all colours -- and any entry or key the user added are
+  preserved (`internal/doctor/reconcile_limine.go`).
 - **Ryotunes opens the packaged app on every box.** A Chromium YouTube Music
   wrapper or a locally built copy left in `~/.local/bin` shadowed
   `/usr/bin/ryotunes` on PATH, so Super+J and the dock kept opening the old

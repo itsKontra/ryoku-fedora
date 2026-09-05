@@ -26,6 +26,8 @@
 #   ssh <name>                       print the ssh command to the guest
 #   delete <name> [--disk-only]      remove the VM (or just wipe its disk)
 #   folder [name]                    print the VMs dir (or one VM dir)
+#   lg [list|create|start|stop|remove|status|<name>]  GPU-passthrough VMs via
+#                                    Looking Glass (delegates to ryoku-hub gpu vm)
 set -euo pipefail
 
 vms_dir="${RYOVM_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/ryoku/vms}"
@@ -1414,6 +1416,26 @@ cmd_mon() {
 	esac
 }
 
+# ---- lg (Looking Glass GPU-passthrough VMs) --------------------------------
+# Strictly the passthrough path: a libvirt domain named ryoku-<name>, displayed
+# through Looking Glass. Delegates to `ryoku-hub gpu vm`, which owns the caps
+# engine, the vfio hook and the tuned domain XML -- quickemu cannot pass a GPU
+# through, so this is a separate engine, never a quickemu conf. `ryovm lg <name>`
+# (a bare name) is the everyday shortcut: start the machine and open Looking
+# Glass. The `ryoport` command is a friendly alias for `ryovm lg`.
+cmd_lg() {
+	have ryoku-hub || die "ryoku-hub is not installed (it owns GPU passthrough)"
+	local sub="${1:-list}"
+	case "$sub" in
+		list|create|start|stop|remove|status)
+			shift || true
+			ryoku-hub gpu vm "$sub" "$@" ;;
+		*)
+			# a bare token is a machine name: start it and launch Looking Glass.
+			ryoku-hub gpu vm start --name "$sub" ;;
+	esac
+}
+
 cmd="${1:-}"; shift || true
 case "$cmd" in
 	caps)     cmd_caps "$@" ;;
@@ -1447,5 +1469,6 @@ case "$cmd" in
 	prefetch) cmd_prefetch "$@" ;;
 	paths)    cmd_paths "$@" ;;
 	mon)      cmd_mon "$@" ;;
-	*) die "usage: ryovm caps|setup|catalog|cloud-catalog|list|get|create|instant|template|templates|spawn|import|launch|console|stop|config|rename|resize|snapshot|seal|restore-seal|usb|portfwd|ssh|delete|folder|icon|prefetch|paths|mon" 2 ;;
+	lg)       cmd_lg "$@" ;;
+	*) die "usage: ryovm caps|setup|catalog|cloud-catalog|list|get|create|instant|template|templates|spawn|import|launch|console|stop|config|rename|resize|snapshot|seal|restore-seal|usb|portfwd|ssh|delete|folder|icon|prefetch|paths|mon|lg" 2 ;;
 esac

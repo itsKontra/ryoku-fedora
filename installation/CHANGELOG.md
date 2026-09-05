@@ -24,6 +24,13 @@
 - `tests/container-install.sh`: asserts the `/etc/ryoku-release` marker, that
   `ryoku version` prints it, and that `ryoku track` refuses to move a box whose
   `[ryoku]` points at a mirror Ryoku does not publish.
+- **The locale picker leads with the keyboard's own country.** `be` is both the
+  Belgian keyboard layout and the Belarusian language code, and `be_BY.UTF-8`
+  sorts and fuzzy-matches ahead of `fr_BE`/`nl_BE` for "be", so a Belgian could
+  pick Belarusian (a Cyrillic locale) by mistake and land in a Russian-looking
+  shell. The locale step now floats the chosen keyboard's country locales to the
+  top and makes one the default highlight, so the intended pick is the obvious
+  one (`tui/main.go`, `tui/system.go`).
 
 A ground-up hardening of the installer for real hardware. Granular backend and
 ISO detail live in `backend/CHANGELOG.md` and `iso/CHANGELOG.md`.

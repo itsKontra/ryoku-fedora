@@ -145,20 +145,30 @@ ryoku_limine_conf_set() {
 }
 
 # ryoku_limine_autoboot CONF: point default_entry at the Limine entry-path
-# ("<dir>/<kernel>") of the first kernel nested under the top-level OS directory,
-# and ensure remember_last_entry: yes. Limine's numeric default_entry counts
-# TOP-LEVEL entries only, so on the hook's collapsed-directory layout a bare
-# index lands on the sibling "/EFI fallback", which chainloads Limine and loops
-# the countdown; an entry path (CONFIG.md) autoboots the kernel leaf directly,
-# and remember_last_entry autoboots the last kernel used (e.g. a CachyOS kernel).
+# ("<dir>/<kernel>") of the boot kernel -- the CachyOS kernel when the menu has
+# one (the cachyos variant installs linux-cachyos beside the stock linux
+# fallback and boots it by default), else the first kernel nested under the
+# top-level OS directory -- and ensure remember_last_entry: yes. Limine's numeric
+# default_entry counts TOP-LEVEL entries only, so on the hook's collapsed-directory
+# layout a bare index lands on the sibling "/EFI fallback", which chainloads Limine
+# and loops the countdown; an entry path (CONFIG.md) autoboots the kernel leaf
+# directly, and remember_last_entry autoboots the last kernel used.
 # A flat menu (no directory) keeps default_entry: 1, its bootable placeholder.
-# Mirrors reconcileLimineAutoboot so a doctored box matches a fresh install.
+# Mirrors limineDefaultKernelPath/reconcileLimineAutoboot so a doctored box
+# matches a fresh install.
 ryoku_limine_autoboot() {
   local conf=$1 path tmp
   path=$(awk '
     { t = $0; sub(/^[[:space:]]+/, "", t) }
     t ~ /^\/[^\/]/                 { dir = t; sub(/^\/\+?/, "", dir); next }
-    t ~ /^\/\/[^\/]/ && dir != "" { k = t; sub(/^\/\//, "", k); if (k != "Snapshots") { print dir "/" k; exit } }
+    t ~ /^\/\/[^\/]/ && dir != "" {
+      k = t; sub(/^\/\//, "", k)
+      if (k == "Snapshots") next
+      p = dir "/" k
+      if (first == "") first = p
+      if (cachyos == "" && index(tolower(p), "cachyos")) cachyos = p
+    }
+    END { print (cachyos != "" ? cachyos : first) }
   ' "$conf")
   [[ -n $path ]] || path=1
   tmp=$(mktemp) || return 1

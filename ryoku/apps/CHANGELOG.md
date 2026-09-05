@@ -3,6 +3,20 @@
 ## Unreleased
 
 ### Added
+- `ryovm/`: **a Looking Glass lane for GPU-passthrough VMs.** Ryoport grows a
+  fourth section (rail + `Ctrl+4`) that manages passthrough machines: point it
+  at an install ISO and pick the guest, and it defines a tuned `ryoku-<name>`
+  libvirt domain (CPU pinning, Hyper-V enlightenments for Windows, virtio disk,
+  the dGPU + its audio as vfio hostdevs, the kvmfr Looking Glass shared-memory
+  device); one button starts it (the vfio hook binds the dGPU) and opens
+  `looking-glass-client`. The lane gates on the GPU page's readiness verdict and
+  states the blocker when passthrough is not ready, and a standing checklist
+  names the guest-side steps that cannot be automated (OS, virtio drivers, the
+  Looking Glass host app, and a virtual-display driver for laptop dGPUs). CLI:
+  `ryovm lg <name>` (or the `ryoport` alias) starts a machine and opens Looking
+  Glass. Strictly passthrough, always Looking Glass -- quickemu cannot pass a
+  GPU through, so this is a separate engine (`Singletons/Lg.qml`,
+  `PassthroughPage.qml`, `bin/ryovm` lg verb, `bin/ryoport`).
 - `fastfetch/`: **the OS line carries the release name** ("Ryoku Onogoro
   v0.56.0-beta.19") via `ryoku version --pretty` (`config.jsonc`).
 

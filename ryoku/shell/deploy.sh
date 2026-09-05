@@ -517,9 +517,31 @@ if command -v sudo >/dev/null 2>&1 && command -v pacman >/dev/null 2>&1; then
   mkdir -p "$(dirname "$_plog")"
   # the redirect is the user's file, which is the intent (shellcheck SC2024 is
   # about root-owned targets); pacman's own output goes to the log for -v.
+  # --overwrite the ryoku-owned paths the ISO installer and this script seed
+  # unowned (privileged helpers, systemd units, polkit rules, the plymouth theme,
+  # the boot configs); once ryoku-desktop packages them an unowned copy otherwise
+  # aborts the whole -Syu with "exists in filesystem" and nothing upgrades.
+  # Mirrors updater.ryokuOverwriteGlob / the doctor's ryokuSystemGlobs.
+  _rovw='/usr/bin/ryoku-*,/usr/lib/systemd/system/ryoku-*,/usr/share/polkit-1/rules.d/*ryoku*.rules,/usr/share/plymouth/themes/ryoku/*,/usr/share/ryoku/boot/*'
+  _pac_ryotunes() { sudo pacman -Syu --needed --noconfirm --overwrite "$_rovw" ryotunes; }
   # shellcheck disable=SC2024
-  if sudo pacman -Syu --needed --noconfirm ryotunes >"$_plog" 2>&1; then
+  if _pac_ryotunes >"$_plog" 2>&1; then
     say "ryotunes from [ryoku]: $(pacman -Q ryotunes 2>/dev/null | awk '{print $2}')"
+  elif grep -q 'exists in filesystem' "$_plog"; then
+    # a new package now claims files that exist unowned (an installer/deploy
+    # stray for any package, not just ryoku): remove the ones no package owns and
+    # retry once. A file another package owns is a real conflict, left in place.
+    _strays=()
+    while IFS= read -r _f; do
+      [ -e "$_f" ] || continue
+      pacman -Qo "$_f" >/dev/null 2>&1 || _strays+=("$_f")
+    done < <(sed -n 's/.*: \(\/[^ ]*\) exists in filesystem.*/\1/p' "$_plog")
+    # shellcheck disable=SC2024
+    if [ "${#_strays[@]}" -gt 0 ] && sudo rm -f "${_strays[@]}" && _pac_ryotunes >>"$_plog" 2>&1; then
+      say "ryotunes from [ryoku]: $(pacman -Q ryotunes 2>/dev/null | awk '{print $2}') (cleared ${#_strays[@]} unowned file(s))"
+    else
+      say "  ryotunes not installed from [ryoku] (file conflicts remain; see $_plog)"
+    fi
   else
     say "  ryotunes not installed from [ryoku] (channel unreachable or not published yet); see $_plog"
   fi
@@ -659,8 +681,10 @@ if command -v sudo >/dev/null 2>&1; then
   cmp -s "$here/../apps/mimeapps.list" /usr/share/applications/mimeapps.list ||
     sudo install -Dm644 "$here/../apps/mimeapps.list" /usr/share/applications/mimeapps.list || true
 fi
-# chromium reads ~/.config/chromium-flags.conf at launch; pin its password store to the GNOME keyring.
+# chromium reads ~/.config/chromium-flags.conf, Google Chrome reads chrome-flags.conf;
+# lay the one source to both (GNOME keyring password store + native Wayland).
 cp -a "$here/../apps/chromium-flags.conf" "$cfg/chromium-flags.conf"
+cp -a "$here/../apps/chromium-flags.conf" "$cfg/chrome-flags.conf"
 # the screen-share source chooser xdph launches (hypr/xdph.conf names it). Its
 # stylesheet is matugen's, rendered to ~/.cache/ryoku/share-picker.css.
 mkdir -p "$cfg/hyprland-preview-share-picker"

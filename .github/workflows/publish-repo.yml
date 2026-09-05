@@ -350,7 +350,11 @@ jobs:
           # and .sig files it lists, SigLevel=Required installs fail with
           # "Maximum file size exceeded", because a missing .sig returns an HTML
           # 404 that overruns pacman's signature size cap. So push packages and
-          # sigs first, the db last, then prune superseded versions.
+          # sigs first, the db last, then prune superseded versions. Keep each db
+          # and its .sig in one transfer: pacman fetches a db's sig even when the
+          # db is unchanged (304), so a db and sig from different builds served at
+          # once wedge a box on "invalid or corrupted database"; the client heals
+          # it (ryoku update, doctor).
           publish() {
             local src=$1 remote=$2
             rclone copy "$src" "$remote" --exclude 'ryoku.db*' --exclude 'ryoku.files*' -P

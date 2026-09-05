@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Fixed
+- `bootloader`: **a CachyOS install autoboots the CachyOS kernel.**
+  `ryoku_limine_autoboot` pointed default_entry at the first kernel the menu listed
+  (stock `linux`), so a fresh CachyOS box booted the Arch kernel; it now prefers the
+  linux-cachyos entry when present, matching `limineDefaultKernelPath` and
+  `reconcileLimineAutoboot` in the doctor (#140).
 - `deploy`/`bootloader`: **the Plymouth splash no longer breaks the install.**
   `ryoku-desktop` (installed in the configure stage) already owns
   `/usr/share/plymouth/themes/ryoku/`, but `bootloader` then laid a second,

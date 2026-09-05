@@ -116,3 +116,19 @@ func TestSizeValueAndCount(t *testing.T) {
 		t.Errorf("countUpgrade should ignore non-upgrade step, got %d", got)
 	}
 }
+
+func TestConflictPath(t *testing.T) {
+	cases := map[string]string{
+		"noto-fonts: /usr/share/fontconfig/conf.avail/46-noto-sans.conf exists in filesystem": "/usr/share/fontconfig/conf.avail/46-noto-sans.conf",
+		"ryoku-desktop: /usr/lib/systemd/system/ryoku-network-kill-guard.service exists in filesystem": "/usr/lib/systemd/system/ryoku-network-kill-guard.service",
+		"foo: /a/b exists in filesystem (owned by bar)": "/a/b",
+		" downloading...":                              "",
+		"error: failed to commit transaction (conflicting files)": "",
+		":: Proceed with installation? [Y/n]":                     "",
+	}
+	for line, want := range cases {
+		if got := conflictPath(line); got != want {
+			t.Errorf("conflictPath(%q) = %q, want %q", line, got, want)
+		}
+	}
+}

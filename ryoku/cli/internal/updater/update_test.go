@@ -181,6 +181,8 @@ func TestSystemUpgradeAdoptsSeededRyokuFiles(t *testing.T) {
 		"/usr/share/polkit-1/rules.d/49-ryoku-wifi-powersave.rules",
 		"/usr/share/plymouth/themes/ryoku/bullet.png",
 		"/usr/share/plymouth/themes/ryoku/logo.png",
+		"/usr/lib/systemd/system/ryoku-network-kill-guard.service",
+		"/usr/share/ryoku/boot/default.conf",
 	} {
 		covered := false
 		for _, g := range strings.Split(glob, ",") {

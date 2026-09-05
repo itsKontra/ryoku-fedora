@@ -136,16 +136,26 @@ func Update(args []string) error {
 		os.Setenv("RYOKU_UPDATE_FROM", from)
 	}
 	clearStalePacmanLock()
-	if err := runSystemUpgrade(channelSwitch); err != nil {
-		// only advertise `ryoku rollback` when the pre snapshot it needs exists;
-		// snapperPre is best-effort and returns "" when it was skipped.
-		hint := "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with pacman directly"
-		if pre != "" {
-			hint = "see `ryoku rollback` (pre-update snapshot " + pre + ")"
+	if conflicts, err := runSystemUpgrade(channelSwitch); err != nil {
+		// One in-place recovery, then a single retry: clear the unowned files a
+		// new package now claims (an installer/deploy stray), or, with nothing to
+		// clear, drop a stale [ryoku] db whose signature no longer matches. A
+		// channel switch already forces -Syyu, so it does not retry here.
+		if !channelSwitch {
+			healSystemUpgrade(conflicts)
+			_, err = runSystemUpgrade(true)
 		}
-		e := fmt.Errorf("pacman -Syu failed; %s: %w", hint, err)
-		progress.fail(e)
-		return e
+		if err != nil {
+			// only advertise `ryoku rollback` when the pre snapshot it needs exists;
+			// snapperPre is best-effort and returns "" when it was skipped.
+			hint := "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with pacman directly"
+			if pre != "" {
+				hint = "see `ryoku rollback` (pre-update snapshot " + pre + ")"
+			}
+			e := fmt.Errorf("pacman -Syu failed; %s: %w", hint, err)
+			progress.fail(e)
+			return e
+		}
 	}
 	// `ryoku track` just repointed the [ryoku] repo. -Syu only moves up, so a
 	// box leaving testing for stable, or pinning an earlier release, still
@@ -298,23 +308,60 @@ func snapshotDesc() string {
 // runSystemUpgrade runs `pacman -Syu` sleep-inhibited (a lid-close or idle
 // suspend mid-transaction cannot corrupt it) and skips snap-pac's per-transaction
 // snapshot: `ryoku update` already brackets the whole run with one snapper
-// pre/post pair, so snap-pac's extra pair is pure noise in the list and the boot
-// menu. sudo resets the environment, so SNAP_PAC_SKIP rides inside via env(1).
-func runSystemUpgrade(forceRefresh bool) error {
-	return runInhibited("System", "System package upgrade", systemUpgradeArgs(forceRefresh))
+// pre/post pair. It returns any "exists in filesystem" conflict paths so a
+// failed run can clear unowned strays and retry.
+func runSystemUpgrade(forceRefresh bool) ([]string, error) {
+	return runUpgradeCollecting("System", "System package upgrade", systemUpgradeArgs(forceRefresh))
+}
+
+// healSystemUpgrade recovers from a failed system upgrade in place, once. Files
+// that block the transaction and that no package owns ("exists in filesystem"
+// for an installer/deploy stray a new package now claims) are removed so the
+// package adopts them; a file another package owns is a real conflict and is
+// left untouched for the retry to surface. With nothing to clear, it assumes a
+// stale [ryoku] db whose signature no longer matches and forces a clean refresh.
+func healSystemUpgrade(conflicts []string) {
+	if strays := unownedFiles(conflicts); len(strays) > 0 {
+		progress.logf("Clearing %d unowned file(s) blocking the upgrade, then retrying", len(strays))
+		_ = sys.Sudo(append([]string{"rm", "-f"}, strays...)...)
+		return
+	}
+	progress.logf("Package database rejected; dropping the stale [ryoku] db and retrying")
+	_ = sys.DropRyokuSyncDB()
+}
+
+// unownedFiles keeps only the paths no installed package owns: pacman -Qo fails
+// on a stray, and removing a file a package ships would break that package.
+func unownedFiles(paths []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, p := range paths {
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		if _, err := sys.RunOut("pacman", "-Qo", p); err != nil {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // ryokuOverwriteGlob names the ryoku-desktop-owned paths that the ISO installer
 // and ryoku/shell/deploy.sh seed unowned before the package began owning them:
-// the privileged helpers (ryoku-dns, ryoku-wifi-powersave), their polkit rules,
-// and the Plymouth splash theme (installer bootloader.sh + deploy.sh). Every
-// ryoku-desktop (re)install --overwrites these, or the first upgrade that starts
-// owning a seeded path aborts the whole transaction ("exists in filesystem") and
-// blocks every update until the files are removed by hand. Keep in sync with the
-// doctor's ryokuSystemGlobs, which clears the same paths on an already-wedged box.
+// the privileged helpers (ryoku-dns, ryoku-network-kill, ryoku-boot-apply,
+// ryoku-wifi-powersave), their polkit rules, the Plymouth splash theme, the
+// ryoku-owned systemd units, and the shipped boot configs under
+// /usr/share/ryoku/boot. Every ryoku-desktop (re)install --overwrites these, or
+// the first upgrade that starts owning a seeded path aborts the whole
+// transaction ("exists in filesystem") and blocks every update until the files
+// are removed by hand. Keep in sync with the doctor's ryokuSystemGlobs, which
+// clears the same paths on an already-wedged box.
 const ryokuOverwriteGlob = "/usr/bin/ryoku-*," +
+	"/usr/lib/systemd/system/ryoku-*," +
 	"/usr/share/polkit-1/rules.d/*ryoku*.rules," +
-	"/usr/share/plymouth/themes/ryoku/*"
+	"/usr/share/plymouth/themes/ryoku/*," +
+	"/usr/share/ryoku/boot/*"
 
 // systemUpgradeArgs is the packaged-box upgrade command. After a channel move
 // the refresh is forced (-Syy): pacman skips a db that is not newer than its

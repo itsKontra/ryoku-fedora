@@ -139,6 +139,7 @@ files=(
   pip/pip.conf
   wireplumber/wireplumber.conf.d/51-ryoku-bluetooth.conf
   chromium-flags.conf
+  chrome-flags.conf
 )
 dirs=(quickshell/hub)
 

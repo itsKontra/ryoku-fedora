@@ -2391,6 +2391,10 @@ func TestStrayRyokuFilesSelectsUnownedOnly(t *testing.T) {
 			return []string{"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules"}, nil
 		case "/usr/share/plymouth/themes/ryoku/*":
 			return []string{"/usr/share/plymouth/themes/ryoku/bullet.png", "/usr/share/plymouth/themes/ryoku/logo.png"}, nil
+		case "/usr/lib/systemd/system/ryoku-*":
+			return []string{"/usr/lib/systemd/system/ryoku-network-kill-guard.service"}, nil
+		case "/usr/share/ryoku/boot/*":
+			return []string{"/usr/share/ryoku/boot/default.conf"}, nil
 		}
 		return nil, nil
 	}
@@ -2403,6 +2407,8 @@ func TestStrayRyokuFilesSelectsUnownedOnly(t *testing.T) {
 		"/usr/bin/ryoku-dns":                             true,
 		"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules": true,
 		"/usr/share/plymouth/themes/ryoku/bullet.png":    true,
+		"/usr/lib/systemd/system/ryoku-network-kill-guard.service": true,
+		"/usr/share/ryoku/boot/default.conf":                       true,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("strayRyokuFiles = %v, want exactly the three unowned paths", got)

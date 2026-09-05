@@ -115,11 +115,9 @@ func reconcileZenInto(roots []string, checkOnly bool) recResult {
 			pending = append(pending, root)
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return failRes("could not create the Zen distribution dir at %s: %v", root, err)
-		}
-		if err := os.WriteFile(dst, append(append([]byte{}, want...), '\n'), 0o644); err != nil {
-			return failRes("could not write the Zen policy at %s: %v", dst, err)
+		if err := writeZenPolicy(dst, append(append([]byte{}, want...), '\n')); err != nil {
+			return failRes("could not write the Zen policy at %s: %v", dst, err).
+				withFix("sudo ryoku doctor")
 		}
 		did = append(did, root)
 	}
@@ -133,4 +131,23 @@ func reconcileZenInto(roots []string, checkOnly bool) recResult {
 	default:
 		return okRes("Zen policy up to date")
 	}
+}
+
+// writeZenPolicy lands the policy as the user when the install dir is theirs
+// (a tarball under ~/.local), and through sudo when it is a package's under
+// /opt or /usr, which is the common case and used to fail with EACCES.
+func writeZenPolicy(dst string, body []byte) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err == nil {
+		if err := os.WriteFile(dst, body, 0o644); err == nil {
+			return nil
+		} else if !os.IsPermission(err) {
+			return err
+		}
+	} else if !os.IsPermission(err) {
+		return err
+	}
+	if err := sys.Sudo("install", "-d", "-m", "0755", filepath.Dir(dst)); err != nil {
+		return err
+	}
+	return sys.WriteRootFile(dst, string(body), "0644")
 }

@@ -468,9 +468,12 @@ EOF
   # the user picks something else, and then their pick wins for good.
   install -Dm644 "$_repo/ryoku/apps/mimeapps.list" \
     "$pkgdir/usr/share/applications/mimeapps.list"
-  # chromium reads ~/.config/chromium-flags.conf; pin its password store to GNOME
-  # Secret Service so it shares the keyring the desktop unlocks (screen share).
+  # chromium reads ~/.config/chromium-flags.conf and Google Chrome reads
+  # ~/.config/chrome-flags.conf; lay the one source to both so each pins the GNOME
+  # keyring password store and native Wayland (screen share works, and Chrome does
+  # not sit on Xwayland where it renders pages blank on NVIDIA).
   install -Dm644 "$_repo/ryoku/apps/chromium-flags.conf" "$cfg/chromium-flags.conf"
+  install -Dm644 "$_repo/ryoku/apps/chromium-flags.conf" "$cfg/chrome-flags.conf"
   # the screen-share source chooser xdph launches (hypr/xdph.conf names the
   # binary); its stylesheet is the matugen template rendered on palette change.
   install -Dm644 "$_repo/ryoku/apps/hyprland-preview-share-picker/config.yaml" \

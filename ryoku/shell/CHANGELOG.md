@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Fixed
+- **Quickshell's runtime logs can no longer eat the RAM.** Quickshell keeps
+  a per-instance directory under `$XDG_RUNTIME_DIR` (a tmpfs, so memory) with
+  two unbounded logs and never removes it; one warning storm wrote 4.3 GB
+  there and a hundred dead instances kept their logs after it, which reads as
+  "the shell uses gigabytes" and starves every socket in the runtime dir. The
+  daemon now prunes dead instance directories at start and every five
+  minutes and truncates a live log past 32 MB (`ipc/qsruntime.go`).
+- **The wallpaper picker no longer holds 400 MB while hidden.** Its QML tree
+  (thumbnails, browsers, previews) was built at daemon boot and kept for the
+  session. It is now built on the first Super+W and torn down a second after
+  the picker closes; the process stays warm, so a reopen is instant (36 ms
+  measured) and an idle picker sits at about 160 MB instead of 410
+  (`ryogami/wall-ui/shell.qml`).
+
 ### Changed
 - **The Ryogami picker closes once something is applied.** Wallpaper, video,
   Wallpaper Engine scene, theme or rice: the picker leaves as soon as the
@@ -9,6 +24,42 @@
   a stay-open browser (`ryogami/wall-ui/`).
 
 ### Fixed
+- **The wallpaper reappears after a reboot even when its file or the monitors
+  arrive late.** The daemon restored the saved wallpaper (static or live) in a
+  single pass at startup and silently gave up if the file the choice named was
+  not yet readable or the compositor's outputs were not yet enumerable -- a
+  login-time race that left the desktop on the grey Hyprland default until the
+  next manual set. The startup restore now retries briefly while the desktop is
+  bare, and a Hyprland event-socket watcher re-spans a live wall onto an output
+  that comes up after the first pass (a login race, a hotplug, a panel that
+  enumerates late). A box upgraded across the Ryogami split also carries its
+  pre-split wallpaper choice into the daemon's store on first start, so the
+  wallpaper survives the update instead of coming up grey (`ryogami/daemon/apply.go`,
+  `ryogami/daemon/restore_watch.go`, `ryogami/daemon/daemon.go`).
+- **The launcher returns to its exact idle size after a query is cleared.** On a
+  monitor with a non-default interface scale (`displays.ui_scale`), the hero
+  launcher opened at one height but settled a few pixels shorter once you typed
+  and erased back to empty, so the idle card visibly jumped. The initial open
+  path sized the card without the per-monitor UI scale the surface actually
+  renders at; it now folds in the same `uiScaleFor` factor, so a fresh open and a
+  cleared query land at the identical height
+  (`modules/launcher/variants/hero/Main.qml`).
+- **The Bluetooth widget no longer leaks `bluetoothctl` processes.** On a box
+  with no adapter the widget polled `bluetoothctl show` on a timer even while
+  the widget was disabled; without BlueZ the call never returned, so each tick
+  orphaned the previous one and dead processes piled into the hundreds, leaking
+  RAM. The widget now reads state straight off `Quickshell.Bluetooth` (BlueZ over
+  D-Bus) with no polling and no process at all, so an adapterless machine spawns
+  nothing (`modules/bar/barstyles/qsbar/modules/BluetoothWidget.qml`).
+- **Bluetooth device names load, and pairing a fresh device works.** The qsbar
+  panel parsed `bluetoothctl devices` output, which left names blank, and its
+  pair step ran `trust`/`pair`/`connect` with no pairing agent, so a new mouse
+  never bonded. The panel now lists devices from `Quickshell.Bluetooth` so names
+  come from BlueZ, and pairing shells one `bluetoothctl` that brings its own
+  `NoInputNoOutput` agent, then trusts, connects and reports the failure text to
+  the panel instead of failing silently. The frame-bar popout pairs through the
+  same path (`modules/bar/barstyles/qsbar/panels/BluetoothPanel.qml`,
+  `modules/bar/popouts/BluetoothPopout.qml`, `services/BtLink.qml`).
 - **A pinned dock icon no longer resets to a generic gear.** The dock resolved
   each icon once through a plain function call, so a pin whose icon was not yet
   findable at first paint -- a fresh boot before the icon-theme cache warms, or

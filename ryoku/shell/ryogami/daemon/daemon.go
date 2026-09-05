@@ -29,6 +29,8 @@ type daemon struct {
 	currentMu sync.Mutex
 	current   string // basename of the last applied wallpaper
 
+	restoreMu sync.Mutex // serializes restoreOutputs: startup, retry, output-added, manual
+
 	random    *randomRotation
 	video     *videoPlayer
 	optimizer *Optimizer
@@ -145,7 +147,13 @@ func runDaemon() error {
 	d.surface.publishCurrent()
 	go func() {
 		if d.config().restoreEnabled() {
-			d.restoreOutputs()
+			d.migrateLegacyOutputs()
+			if want, applied := d.restoreOutputs(); want > 0 && applied == 0 {
+				// A login race can leave the file the choice names, or the
+				// outputs a live wall spans, not yet present; keep trying rather
+				// than leave the desktop on the empty grey frame until a manual set.
+				go d.retryRestore()
+			}
 		}
 		d.rescan(false)
 		d.playlists.resumeAll()
@@ -153,6 +161,7 @@ func runDaemon() error {
 	}()
 	go d.watchConfig()
 	go d.watchLibrary()
+	go d.watchOutputs()
 
 	for {
 		conn, err := ln.Accept()

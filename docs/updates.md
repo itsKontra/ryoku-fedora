@@ -227,7 +227,12 @@ island (when the channel serves the next line) and the Hub's Updates page.
 - **A user override belongs in `~/.config/ryoku/user_edits`, never in a shipped
   path.** The base still ships every file (the delivery check stays green) and
   the overlay wins on top. A whole-file fork opts out of upstream fixes for that
-  one file, so prefer an overlay for anything additive.
+  one file, so prefer an overlay for anything additive. An edit made to a
+  shipped file in place is not lost either: `materialize` notices bytes that
+  match neither what it laid last time nor what it ships now, copies them into
+  the overlay as a fork, lays the base, and lists the files it kept. Hyprland
+  additions (rules, binds) belong in `hypr/user.lua` or the Hub, which are
+  never re-laid.
 - **Everything a user runs must converge on update, wherever it lives.**
   `materialize` covers `~/.config`; a payload installed elsewhere (the lock
   bundle under `~/.local/share`, the SDDM greeter skin under

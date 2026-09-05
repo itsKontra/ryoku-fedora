@@ -44,6 +44,9 @@ func reconcileAsusAura(checkOnly bool) recResult {
 			withFix("choose TLP or ASUS Aura control; remove TLP before installing asusctl")
 	}
 	if !st.installed {
+		if removedByUser("asusctl") {
+			return okRes("asusctl was removed by hand; leaving the Aura keyboard unmanaged")
+		}
 		if checkOnly {
 			return wouldRes("ASUS Aura keyboard provider is missing").
 				withFix("ryoku doctor installs asusctl and starts asusd")
@@ -52,6 +55,7 @@ func reconcileAsusAura(checkOnly bool) recResult {
 			return failRes("could not install the ASUS Aura provider: %v", err).
 				withFix("sudo pacman -S asusctl")
 		}
+		recordProvisioned("asusctl")
 	}
 	if st.installed && st.running {
 		return okRes("ASUS Aura keyboard provider is installed and running")

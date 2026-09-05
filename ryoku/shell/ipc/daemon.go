@@ -212,6 +212,7 @@ func runDaemon() error {
 
 	setupQmlImportPath()
 
+	go d.runtimeJanitor()
 	d.bootstrap()
 
 	for {

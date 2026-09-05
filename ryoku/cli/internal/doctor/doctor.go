@@ -105,6 +105,7 @@ func reconcilers() []reconciler {
 		{"limine boot entry", reconcileLimineBootEntry},
 		{"alongside boot entry", reconcileAlongsideBootEntry},
 		{"limine UKI boot tree", reconcileLimineUKITree},
+		{"limine kernel boot images", reconcileLimineKernelImages},
 		{"limine autoboot", reconcileLimineAutoboot},
 		{"limine snapshot sync", reconcileLimineOSName},
 		{"updatedb snapshot prune", reconcileUpdatedbPrune},
@@ -114,6 +115,7 @@ func reconcilers() []reconciler {
 		{"stale update run-state", reconcileStaleUpdateRun},
 		{"stale install crypt mapper", reconcileStaleCryptMapper},
 		{"ryoku package channel", reconcileRyokuChannel},
+		{"ryoku package database", reconcileRyokuSyncDB},
 		{"boot guard", reconcileBootGuard},
 		{"update channel checkout", reconcileUpdateChannel},
 		{"update checkout pointer", reconcileRepoPointer},
@@ -972,6 +974,53 @@ func reconcileRyokuChannel(checkOnly bool) recResult {
 	// re-populating is idempotent and cheap.
 	_ = sys.Sudo("pacman-key", "--populate", "ryoku")
 	return fixedRes("re-added the [ryoku] repo to pacman.conf so updates arrive again")
+}
+
+// ---- reconciler: ryoku sync database health ----------------------------------
+
+// reconcileRyokuSyncDB heals a cached [ryoku] sync db wedged against its
+// signature. The db is non-reproducible and its detached .sig is fetched fresh
+// on every refresh even when the db itself is unchanged (a 304), so any box
+// that syncs while the mirror briefly serves a db and .sig from different
+// builds caches a mismatched pair. pacman then rejects it -- "invalid or
+// corrupted database (PGP signature)" -- on every transaction, and -Sy will not
+// replace a db it thinks is current, so `pacman -S <anything>` stays wedged
+// until the cache is dropped. `ryoku update` self-heals on the spot; this
+// catches a box a user only ever drives through plain pacman. Detection is
+// read-only (`pacman -Sl` loads and verifies the cached db); the fix drops it
+// and pulls a fresh, matched pair.
+func reconcileRyokuSyncDB(checkOnly bool) recResult {
+	if !sys.PkgInstalled("ryoku-desktop") {
+		return okRes("not a packaged install (desktop runs from a checkout)")
+	}
+	// a missing key is a keyring problem the channel reconciler owns; dropping
+	// the db would only refetch one that fails the same way.
+	if !sys.PkgInstalled("ryoku-keyring") || sys.RyokuServer() == "" {
+		return okRes("[ryoku] repo or keyring absent; nothing to verify")
+	}
+	if !sys.Exists("/var/lib/pacman/sync/ryoku.db") {
+		return okRes("no cached [ryoku] sync db to check")
+	}
+	out, err := sys.RunOut("sh", "-c", "LC_ALL=C pacman -Sl ryoku 2>&1")
+	if err == nil {
+		return okRes("the [ryoku] sync db loads and verifies")
+	}
+	if !strings.Contains(out, "invalid or corrupted database") && !strings.Contains(out, "signature") {
+		// another failure (offline, transient); not the stale-signature wedge.
+		return okRes("the [ryoku] sync db is present; no signature wedge")
+	}
+	if checkOnly {
+		return wouldRes("the cached [ryoku] sync db no longer matches its signature; every pacman transaction fails until it is refreshed").
+			withFix("ryoku doctor")
+	}
+	if err := sys.DropRyokuSyncDB(); err != nil {
+		return failRes("could not drop the stale [ryoku] sync db: %v", err).
+			withFix("sudo rm -f /var/lib/pacman/sync/ryoku.* && sudo pacman -Syy")
+	}
+	// the db is gone now, so a plain -Sy pulls a fresh, matched pair; best-effort
+	// so an offline box simply refetches on its next update.
+	_ = sys.Sudo("pacman", "-Sy", "--noconfirm")
+	return fixedRes("dropped the stale [ryoku] sync db so pacman refetches a matched db and signature")
 }
 
 // ---- reconciler: Material Symbols icon font ------------------------------------
@@ -3672,8 +3721,10 @@ func tailLines(s string, n int) string {
 
 // ryokuSystemGlobs are the ryoku-desktop-owned paths that the ISO installer
 // (bootloader.sh) and ryoku/shell deploy.sh also seed unowned: the privileged
-// helpers + their polkit rules (so a dev checkout's pkexec has a rule to match)
-// and the Plymouth splash theme. On a packaged box an unowned copy from an
+// helpers + their polkit rules (so a dev checkout's pkexec has a rule to match),
+// the ryoku-owned systemd units, the shipped boot configs under
+// /usr/share/ryoku/boot, and the Plymouth splash theme. On a packaged box an
+// unowned copy from an
 // earlier dev deploy, an older ISO, or `ryoku recovery` collides with the package
 // on `pacman -Syu` ("exists in filesystem") and aborts the whole atomic
 // transaction, so no update lands. `ryoku update` now passes --overwrite for these
@@ -3681,8 +3732,10 @@ func tailLines(s string, n int) string {
 // binary; clearing the copies here lets the next update adopt them.
 var ryokuSystemGlobs = []string{
 	"/usr/bin/ryoku-*",
+	"/usr/lib/systemd/system/ryoku-*",
 	"/usr/share/polkit-1/rules.d/*ryoku*.rules",
 	"/usr/share/plymouth/themes/ryoku/*",
+	"/usr/share/ryoku/boot/*",
 }
 
 // pkgOwnsFile reports whether an installed package owns path. A var so tests stub
