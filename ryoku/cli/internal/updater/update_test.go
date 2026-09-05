@@ -14,7 +14,7 @@ import (
 // wantedSnapperHelpers gates the offer. no btrfs+snapper -> nothing,
 // limine-snapper-sync only on Limine.
 func TestWantedSnapperHelpers(t *testing.T) {
-	ready := snapHelpers{rootBtrfs: true, snapper: true}
+	ready := snapHelpers{rootBtrfs: true, snapper: true, pacman: true}
 
 	both := ready
 	both.limine = true
@@ -37,11 +37,14 @@ func TestWantedSnapperHelpers(t *testing.T) {
 		t.Fatalf("all present: got %v, want nil", got)
 	}
 
-	if got := wantedSnapperHelpers(snapHelpers{snapper: true}); got != nil {
+	if got := wantedSnapperHelpers(snapHelpers{snapper: true, pacman: true}); got != nil {
 		t.Fatalf("non-btrfs root must offer nothing, got %v", got)
 	}
-	if got := wantedSnapperHelpers(snapHelpers{rootBtrfs: true}); got != nil {
+	if got := wantedSnapperHelpers(snapHelpers{rootBtrfs: true, pacman: true}); got != nil {
 		t.Fatalf("snapper absent must offer nothing (a separate doctor warn), got %v", got)
+	}
+	if got := wantedSnapperHelpers(snapHelpers{rootBtrfs: true, snapper: true, pacman: false}); got != nil {
+		t.Fatalf("non-pacman system must not offer snap-pac, got %v", got)
 	}
 }
 
@@ -156,6 +159,11 @@ func TestPackagedStatusUpToDateOfflineEmptyRecent(t *testing.T) {
 // file conflict otherwise aborts the whole transaction and blocks every user
 // update, so pin them here.
 func TestRyokuInstallArgsStayInTheRyokuLane(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "pacman"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
 	set := []string{"ryoku/ryoku-desktop", "ryoku/ryogami"}
 	args := ryokuInstallArgs(set)
 	joined := strings.Join(args, " ")
@@ -242,5 +250,23 @@ func TestProwlDecide(t *testing.T) {
 				t.Fatalf("prowlDecide(onPath=%v, owned=%v) = %v, want %v", c.onPath, c.pacmanOwned, got, c.want)
 			}
 		})
+	}
+}
+
+func TestFedoraUpdateLanes(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "dnf"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-desktop", "ryoku/ryoku-shell"}), " ")
+	if got != "sudo dnf -y distro-sync ryoku-desktop ryoku-shell" {
+		t.Fatalf("Ryoku lane: %s", got)
+	}
+	if got := strings.Join(systemUpgradeArgs(), " "); got != "sudo dnf -y upgrade" {
+		t.Fatalf("system lane: %s", got)
+	}
+	if got := strings.Join(refreshDBArgs(true), " "); got != "sudo dnf -y --refresh makecache" {
+		t.Fatalf("refresh: %s", got)
 	}
 }

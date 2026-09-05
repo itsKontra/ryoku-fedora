@@ -29,8 +29,32 @@ var desktopPkgs = []struct{ pkg, name string }{
 
 func detectDesktops() []string {
 	var found []string
+	hasSession := func(patterns ...string) bool {
+		for _, dir := range []string{"/usr/share/wayland-sessions", "/usr/share/xsessions"} {
+			for _, pat := range patterns {
+				if matches, err := filepath.Glob(filepath.Join(dir, pat)); err == nil && len(matches) > 0 {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
 	for _, d := range desktopPkgs {
-		if pacmanHas(d.pkg) {
+		isInstalled := installed(d.pkg)
+		if !isInstalled {
+			switch d.name {
+			case "GNOME":
+				isInstalled = hasSession("*gnome*.desktop")
+			case "KDE Plasma":
+				isInstalled = hasSession("*plasma*.desktop")
+			case "Cinnamon":
+				isInstalled = hasSession("*cinnamon*.desktop")
+			case "Xfce":
+				isInstalled = hasSession("*xfce*.desktop")
+			}
+		}
+		if isInstalled {
 			found = append(found, d.name)
 		}
 	}

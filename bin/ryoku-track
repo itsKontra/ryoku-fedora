@@ -33,7 +33,11 @@ else
 fi
 
 say "Installing build tools and matugen"
-sudo pacman -S --needed --noconfirm git go cmake ninja qt6-shadertools wayland base-devel matugen
+if command -v pacman >/dev/null 2>&1; then
+  sudo pacman -S --needed --noconfirm git go cmake ninja qt6-shadertools wayland base-devel matugen
+elif command -v dnf >/dev/null 2>&1; then
+  sudo dnf install -y git golang cmake ninja-build qt6-qtshadertools-devel wayland-devel gcc-c++ matugen
+fi
 
 say "Fetching the Ryoku source ($CHANNEL) into $REPO"
 if [[ -d $REPO/.git ]]; then

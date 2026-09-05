@@ -93,9 +93,20 @@ func versionParts() (base, sha string) {
 		return base, sha
 	}
 
-	// packaged: split off the pkgrel, then read the g<sha> token the PKGBUILD
-	// pkgver appends; the leading dot-parts before r<count>/g<sha> are the core.
-	ver := strings.SplitN(sys.InstalledVersion(), "-", 2)[0]
+	// packaged: extract git sha and semver core from Arch or RPM version format.
+	rawVer := sys.InstalledVersion()
+	for _, tok := range strings.FieldsFunc(rawVer, func(r rune) bool {
+		return r == '.' || r == '-' || r == '^' || r == '_'
+	}) {
+		if len(tok) >= 10 && strings.HasPrefix(tok, "git") && isHex(tok[3:]) {
+			sha = tok[3:]
+		} else if len(tok) >= 8 && strings.HasPrefix(tok, "g") && isHex(tok[1:]) {
+			sha = tok[1:]
+		}
+	}
+
+	ver := strings.SplitN(rawVer, "-", 2)[0]
+	ver = strings.SplitN(ver, "^", 2)[0]
 	var core []string
 	seen := false
 	for _, tok := range strings.Split(ver, ".") {
@@ -103,7 +114,6 @@ func versionParts() (base, sha string) {
 		case len(tok) >= 2 && tok[0] == 'r' && isDigits(tok[1:]):
 			seen = true
 		case len(tok) >= 8 && tok[0] == 'g' && isHex(tok[1:]):
-			sha = tok[1:]
 			seen = true
 		default:
 			if !seen {

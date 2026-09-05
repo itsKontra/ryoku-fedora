@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -777,6 +778,14 @@ func main() {
 	compositor := flag.String("compositor", "", i18n.T("window manager to install: hyprland or niri (default hyprland)"))
 	flag.Parse()
 
+	if *payload == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			if _, err := os.Stat(filepath.Join(cwd, "ryoku/lockscreen/install-qylock")); err == nil {
+				*payload = cwd
+			}
+		}
+	}
+
 	initGlyphs()
 	comp := chooseCompositor(*compositor)
 
@@ -784,7 +793,7 @@ func main() {
 		die(i18n.T("run as your normal user, not root; sudo is used where needed"))
 	}
 	if detectHostDistro() == nil {
-		die(i18n.T("unsupported distribution: Ryoku installs on Arch-based and Debian-based systems"))
+		die("unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems")
 	}
 	if out("uname", "-m") != "x86_64" {
 		die(i18n.T("Ryoku ships x86_64 builds only"))

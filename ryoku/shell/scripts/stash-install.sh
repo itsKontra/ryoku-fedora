@@ -325,6 +325,19 @@ install_rpm() {
   src="$1"
   rawname=$(basename "$src" .rpm)
   name=$(slug "$rawname"); [ -n "$name" ] || name="app"
+  if command -v dnf >/dev/null 2>&1 && command -v pkexec >/dev/null 2>&1; then
+    printf '@AUTH\n'
+    if pkexec dnf install -y "$src" >/dev/null 2>&1; then
+      LAST_NAME="$name"
+      return 0
+    fi
+  elif command -v rpm >/dev/null 2>&1 && command -v pkexec >/dev/null 2>&1; then
+    printf '@AUTH\n'
+    if pkexec rpm -Uvh "$src" >/dev/null 2>&1; then
+      LAST_NAME="$name"
+      return 0
+    fi
+  fi
   command -v bsdtar >/dev/null 2>&1 || return 1
   dst=$(app_store_dir "$rawname")
   bsdtar -xf "$src" -C "$dst" >/dev/null 2>&1 || return 1

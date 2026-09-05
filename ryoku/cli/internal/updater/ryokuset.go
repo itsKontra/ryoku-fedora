@@ -75,6 +75,17 @@ func ryokuSet(repoNames, installed []string) []string {
 // answered (no [ryoku] section, an unsynced db, no pacman): the caller must
 // stop rather than fall back to a system upgrade, which is the other lane.
 func installedRyokuSet() ([]string, error) {
+	if !sys.Has("pacman") && sys.Has("dnf") {
+		repo, err := sys.RunOut("dnf", "repoquery", "--repo", ryokuRepo, "--qf", "%{name}")
+		if err != nil {
+			return nil, err
+		}
+		installed, err := sys.RunOut("rpm", "-qa", "--qf", "%{NAME}\n")
+		if err != nil {
+			return nil, err
+		}
+		return ryokuSet(lines(repo), lines(installed)), nil
+	}
 	repo, err := sys.RunOut("pacman", "-Slq", ryokuRepo)
 	if err != nil {
 		return nil, err
@@ -108,6 +119,9 @@ func lines(out string) []string {
 // box just left, so a plain -Sy kept the old db against the new signature and
 // failed with "invalid or corrupted database (PGP signature)".
 func refreshDBArgs(force bool) []string {
+	if !sys.Has("pacman") && sys.Has("dnf") {
+		return []string{"sudo", "dnf", "-y", "--refresh", "makecache"}
+	}
 	op := "-Sy"
 	if force {
 		op = "-Syy"
@@ -127,6 +141,13 @@ func refreshDBArgs(force bool) []string {
 // snapper pre/post pair; --overwrite adopts the paths the installer and
 // deploy.sh seed unowned (see ryokuOverwriteGlob).
 func ryokuInstallArgs(set []string) []string {
+	if !sys.Has("pacman") && sys.Has("dnf") {
+		args := []string{"sudo", "dnf", "-y", "distro-sync"}
+		for _, p := range set {
+			args = append(args, strings.TrimPrefix(p, ryokuRepo+"/"))
+		}
+		return args
+	}
 	args := []string{"sudo", "env", "SNAP_PAC_SKIP=y", "pacman", "-S", "--needed", "--noconfirm",
 		"--overwrite", ryokuOverwriteGlob}
 	return append(args, set...)
@@ -140,6 +161,15 @@ func systemLanePending(ryokuTargets []string) []updateItem {
 	ours := make(map[string]bool, len(ryokuTargets))
 	for _, t := range ryokuTargets {
 		ours[strings.TrimPrefix(t, ryokuRepo+"/")] = true
+	}
+	if !sys.Has("pacman") && sys.Has("dnf") {
+		var ups []updateItem
+		for _, u := range pendingUpdates() {
+			if !ours[u.Name] {
+				ups = append(ups, u)
+			}
+		}
+		return ups
 	}
 	out, err := sys.RunOut("pacman", "-Qu")
 	if err != nil {

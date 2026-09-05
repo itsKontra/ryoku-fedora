@@ -163,7 +163,7 @@ var secretish = regexp.MustCompile(`(?i)(password|passwd|secret|token|api[_-]?ke
 
 // subcommandTools get their first subcommand counted alongside argv0.
 var subcommandTools = map[string]bool{
-	"git": true, "pacman": true, "systemctl": true, "docker": true, "cargo": true,
+	"git": true, "pacman": true, "dnf": true, "systemctl": true, "docker": true, "cargo": true,
 	"go": true, "npm": true, "pnpm": true, "yarn": true, "mise": true, "ryoku": true,
 	"hermes": true, "kubectl": true, "make": true, "yay": true, "rashin": true,
 }

@@ -17,15 +17,23 @@
 # Usage: ryoku-dev-lint-qml <config-root>...
 set -euo pipefail
 
-qmllint_bin="${QMLLINT_BIN:-/usr/lib/qt6/bin/qmllint}"
-[[ -x $qmllint_bin ]] || qmllint_bin="$(command -v qmllint || true)"
+qmllint_bin="${QMLLINT_BIN:-}"
 if [[ -z $qmllint_bin ]]; then
-  echo "ryoku-dev-lint-qml: qmllint not found (qt6-declarative)" >&2
+  for p in /usr/lib64/qt6/bin/qmllint /usr/lib/qt6/bin/qmllint /usr/bin/qmllint; do
+    if [[ -x $p ]]; then qmllint_bin="$p"; break; fi
+  done
+fi
+[[ -n $qmllint_bin ]] || qmllint_bin="$(command -v qmllint || true)"
+if [[ -z $qmllint_bin ]]; then
+  echo "ryoku-dev-lint-qml: qmllint not found (qt6-declarative or qt6-qtdeclarative-devel)" >&2
   exit 2
 fi
 (( $# )) || { echo "usage: ryoku-dev-lint-qml <config-root>..." >&2; exit 2; }
 
-imports=(-I /usr/lib/qt6/qml)
+imports=()
+for qmldir in /usr/lib64/qt6/qml /usr/lib/qt6/qml; do
+  [[ -d $qmldir ]] && imports+=(-I "$qmldir")
+done
 IFS=':' read -r -a extra <<< "${RYOKU_QML_IMPORTS:-}"
 for p in "${extra[@]}"; do
   [[ -n $p ]] && imports+=(-I "$p")

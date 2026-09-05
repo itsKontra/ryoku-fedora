@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+)
 
 // The qt6ct-kde shape: an installed provider must drop the shipped name from
 // the install set instead of the run dying on the conflict prompt.
@@ -20,3 +25,45 @@ func TestDropSatisfiedEmptyUnmetDropsAll(t *testing.T) {
 		t.Errorf("everything satisfied should drop all, got %v", got)
 	}
 }
+
+func TestDropSatisfiedFedora(t *testing.T) {
+	if exec.Command("rpm", "-q", "--quiet", "git").Run() != nil {
+		t.Skip("git is not installed via rpm; skipping Fedora dropSatisfied test")
+	}
+	f := &facts{distro: fedoraLinux}
+	e := &engine{f: f, dry: false}
+	pkgs := []string{"git", "nonexistent-pkg-test-xyz"}
+	res := e.dropSatisfied(pkgs)
+	for _, p := range res {
+		if p == "git" {
+			t.Errorf("git is installed and should have been dropped on Fedora, got %v", res)
+		}
+	}
+	foundNonexistent := false
+	for _, p := range res {
+		if p == "nonexistent-pkg-test-xyz" {
+			foundNonexistent = true
+		}
+	}
+	if !foundNonexistent {
+		t.Errorf("uninstalled package should be kept, got %v", res)
+	}
+}
+
+func TestStepPackagesAllSatisfiedNoop(t *testing.T) {
+	dir := t.TempDir()
+	pkgDir := filepath.Join(dir, "system", "packages")
+	if err := os.MkdirAll(pkgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkgDir, "base.packages"), []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	customDistro := &distro{id: "fedora", name: "Fedora", fromSource: true, build: nil, installCmd: []string{"fail-if-called"}}
+	f := &facts{distro: customDistro}
+	e := &engine{f: f, p: &plan{}, payload: dir, dry: false}
+	if err := stepPackages(e); err != nil {
+		t.Errorf("stepPackages when all satisfied should return nil without running installCmd, got %v", err)
+	}
+}
+

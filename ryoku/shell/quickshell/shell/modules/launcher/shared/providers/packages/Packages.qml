@@ -257,7 +257,7 @@ Provider {
 
     Process {
         id: availProc
-        command: ["gpk", "search", "--help"]
+        command: ["sh", "-c", "command -v gpk >/dev/null 2>&1 && gpk search --help >/dev/null 2>&1"]
         onExited: (code) => { packages.available = (code === 0); }
     }
 

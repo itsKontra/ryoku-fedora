@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+- **Fedora updates retain the upstream package split.** DNF updates the installed
+  Ryoku set, while a full system upgrade remains behind `--system`.
+
 - **`ryoku doctor` keeps your login shell honest.** Changing your shell in the
   Hub writes it in two places: your account shell, and a session override the
   compositor exports so everything it launches agrees. Nothing noticed when the

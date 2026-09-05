@@ -15,4 +15,13 @@ set -euo pipefail
 # -Syu, not -S: installing new packages against a stale db is a partial upgrade,
 # which breaks on soname bumps (e.g. a new x265 vs the installed ffmpeg). A full
 # sync+upgrade keeps the transaction consistent.
-exec sudo pacman -Syu --needed --noconfirm "$@"
+if command -v pacman >/dev/null 2>&1; then
+  exec sudo pacman -Syu --needed --noconfirm "$@"
+elif command -v dnf >/dev/null 2>&1; then
+  exec sudo dnf -y install "$@"
+elif command -v apt-get >/dev/null 2>&1; then
+  exec sudo apt-get -y install "$@"
+else
+  echo "ryoku-pkg-add: no supported package manager found" >&2
+  exit 1
+fi

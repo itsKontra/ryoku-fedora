@@ -1,0 +1,119 @@
+# Ryoku Fedora base package set. One package per line; '#' and blank lines are ignored.
+# Mapped from base.packages for Fedora Linux / DNF environments.
+
+# Core system
+@core
+@development-tools
+rust
+cargo
+kernel
+kernel-devel
+kernel-modules-extra
+linux-firmware
+dkms
+sudo
+
+# Boot chain
+btrfs-progs
+cryptsetup
+dosfstools
+efibootmgr
+plymouth
+snapper
+
+# Networking
+NetworkManager
+wpa_supplicant
+wireless-regdb
+iw
+nftables
+firewalld
+
+# Bluetooth
+bluez
+bluez-tools
+
+# Audio stack
+pipewire
+pipewire-pulseaudio
+pipewire-alsa
+wireplumber
+pamixer
+pavucontrol
+
+# Hyprland & Wayland compositor stack
+hyprland
+hyprlang
+hyprlock
+hypridle
+hyprsunset
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+xwaylandvideobridge
+
+# Qt6 & UI stack
+qt6-qtbase
+qt6-qtbase-devel
+qt6-qtbase-gui
+qt6-qtdeclarative
+qt6-qtdeclarative-devel
+qt6-qt5compat
+qt6-qt5compat-devel
+qt6-qtsvg
+qt6-qtsvg-devel
+qt6-qtmultimedia
+qt6-qtmultimedia-devel
+qt6-qtwayland
+qt6-qtwayland-devel
+qt6-qtshadertools
+qt6-qtshadertools-devel
+quickshell
+
+# Display Manager
+sddm
+sddm-wayland-generic
+
+# Tools & Shell utilities
+fish
+bash-completion
+kitty
+starship
+eza
+bat
+ripgrep
+fd-find
+fzf
+jq
+fastfetch
+brightnessctl
+playerctl
+socat
+rsync
+tar
+unzip
+p7zip
+libarchive
+libnotify
+grim
+slurp
+wl-clipboard
+cliphist
+wtype
+swappy
+gamemode
+mangohud
+zenity
+
+# Fonts & Theming
+rsms-inter-fonts
+google-noto-sans-fonts
+google-noto-sans-cjk-fonts
+google-noto-color-emoji-fonts
+fira-code-fonts
+source-foundry-hack-fonts
+jetbrains-mono-fonts
+adw-gtk3-theme
+papirus-icon-theme
+bibata-cursor-themes
+matugen
+awww

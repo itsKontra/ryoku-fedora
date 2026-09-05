@@ -327,11 +327,21 @@ type soCopy struct {
 // pluginCopies lists every copy of a plugin, local build first.
 func pluginCopies(id string) []soCopy {
 	var out []soCopy
+	seen := map[string]bool{}
 	for _, c := range []soCopy{
 		{Path: filepath.Join(userPluginDir(), id+".so"), Tier: "built"},
+		{Path: filepath.Join("/usr/lib64/hyprland/plugins", id+".so"), Tier: "package"},
 		{Path: filepath.Join(pluginDir, id+".so"), Tier: "package"},
 	} {
 		if fi, err := os.Stat(c.Path); err == nil && !fi.IsDir() {
+			realPath := c.Path
+			if target, err := filepath.EvalSymlinks(c.Path); err == nil {
+				realPath = target
+			}
+			if seen[realPath] {
+				continue
+			}
+			seen[realPath] = true
 			c.ABI = readABI(c.Path)
 			out = append(out, c)
 		}

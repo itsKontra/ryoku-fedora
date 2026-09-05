@@ -2,7 +2,26 @@
 
 ## Unreleased
 
+### Added
+- **Fedora Linux support.** The standalone shell installer supports Fedora
+  (and downstream like-distros like Nobara and Bazzite) via DNF and native
+  source/prebuilt deployment (`fromSource`). Scans host via `dnf`/`rpm`, maps
+  packages via `system/packages/fedora-base.packages`, configures the Quickshell
+  COPR, deploys prebuilt tools (matugen, gpk, fonts, cursors), and
+  adapts library paths (`/usr/lib64`), PAM (`authselect`), NetworkManager,
+  and doctor reconcilers for RPM-based environments.
+
 ### Fixed
+- **Fedora support stays compatible with the current desktop.** Retired awww
+  and Spicetify setup is removed, and the bundled installer is rebuilt from
+  the combined Fedora and upstream sources.
+
+- **Btrfs root conversions now install snapper.** `readBasePackages` skipped
+  `snapper` (and `snap-pac`) unconditionally in `bootChainSkip`, so converting a
+  btrfs machine promised snapper configuration by `ryoku doctor` but failed to
+  install the package, leaving doctor warning about missing packages and
+  snapshots unconfigured. It now permits `snapper` and `snap-pac` on a btrfs root.
+
 - **Converting a box no longer aborts on the Plymouth splash theme.**
   `ryoku-desktop` owns `/usr/share/plymouth/themes/ryoku/`, so a resume after a
   killed run, a box carrying an older Ryoku deploy, or the ISO installer's seeded

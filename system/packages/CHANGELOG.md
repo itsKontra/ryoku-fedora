@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- `base.packages`: **`inotify-tools` for snapshot sync.** `inotify-tools` joins
+  the boot chain so `limine-snapper-watcher` (`limine-snapper-sync.service`) has
+  `inotifywait` to monitor `/.snapshots` and automatically synchronize new snapshots
+  into the Limine boot menu.
+
 - `aur.packages`: **fingerprint unlock at the lock and login screens.** The
   qylock lock and the SDDM greeter authenticate through a PAM stack that loads
   `pam_fprintd_grosshack.so` (scans the sensor while the password field is live),
