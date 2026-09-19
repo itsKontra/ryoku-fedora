@@ -114,7 +114,7 @@ var fedoraLinux = &distro{
 	id:         "fedora",
 	name:       "Fedora",
 	fromSource: true,
-	installCmd: []string{"dnf", "-y", "install", "--skip-unavailable", "--allowerasing"},
+	installCmd: []string{"dnf", "-y", "install", "--best"},
 	removeCmd:  []string{"dnf", "-y", "remove"},
 	updateCmd:  []string{"dnf", "-y", "upgrade"},
 	refreshCmd: []string{"dnf", "makecache"},
@@ -123,49 +123,53 @@ var fedoraLinux = &distro{
 		"gcc", "gcc-c++", "cmake", "ninja-build", "pkgconf-pkg-config", "golang",
 		"qt6-qtbase-devel", "qt6-qtdeclarative-devel", "qt6-qtmultimedia-devel",
 		"qt6-qtshadertools-devel", "qt6-qtsvg-devel", "qt6-qt5compat-devel", "qt6-qtwayland-devel",
+		"wayland-devel", "wayland-protocols-devel", "ffmpeg-free-devel", "libsecret", "gnome-keyring-pam",
 	},
 	rename: map[string]string{
-		"base":                          "",
-		"base-devel":                    "@development-tools",
-		"bluez-utils":                   "bluez",
-		"docker":                        "moby-engine",
-		"edk2-ovmf":                     "edk2-ovmf",
-		"fd":                            "fd-find",
-		"ffmpeg":                        "ffmpeg-free",
-		"github-cli":                    "gh",
-		"gst-libav":                     "gstreamer1-plugin-libav",
-		"gst-plugins-bad":               "gstreamer1-plugins-bad-free",
-		"gst-plugins-base":              "gstreamer1-plugins-base",
-		"gst-plugins-good":              "gstreamer1-plugins-good",
-		"gst-plugins-ugly":              "gstreamer1-plugins-ugly-free",
-		"imagemagick":                   "ImageMagick",
-		"inter-font":                    "rsms-inter-fonts",
-		"linux":                         "kernel",
-		"linux-headers":                 "kernel-devel",
-		"mesa":                          "mesa-dri-drivers",
-		"networkmanager":                "NetworkManager",
-		"noto-fonts":                    "google-noto-sans-fonts",
-		"noto-fonts-cjk":                "google-noto-sans-cjk-fonts",
-		"noto-fonts-emoji":              "google-noto-emoji-fonts",
-		"pipewire-audio":                "pipewire-utils",
-		"pipewire-pulse":                "pipewire-pulseaudio",
-		"polkit":                        "polkit",
-		"python":                        "python3",
-		"qemu-desktop":                  "qemu-system-x86",
-		"qt5-wayland":                   "qt5-qtwayland",
-		"qt6-5compat":                   "qt6-qt5compat",
-		"qt6-declarative":               "qt6-qtdeclarative",
-		"qt6-multimedia":                "qt6-qtmultimedia",
-		"qt6-multimedia-ffmpeg":         "qt6-qtmultimedia",
-		"qt6-svg":                       "qt6-qtsvg",
-		"qt6-wayland":                   "qt6-qtwayland",
-		"rust":                          "rust",
-		"tesseract-data-eng":            "tesseract-langpack-eng",
-		"ttf-firacode-nerd":             "fira-code-fonts",
-		"ttf-hack-nerd":                 "source-foundry-hack-fonts",
-		"ttf-jetbrains-mono-nerd":       "jetbrains-mono-fonts",
-		"vulkan-icd-loader":             "vulkan-loader",
-		"xorg-xwayland":                 "xorg-x11-server-Xwayland",
+		"base":                    "",
+		"base-devel":              "gcc-c++",
+		"adw-gtk-theme":           "adw-gtk3-theme",
+		"qt6-imageformats":        "qt6-qtimageformats",
+		"syntax-highlighting":     "kf6-syntax-highlighting",
+		"bluez-utils":             "bluez",
+		"docker":                  "moby-engine",
+		"edk2-ovmf":               "edk2-ovmf",
+		"fd":                      "fd-find",
+		"ffmpeg":                  "ffmpeg-free",
+		"github-cli":              "gh",
+		"gst-libav":               "gstreamer1-plugin-libav",
+		"gst-plugins-bad":         "gstreamer1-plugins-bad-free",
+		"gst-plugins-base":        "gstreamer1-plugins-base",
+		"gst-plugins-good":        "gstreamer1-plugins-good",
+		"gst-plugins-ugly":        "gstreamer1-plugins-ugly-free",
+		"imagemagick":             "ImageMagick",
+		"inter-font":              "rsms-inter-fonts",
+		"linux":                   "kernel",
+		"linux-headers":           "kernel-devel",
+		"mesa":                    "mesa-dri-drivers",
+		"networkmanager":          "NetworkManager",
+		"noto-fonts":              "google-noto-sans-fonts",
+		"noto-fonts-cjk":          "google-noto-sans-cjk-fonts",
+		"noto-fonts-emoji":        "google-noto-emoji-fonts",
+		"pipewire-audio":          "pipewire-utils",
+		"pipewire-pulse":          "pipewire-pulseaudio",
+		"polkit":                  "polkit",
+		"python":                  "python3",
+		"qemu-desktop":            "qemu-system-x86",
+		"qt5-wayland":             "qt5-qtwayland",
+		"qt6-5compat":             "qt6-qt5compat",
+		"qt6-declarative":         "qt6-qtdeclarative",
+		"qt6-multimedia":          "qt6-qtmultimedia",
+		"qt6-multimedia-ffmpeg":   "qt6-qtmultimedia",
+		"qt6-svg":                 "qt6-qtsvg",
+		"qt6-wayland":             "qt6-qtwayland",
+		"rust":                    "rust",
+		"tesseract-data-eng":      "tesseract-langpack-eng",
+		"ttf-firacode-nerd":       "fira-code-fonts",
+		"ttf-hack-nerd":           "source-foundry-hack-fonts",
+		"ttf-jetbrains-mono-nerd": "jetbrains-mono-fonts",
+		"vulkan-icd-loader":       "vulkan-loader",
+		"xorg-xwayland":           "xorg-x11-server-Xwayland",
 
 		// Absent from official Fedora repos or pacman/Arch-specific.
 		// Handled directly as zero-compile prebuilt releases (installDesktopExtras):
@@ -291,8 +295,35 @@ func detectHostDistro() *distro {
 	}
 	id, like, _ := parseOSRelease(string(b))
 	d := detectDistro(id, like)
+	if d != nil && d.id == "fedora" {
+		if immutableFedora(string(b)) || pathExists("/run/ostree-booted") {
+			return nil
+		}
+		copy := *d
+		if has("dnf5") {
+			copy.installCmd = append([]string{"dnf5"}, d.installCmd[1:]...)
+			copy.removeCmd = append([]string{"dnf5"}, d.removeCmd[1:]...)
+			copy.updateCmd = append([]string{"dnf5"}, d.updateCmd[1:]...)
+			copy.refreshCmd = append([]string{"dnf5"}, d.refreshCmd[1:]...)
+		}
+		d = &copy
+	}
 	if d != nil {
 		activeDistro = d
 	}
 	return d
+}
+
+func immutableFedora(release string) bool {
+	for _, line := range strings.Split(release, "\n") {
+		key, value, _ := strings.Cut(line, "=")
+		value = strings.Trim(value, "\"'")
+		if key == "VARIANT_ID" || key == "ID" {
+			switch value {
+			case "silverblue", "kinoite", "sericea", "onyx", "sway-atomic", "budgie-atomic", "coreos", "bazzite", "bluefin", "aurora":
+				return true
+			}
+		}
+	}
+	return false
 }

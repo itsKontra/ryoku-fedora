@@ -2,6 +2,275 @@
 
 This checklist documents every incompatibility found across the Ryoku project (excluding `/system`) when porting `ryoku-shell-installer` to Fedora. Each ticket details the file locations, specific problems, and necessary adaptations.
 
+## Branch review TODOs (2026-09-19)
+
+Reviewed `feat/fedora-support` at `3f4b538b` against its parent
+`550993ae` (73 changed files). This review includes the package manifests and
+runtime callers needed to assess the port. The older **Completed** labels below
+record implementation history, not verified Fedora readiness; the open items
+here supersede those labels where they overlap.
+
+P1 means a release blocker or a security/data-preservation problem. P2 means
+broken functionality or incomplete delivery. Findings are based on the checked-in
+code unless explicitly marked as a validation gap. At review time, no live desktop changes or Fedora transactions had been run.
+The implementation follow-up below records subsequent disposable-container tests.
+
+### P1: address before distributing the port
+
+- [x] **FED-42: Install the selected compositor and its dependencies on fresh Fedora.**
+  `readBasePackages` always reads `system/packages/base.packages`, and the
+  `fromSource` branch installs only its translated names plus build tools.
+  Neither that list nor `fedoraLinux.build` installs Hyprland or niri; the
+  compositor variant is appended only in the Arch branch. The Fedora manifest
+  containing Hyprland is never read. A stock GNOME/KDE host can get through the
+  dependency transaction without the compositor needed for its new session.
+  Use one authoritative dependency source, add the chosen provider's runtime
+  packages, and remove or wire up the unused manifest.
+  Evidence: [engine.go:880](ryoku-shell-installer/engine.go#L880),
+  [engine.go:930](ryoku-shell-installer/engine.go#L930),
+  [distro.go:122](ryoku-shell-installer/distro.go#L122),
+  [fedora-base.packages:45](system/packages/fedora-base.packages#L45).
+  Verify both compositor choices on a Fedora image without either preinstalled,
+  including portal, authentication-agent, session-file and renderer checks.
+
+- [x] **FED-43: Make every RPM spec build from this checkout.**
+  `ryogami.spec` builds in `ryoku/shell/ryogami`, but its Go module is under
+  `daemon/`. `ryoku-shell.spec` installs the nonexistent
+  `ryoku/shell/scripts/ryoku-depth`. `ryotunes.spec` lists files without any
+  source, build or install phase to produce them. Any of these blocks the
+  repository builder, which stops on the first failed spec.
+  Evidence: [ryogami.spec:14](release/rpm/ryogami.spec#L14),
+  [ryoku-shell.spec:31](release/rpm/ryoku-shell.spec#L31),
+  [ryotunes.spec:19](release/rpm/ryotunes.spec#L19),
+  [build-rpm-repo.sh:22](release/rpm/build-rpm-repo.sh#L22).
+  Verify all specs in clean Fedora build roots, then run the whole builder.
+
+- [x] **FED-44: Complete the RPM desktop payload and runtime paths.**
+  The RPM set provides no `ryoku` CLI, compositor provider binaries, or
+  `Ryoku.Ui`, `Ryoku.Blobs` and `Ryoku.Wm` QML modules. The desktop spec copies
+  only Hyprland and Quickshell configuration plus compositor scripts; the source
+  deploy installs substantially more. A clean RPM installation therefore cannot
+  materialize or run the complete desktop. The shell spec also names the video
+  daemon `ryoku-livewall`, while its consumer executes `ryogami-live`.
+  Evidence: [ryoku-desktop.spec:8](release/rpm/ryoku-desktop.spec#L8),
+  [ryoku-desktop.spec:27](release/rpm/ryoku-desktop.spec#L27),
+  [ryoku-shell.spec:25](release/rpm/ryoku-shell.spec#L25),
+  [livewall.go:23](ryoku/shell/ryogami/daemon/livewall.go#L23).
+  Audit against the existing Arch package payload, including user units,
+  helpers, application launch paths and translations. Verify from RPMs alone
+  with an empty user home and no source deployment masking missing files.
+
+- [x] **FED-45: Preserve encrypted browser password storage.**
+  Fedora deployment unconditionally replaces `--password-store=gnome-libsecret`
+  with `--password-store=basic`, and repeats that choice during installation.
+  This affects even users whose keyring works. Chromium documents `basic` as
+  its plain-text store. Repair keyring/PAM integration and preserve a user's
+  chosen backend; make any workaround an explicit choice.
+  Evidence: [deploy.sh:818](ryoku/shell/deploy.sh#L818),
+  [engine.go:1280](ryoku-shell-installer/engine.go#L1280),
+  [Chromium password-storage documentation](https://chromium.googlesource.com/chromium/src/+/HEAD/docs/linux/password_storage.md).
+  Verify normal login, autologin, a locked keyring, and an existing browser
+  profile without silently changing its storage backend.
+
+- [x] **FED-46: Classify DNF commands by operation, not the first option.**
+  Rashin shares RPM's `-q` query whitelist with DNF. Consequently,
+  `dnf -q remove example` is classified as read-only, although DNF's `-q`
+  means quiet. The classifier feeds command badges and the confirmation gate.
+  Parse DNF global options before its verb, keep RPM parsing separate, and
+  recognize `dnf5` too. Explicit sudo still raises the overall tier, but the
+  underlying classification is incorrect without that wrapper.
+  Evidence: [danger.go:222](ryoku/rashin/backend/danger.go#L222),
+  [DNF5 option reference](https://dnf5.readthedocs.io/en/latest/dnf5.8.html).
+  Verify quiet install/remove/upgrade commands remain system changes while
+  package queries remain read-only.
+
+- [x] **FED-47: Keep bootstrap, payload and source updates on the Fedora fork/ref.**
+  The bootstrap downloads its binary from `ryoku-dev/ryoku-arch`, and the
+  binary clones that same hardcoded repository. `--ref` changes only the ref,
+  not the repository. Fetching the bootstrap from this fork does not fetch this
+  fork's installer or payload. Source deployment records its checkout, but
+  does not persist the installer's chosen ref as the update channel; the updater
+  defaults to `main`. Make repository/ref selection coherent and persistent.
+  Evidence: [install.sh:14](ryoku-shell-installer/install.sh#L14),
+  [engine.go:30](ryoku-shell-installer/engine.go#L30),
+  [deploy.sh:317](ryoku/shell/deploy.sh#L317),
+  [channel.go:30](ryoku/cli/internal/updater/channel.go#L30).
+  Verify a fresh install from this branch and its first update both consume
+  the intended Fedora source, without requiring a manual payload checkout.
+
+- [x] **FED-48: Uninstall only artifacts owned by this installation.**
+  The new source-uninstall path deletes every `~/.local/bin/ryo*` file and
+  every `ryoku-*.service`, without an ownership manifest or comparison with
+  preexisting files. This can remove unrelated tools or user-authored units.
+  Record installed artifacts and backups, then remove or restore only those.
+  Evidence: [lifecycle.go:147](ryoku-shell-installer/lifecycle.go#L147).
+  Verify an unrelated `ryo-example` executable and a preexisting custom service
+  survive install/uninstall, and that installed services are properly stopped.
+
+### P2: complete functionality and delivery
+
+- [x] **FED-49: Implement one coherent RPM repository/channel contract.**
+  The updater queries a repository literally named `ryoku`, while the RPM README
+  instructs users to enable a COPR and provides no matching `.repo` definition.
+  Channel switching still reads and writes `/etc/pacman.conf`. In addition,
+  RPM updates strip the repository qualification and invoke unrestricted
+  `dnf distro-sync <names>`, which can select candidates from other enabled
+  repositories. Define the repository ID and release metadata, implement RPM
+  channel switching, and constrain Ryoku package selection to the intended source.
+  Evidence: [ryokuset.go:77](ryoku/cli/internal/updater/ryokuset.go#L77),
+  [ryokuset.go:143](ryoku/cli/internal/updater/ryokuset.go#L143),
+  [release.go:130](ryoku/cli/internal/sys/release.go#L130),
+  [RPM README:26](release/rpm/README.md#L26),
+  [DNF5 distro-sync behavior](https://dnf5.readthedocs.io/en/latest/commands/distro-sync.8.html).
+  Verify update and downgrade against two test channels with a competing
+  repository offering a higher version of a Ryoku package.
+
+- [x] **FED-50: Make RPM releases upgradeable, signed and reproducible.**
+  Most specs always emit `0.1.0-1`, regardless of the source revision. The
+  builder neither increments versions nor signs packages, and specs depend on
+  an absolute `%{repo_root}` injected by the local builder rather than an SRPM
+  source payload. They are not sufficient for the documented clean COPR build
+  or for ordinary upgrades between successive commits. Add source packaging,
+  monotonic RPM versions, signing and publication checks.
+  Evidence: [build-rpm-repo.sh:26](release/rpm/build-rpm-repo.sh#L26),
+  [ryoku-desktop.spec:2](release/rpm/ryoku-desktop.spec#L2),
+  [ryoku-hub.spec:15](release/rpm/ryoku-hub.spec#L15).
+  Verify a clean SRPM rebuild and a signed N-to-N+1 upgrade with signature
+  verification enabled, retaining a tested rollback target.
+
+- [x] **FED-51: Implement Fedora dependency repair in recovery.**
+  Recovery recognizes RPM installs at the end, but its package-reinstallation
+  phase still handles only pacman and otherwise skips packages. Missing Fedora
+  dependencies therefore remain missing while recovery proceeds to reset
+  configuration and rebuild. Add a Fedora repair transaction and validate
+  prerequisites before the reset; use the source identity from FED-47.
+  Evidence: [ryoku-recovery:133](bin/ryoku-recovery#L133).
+  Verify recovery after removing a required build/runtime dependency in a
+  disposable Fedora VM, including an offline failure before config reset.
+
+- [x] **FED-52: Make downloaded extras verifiable and retryable.**
+  Extras download executables directly into their final filenames, suppress
+  several failures with `|| true`, and use file existence to skip retries.
+  An interrupted download can leave a partial executable that subsequent runs
+  accept; Space Grotesk creates its skip-marker directory before downloading.
+  Mutable `latest` executable URLs also have no checksum/signature validation.
+  Download to temporary files, verify content, install atomically, and report
+  failures. Record a version so these tools can receive updates.
+  Evidence: [engine.go:1460](ryoku-shell-installer/engine.go#L1460),
+  [reconcile_rashin_daemon.go:223](ryoku/cli/internal/doctor/reconcile_rashin_daemon.go#L223).
+  Verify interrupted downloads and retries with truncated responses, and check
+  that an already working executable survives a failed update.
+
+- [x] **FED-53: Fix percent escaping in the doctor's icon-font URL.**
+  The format string contains `%%%%5B` and similar sequences. One `fmt.Sprintf`
+  pass produces `%%5B`, not the required `%5B`, so the repair requests the wrong
+  path when Material Symbols is missing on Fedora. The installer's equivalent
+  string already uses the correct `%%` escaping.
+  Evidence: [doctor.go:1188](ryoku/cli/internal/doctor/doctor.go#L1188).
+  Verify the exact generated URL and a font repair with the user font absent;
+  validate the downloaded font before treating its existence as success.
+
+- [x] **FED-54: Rebuild Fedora initramfs after NVIDIA configuration changes.**
+  `reconcileNvidiaModeset` writes/removes modprobe configuration but rebuilds
+  the initramfs only when mkinitcpio is installed. `rebuildInitramfs` returns
+  success without doing anything otherwise. A Fedora boot image containing the
+  old module settings is consequently left stale while doctor reports a fix.
+  Add the host's supported initramfs backend, including dracut, and check
+  rebuild errors before claiming the next boot is repaired.
+  Evidence: [reconcile_hardware.go:281](ryoku/cli/internal/doctor/reconcile_hardware.go#L281),
+  [reconcile_hardware.go:318](ryoku/cli/internal/doctor/reconcile_hardware.go#L318),
+  [reconcile_hardware.go:337](ryoku/cli/internal/doctor/reconcile_hardware.go#L337).
+  Verify both modeset changes and missing-driver recovery in a disposable
+  Fedora environment, then validate an actual NVIDIA reboot separately.
+
+- [x] **FED-55: Fail early when mandatory Fedora repositories/packages are unavailable.**
+  All COPR enable failures become warnings, and the shared install command
+  uses `--skip-unavailable --allowerasing -y`. Missing mandatory runtime
+  packages can therefore be skipped and conflicting installed packages can be
+  removed without a review of the proposed removals. `stepTools` requests
+  `dnf-plugins-core` even though DNF5 documents its plugin commands under
+  `dnf5-plugins`. Detect the supported DNF implementation, preflight required
+  providers, separate optional extras, and inspect destructive replacements.
+  Evidence: [distro.go:115](ryoku-shell-installer/distro.go#L115),
+  [engine.go:560](ryoku-shell-installer/engine.go#L560),
+  [engine.go:790](ryoku-shell-installer/engine.go#L790),
+  [DNF5 plugin reference](https://dnf5.readthedocs.io/en/latest/dnf5.8.html).
+  Verify a missing COPR, a missing mandatory package and a conflicting package
+  fail before changing the login manager; optional extras may warn and continue.
+
+- [ ] **FED-56: Add Fedora integration evidence before retaining completion claims.**
+  **Validation gap:** existing unit tests passing on this Arch host do not prove
+  the fresh Fedora install, RPM payload, SELinux enforcing login, lock/unlock,
+  screen sharing, audio, update, recovery or uninstall paths. FED-37 currently
+  cites a package list and intended socket layout as completion evidence, not
+  an enforcing-mode execution result. Add clean Fedora build/install CI and a
+  documented VM smoke test with logs. Exercise each supported compositor and
+  DNF generation, and explicitly reject unsupported immutable derivatives
+  instead of treating an `ID_LIKE=fedora` match as enough.
+  Evidence: [distro_test.go:24](ryoku-shell-installer/distro_test.go#L24),
+  [FED-37](#fed-37-selinux-security-context--policy-compliance),
+  [release/rpm/](release/rpm/).
+  Record tested Fedora versions, installed repository IDs, package versions,
+  SELinux AVC results and the install/update commits with the test results.
+
+### Implementation follow-up (2026-09-19)
+
+The review fixes are implemented in this working tree. Completion here refers
+to code and automated checks, not approval to distribute the Fedora port.
+FED-56 remains a release gate until the graphical, SELinux and hardware smoke
+results in [the RPM guide](release/rpm/README.md#required-vm-evidence) are recorded.
+
+| Findings | Implementation |
+|---|---|
+| FED-42, FED-55 | The shared base manifest is translated once and combined with the selected provider's runtime dependencies. Removed the unused Fedora manifest. DNF5 selects its own plugin package; mandatory COPR failures stop installation, and install transactions no longer skip packages or allow erasures. |
+| FED-43, FED-44 | RPMs reuse the existing package payload recipes, including the CLI, both provider variants, QML modules, apps, translations, helpers and services. Ryogami ships `ryogami-live`. Removed duplicate app specs and the empty external Ryotunes spec. Fedora Qt compatibility links use `/usr/lib64`. |
+| FED-45 | Deployment seeds browser flags only when absent; neither deployment nor the installer changes the password-store backend to `basic`. Existing SDDM PAM integration is retained. |
+| FED-46 | DNF/DNF5 global options are parsed separately from RPM queries, with regression cases for quiet mutations and package queries. |
+| FED-47 | Bootstrap and binary accept the same repository/ref; this fork defaults to `itsKontra/ryoku-arch`, `feat/fedora-support`. Deployment records the chosen branch, and recovery uses the recorded origin and branch. The downloadable installer binary and checksum are rebuilt. |
+| FED-48 | Source installation records changed binaries, QML files and user units with originals. Uninstall removes/restores only unchanged recorded artifacts, stops recorded units, and preserves unrelated or subsequently edited files. Old installs without receipts are preserved for manual cleanup. |
+| FED-49, FED-50 | Defined the `ryoku` RPM repository and channel layout, repository-constrained updates/downgrades, persistent source metadata, complete SRPM sources, commit-count versions, deterministic build inputs, package/metadata signing and immutable output directories. |
+| FED-51 | Recovery repairs Fedora runtime/build dependencies before clearing configuration, using the same dependency resolver as installation. Failed repair stops before reset. |
+| FED-52, FED-53 | One pinned, SHA-256-verified downloader serves installation and doctor. It validates binaries/fonts, writes files atomically, and records versions and file digests for retry/update checks. The font URL is a literal with correct percent escapes. |
+| FED-54 | Doctor selects dracut or mkinitcpio, reports rebuild failures and retains a pending marker for retry. |
+| FED-56 | Added Fedora 44 container CI for both compositors and DNF generations, signed package installation, empty-home materialization, SRPM rebuild and a competing-repository channel test. Immutable Fedora variants are rejected. VM/hardware evidence remains required. |
+
+Validation on Fedora 44 x86_64 (2026-09-19):
+
+- Built all 11 RPM specs and their SRPMs using the repository builder. The
+  install test found a conflict with Fedora's `shared-mime-info`; desktop defaults
+  now use compositor-specific MIME files, and the affected RPMs were rebuilt.
+- DNF5 installed the signed desktop and niri packages with package and repository
+  signature verification enabled. A new user's empty home materialized correctly;
+  CLI/provider binaries, QML modules, apps and translations passed payload checks.
+- DNF4 installed the Hyprland variant and passed the same fresh-user, SRPM
+  and channel checks. This reused the Fedora container after the niri run;
+  the CI matrix defines independent build roots for all four combinations.
+- Rebuilt the hub from its SRPM without the checkout. Signed channel probes
+  upgraded from version 1 to 2 and downgraded to 1 while a competing repository
+  offered version 3.
+- Uncached Go tests passed for the installer, window-manager seam, Rashin,
+  doctor, system/release helpers and updater. Five downloader tests, recovery
+  and SDDM shell tests, delivery/isolation gates, and whitespace checks passed.
+- RPM tests used working-tree fixes based on `3f4b538b`, version `0.3716`.
+  Subsequent installer environment and cursor-alias changes passed targeted
+  checks; this is not a published release or a bit-for-bit reproducibility test.
+
+Local test logs and package inventories are saved in
+`/tmp/ryoku-fedora-validation/{dnf5-niri,dnf4-hyprland}/` (temporary artifacts).
+
+Graphical login, keyring unlock, enforcing SELinux, real source installation,
+source-to-package migration and NVIDIA reboot validation remain unverified.
+FED-56 and the earlier FED-37 VM gate remain open.
+
+### Original review validation (before fixes)
+
+Passed existing tests (Go reported cached results):
+`go test ./...` in `ryoku-shell-installer`, `ryoku/hub/backend`, and
+`ryoku/rashin/backend`; `go test ./internal/updater ./internal/doctor
+./internal/sys` in `ryoku/cli`. A read-only RPM source-path audit confirmed the
+missing `ryoku-depth` input and the wrong Ryogami module directory. Full RPM
+builds, Fedora transactions, graphical login and hardware tests were not run.
+
 ---
 
 ## Ticket Overview
@@ -44,7 +313,7 @@ This checklist documents every incompatibility found across the Ryoku project (e
 | **Packaging** | [FED-34](#fed-34-missing-upstream-packages-in-fedora-repositories) | Missing Upstream Packages in Fedora Repositories | Blocker | **Completed** |
 | **Packaging** | [FED-35](#fed-35-hyprland-compositor-plugins-abi-compilation) | Hyprland Compositor Plugins ABI Compilation (`deploy.sh`) | High | **Completed** |
 | **Packaging** | [FED-36](#fed-36-packaging-specifications-for-rpmdnf-distribution) | Packaging Specifications for RPM/DNF Distribution (`release/`) | Medium | **Completed** |
-| **System** | [FED-37](#fed-37-selinux-security-context--policy-compliance) | SELinux Security Context & Policy Compliance | Blocker | **Completed** |
+| **System** | [FED-37](#fed-37-selinux-security-context--policy-compliance) | SELinux Security Context & Policy Compliance | Blocker | **Pending VM evidence** |
 | **System** | [FED-38](#fed-38-multi-arch-library-path-standards-usrlib-vs-usrlib64) | Multi-arch Library Path Standards (`/usr/lib` vs `/usr/lib64`) | Blocker | **Completed** |
 | **System** | [FED-39](#fed-39-x11-nvidia-settings-autostart-failure-on-wayland) | X11 NVIDIA Settings Autostart Failure on Wayland | High | **Completed** |
 | **Apps** | [FED-40](#fed-40-chromium-browser-binary-name--user-flags-disparity) | Chromium Browser Binary Name & User Flags Disparity | High | **Completed** |
@@ -759,4 +1028,3 @@ This checklist documents every incompatibility found across the Ryoku project (e
   - Added `ryoku_snap_initial` to `snapshots.sh` to take root snapshot #1 and trigger `limine-snapper-sync`.
   - Added `inotify-tools` to `base.packages`.
   - Updated `iso-preflight.sh` to support mixed-case and `@` package groups in package lists.
-

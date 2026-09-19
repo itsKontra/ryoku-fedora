@@ -437,8 +437,8 @@ const ryokuOverwriteGlob = "/usr/bin/ryoku-*," +
 // owns cannot abort the transaction here either.
 func systemUpgradeArgs() []string {
 	if !sys.Has("pacman") {
-		if sys.Has("dnf") {
-			return []string{"sudo", "dnf", "-y", "upgrade"}
+		if manager := sys.RPMManager(); manager != "" {
+			return []string{"sudo", manager, "-y", "upgrade"}
 		}
 		if sys.Has("apt-get") {
 			return []string{"sudo", "apt-get", "-y", "dist-upgrade"}
@@ -452,8 +452,8 @@ func systemUpgradeArgs() []string {
 // which pacman honours in either direction (a downgrade warns and proceeds),
 // pulling the umbrella's exact-version depends with it.
 func channelSwitchArgs() []string {
-	if sys.Has("dnf") && !sys.Has("pacman") {
-		return []string{"sudo", "dnf", "-y", "install", "ryoku-desktop"}
+	if manager := sys.RPMManager(); manager != "" {
+		return []string{"sudo", manager, "-y", "--repo=ryoku", "install", "ryoku-desktop"}
 	}
 	if sys.Has("apt-get") && !sys.Has("pacman") {
 		return []string{"true"}
@@ -1262,8 +1262,8 @@ func latestAvailable(pkg string) string {
 				return f[2]
 			}
 		}
-	} else if sys.Has("dnf") {
-		out, err := sys.RunOut("dnf", "repoquery", "--qf", "%{VERSION}-%{RELEASE}", pkg)
+	} else if manager := sys.RPMManager(); manager != "" {
+		out, err := sys.RunOut(manager, "repoquery", "--repo=ryoku", "--qf", "%{VERSION}-%{RELEASE}", pkg)
 		if err == nil && strings.TrimSpace(out) != "" {
 			return strings.TrimSpace(out)
 		}
@@ -1299,10 +1299,10 @@ func pendingUpdates() []updateItem {
 		}
 		return ups
 	}
-	if sys.Has("dnf") {
+	if manager := sys.RPMManager(); manager != "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 		defer cancel()
-		out, _ := exec.CommandContext(ctx, "dnf", "check-update").Output()
+		out, _ := exec.CommandContext(ctx, manager, "check-update").Output()
 		sc := bufio.NewScanner(strings.NewReader(string(out)))
 		for sc.Scan() {
 			f := strings.Fields(sc.Text())

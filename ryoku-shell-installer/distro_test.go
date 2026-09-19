@@ -94,7 +94,7 @@ func TestInstallArgs(t *testing.T) {
 		t.Errorf("debian removeArgs = %q", got)
 	}
 	got = strings.Join(fedoraLinux.installArgs([]string{"git"}), " ")
-	if got != "dnf -y install --skip-unavailable --allowerasing git" {
+	if got != "dnf -y install --best git" {
 		t.Errorf("fedora installArgs = %q", got)
 	}
 	got = strings.Join(fedoraLinux.removeArgs([]string{"dunst"}), " ")
@@ -145,5 +145,30 @@ func TestDesktopPacmanArgsAdoptsRyokuPaths(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(desktopPacmanArgs(debianLinux, []string{"foo"}), " "), "--overwrite") {
 		t.Error("fromSource distro must not carry --overwrite")
+	}
+}
+
+func TestImmutableFedoraRejected(t *testing.T) {
+	for _, id := range []string{"silverblue", "kinoite", "coreos", "sway-atomic", "bazzite", "bluefin"} {
+		if !immutableFedora("ID=fedora\nVARIANT_ID=\"" + id + "\"\n") {
+			t.Errorf("accepted %s", id)
+		}
+	}
+	if immutableFedora("ID=fedora\nVARIANT_ID=workstation\n") {
+		t.Fatal("rejected mutable Fedora")
+	}
+}
+
+func TestFedoraSourceDependenciesIncludeChosenProvider(t *testing.T) {
+	for _, provider := range []string{"hyprland", "niri"} {
+		e := &engine{f: &facts{distro: fedoraLinux}, p: &plan{compositor: provider}}
+		packages, err := e.sourceDependencies([]string{"polkit", "qt6-wayland"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := " " + strings.Join(packages, " ") + " "
+		if !strings.Contains(got, " "+provider+" ") || !strings.Contains(got, " qt6-qtwayland ") || !strings.Contains(got, " polkit ") {
+			t.Fatalf("missing dependencies: %s", got)
+		}
 	}
 }

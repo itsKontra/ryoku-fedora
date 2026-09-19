@@ -59,11 +59,10 @@ func TestStepPackagesAllSatisfiedNoop(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(pkgDir, "base.packages"), []byte(""), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	customDistro := &distro{id: "fedora", name: "Fedora", fromSource: true, build: nil, installCmd: []string{"fail-if-called"}}
+	customDistro := &distro{id: "fedora", name: "Fedora", fromSource: true, build: nil, rename: map[string]string{"hyprland": "", "hyprpolkitagent": "", "xdg-desktop-portal-hyprland": "", "hypridle": "", "hyprpicker": ""}, installCmd: []string{"fail-if-called"}}
 	f := &facts{distro: customDistro}
-	e := &engine{f: f, p: &plan{}, payload: dir, dry: false}
+	e := &engine{f: f, p: &plan{compositor: "hyprland"}, payload: dir, dry: false}
 	if err := stepPackages(e); err != nil {
 		t.Errorf("stepPackages when all satisfied should return nil without running installCmd, got %v", err)
 	}
 }
-

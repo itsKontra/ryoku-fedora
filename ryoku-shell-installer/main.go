@@ -773,10 +773,15 @@ func main() {
 	yes := flag.Bool("yes", false, i18n.T("run non-interactively with the default plan"))
 	dry := flag.Bool("dry-run", false, i18n.T("print every command instead of running it"))
 	uninstall := flag.Bool("uninstall", false, i18n.T("remove the ryoku packages and restore the backup chain"))
-	ref := flag.String("ref", envOr("RYOKU_SHELL_REF", "main"), i18n.T("ryoku-arch git ref for the payload"))
+	ref := flag.String("ref", envOr("RYOKU_SHELL_REF", "feat/fedora-support"), i18n.T("ryoku-arch git ref for the payload"))
 	payload := flag.String("payload", os.Getenv("RYOKU_SHELL_PAYLOAD"), i18n.T("use a local ryoku-arch checkout as the payload"))
 	compositor := flag.String("compositor", "", i18n.T("window manager to install: hyprland or niri (default hyprland)"))
+	flag.StringVar(&repoURL, "repo", envOr("RYOKU_SHELL_REPO", repoURL), i18n.T("git repository URL for the installer payload"))
+	dependencyList := flag.Bool("dependency-list", false, "print host source dependencies without installing")
 	flag.Parse()
+	if strings.HasPrefix(repoURL, "-") || strings.ContainsAny(repoURL, "\r\n") {
+		die("invalid repository URL")
+	}
 
 	if *payload == "" {
 		if cwd, err := os.Getwd(); err == nil {
@@ -786,6 +791,23 @@ func main() {
 		}
 	}
 
+	if *dependencyList {
+		d := detectHostDistro()
+		if d == nil {
+			die("unsupported distribution (immutable Fedora derivatives are not supported)")
+		}
+		e := &engine{f: &facts{distro: d}, p: &plan{compositor: chooseCompositor(*compositor)}, payload: *payload}
+		base, err := e.readBasePackages()
+		if err != nil {
+			die(err.Error())
+		}
+		pkgs, err := e.sourceDependencies(base)
+		if err != nil {
+			die(err.Error())
+		}
+		fmt.Println(strings.Join(pkgs, "\n"))
+		return
+	}
 	initGlyphs()
 	comp := chooseCompositor(*compositor)
 

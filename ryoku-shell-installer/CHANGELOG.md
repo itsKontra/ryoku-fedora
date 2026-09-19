@@ -4,14 +4,21 @@
 
 ### Added
 - **Fedora Linux support.** The standalone shell installer supports Fedora
-  (and downstream like-distros like Nobara and Bazzite) via DNF and native
+  and mutable downstream distributions via DNF and native
   source/prebuilt deployment (`fromSource`). Scans host via `dnf`/`rpm`, maps
-  packages via `system/packages/fedora-base.packages`, configures the Quickshell
+  packages via the shared `system/packages/base.packages` with distro translation, configures the Quickshell
   COPR, deploys prebuilt tools (matugen, gpk, fonts, cursors), and
   adapts library paths (`/usr/lib64`), PAM (`authselect`), NetworkManager,
   and doctor reconcilers for RPM-based environments.
 
 ### Fixed
+- **Fedora installation and recovery preserve the selected source and desktop.**
+  Required packages and repositories now fail early, downloads are verified,
+  and uninstall preserves unrelated files and later user edits. Immutable
+  Fedora variants are rejected. RPM builds, signed installation and channel
+  switching have container coverage; graphical and hardware validation remain
+  pending.
+
 - **Fedora support stays compatible with the current desktop.** Retired awww
   and Spicetify setup is removed, and the bundled installer is rebuilt from
   the combined Fedora and upstream sources.

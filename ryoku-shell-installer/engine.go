@@ -27,7 +27,7 @@ import (
 // line-anchored so a commented-out "#[ryoku]" stanza does not count.
 var ryokuStanzaRe = regexp.MustCompile(`(?m)^\[ryoku\]`)
 
-const repoURL = "https://github.com/ryoku-dev/ryoku-arch.git"
+var repoURL = "https://github.com/itsKontra/ryoku-arch.git"
 
 const pacmanStanza = `
 [ryoku]
@@ -321,7 +321,7 @@ func (e *engine) runFrom(idx int) chan any {
 				e.say(i18n.T("finished in the previous run, resuming past it"))
 				continue
 			}
-			if err := s.fn(e); err != nil {
+			if err := e.runOwnedStep(s); err != nil {
 				e.sayf(i18n.T("step %s failed: %v"), s.id, err)
 				e.events <- evDone{err: err, idx: i}
 				return
@@ -377,9 +377,14 @@ func (e *engine) cmd(dir string, env []string, name string, args ...string) erro
 	e.say("$ " + line)
 	c := exec.Command(name, args...)
 	c.Dir = dir
-	if len(env) > 0 {
-		c.Env = append(os.Environ(), env...)
+	c.Env = os.Environ()
+	if e.p != nil && e.p.compositor != "" {
+		c.Env = append(c.Env, "RYOKU_WM="+e.p.compositor)
 	}
+	if e.f != nil && e.f.homeDir != "" {
+		c.Env = append(c.Env, "PATH="+filepath.Join(e.f.homeDir, ".local/bin")+":"+os.Getenv("PATH"))
+	}
+	c.Env = append(c.Env, env...)
 	pr, pw := io.Pipe()
 	c.Stdout, c.Stderr = pw, pw
 	var wg sync.WaitGroup
@@ -561,12 +566,19 @@ func stepTools(e *engine) error {
 	d := e.d()
 	pkgs := []string{"git", d.local("base-devel")}
 	if d.id == "fedora" {
-		pkgs = append(pkgs, "dnf-plugins-core")
+		plugin := "dnf-plugins-core"
+		if d.installCmd[0] == "dnf5" {
+			plugin = "dnf5-plugins"
+		}
+		pkgs = append(pkgs, plugin)
 	}
 	return e.sudo(d.installArgs(pkgs)...)
 }
 
 func stepPayload(e *engine) error {
+	if !e.dry && exec.Command("git", "check-ref-format", "refs/heads/"+e.ref).Run() != nil {
+		return fmt.Errorf("invalid source branch %q", e.ref)
+	}
 	if e.payloadOverride != "" {
 		e.payload = e.payloadOverride
 		if _, err := os.Stat(filepath.Join(e.payload, "ryoku/lockscreen/install-qylock")); err != nil && !e.dry {
@@ -582,6 +594,9 @@ func stepPayload(e *engine) error {
 	e.payload = filepath.Join(cache, "ryoku-shell-install/repo")
 
 	if _, err := os.Stat(filepath.Join(e.payload, ".git")); err == nil {
+		if err := e.cmd(e.payload, nil, "git", "remote", "set-url", "origin", repoURL); err != nil {
+			return err
+		}
 		if err := e.cmd(e.payload, nil, "git", "fetch", "--depth=1", "origin", e.ref); err != nil {
 			return err
 		}
@@ -602,7 +617,7 @@ func stepPayload(e *engine) error {
 	paths := sparsePaths
 	if e.d().fromSource {
 		paths = []string{
-			"ryoku", "system", "release/packages/ryoku-keyring",
+			"ryoku", "system", "bin", "ryoku-shell-installer", "release/packages/ryoku-keyring",
 		}
 	}
 	if err := e.cmd(e.payload, nil, "git", append([]string{"sparse-checkout", "set"}, paths...)...); err != nil {
@@ -789,24 +804,12 @@ func stepConflicts(e *engine) error {
 
 func stepRepo(e *engine) error {
 	if e.d().id == "fedora" {
-		coprs := []struct {
-			name string
-			desc string
-		}{
-			{"sdegler/hyprland", "Hyprland compositor stack"},
+		coprs := []struct{ name, desc string }{
+			{"sdegler/hyprland", "compositor and desktop helper tools"},
 			{"errornointernet/quickshell", "Quickshell desktop engine"},
-			{"scottames/awww", "awww wallpaper daemon"},
 			{"atim/starship", "Starship prompt"},
 			{"atim/lazygit", "lazygit"},
 			{"lihaohong/yazi", "yazi"},
-			{"tofik/nwg-shell", "nwg-shell tools"},
-			{"erikreider/SwayNotificationCenter", "SwayNotificationCenter"},
-			{"alternateved/eza", "eza"},
-			{"opuk/bottom", "bottom"},
-			{"atim/lazydocker", "lazydocker"},
-			{"wezfurlong/wezterm-nightly", "wezterm-nightly"},
-			{"scottames/ghostty", "ghostty"},
-			{"errornointernet/packages", "wallust palette generator"},
 		}
 		for _, c := range coprs {
 			if e.dry {
@@ -814,8 +817,8 @@ func stepRepo(e *engine) error {
 				continue
 			}
 			e.say("enabling " + c.desc + " COPR (" + c.name + ")")
-			if err := e.sudo("dnf", "-y", "copr", "enable", c.name); err != nil {
-				e.say("warning: could not enable " + c.name + " COPR (continuing): " + err.Error())
+			if err := e.sudo(e.d().installCmd[0], "-y", "copr", "enable", c.name); err != nil {
+				return fmt.Errorf("enable required COPR %s: %w", c.name, err)
 			} else {
 				e.say("enabled " + c.desc + " COPR (" + c.name + ")")
 			}
@@ -915,7 +918,11 @@ func (e *engine) asusAura() bool {
 // verification runs before the new session exists, and caps answers without a
 // live compositor.
 func (e *engine) providerAnswers() bool {
-	return exec.Command("ryoku-wm-"+e.p.compositor, "caps").Run() == nil
+	binary := "ryoku-wm-" + e.p.compositor
+	if e.d().fromSource {
+		binary = filepath.Join(e.f.homeDir, ".local/bin", binary)
+	}
+	return exec.Command(binary, "caps").Run() == nil
 }
 
 func stepPackages(e *engine) error {
@@ -931,7 +938,10 @@ func stepPackages(e *engine) error {
 	if d.fromSource {
 		// no [ryoku] repository here: the desktop is built from the payload, so
 		// install its dependencies plus the toolchain that builds it.
-		pkgs = append(d.localAll(base), d.build...)
+		pkgs, err = e.sourceDependencies(base)
+		if err != nil {
+			return err
+		}
 	} else {
 		pkgs = append(append([]string{}, ryokuPkgs...), base...)
 		// name the chosen variant so pacman installs it directly instead of
@@ -1048,7 +1058,10 @@ func stepBuild(e *engine) error {
 		return fmt.Errorf("payload is missing ryoku/shell/deploy.sh (%s)", script)
 	}
 	e.say(i18n.T("building the desktop from the payload (this takes a few minutes)"))
-	return e.cmd(dir, nil, "bash", script)
+	if err := e.cmd(dir, []string{"RYOKU_SHELL_REF=" + e.ref}, "bash", script); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(e.f.homeDir, ".local/state/ryoku/source-compositor"), []byte(e.p.compositor+"\n"), 0o644)
 }
 
 // filterByUnmet keeps only the names pacman -T reported as unmet.
@@ -1276,23 +1289,6 @@ func stepConfigs(e *engine) error {
 		}
 	}
 
-	// On Fedora, gnome-keyring auto-unlock is not wired and secret-service
-	// prompts deadlock Chromium's network service. Ensure chromium-flags.conf
-	// uses --password-store=basic.
-	if e.d().id == "fedora" {
-		flagsFile := filepath.Join(e.f.homeDir, ".config/chromium-flags.conf")
-		if data, err := os.ReadFile(flagsFile); err == nil {
-			newData := strings.ReplaceAll(string(data), "--password-store=gnome-libsecret", "--password-store=basic")
-			if newData != string(data) {
-				if e.dry {
-					e.say("DRYRUN: would set --password-store=basic in " + flagsFile)
-				} else if err := os.WriteFile(flagsFile, []byte(newData), 0o644); err == nil {
-					e.say("configured Chromium basic password store for Fedora -> " + flagsFile)
-				}
-			}
-		}
-	}
-
 	// salvaged monitor pins go in before the stub pass, real pins beat a
 	// comment stub. only the hyprland dialect supports desc: names.
 	//
@@ -1461,79 +1457,17 @@ func (e *engine) installDesktopExtras() {
 	if e.dry || e.f == nil || e.f.homeDir == "" {
 		return
 	}
-	binDir := filepath.Join(e.f.homeDir, ".local", "bin")
-	_ = os.MkdirAll(binDir, 0o755)
-
-	// matugen: official precompiled binary release (zero-compile default)
-	if !has("matugen") {
-		if e.d().id == "fedora" {
-			_ = e.sudo("dnf", "-y", "install", "matugen")
+	if runtime.GOARCH != "amd64" {
+		e.say("desktop extras require x86_64")
+		return
+	}
+	for _, name := range []string{"matugen", "gpk", "prowl-agent", "bibata", "space-grotesk", "material-symbols"} {
+		if has(name) && !pathExists(filepath.Join(e.f.homeDir, ".local/state/ryoku/extras", name+".json")) {
+			continue
 		}
-	}
-	if !has("matugen") && runtime.GOARCH == "amd64" {
-		dst := filepath.Join(binDir, "matugen")
-		if _, err := os.Stat(dst); os.IsNotExist(err) {
-			e.say("installing prebuilt matugen binary (zero-compile)")
-			cmd := fmt.Sprintf(`curl -fsSL --connect-timeout 10 -m 30 https://github.com/InioX/matugen/releases/download/v4.2.0/matugen-4.2.0-x86_64.tar.gz | tar -xz -C %q matugen && chmod +x %q`, binDir, dst)
-			if out, err := exec.Command("sh", "-c", cmd).CombinedOutput(); err != nil {
-				e.say("warning: could not install prebuilt matugen: " + strings.TrimSpace(string(out)))
-			}
+		if err := e.cmd("", nil, "python3", filepath.Join(e.payload, "ryoku/shell/scripts/ryoku-install-extra"), name); err != nil {
+			e.sayf(i18n.T("optional extra %s failed; rerun ryoku-install-extra %s to retry: %v"), name, name, err)
 		}
-	}
-
-	// gpk: GlazePKG prebuilt binary release
-	if !has("gpk") {
-		dst := filepath.Join(binDir, "gpk")
-		if _, err := os.Stat(dst); os.IsNotExist(err) {
-			arch := "amd64"
-			if runtime.GOARCH == "arm64" {
-				arch = "arm64"
-			}
-			e.say("installing prebuilt gpk binary")
-			cmd := fmt.Sprintf(`curl -fsSL --connect-timeout 10 -m 30 https://github.com/neur0map/glazepkg/releases/latest/download/gpk-linux-%s -o %q 2>/dev/null && chmod +x %q || true`, arch, dst, dst)
-			_ = exec.Command("sh", "-c", cmd).Run()
-		}
-	}
-
-	// prowl-agent: official prebuilt binary release for rashin code intelligence
-	if !has("prowl-agent") {
-		dst := filepath.Join(binDir, "prowl-agent")
-		if _, err := os.Stat(dst); os.IsNotExist(err) {
-			arch := "amd64"
-			if runtime.GOARCH == "arm64" {
-				arch = "arm64"
-			}
-			e.say("installing prebuilt prowl-agent binary")
-			cmd := fmt.Sprintf(`curl -fsSL --connect-timeout 10 -m 30 https://github.com/neur0map/prowl-agent/releases/latest/download/prowl-agent-linux-%s -o %q 2>/dev/null && chmod +x %q || true`, arch, dst, dst)
-			_ = exec.Command("sh", "-c", cmd).Run()
-		}
-	}
-
-	// bibata cursor theme: official prebuilt cursor assets
-	iconsDir := filepath.Join(e.f.homeDir, ".local", "share", "icons")
-	if !pathExists("/usr/share/icons/Bibata-Modern-Ice") && !pathExists(filepath.Join(iconsDir, "Bibata-Modern-Ice")) {
-		_ = os.MkdirAll(iconsDir, 0o755)
-		e.say("installing Bibata cursor theme")
-		cmd := fmt.Sprintf(`curl -fsSL --connect-timeout 10 -m 30 https://github.com/ful1e5/Bibata_Cursor/releases/download/v2.0.7/Bibata.tar.xz | tar -xJ -C %q 2>/dev/null || true`, iconsDir)
-		_ = exec.Command("sh", "-c", cmd).Run()
-	}
-
-	// Space Grotesk brand font: official prebuilt OTF release
-	fontsDir := filepath.Join(e.f.homeDir, ".local", "share", "fonts")
-	if !pathExists("/usr/share/fonts/OTF/SpaceGrotesk-Regular.otf") && !pathExists(filepath.Join(fontsDir, "SpaceGrotesk")) {
-		_ = os.MkdirAll(filepath.Join(fontsDir, "SpaceGrotesk"), 0o755)
-		e.say("installing Space Grotesk brand font")
-		cmd := fmt.Sprintf(`tmp=$(mktemp -d) && curl -fsSL --connect-timeout 10 -m 30 https://github.com/floriankarsten/space-grotesk/releases/download/2.0.0/SpaceGrotesk-2.0.0.zip -o "$tmp/sg.zip" && unzip -qo "$tmp/sg.zip" -d "$tmp" && cp -f "$tmp"/SpaceGrotesk-*/otf/*.otf %q/ 2>/dev/null; rm -rf "$tmp" || true`, filepath.Join(fontsDir, "SpaceGrotesk"))
-		_ = exec.Command("sh", "-c", cmd).Run()
-	}
-
-	// Material Symbols icon font: official variable TTF release
-	fontDst := filepath.Join(fontsDir, "MaterialSymbolsRounded.ttf")
-	if !pathExists(fontDst) && !pathExists("/usr/share/fonts/TTF/MaterialSymbolsRounded.ttf") && !pathExists("/usr/share/fonts/material-symbols/MaterialSymbolsRounded.ttf") {
-		_ = os.MkdirAll(fontsDir, 0o755)
-		e.say("installing Material Symbols icon font")
-		cmd := fmt.Sprintf(`curl -fsSL --connect-timeout 10 -m 30 "https://raw.githubusercontent.com/google/material-design-icons/master/variablefont/MaterialSymbolsRounded%%5BFILL%%2CGRAD%%2Copsz%%2Cwght%%5D.ttf" -o %q 2>/dev/null && fc-cache -f %q || true`, fontDst, fontsDir)
-		_ = exec.Command("sh", "-c", cmd).Run()
 	}
 }
 

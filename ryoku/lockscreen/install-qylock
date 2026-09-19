@@ -171,6 +171,16 @@ user mkdir -p "$TARGET_HOME/.local/share"
 user rm -rf "$LOCK_DIR"
 user cp -a "$BUNDLE/quickshell-lockscreen" "$LOCK_DIR"
 user chmod +x "$LOCK_DIR/lock.sh"
+# Vendored compatibility links must follow the host Qt library directory.
+if [[ $RYOKU_DRYRUN != 1 && -d /usr/lib64/qt6/qml/Qt5Compat ]]; then
+  while IFS= read -r -d '' link; do
+    target=$(readlink "$link")
+    if [[ $target == /usr/lib/qt6/qml/* ]]; then
+      user ln -sfn "/usr/lib64/qt6/qml/${target#/usr/lib/qt6/qml/}" "$link"
+    fi
+  done < <(find "$LOCK_DIR/imports" -type l -print0)
+fi
+
 
 # --- 4. themes the lock reads, plus the themes_link the lock resolves ---------
 echo "  lock themes -> $QYLOCK_DIR/themes"

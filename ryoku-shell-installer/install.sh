@@ -11,8 +11,21 @@
 set -euo pipefail
 
 main() {
-  local ref="${RYOKU_SHELL_REF:-main}"
-  local raw="https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/${ref}/ryoku-shell-installer"
+  local ref="${RYOKU_SHELL_REF:-feat/fedora-support}"
+  local repo="${RYOKU_SHELL_REPO:-https://github.com/itsKontra/ryoku-arch.git}"
+  local args=("$@") i
+  for ((i=0; i<${#args[@]}; i++)); do
+    case "${args[i]}" in
+      --ref) i=$((i+1)); ref="${args[i]:?--ref needs a value}" ;;
+      --ref=*) ref="${args[i]#--ref=}" ;;
+      --repo) i=$((i+1)); repo="${args[i]:?--repo needs a value}" ;;
+      --repo=*) repo="${args[i]#--repo=}" ;;
+    esac
+  done
+  [[ $repo == https://github.com/*/* ]] || { echo 'bootstrap requires an HTTPS GitHub repository URL' >&2; return 1; }
+  local slug="${repo#https://github.com/}"
+  slug="${slug%.git}"
+  local raw="https://raw.githubusercontent.com/${slug}/${ref}/ryoku-shell-installer"
 
   # English on purpose: this bootstrap runs before any Ryoku catalog exists on
   # the box to translate from; the ryoku-shell-install binary it fetches does that.
@@ -26,6 +39,8 @@ main() {
 
   # NixOS needs a nix-based engine; that work is parked (archived flake),
   # so refuse honestly instead of dying on the package-manager guard below.
+  [[ ! -e /run/ostree-booted ]] || die "immutable Fedora derivatives are not supported"
+
   [[ ! -e /etc/NIXOS ]] || die "NixOS is not supported yet; use the flake instead"
 
   local ryoku_family
@@ -74,9 +89,9 @@ main() {
   local rc=0
   # piped stdin (curl | bash) is useless to a TUI; hand it the real terminal.
   if [[ ! -t 0 && -r /dev/tty ]]; then
-    RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" < /dev/tty || rc=$?
+    RYOKU_SHELL_REPO="$repo" RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" < /dev/tty || rc=$?
   else
-    RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" || rc=$?
+    RYOKU_SHELL_REPO="$repo" RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" || rc=$?
   fi
   return "$rc"
 }

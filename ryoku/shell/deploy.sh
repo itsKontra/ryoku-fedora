@@ -314,11 +314,20 @@ fi
 # deployed `ryoku` binary (on PATH, far from the repo) can track the update
 # channel in `ryoku status`: it compares this commit (what is now running)
 # against origin/main. One way, like every step: the repo is the source.
+install -Dm755 "$here/scripts/ryoku-install-extra" "$bindir/ryoku-install-extra"
 repo_root="$(cd "$here/../.." && pwd)"
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku"
 mkdir -p "$state_dir"
 printf '%s\n' "$repo_root" > "$state_dir/repo"
 git -C "$repo_root" rev-parse HEAD > "$state_dir/deployed" 2>/dev/null || rm -f "$state_dir/deployed"
+if [[ -n ${RYOKU_SHELL_REF:-} ]]; then
+  git check-ref-format "refs/heads/$RYOKU_SHELL_REF"
+  mkdir -p "$cfg/environment.d"
+  channel_file="$cfg/environment.d/ryoku.conf"
+  touch "$channel_file"
+  sed -i '/^RYOKU_CHANNEL=/d' "$channel_file"
+  printf 'RYOKU_CHANNEL=%s\n' "$RYOKU_SHELL_REF" >> "$channel_file"
+fi
 say "recorded update-channel checkout -> $state_dir/repo"
 
 # The `ryoku` agent skill resolves through the repo pointer just recorded:
@@ -802,22 +811,9 @@ if command -v sudo >/dev/null 2>&1; then
 fi
 # chromium reads ~/.config/chromium-flags.conf, Google Chrome reads chrome-flags.conf;
 # lay the one source to both (GNOME keyring password store + native Wayland).
-cp -a "$here/../apps/chromium-flags.conf" "$cfg/chromium-flags.conf"
-cp -a "$here/../apps/chromium-flags.conf" "$cfg/chrome-flags.conf"
-# On Fedora/RHEL, Chromium installs as /usr/bin/chromium-browser and does not read ~/.config/chromium-flags.conf.
-# Furthermore, gnome-keyring PAM auto-unlock is absent and libsecret prompts deadlock Chromium's network service.
-is_fedora=0
-if [[ -r /etc/os-release ]]; then
-  # shellcheck source=/dev/null
-  . /etc/os-release
-  case "${ID:-} ${ID_LIKE:-}" in
-    *fedora*) is_fedora=1 ;;
-  esac
-fi
-if (( is_fedora )) || command -v chromium-browser >/dev/null 2>&1; then
-  sed -i 's/--password-store=gnome-libsecret/--password-store=basic/' "$cfg/chromium-flags.conf"
-  sed -i 's/--password-store=gnome-libsecret/--password-store=basic/' "$cfg/chrome-flags.conf"
-fi
+for browser in chromium chrome; do
+  [[ -e "$cfg/$browser-flags.conf" ]] || cp -a "$here/../apps/chromium-flags.conf" "$cfg/$browser-flags.conf"
+done
 # Provide a ~/.local/bin/chromium wrapper that reads flags and execs chromium-browser.
 if ! command -v chromium >/dev/null 2>&1 || [[ "$(command -v chromium)" == "$bindir/chromium" ]]; then
   if command -v chromium-browser >/dev/null 2>&1; then

@@ -203,7 +203,7 @@ func reconcileKeplerNvidia(checkOnly bool) recResult {
 	}
 	if err := rebuildKeplerNouveau(); err != nil {
 		return warnRes(i18n.T("restored Nouveau, but the initramfs rebuild failed: %v"), err).
-			withFix(i18n.T("sudo limine-mkinitcpio  (or: sudo mkinitcpio -P)"))
+			withFix(i18n.T("ryoku doctor (retries the pending initramfs rebuild)"))
 	}
 	return fixedRes(i18n.T("removed unsupported 580xx from Kepler hardware and restored Nouveau for the next boot"))
 }
@@ -265,6 +265,26 @@ func removeRootFiles(paths ...string) error {
 }
 
 func reconcileNvidiaModeset(checkOnly bool) recResult {
+	pending := filepath.Join(sys.StateDir(), "nvidia-initramfs-pending")
+	if sys.Exists(pending) {
+		if checkOnly {
+			return wouldRes(i18n.T("NVIDIA initramfs rebuild is pending"))
+		}
+		if err := rebuildInitramfs(); err != nil {
+			return failRes(i18n.T("NVIDIA initramfs rebuild failed: %v"), err)
+		}
+		if err := os.Remove(pending); err != nil {
+			return failRes("remove initramfs marker: %v", err)
+		}
+		return fixedRes(i18n.T("rebuilt the pending NVIDIA initramfs"))
+	}
+	markPending := func() error {
+		if err := os.MkdirAll(filepath.Dir(pending), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(pending, []byte("pending\n"), 0o600)
+	}
+
 	if !nvidiaDriverActive() {
 		return okRes(i18n.T("no proprietary NVIDIA driver in use"))
 	}
@@ -278,6 +298,9 @@ func reconcileNvidiaModeset(checkOnly bool) recResult {
 			return wouldRes(i18n.T("nouveau is blacklisted but no nvidia module exists for any installed kernel; the session cannot start (the SDDM login loop)")).
 				withFix(i18n.T("ryoku doctor  (restores nouveau, rebuilds the initramfs)"))
 		}
+		if err := markPending(); err != nil {
+			return failRes("record pending initramfs: %v", err)
+		}
 		toRemove := []string{"/etc/modprobe.d/nvidia.conf"}
 		if needsMkinit {
 			toRemove = append(toRemove, "/etc/mkinitcpio.conf.d/nvidia.conf")
@@ -286,14 +309,12 @@ func reconcileNvidiaModeset(checkOnly bool) recResult {
 			return failRes(i18n.T("could not remove the stale NVIDIA config: %v"), err).
 				withFix("sudo rm /etc/modprobe.d/nvidia.conf /etc/mkinitcpio.conf.d/nvidia.conf && sudo mkinitcpio -P")
 		}
-		if needsMkinit {
-			if err := rebuildInitramfs(); err != nil {
-				return warnRes(i18n.T("restored nouveau, but the initramfs rebuild failed: %v"), err).
-					withFix(i18n.T("sudo limine-mkinitcpio  (or: sudo mkinitcpio -P)"))
-			}
-			return fixedRes(i18n.T("no nvidia module exists for the installed kernel(s); restored nouveau and rebuilt the initramfs so the next boot has a display. Install a matching driver (pacman -Syu nvidia-open) and run ryoku doctor again to switch back"))
+		if err := rebuildInitramfs(); err != nil {
+			return warnRes(i18n.T("restored nouveau, but the initramfs rebuild failed: %v"), err).
+				withFix(i18n.T("ryoku doctor (retries the pending initramfs rebuild)"))
 		}
-		return fixedRes("no nvidia module exists for the installed kernel(s); restored nouveau so the next boot has a display. Install a matching driver and run ryoku doctor again to switch back")
+		_ = os.Remove(pending)
+		return fixedRes(i18n.T("no nvidia module exists for the installed kernel(s); restored nouveau and rebuilt the initramfs so the next boot can use nouveau. Install a matching driver and run ryoku doctor again to switch back"))
 	}
 	modprobe := readFileSafe("/etc/modprobe.d/nvidia.conf")
 	mkinit := readFileSafe("/etc/mkinitcpio.conf.d/nvidia.conf")
@@ -304,14 +325,12 @@ func reconcileNvidiaModeset(checkOnly bool) recResult {
 		return okRes(i18n.T("NVIDIA modeset + fbdev + nouveau blacklist in place"))
 	}
 	if checkOnly {
-		fix := "ryoku doctor  (writes /etc/modprobe.d/nvidia.conf"
-		if needsMkinit {
-			fix += " and rebuilds the initramfs)"
-		} else {
-			fix += ")"
-		}
+		fix := "ryoku doctor (writes /etc/modprobe.d/nvidia.conf and rebuilds the initramfs)"
 		return wouldRes(i18n.T("NVIDIA driver in use but nouveau is not blacklisted / DRM modeset + fbdev not set; the GPU or an external display can fail to come up on some boots")).
 			withFix(fix)
+	}
+	if err := markPending(); err != nil {
+		return failRes("record pending initramfs: %v", err)
 	}
 	if err := writeRootFile("/etc/modprobe.d/nvidia.conf", nvidiaModprobeConf, "0644"); err != nil {
 		return failRes(i18n.T("could not write /etc/modprobe.d/nvidia.conf: %v"), err).
@@ -322,26 +341,24 @@ func reconcileNvidiaModeset(checkOnly bool) recResult {
 			return failRes(i18n.T("could not write /etc/mkinitcpio.conf.d/nvidia.conf: %v"), err).
 				withFix(i18n.T("re-run with sudo access"))
 		}
-		if err := rebuildInitramfs(); err != nil {
-			return warnRes(i18n.T("wrote the NVIDIA reliability config, but the initramfs rebuild failed: %v"), err).
-				withFix(i18n.T("sudo limine-mkinitcpio  (or: sudo mkinitcpio -P)"))
-		}
-		return fixedRes(i18n.T("blacklisted nouveau, enabled NVIDIA DRM modeset, and rebuilt the initramfs"))
 	}
-	return fixedRes("blacklisted nouveau and enabled NVIDIA DRM modeset")
+	if err := rebuildInitramfs(); err != nil {
+		return warnRes(i18n.T("wrote the NVIDIA reliability config, but the initramfs rebuild failed: %v"), err).
+			withFix(i18n.T("ryoku doctor (retries the pending initramfs rebuild)"))
+	}
+	_ = os.Remove(pending)
+	return fixedRes(i18n.T("blacklisted nouveau, enabled NVIDIA DRM modeset, and rebuilt the initramfs"))
 }
 
 // rebuildInitramfs regenerates the boot image after a module/blacklist
-// change. limine-mkinitcpio when present (the UKI path Ryoku uses), else
-// plain mkinitcpio -P.
+// change using the host boot-image tooling.
 func rebuildInitramfs() error {
-	if _, err := exec.LookPath("limine-mkinitcpio"); err == nil {
-		return sys.Run("sudo", "limine-mkinitcpio")
+	for _, args := range [][]string{{"limine-mkinitcpio"}, {"mkinitcpio", "-P"}, {"dracut", "--regenerate-all", "--force"}} {
+		if sys.Has(args[0]) {
+			return sys.Sudo(args...)
+		}
 	}
-	if _, err := exec.LookPath("mkinitcpio"); err == nil {
-		return sys.Run("sudo", "mkinitcpio", "-P")
-	}
-	return nil
+	return fmt.Errorf("no supported initramfs builder (mkinitcpio or dracut)")
 }
 
 // ---- reconciler: NVIDIA update guard hook ------------------------------------

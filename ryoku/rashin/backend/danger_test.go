@@ -120,3 +120,18 @@ func TestClassifyQuoting(t *testing.T) {
 		}
 	})
 }
+
+func TestDNFGlobalOptionsDoNotHideMutations(t *testing.T) {
+	for _, command := range []string{"dnf -q remove example", "dnf5 --quiet install example", "dnf --setopt cachedir=/tmp/info -y upgrade", "dnf --config info remove example", "dnf5 --repo=ryoku distro-sync ryoku-shell"} {
+		tier, _ := classify(command)
+		if tier != tierSystem {
+			t.Errorf("%s classified %v", command, tier)
+		}
+	}
+	for _, command := range []string{"dnf -q list installed", "dnf5 --repo ryoku repoquery ryoku-shell", "rpm -qa"} {
+		tier, _ := classify(command)
+		if tier != tierRead {
+			t.Errorf("%s classified %v", command, tier)
+		}
+	}
+}

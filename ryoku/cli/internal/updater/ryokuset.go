@@ -75,8 +75,8 @@ func ryokuSet(repoNames, installed []string) []string {
 // answered (no [ryoku] section, an unsynced db, no pacman): the caller must
 // stop rather than fall back to a system upgrade, which is the other lane.
 func installedRyokuSet() ([]string, error) {
-	if !sys.Has("pacman") && sys.Has("dnf") {
-		repo, err := sys.RunOut("dnf", "repoquery", "--repo", ryokuRepo, "--qf", "%{name}")
+	if manager := sys.RPMManager(); manager != "" {
+		repo, err := sys.RunOut(manager, "repoquery", "--repo", ryokuRepo, "--qf", "%{name}")
 		if err != nil {
 			return nil, err
 		}
@@ -119,8 +119,8 @@ func lines(out string) []string {
 // box just left, so a plain -Sy kept the old db against the new signature and
 // failed with "invalid or corrupted database (PGP signature)".
 func refreshDBArgs(force bool) []string {
-	if !sys.Has("pacman") && sys.Has("dnf") {
-		return []string{"sudo", "dnf", "-y", "--refresh", "makecache"}
+	if manager := sys.RPMManager(); manager != "" {
+		return []string{"sudo", manager, "--repo=ryoku", "--refresh", "makecache"}
 	}
 	op := "-Sy"
 	if force {
@@ -141,8 +141,11 @@ func refreshDBArgs(force bool) []string {
 // snapper pre/post pair; --overwrite adopts the paths the installer and
 // deploy.sh seed unowned (see ryokuOverwriteGlob).
 func ryokuInstallArgs(set []string) []string {
-	if !sys.Has("pacman") && sys.Has("dnf") {
-		args := []string{"sudo", "dnf", "-y", "distro-sync"}
+	if len(set) == 0 {
+		return []string{"true"}
+	}
+	if manager := sys.RPMManager(); manager != "" {
+		args := []string{"sudo", manager, "-y", "--repo=ryoku", "distro-sync"}
 		for _, p := range set {
 			args = append(args, strings.TrimPrefix(p, ryokuRepo+"/"))
 		}
@@ -162,7 +165,7 @@ func systemLanePending(ryokuTargets []string) []updateItem {
 	for _, t := range ryokuTargets {
 		ours[strings.TrimPrefix(t, ryokuRepo+"/")] = true
 	}
-	if !sys.Has("pacman") && sys.Has("dnf") {
+	if manager := sys.RPMManager(); manager != "" {
 		var ups []updateItem
 		for _, u := range pendingUpdates() {
 			if !ours[u.Name] {

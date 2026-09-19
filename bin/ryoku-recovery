@@ -6,21 +6,23 @@
 set -euo pipefail
 
 REPO_URL="${RYOKU_RECOVERY_URL:-https://github.com/ryoku-dev/ryoku-arch.git}"
-# Recovery always restores the stable channel. Every Ryoku machine runs main; a
-# leaked RYOKU_CHANNEL (an old ISO that switched to a release branch, or a
-# maintainer shell) must never redirect the rescue onto unstable-dev, or the
-# panic button re-breaks the very box it should save.
-CHANNEL="main"
+CHANNEL="${RYOKU_RECOVERY_REF:-main}"
 # Converge every box onto the one checkout `ryoku track` uses, so update and
 # recovery never track different trees; legacy checkouts are consolidated below.
 DATA_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/ryoku"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku"
-if [[ -n ${RYOKU_RECOVERY_DIR:-} ]]; then
-  RECOVERY_DIR="$RYOKU_RECOVERY_DIR"
-elif git -C "$DATA_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-  RECOVERY_DIR="$DATA_ROOT"
-else
-  RECOVERY_DIR="$DATA_ROOT/repo"
+RECOVERY_DIR="${RYOKU_RECOVERY_DIR:-$HOME/ryoku-arch}"
+if [[ -f $STATE_DIR/repo ]]; then
+  source_repo=$(cat "$STATE_DIR/repo")
+  if git -C "$source_repo" rev-parse --git-dir >/dev/null 2>&1; then
+    REPO_URL="${RYOKU_RECOVERY_URL:-$(git -C "$source_repo" remote get-url origin)}"
+    RECOVERY_DIR="${RYOKU_RECOVERY_DIR:-$source_repo}"
+    channel_file="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/ryoku.conf"
+    if [[ -r $channel_file && -z ${RYOKU_RECOVERY_REF:-} ]]; then
+      CHANNEL=$(sed -n 's/^RYOKU_CHANNEL=//p' "$channel_file" | tail -1)
+      [[ -n $CHANNEL ]] || CHANNEL=main
+    fi
+  fi
 fi
 ASSUME_YES=0
 DO_PACKAGES=1
@@ -74,7 +76,13 @@ if [[ ${RYOKU_RECOVERY_FORCE:-0} != 1 ]] && ! is_ryoku; then
 fi
 
 need git
-need go
+if ! command -v go >/dev/null 2>&1; then
+  if command -v dnf5 >/dev/null 2>&1; then sudo dnf5 -y install golang
+  elif command -v dnf >/dev/null 2>&1; then sudo dnf -y install golang
+  else need go
+  fi
+fi
+git check-ref-format "refs/heads/$CHANNEL" >/dev/null || die "invalid recovery branch"
 
 if [[ $ASSUME_YES != 1 ]]; then
   [[ -r /dev/tty ]] || die "non-interactive shell; re-run with --yes once you are sure"
@@ -138,8 +146,16 @@ if [[ $DO_PACKAGES == 1 ]]; then
       sudo pacman -Syu --needed --noconfirm "${pkgs[@]}" ||
         warn "pacman step failed (offline or a package error); continuing with the redeploy"
     fi
+  elif command -v dnf5 >/dev/null 2>&1 || command -v dnf >/dev/null 2>&1; then
+    manager=dnf
+    command -v dnf5 >/dev/null 2>&1 && manager=dnf5
+    compositor=""
+    [[ ! -r $STATE_DIR/source-compositor ]] || compositor=$(cat "$STATE_DIR/source-compositor")
+    dependencies=$(cd "$RECOVERY_DIR/ryoku-shell-installer" && go run . --dependency-list --payload "$RECOVERY_DIR" --compositor "$compositor") || die "cannot resolve Fedora dependencies; configs were not reset"
+    mapfile -t pkgs <<< "$dependencies"
+    sudo "$manager" -y --refresh install --best "${pkgs[@]}" || die "Fedora dependency repair failed; configs were not reset"
   else
-    warn "skipping packages (pacman or base.packages not found)"
+    die "cannot repair packages on this host; configs were not reset"
   fi
 fi
 
@@ -186,7 +202,7 @@ done
 deploy="$RECOVERY_DIR/ryoku/shell/deploy.sh"
 [[ -x $deploy ]] || die "recovery checkout is missing $deploy"
 say "rebuilding and redeploying the desktop (overwrites Ryoku configs)"
-"$deploy"
+RYOKU_SHELL_REF="$CHANNEL" "$deploy"
 
 # deploy.sh records the checkout as the update channel, which fits a dev box
 # but silently converts a packaged install into a git-tracking one: `ryoku

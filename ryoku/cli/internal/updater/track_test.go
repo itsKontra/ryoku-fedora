@@ -15,6 +15,10 @@ import (
 func packagedConf(t *testing.T, channel string) {
 	t.Helper()
 	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "pacman"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
 	conf := filepath.Join(dir, "pacman.conf")
 	body := "[options]\nHoldPkg = pacman\n"
 	if channel != "" {

@@ -260,13 +260,25 @@ func TestFedoraUpdateLanes(t *testing.T) {
 	}
 	t.Setenv("PATH", bin)
 	got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-desktop", "ryoku/ryoku-shell"}), " ")
-	if got != "sudo dnf -y distro-sync ryoku-desktop ryoku-shell" {
+	if got != "sudo dnf -y --repo=ryoku distro-sync ryoku-desktop ryoku-shell" {
 		t.Fatalf("Ryoku lane: %s", got)
 	}
 	if got := strings.Join(systemUpgradeArgs(), " "); got != "sudo dnf -y upgrade" {
 		t.Fatalf("system lane: %s", got)
 	}
-	if got := strings.Join(refreshDBArgs(true), " "); got != "sudo dnf -y --refresh makecache" {
+	if got := strings.Join(refreshDBArgs(true), " "); got != "sudo dnf --repo=ryoku --refresh makecache" {
 		t.Fatalf("refresh: %s", got)
+	}
+}
+
+func TestDNF5OnlyAndEmptyRyokuSet(t *testing.T) {
+	bin := t.TempDir()
+	os.WriteFile(filepath.Join(bin, "dnf5"), []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	t.Setenv("PATH", bin)
+	if got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-shell"}), " "); got != "sudo dnf5 -y --repo=ryoku distro-sync ryoku-shell" {
+		t.Fatal(got)
+	}
+	if got := strings.Join(ryokuInstallArgs(nil), " "); got != "true" {
+		t.Fatalf("empty set could upgrade host: %s", got)
 	}
 }

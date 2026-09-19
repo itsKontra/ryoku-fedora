@@ -142,23 +142,10 @@ func runUninstall(yes, dry bool) int {
 		}
 	}
 
-	if activeDistro.fromSource {
-		if confirm(rd, "remove Ryoku binaries and QML plugins from ~/.local?", yes) {
-			if dry {
-				fmt.Println("DRYRUN: remove ~/.local/bin/ryo* and ~/.local/lib/qt6/qml/Ryoku")
-			} else {
-				bins, _ := filepath.Glob(filepath.Join(home, ".local/bin/ryoku*"))
-				bins2, _ := filepath.Glob(filepath.Join(home, ".local/bin/ryo*"))
-				for _, b := range append(bins, bins2...) {
-					_ = os.Remove(b)
-				}
-				_ = os.RemoveAll(filepath.Join(home, ".local/lib/qt6/qml/Ryoku"))
-				services, _ := filepath.Glob(filepath.Join(home, ".config/systemd/user/ryoku-*.service"))
-				for _, s := range services {
-					_ = os.Remove(s)
-				}
-				_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
-			}
+	if activeDistro.fromSource && confirm(rd, "remove or restore artifacts recorded by this installation?", yes) {
+		if err := uninstallArtifacts(home, dry, run); err != nil {
+			fmt.Println("source uninstall failed: " + err.Error())
+			return 1
 		}
 	}
 

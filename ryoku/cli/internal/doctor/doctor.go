@@ -1166,11 +1166,12 @@ func reconcileIconFont(checkOnly bool) recResult {
 	userFont := filepath.Join(sys.Home(), ".local", "share", "fonts", "MaterialSymbolsRounded.ttf")
 	fontPaths := []string{
 		userFont,
+		"/usr/share/fonts/MaterialSymbolsRounded.ttf",
 		"/usr/share/fonts/TTF/MaterialSymbolsRounded.ttf",
 		"/usr/share/fonts/material-symbols/MaterialSymbolsRounded.ttf",
 	}
 	for _, fp := range fontPaths {
-		if sys.Exists(fp) {
+		if validFont(fp) {
 			return okRes("Material Symbols icon font installed")
 		}
 	}
@@ -1183,10 +1184,8 @@ func reconcileIconFont(checkOnly bool) recResult {
 		if err := os.MkdirAll(fontsDir, 0o755); err != nil {
 			return failRes("could not create font directory: %v", err)
 		}
-		cmd := fmt.Sprintf(`curl -fsSL --connect-timeout 10 -m 30 "https://raw.githubusercontent.com/google/material-design-icons/master/variablefont/MaterialSymbolsRounded%%%%5BFILL%%%%2CGRAD%%%%2Copsz%%%%2Cwght%%%%5D.ttf" -o %q 2>/dev/null && fc-cache -f %q`, userFont, fontsDir)
-		if err := exec.Command("sh", "-c", cmd).Run(); err != nil {
-			return failRes("could not download Material Symbols font: %v", err).
-				withFix("%s", `curl -fsSL -o ~/.local/share/fonts/MaterialSymbolsRounded.ttf "https://raw.githubusercontent.com/google/material-design-icons/master/variablefont/MaterialSymbolsRounded%5BFILL%2CGRAD%2Copsz%2Cwght%5D.ttf"`)
+		if err := installDesktopExtra("material-symbols"); err != nil {
+			return failRes("could not install Material Symbols font: %v", err)
 		}
 		return fixedRes("installed the Material Symbols icon font; `ryoku reload` picks it up")
 	}

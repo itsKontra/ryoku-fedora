@@ -51,6 +51,9 @@ func repoBase() string {
 	if b := strings.TrimSpace(os.Getenv("RYOKU_RELEASE_BASE")); b != "" {
 		return strings.TrimSuffix(b, "/")
 	}
+	if sys.RPMManager() != "" {
+		return sys.RPMReleaseBase()
+	}
 	return sys.RepoBase
 }
 
@@ -86,8 +89,7 @@ func fetchCached(name, url string, ttl time.Duration) []byte {
 // the channel is unreachable and nothing is cached.
 func channelServes(channel string) channelRelease {
 	var r channelRelease
-	url := strings.Replace(sys.ChannelServer(channel), sys.RepoBase, repoBase(), 1)
-	url = strings.Replace(url, "$arch", "x86_64", 1)
+	url := strings.Replace(sys.ChannelURL(channel), sys.RepoBase, repoBase(), 1)
 	if url == "" {
 		return r
 	}
@@ -178,14 +180,14 @@ func Track(channel string) error {
 // clone) and rewrite the [ryoku] Server to channel. It touches no pacman and no
 // network, so it is unit-testable; the caller runs the pacman side after.
 func switchToPackageChannel(channel string) (migrated bool, err error) {
+	if err := sys.SetPackagedChannel(channel); err != nil {
+		return false, err
+	}
 	if sys.SourceTracked() {
 		if err := sys.RetireSourceTracking(); err != nil {
 			return false, fmt.Errorf(i18n.T("could not retire the source checkout: %w"), err)
 		}
 		migrated = true
-	}
-	if err := sys.SetPackagedChannel(channel); err != nil {
-		return migrated, err
 	}
 	return migrated, nil
 }

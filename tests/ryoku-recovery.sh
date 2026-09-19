@@ -119,5 +119,42 @@ HOME="$home2" XDG_DATA_HOME="$home2/.local/share" \
 check "$(git_q -C "$arch2" rev-parse --abbrev-ref HEAD)" "main" \
   "clean machine clones ~/ryoku-arch on main"
 
+# A recorded source installation follows its own fork/ref, including recovery.
+state3="$work/home3/.local/state/ryoku"
+config3="$work/home3/.config"
+repo3="$work/home3/source"
+mkdir -p "$state3" "$config3/environment.d"
+git_q clone -q "$origin" "$repo3"
+printf '%s\n' "$repo3" > "$state3/repo"
+printf 'RYOKU_CHANNEL=unstable-dev\n' > "$config3/environment.d/ryoku.conf"
+HOME="$work/home3" XDG_DATA_HOME="$work/home3/.local/share" \
+  XDG_STATE_HOME="$work/home3/.local/state" XDG_CONFIG_HOME="$config3" \
+  RYOKU_RECOVERY_FORCE=1 RYOKU_TEST_MARKER="$work/marker3" \
+  "$RECOVERY" --yes --no-packages >/dev/null
+check "$(git_q -C "$repo3" rev-parse --abbrev-ref HEAD)" "unstable-dev" \
+  "source recovery preserves the recorded branch"
+check "$(git_q -C "$repo3" remote get-url origin)" "$origin" \
+  "source recovery preserves the recorded origin"
+
+if command -v dnf5 >/dev/null 2>&1 && ! command -v pacman >/dev/null 2>&1; then
+# Dependency resolution/repair failure must precede the destructive reset.
+# This fixture uses a missing dependency resolver directory and never invokes
+# a package manager, so it is safe on any test host.
+home4="$work/home4"
+mkdir -p "$home4/.config/ryoku/user_edits"
+printf 'keep me\n' > "$home4/.config/ryoku/user_edits/keep"
+if HOME="$home4" XDG_DATA_HOME="$home4/.local/share" \
+  XDG_STATE_HOME="$home4/.local/state" XDG_CONFIG_HOME="$home4/.config" \
+  RYOKU_RECOVERY_URL="$origin" RYOKU_RECOVERY_FORCE=1 \
+  RYOKU_TEST_MARKER="$work/marker4" \
+  "$RECOVERY" --yes >"$work/recovery-failure.log" 2>&1; then
+  echo "::error::recovery unexpectedly succeeded without dependencies" >&2
+  fail=1
+fi
+present "$home4/.config/ryoku/user_edits/keep" "failed repair preserves user configuration"
+absent "$work/marker4" "failed repair never deploys"
+
+fi
+
 if ((fail)); then echo "ryoku-recovery: FAILED" >&2; exit 1; fi
 echo "ryoku-recovery: all checks passed"

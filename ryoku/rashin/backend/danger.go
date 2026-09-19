@@ -219,13 +219,11 @@ func classifyArgv(argv []string) (dangerTier, string) {
 			}
 		}
 		return tierSystem, "changes installed packages"
-	case name == "dnf" || name == "rpm":
-		op := ""
-		if len(argv) > 1 {
-			op = argv[1]
-		}
-		for _, read := range []string{"-q", "--query", "repoquery", "search", "info", "check-update", "list"} {
-			if op == read || strings.HasPrefix(op, read) {
+	case name == "dnf" || name == "dnf5":
+		return classifyDNF(argv[1:])
+	case name == "rpm":
+		for _, a := range argv[1:] {
+			if a == "--query" || a == "-q" || (strings.HasPrefix(a, "-q") && !strings.HasPrefix(a, "--")) {
 				return tierRead, ""
 			}
 		}
@@ -540,4 +538,26 @@ func underAny(p string, roots []string) bool {
 		}
 	}
 	return false
+}
+
+// Unknown options are conservative: their argument might otherwise look like a query verb.
+func classifyDNF(args []string) (dangerTier, string) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		key, _, equal := strings.Cut(a, "=")
+		switch key {
+		case "-q", "--quiet", "-y", "--assumeyes", "--assumeno", "--refresh", "-C", "--cacheonly":
+			continue
+		case "--config", "-c", "--installroot", "--releasever", "--setopt", "--repo", "--enablerepo", "--disablerepo", "--enable-repo", "--disable-repo", "--color", "--exclude", "-x":
+			if !equal {
+				i++
+			}
+			continue
+		case "repoquery", "search", "info", "check-update", "check-upgrade", "list", "provides", "repolist", "repoinfo":
+			return tierRead, ""
+		default:
+			return tierSystem, "changes installed packages"
+		}
+	}
+	return tierSystem, "changes installed packages"
 }
