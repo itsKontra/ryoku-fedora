@@ -17,7 +17,7 @@ func sourceMode(d *distro, mode, payload, ref string) bool {
 	if mode != "auto" {
 		return mode == "source"
 	}
-	return payload != "" || (ref != "" && ref != "main") || strings.TrimSuffix(repoURL, ".git") != strings.TrimSuffix(defaultRepoURL, ".git")
+	return payload != "" || (ref != "" && ref != "main-fedora") || strings.TrimSuffix(repoURL, ".git") != strings.TrimSuffix(defaultRepoURL, ".git")
 }
 
 func (e *engine) fromSource() bool {

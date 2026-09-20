@@ -1,7 +1,7 @@
 name: Publish Fedora COPR packages
 on:
   push:
-    branches: [main]
+    branches: [main-fedora]
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   gate:
-    if: github.repository == 'itsKontra/ryoku-fedora' && github.ref == 'refs/heads/main'
+    if: github.repository == 'itsKontra/ryoku-fedora' && github.ref == 'refs/heads/main-fedora'
     uses: ./.github/workflows/fedora-rpm.yml
     with:
       release: ${{ format('v0.0.0-alpha.{0}', github.run_number) }}
@@ -29,7 +29,7 @@ jobs:
         env:
           COPR_FINGERPRINT: ${{ vars.RYOKU_COPR_FINGERPRINT }}
         run: |
-          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main-fedora)"
           test -n "$COPR_FINGERPRINT"
       - uses: actions/download-artifact@v4
         with:

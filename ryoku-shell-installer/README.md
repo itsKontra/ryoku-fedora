@@ -19,7 +19,7 @@ modules and `Ryoku.Blobs` are compiled locally. The Hyprland compositor plugins
 need `makepkg` and are skipped there; the shell degrades to them being off.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/ryoku-shell-installer/install.sh | bash
 ```
 
 Headless / unattended:

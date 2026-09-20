@@ -13,13 +13,13 @@ set -euo pipefail
 
 CHANNEL="${1:-unstable-dev}"
 case "$CHANNEL" in
-  main | unstable-dev) ;;
+  main | main-fedora | unstable-dev) ;;
   -h | --help)
     sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
-    echo "usage: ryoku track <main|unstable-dev> --source"
+    echo "usage: ryoku track <main|main-fedora|unstable-dev> --source"
     exit 0
     ;;
-  *) echo "ryoku-track: unknown channel '$CHANNEL' (use: main or unstable-dev)" >&2; exit 1 ;;
+  *) echo "ryoku-track: unknown channel '$CHANNEL' (use: main, main-fedora, or unstable-dev)" >&2; exit 1 ;;
 esac
 
 REPO="$HOME/ryoku-arch"
@@ -29,7 +29,7 @@ say() { printf '\n==> %s\n' "$*"; }
 if [[ $CHANNEL == unstable-dev ]]; then
   say "Switching this box to unstable-dev, the bleeding edge rebuilt from source. Use at your own risk."
 else
-  say "Switching this box to main, the stable channel, tracked from source."
+  say "Switching this box to $CHANNEL, the stable channel, tracked from source."
 fi
 
 say "Installing build tools and matugen"

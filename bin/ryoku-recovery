@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ryoku panic button. last resort for when an update wrecks the desktop and
-# `ryoku update` cant dig me out. i pull main fresh, reinstall the base packages,
+# `ryoku update` cant dig me out. i pull main-fedora fresh, reinstall the base packages,
 # and rebuild + redeploy the whole desktop, which overwrites my ryoku configs.
 # dont edit this lightly, talk to me first.
 set -euo pipefail
 
 REPO_URL="${RYOKU_RECOVERY_URL:-https://github.com/itsKontra/ryoku-fedora.git}"
-CHANNEL="${RYOKU_RECOVERY_REF:-main}"
+CHANNEL="${RYOKU_RECOVERY_REF:-main-fedora}"
 # Converge every box onto the one checkout `ryoku track` uses, so update and
 # recovery never track different trees; legacy checkouts are consolidated below.
 DATA_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/ryoku"
@@ -20,7 +20,7 @@ if [[ -f $STATE_DIR/repo ]]; then
     channel_file="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d/ryoku.conf"
     if [[ -r $channel_file && -z ${RYOKU_RECOVERY_REF:-} ]]; then
       CHANNEL=$(sed -n 's/^RYOKU_CHANNEL=//p' "$channel_file" | tail -1)
-      [[ -n $CHANNEL ]] || CHANNEL=main
+      [[ -n $CHANNEL ]] || CHANNEL=main-fedora
     fi
   fi
 fi
@@ -40,7 +40,7 @@ rebuilds + redeploys the desktop, and CLEARS your user_edits overlay and Hub
 settings, OVERWRITING your Ryoku configs in ~/.config with the shipped defaults.
 
   ryoku recovery [--yes] [--no-packages]
-  curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-recovery | bash
+  curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/bin/ryoku-recovery | bash
 
   -y, --yes          skip the confirmation prompt
       --no-packages  only pull and redeploy configs, skip the pacman step
@@ -117,7 +117,7 @@ else
 fi
 
 # -f so a dirty or conflicted tree (the old updater stash-pops before switching,
-# which can leave conflicts) can never block the rescue from reaching main.
+# which can leave conflicts) can never block the rescue from reaching main-fedora.
 git -C "$RECOVERY_DIR" checkout -f -B "$CHANNEL" "origin/$CHANNEL"
 git -C "$RECOVERY_DIR" reset --hard "origin/$CHANNEL"
 git -C "$RECOVERY_DIR" clean -fdx

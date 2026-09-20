@@ -218,13 +218,13 @@ installs the desktop RPMs via DNF, migrates you off conflicting shells and daemo
 and wires up the full desktop. It never partitions a disk.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/ryoku-shell-installer/install.sh | bash
 ```
 
 Preview everything it would do without changing anything:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/ryoku-shell-installer/install.sh | bash -s -- --dry-run
 ```
 
 Details in [`ryoku-shell-installer/`](ryoku-shell-installer/README.md),
@@ -239,7 +239,7 @@ you off conflicting shells and daemons, and wires up the full desktop. It never
 partitions a disk.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/ryoku-shell-installer/install.sh | bash
 ```
 
 Preview everything it would do without changing anything by appending
@@ -303,7 +303,7 @@ previous snapshot from the Limine boot menu.
 ## Recovery
 
 When an update leaves the desktop unusable and `ryoku update` cannot fix it,
-there is a last-resort recovery. It pulls the latest `main`, reinstalls the base
+there is a last-resort recovery. It pulls the latest `main-fedora`, reinstalls the base
 packages (via pacman on Arch or dnf on Fedora), and rebuilds and redeploys the whole
 desktop from source, overwriting your Ryoku configs:
 
@@ -315,11 +315,11 @@ If the `ryoku` command itself is gone, drop to a TTY (`Ctrl+Alt+F2`, then log in
 and run the same recovery straight from the repo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-recovery | bash
+curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/bin/ryoku-recovery | bash
 ```
 
 This is a true last resort. It clears your user overrides and the Hub's stored
-settings, and resets you to the latest `main`. It refuses to run on a machine
+settings, and resets you to the latest `main-fedora`. It refuses to run on a machine
 that is not Ryoku, and asks you to confirm before it changes
 anything. Pass `--yes` to skip the prompt and `--no-packages` to pull and
 redeploy the configs without the package step. Details in
