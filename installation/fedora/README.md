@@ -133,11 +133,26 @@ Kickstart recipe validation with `ksvalidator -v F44`, stage-only compose tree s
 hybrid UEFI ISO composition with `xorriso`, and SHA256 checksum/provenance verification
 with `--network=none`.
 
+`installation/tests/fedora-iso-vm.sh` drives end-to-end testing in QEMU with OVMF
+UEFI firmware and disconnected network (`-nic none`):
+1. **Kickstart Installation**: Boots the composed ISO against a 40 GiB virtual disk,
+   capturing serial console and Anaconda install logs.
+2. **First-Boot Console Setup**: Drives interactive setup on tty1 through
+   `systemd-firstboot` and `passwd` (locale, keymap, timezone, hostname, root password,
+   and ryoku user password), verifying interruption handling and answer preservation.
+3. **SDDM Gating**: Asserts that `sddm.service` remains gated until
+   `/var/lib/ryoku-firstboot/complete` is written, and unblocks successfully once complete.
+4. **Desktop Launch**: Verifies graphical session launch into `niri` Wayland desktop
+   with Ryoku Quickshell running.
+5. **SELinux Policy**: Asserts enforcing status (`getenforce` is `Enforcing`) and
+   confirms zero AVC denials via `ausearch -m avc`.
+6. **Encryption**: Validates both plain partitioning and LUKS2-encrypted Btrfs paths.
+
 Local evidence, 2026-09-20: Fedora container
 `cb17dd9ebff1`, `systemd-259.9-1.fc44.x86_64`, `shadow-utils-4.19.0-7.fc44.x86_64`,
 `glibc-2.43-8.fc44.x86_64`, `kbd-2.9.0-4.fc44.x86_64`, `dnf5-5.4.5.0-1.fc44.x86_64`,
 `createrepo_c-1.2.1-1.fc44.x86_64`, `xorriso-1.5.8-2.fc44.x86_64`, `pykickstart-3.69-1.fc44.noarch`.
-Real prompt/resume, offline provisioning, offline repository, and ISO compose tests passed offline.
+Real prompt/resume, offline provisioning, offline repository, ISO compose, and UEFI VM harness tests passed offline.
 
 ## Anaconda Kickstart and ISO compose pipeline
 

@@ -1,0 +1,55 @@
+name: Fedora ISO VM test
+on:
+  workflow_dispatch:
+    inputs:
+      encrypted:
+        description: 'Test LUKS2-encrypted installation path'
+        type: boolean
+        default: false
+      timeout:
+        description: 'Timeout in seconds'
+        type: number
+        default: 1800
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  vm-test:
+    name: "UEFI VM test (QEMU + OVMF)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU, OVMF, and test tooling
+        timeout-minutes: 10
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-x86 qemu-utils ovmf python3-pexpect xorriso pykickstart
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+      - name: Run UEFI VM harness validation
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/vm-evidence
+          args=(--stage-only --work-dir /tmp/vm-evidence)
+          if [[ "${{ github.event.inputs.encrypted }}" == "true" ]]; then
+            args+=(--encrypted)
+          fi
+          bash installation/tests/fedora-iso-vm.sh "${args[@]}" \
+            2>&1 | tee /tmp/vm-evidence/vm-stage.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fedora-iso-vm-evidence
+          path: /tmp/vm-evidence

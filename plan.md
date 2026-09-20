@@ -67,6 +67,18 @@ Tracking plan and milestones for [issue #10](https://github.com/itsKontra/ryoku-
   - [x] Container smoke test script (`installation/tests/fedora-iso.sh`) validating Kickstart syntax with `ksvalidator -v F44`, stage-only compose, ISO image creation with `xorriso`, and checksum verification in `--network=none`.
   - [x] CI workflow updated in `.github/workflows/fedora-firstboot.yml`.
 
+- [x] **Milestone 4: Automated UEFI VM Test Harness & Validation**
+  - [x] Automated UEFI VM test harness (`installation/tests/fedora-iso-vm.sh`, `installation/tests/fedora-iso-vm.py`):
+    - Launches QEMU with OVMF UEFI firmware, 40 GiB virtual disk, and disconnected network (`-nic none`).
+    - Drives Anaconda Kickstart installation with test target disk adaptation and captures serial and install logs.
+    - Reboots into installed target disk and drives interactive console setup on tty1 (testing prompt order, answers, and interruption handling).
+    - Verifies SDDM gate preconditions and unblocking upon setup completion.
+    - Verifies graphical session launch into `niri` desktop with Ryoku shell.
+    - Verifies SELinux enforcing status and asserts zero denials (`ausearch -m avc`).
+    - Supports both unencrypted and LUKS2-encrypted installation paths.
+  - [x] 11 unit tests in `installation/fedora/tests/test_vm.py` (58 tests in `installation/fedora/tests/` total).
+  - [x] CI workflow for VM testing in `.github/workflows/fedora-iso-vm.yml` and stage-only gate in `.github/workflows/fedora-firstboot.yml`.
+
 ---
 
 ## Remaining Milestones
@@ -130,19 +142,20 @@ Tracking plan and milestones for [issue #10](https://github.com/itsKontra/ryoku-
 
 ---
 
-### Milestone 4: Automated UEFI VM Test Harness & Validation
+### Milestone 4: Automated UEFI VM Test Harness & Validation (Complete)
 *Prove end-to-end correctness in automated virtual machines with disconnected network.*
 
-- [ ] **VM Test Automation Harness (`installation/tests/fedora-iso-vm.sh`)**:
-  - [ ] Launch QEMU with OVMF UEFI firmware, virtual drive, and disconnected NIC (`-nic none`).
-  - [ ] Drive Anaconda Kickstart installation to completion.
-  - [ ] Capture serial console logs and Anaconda install logs.
-- [ ] **First-Boot & Desktop Verification**:
-  - [ ] Reboot into installed virtual disk.
-  - [ ] Drive interactive console setup on tty1 (verify prompt order, answers, and interruption handling).
-  - [ ] Verify SDDM unblocks only after completion file exists.
-  - [ ] Verify graphical login into `niri` desktop with Ryoku shell running.
-  - [ ] Verify SELinux enforcing status and assert zero denials (`ausearch -m avc`).
-  - [ ] Test both unencrypted and LUKS2-encrypted installation paths.
-- [ ] **CI Integration**:
-  - [ ] Add GitHub Actions workflow for scheduled/manual ISO build and VM smoke tests.
+- [x] **VM Test Automation Harness (`installation/tests/fedora-iso-vm.sh`, `installation/tests/fedora-iso-vm.py`)**:
+  - [x] Launch QEMU with OVMF UEFI firmware, virtual drive, and disconnected NIC (`-nic none`).
+  - [x] Drive Anaconda Kickstart installation to completion.
+  - [x] Capture serial console logs and Anaconda install logs.
+- [x] **First-Boot & Desktop Verification**:
+  - [x] Reboot into installed virtual disk.
+  - [x] Drive interactive console setup on tty1 (verify prompt order, answers, and interruption handling).
+  - [x] Verify SDDM unblocks only after completion file exists.
+  - [x] Verify graphical login into `niri` desktop with Ryoku shell running.
+  - [x] Verify SELinux enforcing status and assert zero denials (`ausearch -m avc`).
+  - [x] Test both unencrypted and LUKS2-encrypted installation paths.
+- [x] **CI Integration**:
+  - [x] Add GitHub Actions workflow for scheduled/manual ISO build and VM smoke tests (`.github/workflows/fedora-iso-vm.yml`).
+  - [x] Integrate stage-only VM harness validation in `.github/workflows/fedora-firstboot.yml`.

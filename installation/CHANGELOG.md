@@ -13,6 +13,18 @@
   its space is listed but needs GPT (`backend/lib/disk.sh`, `tui/system.go`).
 
 ### Added
+- **Automated UEFI VM test harness and validation for Fedora 44 Ryoku ISO.** Provide
+  the automated test harness (`tests/fedora-iso-vm.sh`, `tests/fedora-iso-vm.py`)
+  driving QEMU with OVMF firmware, 40 GiB virtual disk, and disconnected network
+  (`-nic none`). Automate Kickstart installation with test target adaptation and
+  capture serial and Anaconda install logs. Drive interactive console first-boot setup
+  on tty1 through `systemd-firstboot` and `passwd` (locale, keymap, timezone, hostname,
+  root password, ryoku user password) with interruption recovery. Verify SDDM gating
+  preconditions and unblocking upon setup completion, graphical session launch into
+  `niri` desktop with Ryoku Quickshell, and SELinux enforcing status with zero AVC denials
+  (`ausearch -m avc`). Test both unencrypted and LUKS2-encrypted installation paths
+  with 11 unit tests in `fedora/tests/test_vm.py` (58 tests total), and integrate into
+  CI (`.github/workflows/fedora-iso-vm.yml`, `.github/workflows/fedora-firstboot.yml`).
 - **Anaconda Kickstart and ISO compose pipeline for Fedora 44.** Define the
   single-source-of-truth Kickstart recipe (`fedora/kickstart/ryoku.ks`) with UEFI
   GPT partitioning (600 MiB ESP, 2 GiB `/boot`, Btrfs with `root` and `home` subvolumes,
