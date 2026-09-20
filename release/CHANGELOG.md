@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+- Fedora RPM checks invoke the standard `dnf` command. COPR build and
+  publishing integration is tracked in fork issue #4.
+
 ### Added
 - **`ryoku-desktop` ships the `ryoku-gpu-trim` initramfs hook.**
   `/usr/lib/initcpio/install/ryoku-gpu-trim`, from

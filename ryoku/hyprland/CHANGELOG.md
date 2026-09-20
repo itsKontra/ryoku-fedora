@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Fixed
+- Browser fallback no longer checks for Chromium twice; `chromium-browser`
+  is used when present before falling back to `chromium`.
+
 - **Hiding the scratchpad no longer makes the next bar panel pop it open.**
   Super+Alt+H toggled the special workspace through Hyprland directly, which
   leaves keyboard focus on the window it just hid. Any surface that then takes

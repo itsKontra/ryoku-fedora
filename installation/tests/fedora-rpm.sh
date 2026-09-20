@@ -3,7 +3,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 provider=${1:?compositor provider}
-manager=${RYOKU_TEST_DNF:-dnf5}
+manager=${RYOKU_TEST_DNF:-dnf}
 [[ -f /etc/fedora-release && $EUID == 0 ]] || { echo 'requires a disposable Fedora root' >&2; exit 1; }
 logdir=${RYOKU_TEST_LOGS:-/tmp/fedora-evidence}
 mkdir -p "$logdir"
@@ -16,7 +16,7 @@ cat /etc/os-release
   qt6-qtshadertools-devel qt6-qtsvg-devel qt6-qt5compat-devel qt6-qtwayland-devel \
   python3 git gnupg2 dnf5-plugins
 for repo in sdegler/hyprland errornointernet/quickshell atim/starship atim/lazygit lihaohong/yazi; do
-  dnf5 -y copr enable "$repo"
+  dnf -y copr enable "$repo"
 done
 export GNUPGHOME
 GNUPGHOME=$(mktemp -d)

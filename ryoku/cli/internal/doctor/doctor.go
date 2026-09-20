@@ -490,7 +490,7 @@ SNAPPER_CONFIGS="root"
 // file where SNAPPER_CONFIGS is declared. On Fedora/openSUSE/RHEL this is
 // /etc/sysconfig/snapper; on Debian/Ubuntu /etc/default/snapper; on Arch /etc/conf.d/snapper.
 func snapperGlobalConfPath() string {
-	if sys.Exists("/etc/sysconfig/snapper") || sys.Exists("/etc/sysconfig") || sys.Has("dnf") || sys.Has("dnf5") {
+	if sys.Exists("/etc/sysconfig/snapper") || sys.Exists("/etc/sysconfig") || sys.Has("dnf") {
 		return "/etc/sysconfig/snapper"
 	}
 	if sys.Exists("/etc/default/snapper") || (sys.Exists("/etc/default") && !sys.Exists("/etc/conf.d")) {

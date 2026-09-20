@@ -27,7 +27,7 @@ import (
 // line-anchored so a commented-out "#[ryoku]" stanza does not count.
 var ryokuStanzaRe = regexp.MustCompile(`(?m)^\[ryoku\]`)
 
-var repoURL = "https://github.com/itsKontra/ryoku-arch.git"
+var repoURL = "https://github.com/itsKontra/ryoku-fedora.git"
 
 const pacmanStanza = `
 [ryoku]
@@ -567,8 +567,11 @@ func stepTools(e *engine) error {
 	pkgs := []string{"git", d.local("base-devel")}
 	if d.id == "fedora" {
 		plugin := "dnf-plugins-core"
-		if d.installCmd[0] == "dnf5" {
-			plugin = "dnf5-plugins"
+		if command, err := exec.LookPath(d.installCmd[0]); err == nil {
+			resolved, _ := filepath.EvalSymlinks(command)
+			if filepath.Base(resolved) == "dnf5" {
+				plugin = "dnf5-plugins"
+			}
 		}
 		pkgs = append(pkgs, plugin)
 	}

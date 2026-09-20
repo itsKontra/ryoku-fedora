@@ -12,6 +12,10 @@
   and doctor reconcilers for RPM-based environments.
 
 ### Fixed
+- The bootstrap and installer now default to `itsKontra/ryoku-fedora` on
+  `main`. Fedora commands use `dnf`, including when it links to DNF5, while
+  installing the COPR plugin package for the implementation behind that link.
+
 - **Fedora installation and recovery preserve the selected source and desktop.**
   Required packages and repositories now fail early, downloads are verified,
   and uninstall preserves unrelated files and later user edits. Immutable

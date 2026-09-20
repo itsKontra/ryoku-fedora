@@ -13,9 +13,6 @@ func RPMManager() string {
 	if Has("pacman") {
 		return ""
 	}
-	if Has("dnf5") {
-		return "dnf5"
-	}
 	if Has("dnf") {
 		return "dnf"
 	}

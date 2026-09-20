@@ -271,11 +271,14 @@ func TestFedoraUpdateLanes(t *testing.T) {
 	}
 }
 
-func TestDNF5OnlyAndEmptyRyokuSet(t *testing.T) {
+func TestDNFSymlinkAndEmptyRyokuSet(t *testing.T) {
 	bin := t.TempDir()
 	os.WriteFile(filepath.Join(bin, "dnf5"), []byte("#!/bin/sh\nexit 0\n"), 0o755)
+	if err := os.Symlink("dnf5", filepath.Join(bin, "dnf")); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("PATH", bin)
-	if got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-shell"}), " "); got != "sudo dnf5 -y --repo=ryoku distro-sync ryoku-shell" {
+	if got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-shell"}), " "); got != "sudo dnf -y --repo=ryoku distro-sync ryoku-shell" {
 		t.Fatal(got)
 	}
 	if got := strings.Join(ryokuInstallArgs(nil), " "); got != "true" {

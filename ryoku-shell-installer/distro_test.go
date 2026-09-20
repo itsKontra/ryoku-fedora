@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -170,5 +171,38 @@ func TestFedoraSourceDependenciesIncludeChosenProvider(t *testing.T) {
 		if !strings.Contains(got, " "+provider+" ") || !strings.Contains(got, " qt6-qtwayland ") || !strings.Contains(got, " polkit ") {
 			t.Fatalf("missing dependencies: %s", got)
 		}
+	}
+}
+
+func TestFedoraToolsFollowDNFSymlink(t *testing.T) {
+	for _, implementation := range []string{"dnf4", "dnf5"} {
+		t.Run(implementation, func(t *testing.T) {
+			bin := t.TempDir()
+			if err := os.WriteFile(filepath.Join(bin, implementation), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(implementation, filepath.Join(bin, "dnf")); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", bin)
+			e := &engine{f: &facts{distro: fedoraLinux}, dry: true, events: make(chan any, 16)}
+			if err := stepTools(e); err != nil {
+				t.Fatal(err)
+			}
+			close(e.events)
+			var output string
+			for event := range e.events {
+				if line, ok := event.(evLine); ok {
+					output += line.line + "\n"
+				}
+			}
+			plugin := "dnf-plugins-core"
+			if implementation == "dnf5" {
+				plugin = "dnf5-plugins"
+			}
+			if !strings.Contains(output, "dnf -y install --best") || !strings.Contains(output, plugin) {
+				t.Fatalf("wrong command or COPR plugin: %s", output)
+			}
+		})
 	}
 }

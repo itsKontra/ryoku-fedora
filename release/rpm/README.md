@@ -3,6 +3,8 @@
 The port is experimental. Container builds verify package construction and
 installation; graphical sessions and SELinux require the VM checks below.
 Nothing in this directory implies that a public RPM repository is published.
+COPR builds, publishing on pushes to `main`, and installer repository setup
+are tracked in [#4](https://github.com/itsKontra/ryoku-fedora/issues/4).
 
 `stage-package.sh` runs the existing Arch recipes' build/package functions in a
 staging directory. It does not run package hooks. This keeps the CLI, providers,
@@ -70,7 +72,7 @@ DNF option semantics are documented in the
 
 ## Source installs
 
-The bootstrap defaults to `itsKontra/ryoku-arch`, branch `feat/fedora-support`.
+The bootstrap defaults to `itsKontra/ryoku-fedora`, branch `main`.
 Override both explicitly for another publisher:
 
 ```sh

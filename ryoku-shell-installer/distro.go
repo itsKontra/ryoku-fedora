@@ -299,14 +299,6 @@ func detectHostDistro() *distro {
 		if immutableFedora(string(b)) || pathExists("/run/ostree-booted") {
 			return nil
 		}
-		copy := *d
-		if has("dnf5") {
-			copy.installCmd = append([]string{"dnf5"}, d.installCmd[1:]...)
-			copy.removeCmd = append([]string{"dnf5"}, d.removeCmd[1:]...)
-			copy.updateCmd = append([]string{"dnf5"}, d.updateCmd[1:]...)
-			copy.refreshCmd = append([]string{"dnf5"}, d.refreshCmd[1:]...)
-		}
-		d = &copy
 	}
 	if d != nil {
 		activeDistro = d

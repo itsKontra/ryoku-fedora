@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Disposable Fedora only: verify candidates and downgrades with a competing repo.
 set -euo pipefail
-manager=${RYOKU_TEST_DNF:-dnf5}
+manager=${RYOKU_TEST_DNF:-dnf}
 key=${1:?signing key fingerprint}
 work=$(mktemp -d)
 trap 'rm -rf "$work"; rm -f /etc/yum.repos.d/ryoku-channel-test.repo' EXIT

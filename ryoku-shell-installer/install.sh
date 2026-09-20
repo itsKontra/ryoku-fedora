@@ -4,15 +4,15 @@
 # on an existing Arch machine. Kept deliberately dumb: every real decision
 # lives in the ryoku-shell-install binary this script downloads.
 #
-#   curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/ryoku-shell-installer/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
 #
 # args after `bash -s --` are forwarded to the installer (--yes, --dry-run).
 # RYOKU_SHELL_REF picks the git ref to fetch the installer and payload from.
 set -euo pipefail
 
 main() {
-  local ref="${RYOKU_SHELL_REF:-feat/fedora-support}"
-  local repo="${RYOKU_SHELL_REPO:-https://github.com/itsKontra/ryoku-arch.git}"
+  local ref="${RYOKU_SHELL_REF:-main}"
+  local repo="${RYOKU_SHELL_REPO:-https://github.com/itsKontra/ryoku-fedora.git}"
   local args=("$@") i
   for ((i=0; i<${#args[@]}; i++)); do
     case "${args[i]}" in
@@ -48,7 +48,7 @@ main() {
     ryoku_family=arch
   elif command -v apt-get > /dev/null 2>&1; then
     ryoku_family=debian
-  elif command -v dnf > /dev/null 2>&1 || command -v dnf5 > /dev/null 2>&1; then
+  elif command -v dnf > /dev/null 2>&1; then
     ryoku_family=fedora
   else
     die "unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems"

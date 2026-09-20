@@ -136,7 +136,7 @@ check "$(git_q -C "$repo3" rev-parse --abbrev-ref HEAD)" "unstable-dev" \
 check "$(git_q -C "$repo3" remote get-url origin)" "$origin" \
   "source recovery preserves the recorded origin"
 
-if command -v dnf5 >/dev/null 2>&1 && ! command -v pacman >/dev/null 2>&1; then
+if command -v dnf >/dev/null 2>&1 && ! command -v pacman >/dev/null 2>&1; then
 # Dependency resolution/repair failure must precede the destructive reset.
 # This fixture uses a missing dependency resolver directory and never invokes
 # a package manager, so it is safe on any test host.
@@ -155,6 +155,29 @@ present "$home4/.config/ryoku/user_edits/keep" "failed repair preserves user con
 absent "$work/marker4" "failed repair never deploys"
 
 fi
+
+# Package detection must use dnf even when rpm is unavailable.
+cat > "$work/fakebin/dnf" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" > "$RYOKU_DNF_QUERY"
+[ "$*" = '-q list --installed ryoku-desktop' ]
+EOF
+printf '#!/bin/sh\nexit 1\n' > "$work/fakebin/pacman"
+chmod +x "$work/fakebin/dnf" "$work/fakebin/pacman"
+home5="$work/home5"
+state5="$home5/.local/state/ryoku"
+mkdir -p "$state5"
+printf 'old checkout\n' > "$state5/repo"
+printf 'old commit\n' > "$state5/deployed"
+HOME="$home5" XDG_DATA_HOME="$home5/.local/share" \
+  XDG_STATE_HOME="$home5/.local/state" XDG_CONFIG_HOME="$home5/.config" \
+  RYOKU_RECOVERY_URL="$origin" RYOKU_RECOVERY_FORCE=1 \
+  RYOKU_TEST_MARKER="$work/marker5" RYOKU_DNF_QUERY="$work/dnf-query" \
+  "$RECOVERY" --yes --no-packages >/dev/null
+check "$(cat "$work/dnf-query")" '-q list --installed ryoku-desktop' \
+  "recovery queries the installed desktop through dnf"
+absent "$state5/repo" "RPM installation retains its package update channel"
+absent "$state5/deployed" "RPM installation clears source deployment state"
 
 if ((fail)); then echo "ryoku-recovery: FAILED" >&2; exit 1; fi
 echo "ryoku-recovery: all checks passed"

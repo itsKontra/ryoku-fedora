@@ -179,6 +179,8 @@
   (`internal/updater/materialize.go`).
 
 ### Fixed
+- Fedora updates use the standard `dnf` command, including on DNF5 systems.
+
 - **"Apply system-wide" for the keyboard layout no longer just says FAILED.**
   Setting the login screen, TTYs, and disk-passphrase keymap rebuilds the boot
   image, which needs root; run from the Hub there is no terminal for the sudo

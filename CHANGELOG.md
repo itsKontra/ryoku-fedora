@@ -6,6 +6,9 @@ for finer detail.
 ## Unreleased
 
 ### Fixed
+- Recovery uses `dnf` for Fedora dependency repair and installed-package
+  detection, and its bootstrap URL points to the renamed Fedora fork.
+
 - The Now playing widget now respects Power Saver, reduced motion, and the shared
   audio-animation policy instead of keeping its private waveform and decorative
   animations running. Song information and playback controls remain available.

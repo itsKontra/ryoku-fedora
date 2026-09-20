@@ -773,7 +773,7 @@ func main() {
 	yes := flag.Bool("yes", false, i18n.T("run non-interactively with the default plan"))
 	dry := flag.Bool("dry-run", false, i18n.T("print every command instead of running it"))
 	uninstall := flag.Bool("uninstall", false, i18n.T("remove the ryoku packages and restore the backup chain"))
-	ref := flag.String("ref", envOr("RYOKU_SHELL_REF", "feat/fedora-support"), i18n.T("ryoku-arch git ref for the payload"))
+	ref := flag.String("ref", envOr("RYOKU_SHELL_REF", "main"), i18n.T("ryoku-fedora git ref for the payload"))
 	payload := flag.String("payload", os.Getenv("RYOKU_SHELL_PAYLOAD"), i18n.T("use a local ryoku-arch checkout as the payload"))
 	compositor := flag.String("compositor", "", i18n.T("window manager to install: hyprland or niri (default hyprland)"))
 	flag.StringVar(&repoURL, "repo", envOr("RYOKU_SHELL_REPO", repoURL), i18n.T("git repository URL for the installer payload"))
