@@ -29,7 +29,7 @@ def publish(client, metadata):
     # A stale retry must never expose a newer, untested submission. This project
     # is dedicated to the serialized workflow; manual builds need their own project.
     recent = client.build_proxy.get_list(owner, project,
-        pagination={'limit': len(ids) + 1, 'order': 'id', 'order_type': 'DESC'})['items']
+        pagination={'limit': len(ids) + 1, 'order': 'id', 'order_type': 'DESC'})
     if {b['id'] for b in recent if b['id'] >= min(ids)} != ids:
         raise ValueError('interleaved or newer builds exist; run the complete pipeline again')
     client.project_proxy.regenerate_repos(owner, project)
