@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
+git config --global --add safe.directory "$root" 2>/dev/null || true
+git config --global --add safe.directory '*' 2>/dev/null || true
 out=${RYOKU_RPM_OUT:-$root/release/rpm/out}
 die() { echo "build-rpm-repo: $*" >&2; exit 1; }
 for tool in rpmbuild createrepo_c python3 tar gzip; do command -v "$tool" >/dev/null || die "missing $tool"; done

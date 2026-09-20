@@ -58,7 +58,9 @@ jobs:
       image: fedora:44
       options: --privileged
     steps:
-      - run: dnf -y install git mock
+      - run: |
+          dnf -y install git mock
+          git config --global --add safe.directory '*'
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
@@ -85,7 +87,9 @@ jobs:
         dnf: [dnf, dnf4]
     container: fedora:${{ matrix.fedora }}
     steps:
-      - run: dnf -y install git python3-dnf
+      - run: |
+          dnf -y install git python3-dnf
+          git config --global --add safe.directory '*'
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
