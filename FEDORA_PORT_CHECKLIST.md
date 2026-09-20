@@ -73,7 +73,7 @@ The implementation follow-up below records subsequent disposable-container tests
   profile without silently changing its storage backend.
 
 - [x] **FED-46: Classify DNF commands by operation, not the first option.**
-  Rashin shares RPM's `-q` query whitelist with DNF. Consequently,
+  Rashin shares RPM's `-q` query allowlist with DNF. Consequently,
   `dnf -q remove example` is classified as read-only, although DNF's `-q`
   means quiet. The classifier feeds command badges and the confirmation gate.
   Parse DNF global options before its verb, keep RPM parsing separate, and

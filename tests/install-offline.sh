@@ -21,6 +21,7 @@
 # Dry-run, so no disk is touched. Every network binary is replaced by a tripwire,
 # which is what proves the offline path reaches the network zero times.
 set -euo pipefail
+export LC_ALL=C
 
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$here/.."
@@ -55,6 +56,7 @@ run_offline() {
     RYOKU_ONLINE="$2" RYOKU_OFFLINE_REPO="$1" \
     RYOKU_DISK=/dev/vda RYOKU_PASSWORD_HASH='$6$fake$hash' \
     RYOKU_DISK_STRATEGY=whole RYOKU_ENCRYPT=0 RYOKU_SWAP_GIB=8 \
+    RYOKU_COMPOSITOR=hyprland RYOKU_COMPOSITOR_CONFIG_DIR=hypr \
     bash "$root/installation/backend/ryoku-install" 2>&1)" || rc=$?
 }
 

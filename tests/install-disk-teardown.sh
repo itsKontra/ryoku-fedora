@@ -6,6 +6,7 @@
 # RYOKU_PROC_MOUNTS / RYOKU_PROC_SWAPS seams (tests only), so what we assert is
 # the teardown PLAN (commands, in order). no real device or /proc touched.
 set -euo pipefail
+export LC_ALL=C
 
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$here/.."

@@ -8,6 +8,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$here/.."
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
+export LC_ALL=C
+
 canonical="partition filesystems mount pacstrap configure bootloader"
 
 # run_backend <strategy> <encrypt> <swap> [esp-mode] [variant]
@@ -18,6 +20,7 @@ run_backend() {
     RYOKU_DISK_STRATEGY="$1" RYOKU_ENCRYPT="$2" RYOKU_SWAP_GIB="$3" \
     RYOKU_ESP_MODE="${4:-auto}" RYOKU_VARIANT="${5:-plain}" \
     RYOKU_LUKS_PASSPHRASE=passphrase \
+    RYOKU_COMPOSITOR=hyprland RYOKU_COMPOSITOR_CONFIG_DIR=hypr \
     bash "$root/installation/backend/ryoku-install" 2>&1)" || rc=$?
 }
 
@@ -95,6 +98,7 @@ done
 # `ryoku-gpu mode` call is narrated against the user's gpu.lua; sync->performance.
 out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
   RYOKU_PASSWORD_HASH='$6$fake$hash' RYOKU_DISK_STRATEGY=whole RYOKU_GPU_MODE=sync \
+  RYOKU_COMPOSITOR=hyprland RYOKU_COMPOSITOR_CONFIG_DIR=hypr \
   bash "$root/installation/backend/ryoku-install" 2>&1)" || fail "gpu-mode dry run exited nonzero: $out"
 grep -qF 'ryoku-gpu mode performance' <<<"$out" || fail "RYOKU_GPU_MODE=sync did not narrate 'ryoku-gpu mode performance'"
 grep -qF '/home/ryoku/.config/hypr/gpu.lua' <<<"$out" || fail "gpu-mode narration did not target the user's gpu.lua"
@@ -102,6 +106,7 @@ grep -qF '/home/ryoku/.config/hypr/gpu.lua' <<<"$out" || fail "gpu-mode narratio
 # absent by default: no ryoku-gpu mode call when RYOKU_GPU_MODE is unset.
 out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
   RYOKU_PASSWORD_HASH='$6$fake$hash' RYOKU_DISK_STRATEGY=whole \
+  RYOKU_COMPOSITOR=hyprland RYOKU_COMPOSITOR_CONFIG_DIR=hypr \
   bash "$root/installation/backend/ryoku-install" 2>&1)" || fail "no-gpu-mode dry run exited nonzero: $out"
 grep -qF 'ryoku-gpu mode' <<<"$out" && fail "ryoku-gpu mode narrated when RYOKU_GPU_MODE was unset"
 
