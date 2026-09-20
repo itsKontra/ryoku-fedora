@@ -488,6 +488,13 @@ EOF
   install -d "$pkgdir/usr/share/ryoku/ryodecors"
   cp -a "$_repo/ryoku/assets/ryodecors/." "$pkgdir/usr/share/ryoku/ryodecors/"
 
+  # Wallpapers and brand assets, shipped so the offline provisioner can seed
+  # them into the user's home without needing the git checkout or network.
+  install -d "$pkgdir/usr/share/ryoku/wallpapers"
+  cp -a "$_repo/ryoku/assets/wallpapers/." "$pkgdir/usr/share/ryoku/wallpapers/"
+  install -d "$pkgdir/usr/share/ryoku/brand"
+  cp -a "$_repo/ryoku/assets/brand/." "$pkgdir/usr/share/ryoku/brand/"
+
   # cp -a kept source mode bits; normalize so hypr/scripts stays executable
   # and the rest is world-readable data.
   chmod -R u=rwX,go=rX "$pkgdir/usr/share/ryoku"

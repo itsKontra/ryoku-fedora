@@ -13,6 +13,14 @@
   its space is listed but needs GPT (`backend/lib/disk.sh`, `tui/system.go`).
 
 ### Added
+- **Offline desktop provisioner for Fedora 44.** Transform an offline, mounted
+  Fedora sysroot into a fully configured Ryoku desktop target: pre-create locked
+  `ryoku` with fish and wheel, enforce password-required sudo, write SDDM
+  configuration drop-ins for Wayland and niri, enable sddm and base system
+  services, seed qylock lockscreen and wallpapers/decor/brand assets from
+  `/usr/share/ryoku`, materialize user configuration with proper `ryoku:ryoku`
+  ownership, arm console first-boot, and relabel SELinux contexts
+  (`fedora/provision-target.py`, `tests/fedora-provision.sh`).
 - Fedora ISO groundwork: prepare a fresh target for resumable console setup,
   explicitly prompt for hostname and both account passwords, and keep SDDM
   gated until setup succeeds. Add offline Fedora 44 prompt tests and CI, plus

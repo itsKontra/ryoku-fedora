@@ -5,12 +5,14 @@ on:
     paths:
       - 'installation/fedora/**'
       - 'installation/tests/fedora-firstboot.sh'
+      - 'installation/tests/fedora-provision.sh'
       - '.github/workflows/fedora-firstboot.yml'
   push:
     branches: [main-fedora]
     paths:
       - 'installation/fedora/**'
       - 'installation/tests/fedora-firstboot.sh'
+      - 'installation/tests/fedora-provision.sh'
       - '.github/workflows/fedora-firstboot.yml'
 permissions:
   contents: read
@@ -37,6 +39,13 @@ jobs:
             -v "$PWD:/src:ro" ryoku-firstboot-test \
             bash /src/installation/tests/fedora-firstboot.sh \
             2>&1 | tee /tmp/firstboot-evidence/firstboot.log
+      - name: Test offline provisioning without network access
+        run: |
+          set -o pipefail
+          podman run --rm --network=none --no-hostname -e RYOKU_TEST_DISPOSABLE=1 \
+            -v "$PWD:/src:ro" ryoku-firstboot-test \
+            bash /src/installation/tests/fedora-provision.sh \
+            2>&1 | tee /tmp/firstboot-evidence/provision.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:

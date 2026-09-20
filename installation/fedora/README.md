@@ -1,9 +1,47 @@
 # Fedora installation ISO
 
 Implementation of [issue #10](https://github.com/itsKontra/ryoku-fedora/issues/10)
-starts here. The console first-boot component is implemented and tested against
-Fedora 44. **There is no Fedora ISO builder or complete offline desktop
-provisioner yet.** The existing `installation/iso/` builds Arch media.
+starts here. The console first-boot component and offline desktop provisioner
+are implemented and tested against Fedora 44. **There is no Fedora ISO builder
+yet.** The existing `installation/iso/` builds Arch media.
+
+## Offline desktop provisioner
+
+`provision-target.py TARGET_ROOT` prepares an offline, mounted Fedora 44 target
+sysroot (intended for execution from Anaconda's `%post --nochroot --erroronfail`
+section) into a complete Ryoku desktop installation before first boot:
+
+1. **Accounts and Sudo**: Pre-creates the `ryoku` account with home `/home/ryoku`,
+   login shell `/usr/bin/fish`, `wheel` group membership, and a locked password;
+   ensures `root` is locked. Configures `sudo` with `/etc/sudoers.d/10-ryoku-wheel`
+   (mode `0440`) requiring password authentication, and removes any `NOPASSWD` drop-ins.
+2. **Session and Greeter Selection**:
+   - Writes SDDM Wayland drop-in `/etc/sddm.conf.d/10-ryoku-wayland.conf`.
+   - Writes SDDM theme and session drop-in `/etc/sddm.conf.d/99-ryoku.conf`,
+     selecting `Current=ryoku` and `Session=niri.desktop`.
+   - Sets the default cursor fallback to `Bibata-Modern-Ice` in `/usr/share/icons/default/index.theme`.
+   - Wires `pam_gnome_keyring.so` into `/etc/pam.d/sddm` for unlock-on-login.
+   - Enables `sddm.service` and sets `graphical.target` as default.
+3. **Base System Services**: Enables `NetworkManager.service`, `firewalld.service`,
+   and `bluetooth.service` offline.
+4. **Lockscreen**: Seeds the qylock in-session lockscreen bundle and `clockwork/orbital`
+   theme into `/home/ryoku`, wiring the themes link and setting theme preference.
+5. **Assets and Integration**: Seeds desktop entries, vendor MIME defaults
+   (`niri-mimeapps.list` and `mimeapps.list`), wallpapers into `~/Pictures/Wallpapers`,
+   decor art into `~/Pictures/ryodecors`, brand assets into `~/.local/share/ryoku/assets/brand`,
+   and `.npmrc` from `/usr/share/ryoku`.
+6. **Configuration Materialization**: Runs `ryoku materialize` as user `ryoku`
+   with explicit `HOME=/home/ryoku` against the target, and ensures recursive `ryoku:ryoku`
+   ownership across `/home/ryoku`.
+7. **First-Boot Setup**: Invokes `prepare-firstboot.py` on the target sysroot.
+8. **SELinux Relabeling**: Runs `setfiles` using the target's policy across `/etc`,
+   `/var`, and `/home/ryoku`.
+
+From the future Anaconda `%post --nochroot --erroronfail` section:
+
+```sh
+python3 /path/on/media/installation/fedora/provision-target.py /mnt/sysroot
+```
 
 ## First-boot component
 
@@ -61,7 +99,7 @@ the initramfs unlock layout when setup selects a different console keymap.
 
 ## Tests
 
-Root-free state-machine and target-preparation tests:
+Root-free state-machine, target-preparation, and offline provisioning tests:
 
 ```sh
 python3 -m unittest discover -s installation/fedora/tests -v
@@ -81,12 +119,17 @@ the saved settings and credentials, and reruns with stdin closed. Passwords are
 random per run and terminal transcripts are never printed. Static unit
 verification uses a dummy display-manager service; it is not a boot test.
 
+`installation/tests/fedora-provision.sh` runs inside the same disposable container
+against an isolated target sysroot to prove offline user creation, sudo policy,
+SDDM configuration drop-ins, service enablement, lockscreen and wallpaper assets,
+materialization ownership (`ryoku:ryoku`), first-boot arming, and systemd unit verification.
+
 Local evidence, 2026-09-20: Fedora container
 `f0ab7f9811e9`, `systemd-259.9-1.fc44.x86_64`,
 `shadow-utils-4.19.0-7.fc44.x86_64`, `glibc-2.43-8.fc44.x86_64`,
-`kbd-2.9.0-4.fc44.x86_64`. Real prompt/resume tests passed offline. Local Podman
-needed `--security-opt label=disable` to read the checkout mount; these results
-provide no evidence of SELinux behavior on an installed machine.
+`kbd-2.9.0-4.fc44.x86_64`. Real prompt/resume and offline provisioner tests passed offline.
+Local Podman needed `--security-opt label=disable` to read the checkout mount;
+these results provide no evidence of SELinux behavior on an installed machine.
 
 ## Selected compose direction
 
