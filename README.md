@@ -1,3 +1,10 @@
+> [!WARNING]
+> ### ⚠️ Work in Progress / Experimental Fedora Port
+>
+> **Notice:** This is a **forked repository**. This is **NOT** a battle-tested approach to a Fedora port, and more like a forked, vibe code fixed Fedora version with still lots of problems and a currently non-functional distro build.
+>
+> Huge credit and thanks to the original maintainer, **[neur0map](https://github.com/neur0map)**, for this great project! Be sure to check out the original upstream repository at **[neur0map/ryoku-arch](https://github.com/neur0map/ryoku-arch)**.
+
 <div align="center">
 
 <img src="ryoku/assets/brand/logo-mark-v2.png" alt="Ryoku" width="160" />
