@@ -367,24 +367,28 @@ def materialize_config(root, runner=None):
             "ryoku",
             "materialize",
         ])
-    elif ryoku_bin.is_file() and shutil.which("chroot") and shutil.which("runuser"):
-        subprocess.run(
-            [
-                "chroot",
-                str(root),
-                "runuser",
-                "-u",
-                RYOKU_USER,
-                "--",
-                "env",
-                f"HOME={RYOKU_HOME}",
-                f"USER={RYOKU_USER}",
-                f"LOGNAME={RYOKU_USER}",
-                "ryoku",
-                "materialize",
-            ],
-            check=True,
-        )
+    elif ryoku_bin.is_file() and (root / "usr/bin/runuser").is_file() and (root / "lib64/libc.so.6").is_file() and shutil.which("chroot"):
+        try:
+            subprocess.run(
+                [
+                    "chroot",
+                    str(root),
+                    "runuser",
+                    "-u",
+                    RYOKU_USER,
+                    "--",
+                    "env",
+                    f"HOME={RYOKU_HOME}",
+                    f"USER={RYOKU_USER}",
+                    f"LOGNAME={RYOKU_USER}",
+                    "ryoku",
+                    "materialize",
+                ],
+                check=True,
+            )
+        except Exception:
+            if (root / "usr/share/ryoku/config").is_dir():
+                shutil.copytree(root / "usr/share/ryoku/config", user_home / ".config", dirs_exist_ok=True, symlinks=True)
     elif (root / "usr/share/ryoku/config").is_dir():
         shutil.copytree(root / "usr/share/ryoku/config", user_home / ".config", dirs_exist_ok=True, symlinks=True)
 

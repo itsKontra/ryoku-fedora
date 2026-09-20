@@ -124,12 +124,39 @@ against an isolated target sysroot to prove offline user creation, sudo policy,
 SDDM configuration drop-ins, service enablement, lockscreen and wallpaper assets,
 materialization ownership (`ryoku:ryoku`), first-boot arming, and systemd unit verification.
 
+`installation/tests/fedora-repo.sh` runs inside the disposable container to prove
+pinned key verification, repository creation with `createrepo_c`, SHA256 manifest
+generation, and dependency closure resolution in an empty installroot with `--network=none`.
+
 Local evidence, 2026-09-20: Fedora container
-`f0ab7f9811e9`, `systemd-259.9-1.fc44.x86_64`,
-`shadow-utils-4.19.0-7.fc44.x86_64`, `glibc-2.43-8.fc44.x86_64`,
-`kbd-2.9.0-4.fc44.x86_64`. Real prompt/resume and offline provisioner tests passed offline.
-Local Podman needed `--security-opt label=disable` to read the checkout mount;
-these results provide no evidence of SELinux behavior on an installed machine.
+`9ea53600c45b`, `systemd-259.9-1.fc44.x86_64`, `shadow-utils-4.19.0-7.fc44.x86_64`,
+`glibc-2.43-8.fc44.x86_64`, `kbd-2.9.0-4.fc44.x86_64`, `dnf5-5.4.5.0-1.fc44.x86_64`,
+`createrepo_c-1.2.1-1.fc44.x86_64`. Real prompt/resume, offline provisioning, and
+offline repository tests passed offline.
+
+## Offline package closure and repository setup
+
+`packages.list` defines the hermetic package payload required for offline media
+installation, organized into categories:
+- `[base]`: Fedora 44 Minimal environment, systemd, glibc-all-langpacks, shadow-utils, sudo, selinux-policy-targeted, btrfs-progs, cryptsetup, kbd, tzdata, dnf5, rpm.
+- `[kernel]`: Standard Fedora kernel and generic dracut initramfs.
+- `[bootloader]`: UEFI bootloader components (`grub2-efi-x64`, `shim-x64`, `efibootmgr`).
+- `[drivers]`: Open graphics drivers (`mesa-dri-drivers`, `mesa-vulkan-drivers`, `vulkan-loader`, `xorg-x11-server-Xwayland`) and firmware (`linux-firmware`, `amd-ucode-firmware`, `microcode_ctl`).
+- `[utilities]`: Core utilities: `chromium`, `tmux`, `neovim`, `vim-enhanced`, `bat`, `lua`, `python3`, `alacritty`, `fish`, `fzf`, `less`, `grep`, `ripgrep`, `nano`, `zsh`, `bash`.
+- `[services]`: Base system services: `firewalld`, `NetworkManager`, `bluez`, `pipewire`, `wireplumber`, `sddm`.
+- `[multimedia]`: Full RPM Fusion FFmpeg stack (`ffmpeg`, `ffmpeg-libs`, `libavdevice`) and pinned release packages.
+- `[desktop]`: Ryoku desktop components (`ryoku-desktop`, `ryoku-desktop-niri`) and compositor runtime (`niri`, `xwayland-satellite`, `quickshell`).
+
+`build-repo.py` manages offline repository construction and verification:
+1. **Key Verification**: Validates all pinned GPG keys in `keys/` against hardcoded fingerprints:
+   - Fedora 44 Primary: `36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6`
+   - RPM Fusion Free 2020: `E9A491A3DE247814E7E067EAE06F8ECDD651FF2E`
+   - RPM Fusion Nonfree 2020: `79BDB88F9BBF73910FD4095B6A2AF96194843C65`
+   - Ryoku COPR: `7575D19C9D8ECDC212702114ED1C392039749395`
+2. **FFmpeg Transaction Solving**: Excludes Fedora's `ffmpeg-free` and `libav*-free` subpackages during transaction solve, ensuring the full RPM Fusion FFmpeg stack is selected without conflicting packages or requiring `--allowerasing`.
+3. **Repository Metadata**: Runs `createrepo_c` with SHA256 checksums to create standard RPM-MD metadata.
+4. **Manifest Generation**: Inspects all packages, computing file sizes, SHA256 digests, and NEVRA records into `manifest.json`.
+5. **Offline Closure Verification**: Validates the composed repository in an empty, isolated installroot with `--disablerepo=*` and networking disabled.
 
 ## Selected compose direction
 

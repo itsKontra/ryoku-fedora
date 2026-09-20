@@ -1,0 +1,109 @@
+# Fedora 44 Ryoku ISO Package Closure
+#
+# Hermetic package payload for offline installation media.
+# Dependencies are solved during compose against an empty installroot.
+
+[base]
+# Fedora 44 Minimal Environment
+rootfiles
+glibc
+glibc-all-langpacks
+systemd
+systemd-udev
+systemd-resolved
+systemd-networkd
+util-linux
+shadow-utils
+sudo
+authselect
+selinux-policy-targeted
+setfiles
+policycoreutils
+policycoreutils-python-utils
+btrfs-progs
+dosfstools
+e2fsprogs
+cryptsetup
+kbd
+kbd-misc
+tzdata
+dnf5
+rpm
+tar
+gzip
+iproute
+iputils
+chrony
+
+[kernel]
+# Standard Fedora kernel and dracut
+kernel
+kernel-core
+kernel-modules
+dracut
+dracut-config-generic
+
+[bootloader]
+# UEFI bootloader
+grub2-efi-x64
+grub2-common
+shim-x64
+efibootmgr
+
+[drivers]
+# Open graphics drivers and hardware firmware
+mesa-dri-drivers
+mesa-vulkan-drivers
+vulkan-loader
+xorg-x11-server-Xwayland
+mesa-va-drivers
+mesa-vdpau-drivers
+libva-utils
+linux-firmware
+amd-ucode-firmware
+microcode_ctl
+
+[utilities]
+# Core utilities and interactive tools
+chromium
+tmux
+neovim
+vim-enhanced
+bat
+lua
+python3
+alacritty
+fish
+fzf
+less
+grep
+ripgrep
+nano
+zsh
+bash
+
+[services]
+# Base system services
+firewalld
+NetworkManager
+NetworkManager-wifi
+bluez
+pipewire
+wireplumber
+sddm
+
+[multimedia]
+# RPM Fusion full FFmpeg stack (replaces Fedora ffmpeg-free)
+ffmpeg
+ffmpeg-libs
+libavdevice
+rpmfusion-free-release
+rpmfusion-nonfree-release
+
+[desktop]
+# Ryoku desktop packages and Wayland environment
+ryoku-desktop
+ryoku-desktop-niri
+niri
+xwayland-satellite
+quickshell

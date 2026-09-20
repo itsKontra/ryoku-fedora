@@ -31,6 +31,23 @@ Tracking plan and milestones for [issue #10](https://github.com/itsKontra/ryoku-
   - [x] Executes offline SELinux relabeling via `setfiles` across `/etc`, `/var`, and `/home/ryoku`.
   - [x] 12 unit tests in `installation/fedora/tests/test_provision.py` (22 fedora tests total).
   - [x] Offline Fedora 44 container provisioning validation in `installation/tests/fedora-provision.sh`.
+- [x] **Milestone 2: Offline RPM Package Closure & Repository Setup**
+  - [x] Declarative package closure definition (`installation/fedora/packages.list`):
+    - Minimal base: `kernel`, `kernel-core`, `kernel-modules`, `systemd`, `systemd-udev`, `systemd-resolved`, `systemd-networkd`, `dracut`, `grub2-efi-x64`, `shim-x64`, `btrfs-progs`, `cryptsetup`, `selinux-policy-targeted`, `setfiles`, `shadow-utils`, `sudo`, `glibc-all-langpacks`, `kbd`, `tzdata`, `dnf5`, `rpm`.
+    - Open graphics drivers & firmware: `mesa-dri-drivers`, `mesa-vulkan-drivers`, `vulkan-loader`, `xorg-x11-server-Xwayland`, `mesa-va-drivers`, `mesa-vdpau-drivers`, `linux-firmware`, `amd-ucode-firmware`, `microcode_ctl`.
+    - Core utilities: `chromium`, `tmux`, `neovim`, `vim-enhanced`, `bat`, `lua`, `python3`, `alacritty`, `fish`, `fzf`, `less`, `grep`, `ripgrep`, `nano`, `zsh`, `bash`.
+    - Base services: `firewalld`, `NetworkManager`, `NetworkManager-wifi`, `bluez`, `pipewire`, `wireplumber`, `sddm`.
+    - Desktop packages: `ryoku-desktop`, `ryoku-desktop-niri`, `niri`, `xwayland-satellite`, `quickshell`.
+  - [x] RPM Fusion full FFmpeg integration:
+    - Pinned Fedora 44 RPM Fusion release packages and signing keys in `installation/fedora/keys/`.
+    - Fingerprint verification for Fedora 44 Primary, RPM Fusion Free 2020, RPM Fusion Nonfree 2020, and Ryoku COPR.
+    - Explicit transaction solver replacing `ffmpeg-free` with RPM Fusion's full stack (`ffmpeg`, `ffmpeg-libs`, `libavdevice`) during compose without package dropouts.
+  - [x] Local repository tooling (`installation/fedora/build-repo.py`):
+    - Packaging and assembly tool with `createrepo_c` and SHA256 checksums.
+    - Manifest generation (`manifest.json`) recording package NEVRAs, file sizes, and SHA256 hashes.
+    - Offline closure verification in isolated empty installroot with `--disablerepo=*` and networking disabled.
+  - [x] 16 unit tests in `installation/fedora/tests/test_repo.py` (38 tests in `installation/fedora/tests/` total).
+  - [x] Offline container validation script (`installation/tests/fedora-repo.sh`).
   - [x] CI workflow updated in `.github/workflows/fedora-firstboot.yml`.
 
 ---
@@ -58,20 +75,20 @@ Tracking plan and milestones for [issue #10](https://github.com/itsKontra/ryoku-
 
 ---
 
-### Milestone 2: Offline RPM Package Closure & Repository Setup
+### Milestone 2: Offline RPM Package Closure & Repository Setup (Complete)
 *Establish the complete hermetic package payload and resolve all dependencies for disconnected installation.*
 
-- [ ] **Package Closure Definition**:
-  - [ ] Base package set: Fedora 44 Minimal environment, standard Fedora kernel, and open graphics drivers.
-  - [ ] Core utilities and tools: `chromium`, `tmux`, `neovim`, `vim`, `bat`, `lua`, `python3`, `alacritty`, `fish`, `fzf`, `less`, `grep`, `ripgrep`, `nano`, `zsh`, `bash`.
-  - [ ] Base services: `firewalld`, `NetworkManager`, `bluez`.
-  - [ ] Ryoku desktop packages: `ryoku-desktop`, `ryoku-desktop-niri`, and runtime closure.
-- [ ] **RPM Fusion Full FFmpeg Integration**:
-  - [ ] Pin Fedora 44 RPM Fusion release packages and signing keys.
-  - [ ] Explicitly resolve transaction replacing Fedora `ffmpeg-free` with full RPM Fusion `ffmpeg` during compose without unexpected package removals.
-- [ ] **Local Repository Packaging**:
-  - [ ] Assemble all binary RPMs into a local repository directory using `createrepo_c`.
-  - [ ] Resolve and verify the complete dependency closure against an empty installroot with networking disabled.
+- [x] **Package Closure Definition**:
+  - [x] Base package set: Fedora 44 Minimal environment, standard Fedora kernel, and open graphics drivers.
+  - [x] Core utilities and tools: `chromium`, `tmux`, `neovim`, `vim-enhanced`, `bat`, `lua`, `python3`, `alacritty`, `fish`, `fzf`, `less`, `grep`, `ripgrep`, `nano`, `zsh`, `bash`.
+  - [x] Base services: `firewalld`, `NetworkManager`, `bluez`.
+  - [x] Ryoku desktop packages: `ryoku-desktop`, `ryoku-desktop-niri`, and runtime closure.
+- [x] **RPM Fusion Full FFmpeg Integration**:
+  - [x] Pin Fedora 44 RPM Fusion release packages and signing keys.
+  - [x] Explicitly resolve transaction replacing Fedora `ffmpeg-free` with full RPM Fusion `ffmpeg` during compose without unexpected package removals.
+- [x] **Local Repository Packaging**:
+  - [x] Assemble all binary RPMs into a local repository directory using `createrepo_c`.
+  - [x] Resolve and verify the complete dependency closure against an empty installroot with networking disabled.
 
 ---
 

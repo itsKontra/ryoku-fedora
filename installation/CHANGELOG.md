@@ -13,6 +13,15 @@
   its space is listed but needs GPT (`backend/lib/disk.sh`, `tui/system.go`).
 
 ### Added
+- **Offline RPM package closure and repository setup for Fedora 44.** Define the
+  declarative package payload (`packages.list`) covering minimal base, standard
+  kernel, open graphics drivers, core utilities (`chromium`, `tmux`, `neovim`,
+  `fish`, etc.), base services, and desktop runtime. Pin Fedora 44 Primary,
+  RPM Fusion Free/Nonfree 2020, and Ryoku COPR signing keys. Provide offline
+  repository tooling (`fedora/build-repo.py`) with explicit FFmpeg transaction
+  solving to replace `ffmpeg-free` without package removals, SHA256 manifest
+  generation, `createrepo_c` metadata, and disconnected installroot closure
+  validation (`fedora/build-repo.py`, `tests/fedora-repo.sh`).
 - **Offline desktop provisioner for Fedora 44.** Transform an offline, mounted
   Fedora sysroot into a fully configured Ryoku desktop target: pre-create locked
   `ryoku` with fish and wheel, enforce password-required sudo, write SDDM

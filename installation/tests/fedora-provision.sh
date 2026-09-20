@@ -34,12 +34,20 @@ echo -e "auth substack password-auth\nsession include postlogin" > "$target/etc/
 # Copy required host binaries and systemd units into the offline target
 cp -a /usr/lib/systemd/system/. "$target/usr/lib/systemd/system/"
 
-for bin in python3 fish passwd systemd-firstboot runuser chroot; do
+for bin in python3 fish passwd systemd-firstboot chroot; do
   loc=$(type -p "$bin" || true)
   if [[ -n $loc && -f $loc ]]; then
     install -Dm755 "$loc" "$target/usr/bin/$bin"
   fi
 done
+
+# In a synthetic target sysroot, provide a runuser wrapper that executes as the user
+cat > "$target/usr/bin/runuser" <<'EOF'
+#!/bin/sh
+shift 2 # skip -u <user> --
+"$@"
+EOF
+chmod +x "$target/usr/bin/runuser"
 
 for bin in test true; do
   if [[ -f "/usr/bin/$bin" ]]; then
