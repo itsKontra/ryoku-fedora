@@ -7,6 +7,7 @@ on:
       - 'installation/tests/fedora-firstboot.sh'
       - 'installation/tests/fedora-provision.sh'
       - 'installation/tests/fedora-repo.sh'
+      - 'installation/tests/fedora-iso.sh'
       - '.github/workflows/fedora-firstboot.yml'
   push:
     branches: [main-fedora]
@@ -15,6 +16,7 @@ on:
       - 'installation/tests/fedora-firstboot.sh'
       - 'installation/tests/fedora-provision.sh'
       - 'installation/tests/fedora-repo.sh'
+      - 'installation/tests/fedora-iso.sh'
       - '.github/workflows/fedora-firstboot.yml'
 permissions:
   contents: read
@@ -31,7 +33,7 @@ jobs:
         run: |
           podman build -t ryoku-firstboot-test - <<'EOF'
           FROM registry.fedoraproject.org/fedora:44
-          RUN dnf -y install systemd python3 passwd fish sudo kbd glibc-all-langpacks rpm-build createrepo_c
+          RUN dnf -y install systemd python3 passwd fish sudo kbd glibc-all-langpacks rpm-build createrepo_c xorriso pykickstart
           EOF
       - name: Test without network access
         run: |
@@ -55,6 +57,13 @@ jobs:
             -v "$PWD:/src:ro" ryoku-firstboot-test \
             bash /src/installation/tests/fedora-repo.sh \
             2>&1 | tee /tmp/firstboot-evidence/repo.log
+      - name: Test ISO builder and kickstart recipe without network access
+        run: |
+          set -o pipefail
+          podman run --rm --network=none --no-hostname -e RYOKU_TEST_DISPOSABLE=1 \
+            -v "$PWD:/src:ro" ryoku-firstboot-test \
+            bash /src/installation/tests/fedora-iso.sh \
+            2>&1 | tee /tmp/firstboot-evidence/iso.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:

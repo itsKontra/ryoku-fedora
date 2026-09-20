@@ -13,6 +13,16 @@
   its space is listed but needs GPT (`backend/lib/disk.sh`, `tui/system.go`).
 
 ### Added
+- **Anaconda Kickstart and ISO compose pipeline for Fedora 44.** Define the
+  single-source-of-truth Kickstart recipe (`fedora/kickstart/ryoku.ks`) with UEFI
+  GPT partitioning (600 MiB ESP, 2 GiB `/boot`, Btrfs with `root` and `home` subvolumes,
+  and Fedora zram swap policy), strict whole-disk safety (`clearpart --none`),
+  interactive LUKS2 encryption prompt, local media repository priority (`--cost=10`),
+  full RPM Fusion FFmpeg selection via `-ffmpeg-free` exclusions, and `%post` offline
+  provisioning. Provide the automated compose pipeline script (`fedora/build-iso.sh`)
+  supporting GPG key validation, repository metadata/manifest generation, staging,
+  hybrid UEFI ISO packaging via `xorriso`/`mkksiso`/`lorax`, and structured
+  provenance recording (`fedora/build-iso.sh`, `tests/fedora-iso.sh`).
 - **Offline RPM package closure and repository setup for Fedora 44.** Define the
   declarative package payload (`packages.list`) covering minimal base, standard
   kernel, open graphics drivers, core utilities (`chromium`, `tmux`, `neovim`,

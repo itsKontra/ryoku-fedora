@@ -50,6 +50,23 @@ Tracking plan and milestones for [issue #10](https://github.com/itsKontra/ryoku-
   - [x] Offline container validation script (`installation/tests/fedora-repo.sh`).
   - [x] CI workflow updated in `.github/workflows/fedora-firstboot.yml`.
 
+- [x] **Milestone 3: Anaconda Kickstart & Lorax ISO Builder**
+  - [x] Single-source-of-truth Anaconda Kickstart recipe (`installation/fedora/kickstart/ryoku.ks`):
+    - UEFI GPT partitioning scheme: 600 MiB FAT32 ESP at `/boot/efi`, 2 GiB ext4 `/boot`, Btrfs with `root` and `home` subvolumes, and Fedora zram swap policy.
+    - Strict target safety: explicit target disk selection and user confirmation via `clearpart --none`; unconditional `clearpart --all` strictly forbidden.
+    - Interactive LUKS2 disk encryption prompted without embedded secrets.
+    - Local media repository configured with `--cost=10`.
+    - Package payload matching `packages.list` with `-ffmpeg-free` and related free subpackages excluded to enforce RPM Fusion full stack.
+    - `%post --nochroot --erroronfail` section locating and executing `provision-target.py` on `/mnt/sysroot`.
+  - [x] Compose pipeline script (`installation/fedora/build-iso.sh`):
+    - GPG key verification, repository metadata (`createrepo_c`), and SHA256 manifest generation.
+    - Payload staging into `iso_root` (Kickstart, local RPMs, offline desktop provisioner).
+    - Hybrid UEFI bootable ISO generation via `xorriso`, `mkksiso`, or `lorax`.
+    - Automated SHA256 checksum file and structured provenance record (`provenance.json`).
+  - [x] 9 unit tests in `installation/fedora/tests/test_iso.py` (47 tests in `installation/fedora/tests/` total).
+  - [x] Container smoke test script (`installation/tests/fedora-iso.sh`) validating Kickstart syntax with `ksvalidator -v F44`, stage-only compose, ISO image creation with `xorriso`, and checksum verification in `--network=none`.
+  - [x] CI workflow updated in `.github/workflows/fedora-firstboot.yml`.
+
 ---
 
 ## Remaining Milestones
@@ -92,24 +109,24 @@ Tracking plan and milestones for [issue #10](https://github.com/itsKontra/ryoku-
 
 ---
 
-### Milestone 3: Anaconda Kickstart & Lorax ISO Builder
+### Milestone 3: Anaconda Kickstart & Lorax ISO Builder (Complete)
 *Define the Kickstart installer recipe and automate the ISO compose pipeline.*
 
-- [ ] **Kickstart Specification (`installation/fedora/kickstart/ryoku.ks`)**:
-  - [ ] Partitioning scheme:
+- [x] **Kickstart Specification (`installation/fedora/kickstart/ryoku.ks`)**:
+  - [x] Partitioning scheme:
     - 600 MiB FAT32 ESP at `/boot/efi`.
     - 2 GiB ext4 `/boot`.
     - Remaining disk as Btrfs with `root` and `home` subvolumes mounted at `/` and `/home`.
     - Fedora zram swap policy.
-  - [ ] Target safety: Require explicit target disk selection and interactive erasure confirmation; forbid unattended `clearpart --all`.
-  - [ ] Optional LUKS2 disk encryption prompted interactively during installation.
-  - [ ] `%packages` payload referencing only local media repository (`--cost=10`).
-  - [ ] `%post --nochroot --erroronfail` section executing the offline provisioner from Milestone 1.
-- [ ] **Compose Pipeline (`installation/fedora/build-iso.sh`)**:
-  - [ ] Build Anaconda installer tree and `.treeinfo` using `lorax`.
-  - [ ] Inject Kickstart and local RPM repository payload.
-  - [ ] Produce hybrid UEFI bootable ISO using `xorriso` / `mkksiso`.
-  - [ ] Generate SHA256 checksums, package manifests, and provenance records.
+  - [x] Target safety: Require explicit target disk selection and interactive erasure confirmation; forbid unattended `clearpart --all`.
+  - [x] Optional LUKS2 disk encryption prompted interactively during installation.
+  - [x] `%packages` payload referencing only local media repository (`--cost=10`).
+  - [x] `%post --nochroot --erroronfail` section executing the offline provisioner from Milestone 1.
+- [x] **Compose Pipeline (`installation/fedora/build-iso.sh`)**:
+  - [x] Build Anaconda installer tree and `.treeinfo` using `lorax`.
+  - [x] Inject Kickstart and local RPM repository payload.
+  - [x] Produce hybrid UEFI bootable ISO using `xorriso` / `mkksiso`.
+  - [x] Generate SHA256 checksums, package manifests, and provenance records.
 
 ---
 

@@ -318,9 +318,10 @@ def verify_offline_closure(repo_dir, packages, installroot=None, dnf_bin="dnf"):
 
 
 def parse_args():
+    script_dir = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description="Fedora 44 offline RPM repository builder and verifier")
-    parser.add_argument("--packages", default="installation/fedora/packages.list", help="Path to packages.list")
-    parser.add_argument("--keys-dir", default="installation/fedora/keys", help="Path to directory with pinned GPG keys")
+    parser.add_argument("--packages", default=str(script_dir / "packages.list"), help="Path to packages.list")
+    parser.add_argument("--keys-dir", default=str(script_dir / "keys"), help="Path to directory with pinned GPG keys")
     parser.add_argument("--dest", default="/tmp/ryoku-offline-repo", help="Target repository directory")
     parser.add_argument("--manifest", default=None, help="Path to output manifest.json")
     parser.add_argument("--verify-keys", action="store_true", help="Verify pinned GPG keys")

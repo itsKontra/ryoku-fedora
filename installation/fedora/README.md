@@ -1,9 +1,9 @@
 # Fedora installation ISO
 
 Implementation of [issue #10](https://github.com/itsKontra/ryoku-fedora/issues/10)
-starts here. The console first-boot component and offline desktop provisioner
-are implemented and tested against Fedora 44. **There is no Fedora ISO builder
-yet.** The existing `installation/iso/` builds Arch media.
+starts here. The console first-boot component, offline desktop provisioner,
+offline RPM package closure, Anaconda Kickstart installer recipe, and ISO compose
+pipeline are implemented and tested against Fedora 44.
 
 ## Offline desktop provisioner
 
@@ -128,11 +128,37 @@ materialization ownership (`ryoku:ryoku`), first-boot arming, and systemd unit v
 pinned key verification, repository creation with `createrepo_c`, SHA256 manifest
 generation, and dependency closure resolution in an empty installroot with `--network=none`.
 
+`installation/tests/fedora-iso.sh` runs inside the disposable container to prove
+Kickstart recipe validation with `ksvalidator -v F44`, stage-only compose tree staging,
+hybrid UEFI ISO composition with `xorriso`, and SHA256 checksum/provenance verification
+with `--network=none`.
+
 Local evidence, 2026-09-20: Fedora container
-`9ea53600c45b`, `systemd-259.9-1.fc44.x86_64`, `shadow-utils-4.19.0-7.fc44.x86_64`,
+`cb17dd9ebff1`, `systemd-259.9-1.fc44.x86_64`, `shadow-utils-4.19.0-7.fc44.x86_64`,
 `glibc-2.43-8.fc44.x86_64`, `kbd-2.9.0-4.fc44.x86_64`, `dnf5-5.4.5.0-1.fc44.x86_64`,
-`createrepo_c-1.2.1-1.fc44.x86_64`. Real prompt/resume, offline provisioning, and
-offline repository tests passed offline.
+`createrepo_c-1.2.1-1.fc44.x86_64`, `xorriso-1.5.8-2.fc44.x86_64`, `pykickstart-3.69-1.fc44.noarch`.
+Real prompt/resume, offline provisioning, offline repository, and ISO compose tests passed offline.
+
+## Anaconda Kickstart and ISO compose pipeline
+
+`kickstart/ryoku.ks` specifies the Anaconda installation recipe for Fedora 44:
+1. **Target Safety**: Enforces `clearpart --none` and omits hardcoded drive selections. Unattended whole-disk wiping is strictly forbidden.
+2. **UEFI GPT Partitioning**:
+   - 600 MiB FAT32 ESP at `/boot/efi`
+   - 2 GiB ext4 dedicated `/boot`
+   - Remaining disk as Btrfs with `root` and `home` subvolumes mounted at `/` and `/home`
+   - Fedora zram swap policy (no disk swap partition)
+3. **Interactive Encryption**: Supports LUKS2 encryption prompted interactively without embedded secrets.
+4. **Offline Package Repository**: Registers local media at `/run/install/repo` with `--cost=10`.
+5. **Packages Payload**: Contains the complete closure from `packages.list` and excludes Fedora's `ffmpeg-free` and related subpackages to enforce the full RPM Fusion FFmpeg stack.
+6. **Offline Provisioning**: Executes `provision-target.py` on `/mnt/sysroot` during `%post --nochroot --erroronfail`.
+
+`build-iso.sh` orchestrates the compose pipeline:
+1. **Preflight and Verification**: Checks dependencies, verifies pinned GPG keys, and validates the Kickstart recipe.
+2. **Repository Staging**: Runs `createrepo_c` with SHA256 checksums, computes `manifest.json`, and verifies the offline dependency closure.
+3. **Payload Staging**: Stages Kickstart, local RPMs, offline provisioner, and stamped media metadata into `iso_root`.
+4. **Hybrid ISO Composition**: Produces hybrid UEFI bootable media using `mkksiso`, `xorriso`, or `lorax`.
+5. **Checksums and Provenance**: Computes the final `.sha256` checksum file and generates structured `provenance.json` recording build environment, tool versions, and git commit details.
 
 ## Offline package closure and repository setup
 
