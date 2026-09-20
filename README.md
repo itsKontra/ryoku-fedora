@@ -15,15 +15,16 @@ existing distro. The base is lean enough to live in from first boot and
 deliberate in how it looks and moves.
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-E2342A?style=for-the-badge)](LICENSE)
+[![Fedora](https://img.shields.io/badge/Fedora-51A2DA?style=for-the-badge&logo=fedora&logoColor=white)](https://fedoraproject.org)
+[![COPR](https://img.shields.io/badge/COPR-itskontra%2Fryoku-blue?style=for-the-badge)](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)
 [![Built on Arch](https://img.shields.io/badge/Arch_Linux-1793D1?style=for-the-badge&logo=archlinux&logoColor=white)](https://archlinux.org)
 [![Hyprland](https://img.shields.io/badge/Hyprland-58E1C2?style=for-the-badge&logoColor=white)](https://hypr.land)
 [![niri](https://img.shields.io/badge/niri-7E9CD8?style=for-the-badge&logoColor=white)](https://github.com/YaLTeR/niri)
-[![Release status](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fiso.ryoku.dev%2Fstable%2Flatest.json&query=%24.channel&label=status&color=E2342A&style=for-the-badge)](https://ryoku.dev)
-[![Build ISO](https://github.com/ryoku-dev/ryoku-arch/actions/workflows/build-iso.yml/badge.svg)](https://github.com/ryoku-dev/ryoku-arch/actions/workflows/build-iso.yml)
+[![Fedora RPM CI](https://github.com/itsKontra/ryoku-fedora/actions/workflows/fedora-rpm.yml/badge.svg)](https://github.com/itsKontra/ryoku-fedora/actions/workflows/fedora-rpm.yml)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/8KjBmUEyKA)
 [![Reddit](https://img.shields.io/badge/Reddit-r%2FRyokuArch-FF4500?style=for-the-badge&logo=reddit&logoColor=white)](https://www.reddit.com/r/RyokuArch/)
 
-<kbd>[Download](https://ryoku.dev)</kbd> &middot; <kbd>[Ryoku](docs/ryoku.md)</kbd> &middot; <kbd>[Docs](docs/)</kbd> &middot; <kbd>[Structure](docs/structure.md)</kbd> &middot; <kbd>[Discord](https://discord.gg/8KjBmUEyKA)</kbd> &middot; <kbd>[Subreddit](https://www.reddit.com/r/RyokuArch/)</kbd>
+<kbd>[COPR](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)</kbd> &middot; <kbd>[Fedora RPMs](release/rpm/README.md)</kbd> &middot; <kbd>[Download ISO](https://ryoku.dev)</kbd> &middot; <kbd>[Ryoku](docs/ryoku.md)</kbd> &middot; <kbd>[Docs](docs/)</kbd> &middot; <kbd>[Structure](docs/structure.md)</kbd> &middot; <kbd>[Discord](https://discord.gg/8KjBmUEyKA)</kbd> &middot; <kbd>[Subreddit](https://www.reddit.com/r/RyokuArch/)</kbd>
 
 </div>
 
@@ -125,7 +126,8 @@ Everything else waits in Ryoku Settings (`Super + ,`).
 - **The installer** under `installation/`: a guided TUI, the backend installer,
   and the archiso profile that builds the signed ISO.
 - **The update system** under `release/`: the `ryoku` control CLI, the desktop
-  packages, and the signed `[ryoku]` pacman repository.
+  packages, the signed `[ryoku]` pacman repository, and Fedora RPM delivery under
+  [`release/rpm/`](release/rpm/README.md) via [COPR](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/).
 
 ## Requirements
 
@@ -180,8 +182,8 @@ Broadcom Wi-Fi, read-only NVRAM, slow USB media) is in
 
 ## Install
 
-Two ways in. A fresh machine boots the signed **ISO**; an existing Arch box
-converts in place with the **shell installer**.
+A fresh machine boots the signed **ISO** (for Arch); an existing Fedora or Arch
+box installs in place with the **shell installer**.
 
 ### Fresh install (the ISO)
 
@@ -207,6 +209,28 @@ gpg --verify ryoku-*.iso.sig ryoku-*.iso
 Prefer to build it yourself? The archiso profile and build script live in
 [`installation/iso`](installation/iso).
 
+### Fedora install (shell installer)
+
+One line installs the Ryoku desktop on an existing Fedora system (mutable Fedora 44 x86_64):
+it backs up your configs (with a `restore.sh` to undo), sets up the signed
+[COPR repository](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/),
+installs the desktop RPMs via DNF, migrates you off conflicting shells and daemons,
+and wires up the full desktop. It never partitions a disk.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
+```
+
+Preview everything it would do without changing anything:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash -s -- --dry-run
+```
+
+Details in [`ryoku-shell-installer/`](ryoku-shell-installer/README.md),
+Fedora RPM delivery in [`release/rpm/`](release/rpm/README.md),
+and port tracking in [`FEDORA_PORT_CHECKLIST.md`](FEDORA_PORT_CHECKLIST.md).
+
 ### Already on Arch (no ISO)
 
 One line converts an existing Arch machine into a Ryoku box: it backs up your
@@ -215,7 +239,7 @@ you off conflicting shells and daemons, and wires up the full desktop. It never
 partitions a disk.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/ryoku-shell-installer/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
 ```
 
 Preview everything it would do without changing anything by appending
@@ -246,23 +270,25 @@ Ryoku updates its own layer, and leaves the rest of the system to you:
 
 ```bash
 ryoku update          # the Ryoku packages, the configs, the doctor
-sudo pacman -Syu      # your distribution: the base system and its kernel
+sudo pacman -Syu      # Arch: your distribution, the base system and its kernel
+sudo dnf upgrade      # Fedora: your distribution, the base system and its kernel
 ```
 
-`ryoku update` takes a snapshot, moves the packages the signed `[ryoku]` repo
-serves (by name, never a full sysupgrade), re-lays the desktop configs into your
+`ryoku update` takes a snapshot, moves the packages served by the signed `[ryoku]`
+repo on Arch or [COPR (`itskontra/ryoku`)](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)
+on Fedora (by name, never a full sysupgrade), re-lays the desktop configs into your
 home, reloads the shell, and takes a paired post-snapshot. A failed package step
 aborts before anything else changes.
 
-The kernel is deliberately not part of that. Ryoku runs on Arch or on the
+The kernel is deliberately not part of that. Ryoku runs on Arch, Fedora, or on the
 CachyOS kernel, publishes neither, and never picks the moment your boot image is
-rebuilt: `sudo pacman -Syu` does that, when you say so. Every `ryoku update`
-tells you how many system packages are waiting, and `ryoku update --system`
+rebuilt: `sudo pacman -Syu` or `sudo dnf upgrade` does that, when you say so. Every
+`ryoku update` tells you how many system packages are waiting, and `ryoku update --system`
 runs both in one go if you prefer that.
 
-The desktop ships from the `[ryoku]` pacman repository, signed by the release key
-and trusted through the `ryoku-keyring` package, so updates are verified the same
-way the rest of the system is.
+The desktop ships from the `[ryoku]` pacman repository on Arch and the signed
+COPR repository on Fedora (see [`release/rpm/`](release/rpm/README.md)), so updates
+are verified the same way the rest of the system is.
 
 Your settings survive every update. The base configs are Ryoku-owned and
 refreshed in place, while your own edits live in override files that are never
@@ -278,8 +304,8 @@ previous snapshot from the Limine boot menu.
 
 When an update leaves the desktop unusable and `ryoku update` cannot fix it,
 there is a last-resort recovery. It pulls the latest `main`, reinstalls the base
-packages, and rebuilds and redeploys the whole desktop from source, overwriting
-your Ryoku configs:
+packages (via pacman on Arch or dnf on Fedora), and rebuilds and redeploys the whole
+desktop from source, overwriting your Ryoku configs:
 
 ```bash
 ryoku recovery
@@ -289,14 +315,15 @@ If the `ryoku` command itself is gone, drop to a TTY (`Ctrl+Alt+F2`, then log in
 and run the same recovery straight from the repo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-recovery | bash
+curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-recovery | bash
 ```
 
 This is a true last resort. It clears your user overrides and the Hub's stored
 settings, and resets you to the latest `main`. It refuses to run on a machine
 that is not Ryoku, and asks you to confirm before it changes
 anything. Pass `--yes` to skip the prompt and `--no-packages` to pull and
-redeploy the configs without the pacman step.
+redeploy the configs without the package step. Details in
+[`bin/ryoku-recovery`](bin/ryoku-recovery).
 
 ## Repository layout
 
@@ -305,7 +332,7 @@ redeploy the configs without the pacman step.
 | `ryoku/` | The desktop: the window-manager seam and per-compositor configs (Hyprland in Lua, niri in KDL), the Quickshell shell, the lockscreen, app configs, brand assets. |
 | `system/` | The machine definition: boot chain, hardware policy, package sets. |
 | `installation/` | How a machine is built: the TUI, the backend installer, the ISO profile. |
-| `release/` | Packaging: the desktop PKGBUILDs, the `[ryoku]` repo builder, the signing keyring. |
+| `release/` | Packaging: the desktop PKGBUILDs, the `[ryoku]` repo builder, signing keyring, and Fedora RPM delivery under [`release/rpm/`](release/rpm/README.md). |
 | `docs/` | The guides. Start with [`docs/ryoku.md`](docs/ryoku.md) and [`docs/structure.md`](docs/structure.md). |
 
 ## Channels

@@ -6,6 +6,7 @@ for finer detail.
 ## Unreleased
 
 ### Fixed
+- Main README links point to the Fedora fork and document Fedora installation.
 - Recovery uses `dnf` for Fedora dependency repair and installed-package
   detection, and its bootstrap URL points to the renamed Fedora fork.
 
