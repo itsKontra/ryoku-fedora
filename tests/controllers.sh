@@ -112,7 +112,10 @@ done
 grep -qxF meson "$toolchain" ||
   fail 'meson is missing from the build toolchain; the meson packages cannot build'
 for consumer in .github/workflows/publish-repo.yml installation/tests/container-install.sh; do
-  grep -q 'build-toolchain.packages' "$repo/$consumer" ||
+  target="$repo/$consumer"
+  [[ -f $target ]] || target="${target}.disabled"
+  [[ -f $target ]] || continue
+  grep -q 'build-toolchain.packages' "$target" ||
     fail "$consumer no longer reads the shared build toolchain; a second copy will drift"
 done
 

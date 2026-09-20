@@ -29,7 +29,9 @@ jobs:
     container: fedora:44
     steps:
       - name: Bootstrap source tools
-        run: dnf -y install git golang rpm-build rpm-sign gnupg2 createrepo_c python3 tar gzip
+        run: |
+          dnf -y install git golang rpm-build rpm-sign gnupg2 createrepo_c python3 tar gzip
+          git config --global --add safe.directory '*'
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

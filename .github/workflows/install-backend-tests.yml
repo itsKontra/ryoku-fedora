@@ -62,6 +62,8 @@ on:
       - '.github/workflows/install-backend-tests.yml'
   push:
     branches:
+      - main-fedora
+      - main-fedora
       - main
       - unstable-dev
     paths:

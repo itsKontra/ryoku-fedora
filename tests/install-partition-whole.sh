@@ -12,6 +12,7 @@
 # subshell and must not expand here.
 # shellcheck disable=SC2016
 set -euo pipefail
+export LC_ALL=C
 
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$here/.."

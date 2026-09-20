@@ -14,6 +14,7 @@ on:
       - 'tests/ryoku-recovery.sh'
   push:
     branches:
+      - main-fedora
       - main
     paths:
       - 'bin/ryoku-recovery'
