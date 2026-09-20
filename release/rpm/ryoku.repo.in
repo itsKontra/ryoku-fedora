@@ -1,7 +1,7 @@
 [ryoku]
 name=Ryoku desktop
-baseurl=@BASE_URL@/channels/testing/$releasever/$basearch
+baseurl=@BASE_URL@/fedora-$releasever-$basearch/
 enabled=1
 gpgcheck=1
-repo_gpgcheck=1
+repo_gpgcheck=0
 gpgkey=@KEY_URL@

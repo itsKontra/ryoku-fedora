@@ -831,7 +831,7 @@ func main() {
 	}
 
 	if !*uninstall && activeDistro.id == "fedora" && !sourceMode(activeDistro, installMode, *payload, *ref) {
-		if _, _, _, err := fedoraRepositoryConfig(); err != nil {
+		if _, err := fedoraRepositoryConfig(); err != nil {
 			die(err.Error())
 		}
 		if out("rpm", "-E", "%fedora") != "44" {

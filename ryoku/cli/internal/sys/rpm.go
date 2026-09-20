@@ -7,7 +7,9 @@ import (
 )
 
 var RPMRepoFile = "/etc/yum.repos.d/ryoku.repo"
-var RPMBaseFile = "/etc/dnf/vars/ryoku_baseurl"
+
+const COPRServer = "https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-$releasever-$basearch"
+const ChannelCOPR = "copr"
 
 func RPMManager() string {
 	if Has("pacman") {
@@ -19,31 +21,14 @@ func RPMManager() string {
 	return ""
 }
 func rpmChannelServer(channel string) string {
-	if channel != ChannelStable && channel != ChannelTesting && !IsReleaseTag(channel) {
-		return ""
+	if channel == ChannelCOPR {
+		return COPRServer
 	}
-	base, err := os.ReadFile(RPMBaseFile)
-	if err != nil {
-		return ""
-	}
-	root := strings.TrimRight(strings.TrimSpace(string(base)), "/")
-	if !strings.HasPrefix(root, "https://") && !strings.HasPrefix(root, "file://") {
-		return ""
-	}
-	lane := "/channels/"
-	if IsReleaseTag(channel) {
-		lane = "/releases/"
-	}
-	return root + lane + channel + "/$releasever/$basearch"
+	return ""
 }
 func rpmChannelOfServer(server string) string {
-	parts := strings.Split(strings.TrimRight(server, "/"), "/")
-	if len(parts) < 4 {
-		return ""
-	}
-	channel := parts[len(parts)-3]
-	if rpmChannelServer(channel) == strings.TrimRight(server, "/") {
-		return channel
+	if strings.TrimRight(server, "/") == COPRServer {
+		return ChannelCOPR
 	}
 	return ""
 }
@@ -66,7 +51,7 @@ func rpmRepoServer() string {
 func setRPMChannel(channel string) error {
 	server := rpmChannelServer(channel)
 	if server == "" {
-		return fmt.Errorf("invalid RPM channel or missing %s", RPMBaseFile)
+		return fmt.Errorf("Fedora uses the copr channel; stable, testing and frozen release tags are unavailable")
 	}
 	b, err := os.ReadFile(RPMRepoFile)
 	if err != nil {
@@ -100,9 +85,4 @@ func rpmChannelURL(channel string) string {
 		}
 	}
 	return strings.ReplaceAll(server, "$basearch", "x86_64")
-}
-
-func RPMReleaseBase() string {
-	base, _ := os.ReadFile(RPMBaseFile)
-	return strings.TrimRight(strings.TrimSpace(string(base)), "/")
 }

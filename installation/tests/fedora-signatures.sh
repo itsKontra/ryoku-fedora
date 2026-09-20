@@ -14,11 +14,11 @@ cat > "$work/probe.spec" <<'SPEC'
 Name: ryoku-signature-probe
 Version: 0.1
 Release: 1
-Summary: Disposable signature and frozen download test
+Summary: Disposable package signature test
 License: MIT
 BuildArch: noarch
 %description
-Disposable signature and frozen download test.
+Disposable package signature test.
 %install
 mkdir -p %{buildroot}/usr/share/ryoku-signature-probe
 echo verified > %{buildroot}/usr/share/ryoku-signature-probe/result
@@ -26,7 +26,7 @@ echo verified > %{buildroot}/usr/share/ryoku-signature-probe/result
 /usr/share/ryoku-signature-probe
 SPEC
 release=v0.0.0-alpha.1
-out="$work/repository/releases/$release/44/x86_64"
+out="$work/repository"
 mkdir -p "$out"
 rpmbuild --define "_topdir $work/build" --define "_rpmdir $work/rpms" -bb "$work/probe.spec"
 cp "$work/rpms/noarch/"*.rpm "$out/"
@@ -39,18 +39,16 @@ data = dict(release=sys.argv[2], version='0.1', channel='testing', commit='fixtu
 data['rpms'] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in out.glob('*.rpm')}
 (out / 'release.json').write_text(json.dumps(data))
 PY
-RYOKU_COPR_FINGERPRINT="$copr" RYOKU_RPM_SIGNING_KEY="$metadata" \
-  "$root/release/rpm/compose-repo.sh" "$out" "$work/copr.asc"
-mkdir -p "$work/repository/channels"
-ln -s "../releases/$release" "$work/repository/channels/testing"
+python3 "$root/release/rpm/verify-rpms.py" "$out" "$work/copr.asc" "$copr"
+createrepo_c "$out"
 cat > /etc/yum.repos.d/ryoku-signature-test.repo <<REPO
 [ryoku-signature-test]
 name=signature fixture
-baseurl=file://$work/repository/channels/testing/44/x86_64
+baseurl=file://$out
 enabled=0
 gpgcheck=1
-repo_gpgcheck=1
-gpgkey=file://$out/keys/copr.asc file://$out/keys/metadata.asc
+repo_gpgcheck=0
+gpgkey=file://$work/copr.asc
 REPO
 dnf -y --repo=ryoku-signature-test install ryoku-signature-probe
 test "$(cat /usr/share/ryoku-signature-probe/result)" = verified
@@ -64,4 +62,4 @@ if python3 "$root/release/rpm/verify-rpms.py" "$out" "$work/copr.asc" "$copr"; t
   echo 'modified RPM was accepted' >&2
   exit 1
 fi
-echo 'Publisher signatures and frozen package URLs verified'
+echo 'COPR package signature verification passed'

@@ -7,26 +7,30 @@ import (
 	"testing"
 )
 
-func TestRPMChannelsPreserveRepositorySecurity(t *testing.T) {
-	dir := t.TempDir()
-	oldFile, oldBase := RPMRepoFile, RPMBaseFile
-	t.Cleanup(func() { RPMRepoFile, RPMBaseFile = oldFile, oldBase })
-	RPMRepoFile, RPMBaseFile = filepath.Join(dir, "ryoku.repo"), filepath.Join(dir, "ryoku_baseurl")
-	os.WriteFile(RPMBaseFile, []byte("https://fork.example/rpm\n"), 0o644)
-	os.WriteFile(RPMRepoFile, []byte("[other]\nbaseurl=https://other.example\n[ryoku]\nbaseurl="+rpmChannelServer("stable")+"\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=file:///key\n"), 0o644)
-	for _, channel := range []string{"testing", "v1.0.0", "stable"} {
-		if err := setRPMChannel(channel); err != nil {
-			t.Fatal(err)
+func TestCOPRChannelPreservesRepositorySecurity(t *testing.T) {
+	oldFile := RPMRepoFile
+	t.Cleanup(func() { RPMRepoFile = oldFile })
+	RPMRepoFile = filepath.Join(t.TempDir(), "ryoku.repo")
+	original := "[other]\nbaseurl=https://other.example\n[ryoku]\nbaseurl=" + COPRServer + "/\ngpgcheck=1\nrepo_gpgcheck=0\ngpgkey=file:///key\n"
+	if err := os.WriteFile(RPMRepoFile, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := rpmChannelOfServer(rpmRepoServer()); got != ChannelCOPR {
+		t.Fatalf("channel = %q", got)
+	}
+	for _, channel := range []string{"stable", "testing", "v1.0.0", "../untrusted"} {
+		if rpmChannelServer(channel) != "" {
+			t.Fatalf("accepted unsupported channel %q", channel)
 		}
-		if got := rpmChannelOfServer(rpmRepoServer()); got != channel {
-			t.Fatalf("got %q want %q", got, channel)
-		}
-		b, _ := os.ReadFile(RPMRepoFile)
-		if !strings.Contains(string(b), "gpgcheck=1\nrepo_gpgcheck=1") || !strings.Contains(string(b), "baseurl=https://other.example") {
-			t.Fatal("lost repo settings")
+		if err := setRPMChannel(channel); err == nil {
+			t.Fatal("changed unsupported channel")
 		}
 	}
-	if err := setRPMChannel("../untrusted"); err == nil {
-		t.Fatal("accepted bad channel")
+	data, _ := os.ReadFile(RPMRepoFile)
+	if string(data) != original || !strings.Contains(string(data), "gpgcheck=1") {
+		t.Fatal("changed repository security")
+	}
+	if rpmChannelOfServer("https://other.example/fedora-44-x86_64") != "" {
+		t.Fatal("recognized foreign repository")
 	}
 }

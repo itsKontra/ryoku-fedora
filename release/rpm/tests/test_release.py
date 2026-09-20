@@ -19,7 +19,7 @@ def module(name):
 
 
 copr = module('copr-build')
-promotion = module('promote')
+publisher = module('publish')
 repository = module('configure-repo')
 
 
@@ -106,58 +106,64 @@ name = result.name
                              ['one.x86_64.rpm', 'two.x86_64.rpm'])
 
 
-class Promotion(unittest.TestCase):
-    def candidate(self, root, release, sequence, channel='testing'):
-        candidate = root / '.incoming' / release
-        candidate.mkdir(parents=True)
-        (candidate / 'release.json').write_text(json.dumps(dict(
-            release=release, sequence=sequence, channel=channel, version='0.123',
-            commit='abc', date='2026-09-20T00:00:00Z')))
-        for path in ('repodata/repomd.xml', 'repodata/repomd.xml.asc', 'keys/copr.asc', 'keys/metadata.asc'):
-            target = candidate / path
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text('test payload')
-        return candidate
+class Publication(unittest.TestCase):
+    def candidate(self):
+        return dict(copr=dict(owner='itskontra', project='ryoku', chroot='fedora-44-x86_64'),
+                    builds=[dict(id=10, source='one.src.rpm')], sources={'one.src.rpm': 'hash'})
 
-    def test_channel_moves_to_complete_set_and_old_release_survives(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            for number in (1, 2):
-                name = f'v0.0.0-alpha.{number}'
-                candidate = self.candidate(root, name, number)
-                promotion.promote(root, candidate, 'testing', name, 'https://example.invalid/fedora')
-            self.assertTrue((root / 'releases/v0.0.0-alpha.1/44/x86_64/release.json').is_file())
-            current = root / 'channels/testing/44/x86_64/release.json'
-            self.assertEqual(json.loads(current.read_text())['sequence'], 2)
-            candidate = self.candidate(root, 'v0.0.0-alpha.0', 0)
-            with self.assertRaises(ValueError):
-                promotion.promote(root, candidate, 'testing', 'v0.0.0-alpha.0', 'https://example.invalid/fedora')
-            self.assertEqual(json.loads(current.read_text())['sequence'], 2)
+    def client(self):
+        client = Mock()
+        client.project_proxy.get.return_value = {'disable_createrepo': True}
+        client.build_proxy.get.return_value = dict(ownername='itskontra', projectname='ryoku', state='succeeded')
+        client.build_chroot_proxy.get.return_value = {'state': 'succeeded'}
+        client.build_proxy.get_list.return_value = {'items': [{'id': 10}, {'id': 9}]}
+        return client
 
-    def test_failed_candidate_never_replaces_channel(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            candidate = self.candidate(root, 'v1.0.0', 1, 'stable')
-            (candidate / 'repodata/repomd.xml.asc').unlink()
-            with self.assertRaises(ValueError):
-                promotion.promote(root, candidate, 'stable', 'v1.0.0', 'https://example.invalid/fedora')
-            self.assertFalse((root / 'channels/stable').exists())
+    def test_tested_candidate_requests_publication(self):
+        client = self.client()
+        publisher.publish(client, self.candidate())
+        client.project_proxy.regenerate_repos.assert_called_once_with('itskontra', 'ryoku')
 
-    def test_stable_release_updates_rollback_ledger(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            candidate = self.candidate(root, 'v1.0.0', 1, 'stable')
-            promotion.promote(root, candidate, 'stable', 'v1.0.0', 'https://example.invalid/fedora')
-            ledger = json.loads((root / 'releases/index.json').read_text())
-            self.assertEqual(ledger['latest'], 'v1.0.0')
-            self.assertEqual(ledger['releases'][0]['repo'], 'https://example.invalid/fedora/releases/v1.0.0')
+    def test_newer_or_interleaved_build_prevents_stale_publication(self):
+        client = self.client()
+        client.build_proxy.get_list.return_value = {'items': [{'id': 11}, {'id': 10}]}
+        with self.assertRaises(ValueError): publisher.publish(client, self.candidate())
+        client.project_proxy.regenerate_repos.assert_not_called()
+
+    def test_automatic_publication_or_failed_build_rejected(self):
+        for automatic in (True, False):
+            client = self.client()
+            if automatic: client.project_proxy.get.return_value = {'disable_createrepo': False}
+            else: client.build_chroot_proxy.get.return_value = {'state': 'failed'}
+            with self.assertRaises(ValueError): publisher.publish(client, self.candidate())
+            client.project_proxy.regenerate_repos.assert_not_called()
+
+    def test_incomplete_manifest_rejected(self):
+        client = self.client()
+        metadata = self.candidate()
+        metadata['sources']['missing.src.rpm'] = 'hash'
+        with self.assertRaises(ValueError): publisher.publish(client, metadata)
+        client.project_proxy.regenerate_repos.assert_not_called()
 
 
 class Repository(unittest.TestCase):
-    def test_rejects_injected_or_insecure_base_url(self):
-        for base in ('http://example.invalid', 'https://a/\n[evil]', 'https://a/?x=y', 'https://user@a/'):
-            with self.assertRaises(ValueError):
-                repository.validate_base(base)
+    def test_direct_copr_configuration_preserves_package_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            response = Mock()
+            response.url = repository.COPR_ROOT + '/pubkey.gpg'
+            response.read.return_value = b'public key'
+            with patch.object(repository.urllib.request, 'urlopen') as download:
+                download.return_value.__enter__.return_value = response
+                with patch.object(repository.verify, 'verify_key') as verify:
+                    repository.configure('a' * 40, root)
+                    verify.assert_called_once()
+            config = (root / 'etc/yum.repos.d/ryoku.repo').read_text()
+            self.assertIn(repository.COPR_ROOT + '/fedora-$releasever-$basearch/', config)
+            self.assertIn('gpgcheck=1', config)
+            self.assertIn('repo_gpgcheck=0', config)
+            self.assertNotIn('channels/', config)
+            self.assertFalse((root / 'etc/dnf/vars/ryoku_baseurl').exists())
 
     def test_invalid_key_does_not_change_repository(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -169,7 +175,7 @@ class Repository(unittest.TestCase):
                 download.return_value.__enter__.return_value = response
                 with patch.object(repository.verify, 'verify_key', side_effect=ValueError('wrong fingerprint')):
                     with self.assertRaises(ValueError):
-                        repository.configure('https://example.invalid', 'a' * 40, 'b' * 40, 'testing', root)
+                        repository.configure('a' * 40, root)
             self.assertFalse((root / 'etc/yum.repos.d/ryoku.repo').exists())
 
 

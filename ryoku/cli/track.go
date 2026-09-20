@@ -35,6 +35,12 @@ func cmdTrack(args []string) error {
 		}
 		return trackFromSource(channel)
 	}
+	if sys.RPMManager() != "" {
+		if channel == "main" {
+			channel = sys.ChannelCOPR
+		}
+		return updater.Track(channel)
+	}
 	pkg := packageChannelFor(channel)
 	if pkg == "" {
 		return fmt.Errorf(i18n.T("unknown channel %q\n"+
@@ -76,8 +82,10 @@ func packageChannelFor(name string) string {
 		return sys.ChannelTesting
 	case "main":
 		return sys.ChannelStable
+	case sys.ChannelStable, sys.ChannelTesting:
+		return name
 	}
-	if sys.ChannelServer(name) != "" {
+	if sys.IsReleaseTag(name) {
 		return name
 	}
 	return ""

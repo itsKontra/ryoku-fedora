@@ -74,20 +74,18 @@ func TestCustomRepositoryRetainsSourceBuild(t *testing.T) {
 	}
 }
 
-func TestFedoraRepositoryRequiresURLAndKeys(t *testing.T) {
-	t.Setenv("RYOKU_RPM_BASE_URL", "")
-	if _, _, _, err := fedoraRepositoryConfig(); err == nil {
-		t.Fatal("missing URL accepted")
+func TestFedoraRepositoryRequiresOnlyCoprKey(t *testing.T) {
+	t.Setenv("RYOKU_COPR_FINGERPRINT", "")
+	if _, err := fedoraRepositoryConfig(); err == nil {
+		t.Fatal("missing fingerprint accepted")
 	}
-	t.Setenv("RYOKU_RPM_BASE_URL", "https://packages.example.invalid/fedora")
 	t.Setenv("RYOKU_COPR_FINGERPRINT", strings.Repeat("A", 40))
-	t.Setenv("RYOKU_RPM_SIGNING_KEY", strings.Repeat("B", 40))
-	if _, _, _, err := fedoraRepositoryConfig(); err != nil {
+	if _, err := fedoraRepositoryConfig(); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("RYOKU_RPM_BASE_URL", "https://packages.example.invalid/\n[other]")
-	if _, _, _, err := fedoraRepositoryConfig(); err == nil {
-		t.Fatal("injected repository accepted")
+	t.Setenv("RYOKU_COPR_FINGERPRINT", strings.Repeat("Z", 40))
+	if _, err := fedoraRepositoryConfig(); err == nil {
+		t.Fatal("invalid fingerprint accepted")
 	}
 }
 

@@ -810,6 +810,19 @@ func runFreshDoctor() {
 // 'snapper rollback'". So the command teaches that flow instead of running a
 // snapper command that cannot restore the system.
 func Rollback(args []string) error {
+	if sys.RPMManager() != "" {
+		for _, arg := range args {
+			if arg == "--to" || strings.HasPrefix(arg, "--to=") {
+				return fmt.Errorf(i18n.T("COPR does not archive frozen Ryoku releases; tag rollback is unavailable. DNF can downgrade only to versions still retained by COPR"))
+			}
+		}
+		if len(args) > 0 {
+			return restoreGuide(args[0])
+		}
+		fmt.Println(i18n.T("COPR keeps a limited package history; tag-based Ryoku rollback is unavailable."))
+		fmt.Println(i18n.T("Available system snapshots:"))
+		return Snapshots()
+	}
 	to := ""
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--to" && i+1 < len(args) {

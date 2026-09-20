@@ -19,11 +19,11 @@ func stepFedoraRepo(e *engine) error {
 		return err
 	}
 	if !e.fromSource() {
-		base, copr, metadata, err := fedoraRepositoryConfig()
+		copr, err := fedoraRepositoryConfig()
 		if err != nil {
 			return err
 		}
-		if err := e.sudo("python3", filepath.Join(e.payload, "release/rpm/configure-repo.py"), base, copr, metadata); err != nil {
+		if err := e.sudo("python3", filepath.Join(e.payload, "release/rpm/configure-repo.py"), copr); err != nil {
 			return err
 		}
 		if err := e.sudo("dnf", "--refresh", "--repo=ryoku", "makecache"); err != nil {

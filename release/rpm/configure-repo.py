@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the signed Ryoku channel repository on a mutable Fedora host."""
+"""Install the Ryoku COPR repository on a mutable Fedora host."""
 import argparse
 import importlib.machinery
 import os
@@ -12,13 +12,7 @@ verify = importlib.machinery.SourceFileLoader(
     'verify_rpms', str(Path(__file__).with_name('verify-rpms.py'))).load_module()
 
 
-def validate_base(base):
-    url = urllib.parse.urlsplit(base)
-    if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or url.fragment:
-        raise ValueError('RYOKU_RPM_BASE_URL must be an HTTPS repository root')
-    if any(c.isspace() for c in base):
-        raise ValueError('repository root must not contain whitespace')
-    return base.rstrip('/')
+COPR_ROOT = 'https://download.copr.fedorainfracloud.org/results/itskontra/ryoku'
 
 
 def atomic_write(path, data):
@@ -33,39 +27,27 @@ def atomic_write(path, data):
         temporary.unlink(missing_ok=True)
 
 
-def configure(base, copr_fingerprint, metadata_fingerprint, channel, root=Path('/')):
-    base = validate_base(base)
-    if channel not in ('stable', 'testing'):
-        raise ValueError('channel must be stable or testing')
-    key_root = f'{base}/channels/{channel}/44/x86_64/keys'
-    keys = {}
+def configure(copr_fingerprint, root=Path('/')):
     with tempfile.TemporaryDirectory() as work:
-        for name, fingerprint in [('copr', copr_fingerprint), ('metadata', metadata_fingerprint)]:
-            with urllib.request.urlopen(f'{key_root}/{name}.asc', timeout=30) as response:
-                if urllib.parse.urlsplit(response.url).scheme != 'https':
-                    raise ValueError('key download redirected outside HTTPS')
-                data = response.read(1024 * 1024 + 1)
-                if len(data) > 1024 * 1024:
-                    raise ValueError('public key exceeds size limit')
-            key = Path(work) / name
-            key.write_bytes(data)
-            verify.verify_key(key, fingerprint)
-            keys[name] = data
-    for name, data in keys.items():
-        atomic_write(root / f'etc/pki/rpm-gpg/RPM-GPG-KEY-ryoku-{name}', data)
+        with urllib.request.urlopen(COPR_ROOT + '/pubkey.gpg', timeout=30) as response:
+            if urllib.parse.urlsplit(response.url).scheme != 'https':
+                raise ValueError('key download redirected outside HTTPS')
+            data = response.read(1024 * 1024 + 1)
+            if len(data) > 1024 * 1024:
+                raise ValueError('public key exceeds size limit')
+        key = Path(work) / 'copr.asc'
+        key.write_bytes(data)
+        verify.verify_key(key, copr_fingerprint)
+    key_path = 'etc/pki/rpm-gpg/RPM-GPG-KEY-ryoku-copr'
+    atomic_write(root / key_path, data)
     template = Path(__file__).with_name('ryoku.repo.in').read_text()
-    key_urls = ' '.join(f'file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ryoku-{name}' for name in keys)
-    config = template.replace('@BASE_URL@', base).replace('@KEY_URL@', key_urls)
-    config = config.replace('/channels/testing/', f'/channels/{channel}/')
-    atomic_write(root / 'etc/dnf/vars/ryoku_baseurl', (base + '\n').encode())
+    config = template.replace('@BASE_URL@', COPR_ROOT).replace('@KEY_URL@', 'file:///' + key_path)
     atomic_write(root / 'etc/yum.repos.d/ryoku.repo', config.encode())
+    (root / 'etc/dnf/vars/ryoku_baseurl').unlink(missing_ok=True)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('base_url')
     parser.add_argument('copr_fingerprint')
-    parser.add_argument('metadata_fingerprint')
-    parser.add_argument('--channel', choices=['stable', 'testing'], default='testing')
     args = parser.parse_args()
-    configure(args.base_url, args.copr_fingerprint, args.metadata_fingerprint, args.channel)
+    configure(args.copr_fingerprint)

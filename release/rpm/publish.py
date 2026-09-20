@@ -1,46 +1,42 @@
 #!/usr/bin/env python3
-"""Copy a gated candidate to the HTTPS release host, then promote it."""
+"""Request COPR repository publication after the candidate passes install tests."""
 import json
 import os
 from pathlib import Path
-import re
-import shlex
-import subprocess
 import sys
-import tempfile
 
 
-def publish(candidate):
-    base = os.environ['RYOKU_RPM_BASE_URL']
-    host = os.environ['RYOKU_RPM_PUBLISH_HOST']
-    root = os.environ['RYOKU_RPM_PUBLISH_ROOT']
-    if not base.startswith('https://') or any(c.isspace() for c in base):
-        raise ValueError('RYOKU_RPM_BASE_URL must be an HTTPS URL without whitespace')
-    if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.@-]*', host):
-        raise ValueError('invalid SSH publish host')
-    if not re.fullmatch(r'/[A-Za-z0-9_./-]+', root) or '..' in root.split('/'):
-        raise ValueError('publish root must be an absolute path without traversal')
-    metadata = json.loads((candidate / 'release.json').read_text())
-    release = metadata['release']
-    if not re.fullmatch(r'v[0-9][A-Za-z0-9._-]*', release):
-        raise ValueError('invalid release name')
-    incoming = root.rstrip('/') + '/.incoming/' + release
-    with tempfile.TemporaryDirectory() as directory:
-        key = Path(directory) / 'key'
-        key.write_text(os.environ['RYOKU_RPM_SSH_KEY'] + '\n')
-        key.chmod(0o600)
-        known = Path(directory) / 'known_hosts'
-        known.write_text(os.environ['RYOKU_RPM_KNOWN_HOSTS'] + '\n')
-        ssh = ['ssh', '-i', str(key), '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes',
-               '-o', 'StrictHostKeyChecking=yes', '-o', f'UserKnownHostsFile={known}']
-        command = f'mkdir -p {shlex.quote(root + "/.incoming")} && mkdir {shlex.quote(incoming)}'
-        subprocess.run(ssh + [host, command], check=True)
-        subprocess.run(['rsync', '-r', '--checksum', '-e', shlex.join(ssh),
-                        str(candidate) + '/', host + ':' + incoming + '/'], check=True)
-        script = Path(__file__).with_name('promote.py').read_bytes()
-        command = shlex.join(['python3', '-', root, incoming, metadata['channel'], release, base])
-        subprocess.run(ssh + [host, command], input=script, check=True)
+def publish(client, metadata):
+    target = metadata['copr']
+    owner, project, chroot = (target[k] for k in ('owner', 'project', 'chroot'))
+    if (owner, project, chroot) != ('itskontra', 'ryoku', 'fedora-44-x86_64'):
+        raise ValueError('unexpected publication target')
+    project_info = client.project_proxy.get(owner, project)
+    if not (project_info.get('devel_mode') or project_info.get('disable_createrepo')):
+        raise ValueError('COPR must use manual repository generation')
+    builds = metadata['builds']
+    ids = {b['id'] for b in builds}
+    if not ids or len(ids) != len(builds) or len(builds) != len(metadata['sources']):
+        raise ValueError('incomplete build manifest')
+    if {b['source'] for b in builds} != set(metadata['sources']):
+        raise ValueError('builds do not cover the source manifest')
+    for build_id in ids:
+        build = client.build_proxy.get(build_id)
+        if (build['ownername'], build['projectname'], build['state']) != (owner, project, 'succeeded'):
+            raise ValueError('candidate build is not a successful build in the target project')
+        if client.build_chroot_proxy.get(build_id, chroot)['state'] != 'succeeded':
+            raise ValueError('candidate chroot failed')
+    # A stale retry must never expose a newer, untested submission. This project
+    # is dedicated to the serialized workflow; manual builds need their own project.
+    recent = client.build_proxy.get_list(owner, project,
+        pagination={'limit': len(ids) + 1, 'order': 'id', 'order_type': 'DESC'})['items']
+    if {b['id'] for b in recent if b['id'] >= min(ids)} != ids:
+        raise ValueError('interleaved or newer builds exist; run the complete pipeline again')
+    client.project_proxy.regenerate_repos(owner, project)
+    print('COPR repository generation requested for the tested candidate')
 
 
 if __name__ == '__main__':
-    publish(Path(sys.argv[1]))
+    from copr.v3 import Client
+    client = Client.create_from_config_file(os.environ['COPR_CONFIG_FILE'])
+    publish(client, json.loads((Path(sys.argv[1]) / 'release.json').read_text()))

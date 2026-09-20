@@ -33,7 +33,7 @@ def wait_for_build(client, build_id, chroot, deadline, sleep=time.sleep):
         if state not in ('importing', 'pending', 'starting', 'running', 'waiting', 'forked'):
             raise RuntimeError(f'COPR build {build_id} ended with state {state}')
         sleep(20)
-    raise TimeoutError(f'COPR build {build_id} timed out; channel was not promoted')
+    raise TimeoutError(f'COPR build {build_id} timed out; repository was not published')
 
 
 def collect(client, build_id, chroot, out):
@@ -71,6 +71,10 @@ def main():
     metadata = verify_sources(args.sources)
     args.out.mkdir(parents=True, exist_ok=False)
     client = Client.create_from_config_file(os.environ['COPR_CONFIG_FILE'])
+    project_info = client.project_proxy.get(args.owner, args.project)
+    if not (project_info.get('devel_mode') or project_info.get('disable_createrepo')):
+        raise ValueError('enable manual repository generation before submitting builds')
+    metadata['copr'] = dict(owner=args.owner, project=args.project, chroot=args.chroot)
     builds = []
     metadata['builds'] = builds
     metadata['rpms'] = {}
