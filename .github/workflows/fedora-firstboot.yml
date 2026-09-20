@@ -1,0 +1,44 @@
+name: Fedora first-boot setup
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'installation/fedora/**'
+      - 'installation/tests/fedora-firstboot.sh'
+      - '.github/workflows/fedora-firstboot.yml'
+  push:
+    branches: [main-fedora]
+    paths:
+      - 'installation/fedora/**'
+      - 'installation/tests/fedora-firstboot.sh'
+      - '.github/workflows/fedora-firstboot.yml'
+permissions:
+  contents: read
+jobs:
+  firstboot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the container runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+      - name: Prepare Fedora 44 test tools
+        run: |
+          podman build -t ryoku-firstboot-test - <<'EOF'
+          FROM registry.fedoraproject.org/fedora:44
+          RUN dnf -y install systemd python3 passwd fish sudo kbd glibc-all-langpacks
+          EOF
+      - name: Test without network access
+        run: |
+          mkdir -p /tmp/firstboot-evidence
+          set -o pipefail
+          podman run --rm --network=none --no-hostname -e RYOKU_TEST_DISPOSABLE=1 \
+            -v "$PWD:/src:ro" ryoku-firstboot-test \
+            bash /src/installation/tests/fedora-firstboot.sh \
+            2>&1 | tee /tmp/firstboot-evidence/firstboot.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fedora-firstboot-evidence
+          path: /tmp/firstboot-evidence

@@ -13,6 +13,11 @@
   its space is listed but needs GPT (`backend/lib/disk.sh`, `tui/system.go`).
 
 ### Added
+- Fedora ISO groundwork: prepare a fresh target for resumable console setup,
+  explicitly prompt for hostname and both account passwords, and keep SDDM
+  gated until setup succeeds. Add offline Fedora 44 prompt tests and CI, plus
+  the Anaconda compose direction and provisioning audit. ISO composition and
+  booted VM validation remain unfinished (`fedora/README.md`).
 - **Install into the free space on a disk that has no ESP.** A GPT disk with free
   space but no EFI System Partition of its own (a second, OS-less drive) now gets
   the `create-esp` verdict: the installer offers "Install in the free space",
