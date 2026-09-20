@@ -11,6 +11,7 @@ exec > >(tee "$logdir/install.log") 2>&1
 cat /etc/os-release
 "$manager" --version
 "$manager" -y install rpm-build rpm-sign createrepo_c python3 git gnupg2
+git config --global --add safe.directory '*' 2>/dev/null || true
 "$root/release/rpm/enable-dependencies.sh"
 if [[ ${RYOKU_TEST_PREBUILT:-0} != 1 ]]; then
   "$manager" -y install golang gcc gcc-c++ cmake ninja-build pkgconf-pkg-config \
