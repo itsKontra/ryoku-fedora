@@ -34,6 +34,7 @@ build() {
 }
 
 package() {
+  install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-install-extra" "$pkgdir/usr/bin/ryoku-install-extra"
   install -Dm755 "$srcdir/ryoku-shell" "$pkgdir/usr/bin/ryoku-shell"
   install -Dm755 "$srcdir/ryoku-livewall" "$pkgdir/usr/bin/ryoku-livewall"
   install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-reload-cover" \

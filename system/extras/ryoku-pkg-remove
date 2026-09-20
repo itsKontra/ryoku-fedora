@@ -11,4 +11,13 @@ set -euo pipefail
   exit 2
 }
 
-exec sudo pacman -Rs --noconfirm "$@"
+if command -v pacman >/dev/null 2>&1; then
+  exec sudo pacman -Rs --noconfirm "$@"
+elif command -v dnf >/dev/null 2>&1; then
+  exec sudo dnf -y remove "$@"
+elif command -v apt-get >/dev/null 2>&1; then
+  exec sudo apt-get -y remove "$@"
+else
+  echo "ryoku-pkg-remove: no supported package manager found" >&2
+  exit 1
+fi

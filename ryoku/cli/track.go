@@ -16,7 +16,7 @@ import (
 const trackURL = "https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-track"
 
 // sourceChannels are the git branches `ryoku track ... --source` builds from.
-var sourceChannels = map[string]bool{"main": true, "unstable-dev": true}
+var sourceChannels = map[string]bool{"main": true, "main-fedora": true, "unstable-dev": true}
 
 // cmdTrack points the box at an update channel. By default a track selects a
 // package channel and hands off to updater.Track (which rewrites the [ryoku]
@@ -31,15 +31,21 @@ func cmdTrack(args []string) error {
 	}
 	if source {
 		if !sourceChannels[channel] {
-			return fmt.Errorf(i18n.T("`--source` builds from a checkout and takes main or unstable-dev, not %q"), channel)
+			return fmt.Errorf(i18n.T("`--source` builds from a checkout and takes main, main-fedora, or unstable-dev, not %q"), channel)
 		}
 		return trackFromSource(channel)
+	}
+	if sys.RPMManager() != "" {
+		if channel == "main" || channel == "main-fedora" {
+			channel = sys.ChannelCOPR
+		}
+		return updater.Track(channel)
 	}
 	pkg := packageChannelFor(channel)
 	if pkg == "" {
 		return fmt.Errorf(i18n.T("unknown channel %q\n"+
-			"  packaged: stable, testing, unstable-dev, main, or a release tag (v0.55.7-beta.19)\n"+
-			"  source:   main or unstable-dev, with --source"), channel)
+			"  packaged: stable, testing, unstable-dev, main, main-fedora, or a release tag (v0.55.7-beta.19)\n"+
+			"  source:   main, main-fedora, or unstable-dev, with --source"), channel)
 	}
 	return updater.Track(pkg)
 }
@@ -74,10 +80,12 @@ func packageChannelFor(name string) string {
 	switch name {
 	case "unstable-dev":
 		return sys.ChannelTesting
-	case "main":
+	case "main", "main-fedora":
 		return sys.ChannelStable
+	case sys.ChannelStable, sys.ChannelTesting:
+		return name
 	}
-	if sys.ChannelServer(name) != "" {
+	if sys.IsReleaseTag(name) {
 		return name
 	}
 	return ""

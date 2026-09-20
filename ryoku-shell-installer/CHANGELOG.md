@@ -2,7 +2,45 @@
 
 ## Unreleased
 
+### Changed
+- Fedora can install released desktop RPMs with DNF while explicit source and
+  local-payload installs keep their checkout builds. Repository setup shares
+  its dependency list with CI and requires a release URL and trusted key
+  fingerprints. Package mode skips direct extras downloads. Mode/provider
+  changes do not reuse source-install resume state, and conversion preserves
+  edited or untracked source artifacts by stopping before conflict removal.
+
+### Added
+- **Fedora Linux support.** The standalone shell installer supports Fedora
+  and mutable downstream distributions via DNF and native
+  source/prebuilt deployment (`fromSource`). Scans host via `dnf`/`rpm`, maps
+  packages via the shared `system/packages/base.packages` with distro translation, configures the Quickshell
+  COPR, deploys prebuilt tools (matugen, gpk, fonts, cursors), and
+  adapts library paths (`/usr/lib64`), PAM (`authselect`), NetworkManager,
+  and doctor reconcilers for RPM-based environments.
+
 ### Fixed
+- The bootstrap and installer now default to `itsKontra/ryoku-fedora` on
+  `main-fedora`. Fedora commands use `dnf`, including when it links to DNF5, while
+  installing the COPR plugin package for the implementation behind that link.
+
+- **Fedora installation and recovery preserve the selected source and desktop.**
+  Required packages and repositories now fail early, downloads are verified,
+  and uninstall preserves unrelated files and later user edits. Immutable
+  Fedora variants are rejected. RPM builds, signed installation and channel
+  switching have container coverage; graphical and hardware validation remain
+  pending.
+
+- **Fedora support stays compatible with the current desktop.** Retired awww
+  and Spicetify setup is removed, and the bundled installer is rebuilt from
+  the combined Fedora and upstream sources.
+
+- **Btrfs root conversions now install snapper.** `readBasePackages` skipped
+  `snapper` (and `snap-pac`) unconditionally in `bootChainSkip`, so converting a
+  btrfs machine promised snapper configuration by `ryoku doctor` but failed to
+  install the package, leaving doctor warning about missing packages and
+  snapshots unconfigured. It now permits `snapper` and `snap-pac` on a btrfs root.
+
 - **Converting a box no longer aborts on the Plymouth splash theme.**
   `ryoku-desktop` owns `/usr/share/plymouth/themes/ryoku/`, so a resume after a
   killed run, a box carrying an older Ryoku deploy, or the ISO installer's seeded

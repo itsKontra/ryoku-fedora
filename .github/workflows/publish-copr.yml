@@ -1,0 +1,110 @@
+name: Publish Fedora COPR packages
+on:
+  push:
+    branches: [main-fedora]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-fedora
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: github.repository == 'itsKontra/ryoku-fedora' && github.ref == 'refs/heads/main-fedora'
+    uses: ./.github/workflows/fedora-rpm.yml
+    with:
+      release: ${{ format('v0.0.0-alpha.{0}', github.run_number) }}
+      channel: copr
+  copr:
+    needs: gate
+    runs-on: ubuntu-latest
+    environment: fedora-publish
+    container: fedora:44
+    steps:
+      - run: dnf -y install git python3-copr gnupg2 rpm rpm-sign createrepo_c curl
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check trusted source and signing configuration
+        env:
+          COPR_FINGERPRINT: ${{ vars.RYOKU_COPR_FINGERPRINT }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main-fedora)"
+          test -n "$COPR_FINGERPRINT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: fedora-srpms
+          path: /tmp/srpms
+      - name: Submit SRPMs, wait, and download exact build results
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+          COPR_CONFIG_FILE: /tmp/copr-config
+        run: |
+          umask 077
+          trap 'rm -f "$COPR_CONFIG_FILE"' EXIT
+          test -n "$COPR_CONFIG"
+          printf '%s\n' "$COPR_CONFIG" > "$COPR_CONFIG_FILE"
+          python3 release/rpm/copr-build.py /tmp/srpms /tmp/copr-rpms
+      - name: Verify unchanged COPR RPMs
+        env:
+          RYOKU_COPR_FINGERPRINT: ${{ vars.RYOKU_COPR_FINGERPRINT }}
+        run: |
+          mkdir -p /tmp/copr-rpms/keys
+          curl --fail --location --proto '=https' --proto-redir '=https' -o /tmp/copr-rpms/keys/copr.asc https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/pubkey.gpg
+          python3 release/rpm/verify-rpms.py /tmp/copr-rpms /tmp/copr-rpms/keys/copr.asc "$RYOKU_COPR_FINGERPRINT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fedora-copr-candidate
+          path: /tmp/copr-rpms
+          if-no-files-found: error
+  install:
+    needs: copr
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compositor: [hyprland, niri]
+        dnf: [dnf, dnf4]
+    container: fedora:44
+    steps:
+      - run: dnf -y install git python3-dnf
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: fedora-copr-candidate
+          path: /tmp/fedora-rpms
+      - name: Verify publisher signatures and install unchanged RPMs
+        env:
+          RYOKU_TEST_DNF: ${{ matrix.dnf }}
+          RYOKU_TEST_PREBUILT: '1'
+          RYOKU_TEST_SIGNED: '1'
+          RYOKU_COPR_FINGERPRINT: ${{ vars.RYOKU_COPR_FINGERPRINT }}
+        run: installation/tests/fedora-rpm.sh '${{ matrix.compositor }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: copr-install-${{ matrix.compositor }}-${{ matrix.dnf }}
+          path: /tmp/fedora-evidence
+  publish:
+    needs: install
+    runs-on: ubuntu-latest
+    environment: fedora-publish
+    container: fedora:44
+    steps:
+      - run: dnf -y install git python3-copr
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: fedora-copr-candidate
+          path: candidate
+      - name: Publish the tested package set on COPR
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+          COPR_CONFIG_FILE: /tmp/copr-config
+        run: |
+          umask 077
+          trap 'rm -f "$COPR_CONFIG_FILE"' EXIT
+          test -n "$COPR_CONFIG"
+          printf '%s\n' "$COPR_CONFIG" > "$COPR_CONFIG_FILE"
+          python3 release/rpm/publish.py candidate

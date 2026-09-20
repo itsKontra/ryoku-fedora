@@ -384,6 +384,9 @@ func reportSystemLane(pending []updateItem) {
 // left untouched for the retry to surface. With nothing to clear, it assumes a
 // stale [ryoku] db whose signature no longer matches and forces a clean refresh.
 func healPackageUpgrade(conflicts []string) {
+	if !sys.Has("pacman") {
+		return
+	}
 	if strays := unownedFiles(conflicts); len(strays) > 0 {
 		progress.logf(i18n.T("Clearing %d unowned file(s) blocking the upgrade, then retrying"), len(strays))
 		_ = sys.Sudo(append([]string{"rm", "-f"}, strays...)...)
@@ -433,6 +436,14 @@ const ryokuOverwriteGlob = "/usr/bin/ryoku-*," +
 // by hand. It keeps the --overwrite glob so a seeded path a Ryoku package now
 // owns cannot abort the transaction here either.
 func systemUpgradeArgs() []string {
+	if !sys.Has("pacman") {
+		if manager := sys.RPMManager(); manager != "" {
+			return []string{"sudo", manager, "-y", "upgrade"}
+		}
+		if sys.Has("apt-get") {
+			return []string{"sudo", "apt-get", "-y", "dist-upgrade"}
+		}
+	}
 	return []string{"sudo", "env", "SNAP_PAC_SKIP=y", "pacman", "-Syu", "--noconfirm",
 		"--overwrite", ryokuOverwriteGlob}
 }
@@ -441,6 +452,12 @@ func systemUpgradeArgs() []string {
 // which pacman honours in either direction (a downgrade warns and proceeds),
 // pulling the umbrella's exact-version depends with it.
 func channelSwitchArgs() []string {
+	if manager := sys.RPMManager(); manager != "" {
+		return []string{"sudo", manager, "-y", "--repo=ryoku", "install", "ryoku-desktop"}
+	}
+	if sys.Has("apt-get") && !sys.Has("pacman") {
+		return []string{"true"}
+	}
 	return []string{"sudo", "env", "SNAP_PAC_SKIP=y", "pacman", "-S", "--noconfirm",
 		"--overwrite", ryokuOverwriteGlob, "ryoku-desktop"}
 }
@@ -613,10 +630,19 @@ func prowlRefresh() {
 	}
 }
 
-// prowlPacmanOwned reports whether path belongs to an installed pacman package;
-// `pacman -Qo <path>` exits non-zero for a file no package owns (a dev install).
+// prowlPacmanOwned reports whether path belongs to an installed package;
+// returns non-zero for a file no package owns (a dev install).
 func prowlPacmanOwned(path string) bool {
-	return exec.Command("pacman", "-Qo", path).Run() == nil
+	if sys.Has("pacman") {
+		return exec.Command("pacman", "-Qo", path).Run() == nil
+	}
+	if sys.Has("rpm") {
+		return exec.Command("rpm", "-qf", path).Run() == nil
+	}
+	if sys.Has("dpkg-query") {
+		return exec.Command("dpkg-query", "-S", path).Run() == nil
+	}
+	return false
 }
 
 // prowlAction is what an update should do about prowl-agent.
@@ -645,6 +671,9 @@ func prowlDecide(onPath, pacmanOwned bool) prowlAction {
 // the user is running to heal the box. A lock owned by a live pacman is left
 // alone. Composed from sys primitives, same reason as snapHelpers below.
 func clearStalePacmanLock() {
+	if !sys.Has("pacman") {
+		return
+	}
 	const lock = "/var/lib/pacman/db.lck"
 	if !sys.Exists(lock) {
 		return
@@ -662,6 +691,7 @@ func clearStalePacmanLock() {
 type snapHelpers struct {
 	rootBtrfs  bool
 	snapper    bool
+	pacman     bool
 	snapPac    bool
 	limineSync bool
 	limine     bool
@@ -671,6 +701,7 @@ func gatherSnapHelpers() snapHelpers {
 	return snapHelpers{
 		rootBtrfs:  sys.IsBtrfs("/"),
 		snapper:    sys.Has("snapper"),
+		pacman:     sys.Has("pacman"),
 		snapPac:    sys.PkgInstalled("snap-pac"),
 		limineSync: sys.PkgInstalled("limine-snapper-sync"),
 		limine:     sys.PkgInstalled("limine"),
@@ -685,7 +716,7 @@ func wantedSnapperHelpers(h snapHelpers) []string {
 		return nil
 	}
 	var want []string
-	if !h.snapPac {
+	if h.pacman && !h.snapPac {
 		want = append(want, "snap-pac")
 	}
 	if !h.limineSync && h.limine {
@@ -779,6 +810,19 @@ func runFreshDoctor() {
 // 'snapper rollback'". So the command teaches that flow instead of running a
 // snapper command that cannot restore the system.
 func Rollback(args []string) error {
+	if sys.RPMManager() != "" {
+		for _, arg := range args {
+			if arg == "--to" || strings.HasPrefix(arg, "--to=") {
+				return fmt.Errorf(i18n.T("COPR does not archive frozen Ryoku releases; tag rollback is unavailable. DNF can downgrade only to versions still retained by COPR"))
+			}
+		}
+		if len(args) > 0 {
+			return restoreGuide(args[0])
+		}
+		fmt.Println(i18n.T("COPR keeps a limited package history; tag-based Ryoku rollback is unavailable."))
+		fmt.Println(i18n.T("Available system snapshots:"))
+		return Snapshots()
+	}
 	to := ""
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--to" && i+1 < len(args) {
@@ -1196,7 +1240,10 @@ func packagedStatus(installed, latest string) statusReport {
 // Hub and CLI can show the exact commit a packaged box runs. no gNNNN token
 // (a hand-pinned 0.1.0-3, say) -> input comes back unchanged.
 func shortCommit(ver string) string {
-	for _, tok := range strings.FieldsFunc(ver, func(r rune) bool { return r == '.' || r == '-' }) {
+	for _, tok := range strings.FieldsFunc(ver, func(r rune) bool { return r == '.' || r == '-' || r == '^' || r == '_' }) {
+		if len(tok) >= 10 && strings.HasPrefix(tok, "git") && isHex(tok[3:]) {
+			return tok[3:]
+		}
 		if len(tok) >= 8 && tok[0] == 'g' && isHex(tok[1:]) {
 			return tok[1:]
 		}
@@ -1216,15 +1263,22 @@ func isHex(s string) bool {
 // latestAvailable: version of pkg in the [ryoku] repo, or "" when the repo
 // isn't synced/configured. `pacman -Sl ryoku` = "<repo> <pkg> <ver>".
 func latestAvailable(pkg string) string {
-	out, err := sys.RunOut("pacman", "-Sl", "ryoku")
-	if err != nil {
-		return ""
-	}
-	sc := bufio.NewScanner(strings.NewReader(out))
-	for sc.Scan() {
-		f := strings.Fields(sc.Text())
-		if len(f) >= 3 && f[1] == pkg {
-			return f[2]
+	if sys.Has("pacman") {
+		out, err := sys.RunOut("pacman", "-Sl", "ryoku")
+		if err != nil {
+			return ""
+		}
+		sc := bufio.NewScanner(strings.NewReader(out))
+		for sc.Scan() {
+			f := strings.Fields(sc.Text())
+			if len(f) >= 3 && f[1] == pkg {
+				return f[2]
+			}
+		}
+	} else if manager := sys.RPMManager(); manager != "" {
+		out, err := sys.RunOut(manager, "repoquery", "--repo=ryoku", "--qf", "%{VERSION}-%{RELEASE}", pkg)
+		if err == nil && strings.TrimSpace(out) != "" {
+			return strings.TrimSpace(out)
 		}
 	}
 	return ""
@@ -1239,25 +1293,40 @@ type updateItem struct {
 }
 
 // pendingUpdates: packages with a newer version available, via checkupdates
-// (pacman-contrib). syncs to a private db, so no root needed. empty when
-// the system is current or checkupdates is absent.
+// (pacman-contrib) or dnf check-update. Empty when the system is current.
 func pendingUpdates() []updateItem {
 	ups := []updateItem{}
-	if !sys.Has("checkupdates") {
+	if sys.Has("checkupdates") {
+		// cap the check: checkupdates syncs package dbs over the network and the
+		// update island polls this, so it MUST never hang status. generous so a
+		// slow sync still finishes.
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		out, _ := exec.CommandContext(ctx, "checkupdates").Output()
+		sc := bufio.NewScanner(strings.NewReader(string(out)))
+		for sc.Scan() {
+			f := strings.Fields(sc.Text())
+			if len(f) >= 4 && f[2] == "->" && !externalReleasePkgs[f[0]] {
+				ups = append(ups, updateItem{Name: f[0], Old: f[1], New: f[3]})
+			}
+		}
 		return ups
 	}
-	// cap the check: checkupdates syncs package dbs over the network and the
-	// update island polls this, so it MUST never hang status. generous so a
-	// slow sync still finishes.
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-	out, _ := exec.CommandContext(ctx, "checkupdates").Output()
-	sc := bufio.NewScanner(strings.NewReader(string(out)))
-	for sc.Scan() {
-		f := strings.Fields(sc.Text())
-		if len(f) >= 4 && f[2] == "->" && !externalReleasePkgs[f[0]] {
-			ups = append(ups, updateItem{Name: f[0], Old: f[1], New: f[3]})
+	if manager := sys.RPMManager(); manager != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		out, _ := exec.CommandContext(ctx, manager, "check-update").Output()
+		sc := bufio.NewScanner(strings.NewReader(string(out)))
+		for sc.Scan() {
+			f := strings.Fields(sc.Text())
+			if len(f) >= 3 && strings.Contains(f[0], ".") {
+				name := strings.Split(f[0], ".")[0]
+				if !externalReleasePkgs[name] {
+					ups = append(ups, updateItem{Name: name, New: f[1]})
+				}
+			}
 		}
+		return ups
 	}
 	return ups
 }
@@ -1280,7 +1349,7 @@ func aurUpdates() []updateItem {
 	sc := bufio.NewScanner(strings.NewReader(string(out)))
 	for sc.Scan() {
 		f := strings.Fields(sc.Text())
-		if len(f) >= 4 && f[2] == "->" {
+		if len(f) >= 4 && f[2] == "->" && !externalReleasePkgs[f[0]] {
 			ups = append(ups, updateItem{Name: f[0], Old: f[1], New: f[3]})
 		}
 	}

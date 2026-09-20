@@ -20,6 +20,8 @@ import (
 )
 
 type runState struct {
+	Mode      string   `json:"mode,omitempty"`
+	Provider  string   `json:"provider,omitempty"`
 	Completed []string `json:"completed"`
 	BackupDir string   `json:"backupDir"`
 	Updated   string   `json:"updated"`
@@ -59,6 +61,11 @@ func (e *engine) markStepDone(id string) {
 	if e.state == nil {
 		e.state = &runState{}
 	}
+	e.state.Mode = "packages"
+	if e.fromSource() {
+		e.state.Mode = "source"
+	}
+	e.state.Provider = e.p.compositor
 	if !e.state.has(id) {
 		e.state.Completed = append(e.state.Completed, id)
 	}
@@ -134,15 +141,43 @@ func runUninstall(yes, dry bool) int {
 			installed = append(installed, p)
 		}
 	}
+	if activeDistro.id == "fedora" {
+		for _, pkg := range []string{"ryoku-desktop"} {
+			if activeDistro.installedPkg(pkg) {
+				installed = append(installed, pkg)
+			}
+		}
+		for _, provider := range compositors() {
+			pkg := "ryoku-desktop-" + provider
+			if activeDistro.installedPkg(pkg) {
+				installed = append(installed, pkg)
+			}
+		}
+	}
 	if len(installed) == 0 {
 		fmt.Println(i18n.T("no ryoku packages installed"))
-	} else if confirm(rd, i18n.Tf("remove %s?", strings.Join(installed, " ")), yes) {
-		if err := run("sudo", append([]string{"-n", "pacman", "-R", "--noconfirm"}, installed...)...); err != nil {
-			fmt.Println(i18n.T("warning: package removal failed; fix pacman and re-run (continuing with restore)"))
+	} else if confirm(rd, "remove "+strings.Join(installed, " ")+"?", yes) {
+		if err := run("sudo", append(append([]string{"-n"}, activeDistro.removeCmd...), installed...)...); err != nil {
+			fmt.Println("warning: package removal failed (continuing with restore)")
+		}
+	}
+
+	if activeDistro.fromSource && confirm(rd, "remove or restore artifacts recorded by this installation?", yes) {
+		if err := uninstallArtifacts(home, dry, run); err != nil {
+			fmt.Println("source uninstall failed: " + err.Error())
+			return 1
 		}
 	}
 
 	// 2. the [ryoku] repo stanza; original kept next to it.
+	if activeDistro.id == "fedora" && pathExists("/etc/yum.repos.d/ryoku.repo") {
+		if confirm(rd, "disable the [ryoku] RPM repository?", yes) {
+			if err := run("sudo", "-n", "mv", "/etc/yum.repos.d/ryoku.repo", "/etc/yum.repos.d/ryoku.repo.disabled"); err != nil {
+				fmt.Println("could not disable the Ryoku repository: " + err.Error())
+				return 1
+			}
+		}
+	}
 	if b, err := os.ReadFile("/etc/pacman.conf"); err == nil && activeDistro.id == "arch" && ryokuStanzaRe.Match(b) {
 		if confirm(rd, i18n.T("drop the [ryoku] repository from /etc/pacman.conf?"), yes) {
 			stripped := stripPacmanSection(string(b), "ryoku")

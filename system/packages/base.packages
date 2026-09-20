@@ -27,6 +27,9 @@ btrfs-progs
 cryptsetup
 dosfstools
 efibootmgr
+# inotify-tools: inotifywait powers limine-snapper-watcher (limine-snapper-sync.service)
+# to detect new snapshots and sync them into Limine.
+inotify-tools
 limine
 # limine-entry-tool stack ([ryoku]): the hook regenerates the menu, detects other
 # OSes (FIND_BOOTLOADERS), builds the UKI tree; sync adds the Snapshots submenu.

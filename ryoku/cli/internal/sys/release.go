@@ -53,6 +53,9 @@ func IsReleaseTag(s string) bool { return releaseTagRe.MatchString(s) }
 // ChannelServer is the [ryoku] Server line for a channel or release tag, or ""
 // for a name that is neither.
 func ChannelServer(channel string) string {
+	if RPMManager() != "" {
+		return rpmChannelServer(channel)
+	}
 	switch {
 	case channel == ChannelStable:
 		return RepoBase + "/$arch"
@@ -68,6 +71,9 @@ func ChannelServer(channel string) string {
 // testing, a release tag, or "" for a mirror Ryoku does not publish (a local
 // build-repo.sh out/ tree, a private mirror), which is left alone everywhere.
 func ChannelOfServer(server string) string {
+	if RPMManager() != "" {
+		return rpmChannelOfServer(server)
+	}
 	s := strings.TrimSpace(server)
 	s = strings.TrimSuffix(strings.TrimSuffix(s, "/"), "$arch")
 	s = strings.TrimSuffix(strings.TrimSuffix(s, "/"), "x86_64")
@@ -92,12 +98,18 @@ func ChannelOfServer(server string) string {
 // ChannelURL is the browsable base of a channel's x86_64 directory (Server with
 // $arch resolved), used to read release.json.
 func ChannelURL(channel string) string {
+	if RPMManager() != "" {
+		return rpmChannelURL(channel)
+	}
 	return strings.Replace(ChannelServer(channel), "$arch", "x86_64", 1)
 }
 
 // RyokuServer returns the Server line of the [ryoku] stanza in pacman.conf, or
 // "" when the stanza is absent.
 func RyokuServer() string {
+	if RPMManager() != "" {
+		return rpmRepoServer()
+	}
 	b, err := os.ReadFile(PacmanConf)
 	if err != nil {
 		return ""
@@ -128,6 +140,9 @@ func PackagedChannel() string { return ChannelOfServer(RyokuServer()) }
 // testing, or a release tag). It needs a stanza to rewrite; the doctor adds a
 // missing one. Written through sudo install, so the file is replaced whole.
 func SetPackagedChannel(channel string) error {
+	if RPMManager() != "" {
+		return setRPMChannel(channel)
+	}
 	server := ChannelServer(channel)
 	if server == "" {
 		return fmt.Errorf(i18n.T("unknown channel %q (stable, testing, or a release tag like v0.55.7-beta.19)"), channel)
@@ -167,6 +182,9 @@ func SetPackagedChannel(channel string) error {
 // transaction on "invalid or corrupted database (PGP signature)"; dropping it
 // lets the next -Sy pull a matched pair. Callers refresh afterwards.
 func DropRyokuSyncDB() error {
+	if manager := RPMManager(); manager != "" {
+		return Sudo(manager, "--repo=ryoku", "clean", "metadata")
+	}
 	names := []string{"ryoku.db", "ryoku.db.sig", "ryoku.files", "ryoku.files.sig"}
 	paths := make([]string, len(names))
 	for i, n := range names {

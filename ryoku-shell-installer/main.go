@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -772,11 +773,45 @@ func main() {
 	yes := flag.Bool("yes", false, i18n.T("run non-interactively with the default plan"))
 	dry := flag.Bool("dry-run", false, i18n.T("print every command instead of running it"))
 	uninstall := flag.Bool("uninstall", false, i18n.T("remove the ryoku packages and restore the backup chain"))
-	ref := flag.String("ref", envOr("RYOKU_SHELL_REF", "main"), i18n.T("ryoku-arch git ref for the payload"))
+	ref := flag.String("ref", envOr("RYOKU_SHELL_REF", "main-fedora"), i18n.T("ryoku-fedora git ref for the payload"))
 	payload := flag.String("payload", os.Getenv("RYOKU_SHELL_PAYLOAD"), i18n.T("use a local ryoku-arch checkout as the payload"))
 	compositor := flag.String("compositor", "", i18n.T("window manager to install: hyprland or niri (default hyprland)"))
+	flag.StringVar(&repoURL, "repo", envOr("RYOKU_SHELL_REPO", repoURL), i18n.T("git repository URL for the installer payload"))
+	dependencyList := flag.Bool("dependency-list", false, "print host source dependencies without installing")
+	flag.StringVar(&installMode, "install-mode", envOr("RYOKU_INSTALL_MODE", "auto"), i18n.T("installation mode: auto, packages, or source (Fedora)"))
 	flag.Parse()
+	if installMode != "auto" && installMode != "packages" && installMode != "source" {
+		die(i18n.T("install-mode must be auto, packages, or source"))
+	}
+	if strings.HasPrefix(repoURL, "-") || strings.ContainsAny(repoURL, "\r\n") {
+		die("invalid repository URL")
+	}
 
+	if *payload == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			if _, err := os.Stat(filepath.Join(cwd, "ryoku/lockscreen/install-qylock")); err == nil {
+				*payload = cwd
+			}
+		}
+	}
+
+	if *dependencyList {
+		d := detectHostDistro()
+		if d == nil {
+			die("unsupported distribution (immutable Fedora derivatives are not supported)")
+		}
+		e := &engine{f: &facts{distro: d}, p: &plan{compositor: chooseCompositor(*compositor)}, payload: *payload}
+		base, err := e.readBasePackages()
+		if err != nil {
+			die(err.Error())
+		}
+		pkgs, err := e.sourceDependencies(base)
+		if err != nil {
+			die(err.Error())
+		}
+		fmt.Println(strings.Join(pkgs, "\n"))
+		return
+	}
 	initGlyphs()
 	comp := chooseCompositor(*compositor)
 
@@ -784,7 +819,7 @@ func main() {
 		die(i18n.T("run as your normal user, not root; sudo is used where needed"))
 	}
 	if detectHostDistro() == nil {
-		die(i18n.T("unsupported distribution: Ryoku installs on Arch-based and Debian-based systems"))
+		die("unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems")
 	}
 	if out("uname", "-m") != "x86_64" {
 		die(i18n.T("Ryoku ships x86_64 builds only"))
@@ -793,6 +828,15 @@ func main() {
 	// pass the pacman check but every session/service step would fail.
 	if !systemdBooted() {
 		die(i18n.T("this system does not boot with systemd (Artix or another init detected); Ryoku needs systemd and cannot install here"))
+	}
+
+	if !*uninstall && activeDistro.id == "fedora" && !sourceMode(activeDistro, installMode, *payload, *ref) {
+		if _, err := fedoraRepositoryConfig(); err != nil {
+			die(err.Error())
+		}
+		if out("rpm", "-E", "%fedora") != "44" {
+			die(i18n.T("packaged Fedora installs currently support Fedora 44 x86_64"))
+		}
 	}
 
 	if !*dry {

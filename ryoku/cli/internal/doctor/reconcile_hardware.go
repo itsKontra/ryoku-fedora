@@ -203,7 +203,7 @@ func reconcileKeplerNvidia(checkOnly bool) recResult {
 	}
 	if err := rebuildKeplerNouveau(); err != nil {
 		return warnRes(i18n.T("restored Nouveau, but the initramfs rebuild failed: %v"), err).
-			withFix(i18n.T("sudo limine-mkinitcpio  (or: sudo mkinitcpio -P)"))
+			withFix(i18n.T("ryoku doctor (retries the pending initramfs rebuild)"))
 	}
 	return fixedRes(i18n.T("removed unsupported 580xx from Kepler hardware and restored Nouveau for the next boot"))
 }
@@ -265,9 +265,30 @@ func removeRootFiles(paths ...string) error {
 }
 
 func reconcileNvidiaModeset(checkOnly bool) recResult {
+	pending := filepath.Join(sys.StateDir(), "nvidia-initramfs-pending")
+	if sys.Exists(pending) {
+		if checkOnly {
+			return wouldRes(i18n.T("NVIDIA initramfs rebuild is pending"))
+		}
+		if err := rebuildInitramfs(); err != nil {
+			return failRes(i18n.T("NVIDIA initramfs rebuild failed: %v"), err)
+		}
+		if err := os.Remove(pending); err != nil {
+			return failRes("remove initramfs marker: %v", err)
+		}
+		return fixedRes(i18n.T("rebuilt the pending NVIDIA initramfs"))
+	}
+	markPending := func() error {
+		if err := os.MkdirAll(filepath.Dir(pending), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(pending, []byte("pending\n"), 0o600)
+	}
+
 	if !nvidiaDriverActive() {
 		return okRes(i18n.T("no proprietary NVIDIA driver in use"))
 	}
+	needsMkinit := sys.Has("mkinitcpio") || sys.Has("limine-mkinitcpio")
 	// nouveau blacklisted with no loadable nvidia module = no driver can bind
 	// the card (the SDDM login loop). Restore nouveau so the next boot has a
 	// display; installing the matching driver is then an ordinary fix.
@@ -277,49 +298,67 @@ func reconcileNvidiaModeset(checkOnly bool) recResult {
 			return wouldRes(i18n.T("nouveau is blacklisted but no nvidia module exists for any installed kernel; the session cannot start (the SDDM login loop)")).
 				withFix(i18n.T("ryoku doctor  (restores nouveau, rebuilds the initramfs)"))
 		}
-		if err := removeRootFiles("/etc/modprobe.d/nvidia.conf", "/etc/mkinitcpio.conf.d/nvidia.conf"); err != nil {
+		if err := markPending(); err != nil {
+			return failRes("record pending initramfs: %v", err)
+		}
+		toRemove := []string{"/etc/modprobe.d/nvidia.conf"}
+		if needsMkinit {
+			toRemove = append(toRemove, "/etc/mkinitcpio.conf.d/nvidia.conf")
+		}
+		if err := removeRootFiles(toRemove...); err != nil {
 			return failRes(i18n.T("could not remove the stale NVIDIA config: %v"), err).
 				withFix("sudo rm /etc/modprobe.d/nvidia.conf /etc/mkinitcpio.conf.d/nvidia.conf && sudo mkinitcpio -P")
 		}
 		if err := rebuildInitramfs(); err != nil {
 			return warnRes(i18n.T("restored nouveau, but the initramfs rebuild failed: %v"), err).
-				withFix(i18n.T("sudo limine-mkinitcpio  (or: sudo mkinitcpio -P)"))
+				withFix(i18n.T("ryoku doctor (retries the pending initramfs rebuild)"))
 		}
-		return fixedRes(i18n.T("no nvidia module exists for the installed kernel(s); restored nouveau and rebuilt the initramfs so the next boot has a display. Install a matching driver (pacman -Syu nvidia-open) and run ryoku doctor again to switch back"))
+		_ = os.Remove(pending)
+		return fixedRes(i18n.T("no nvidia module exists for the installed kernel(s); restored nouveau and rebuilt the initramfs so the next boot can use nouveau. Install a matching driver and run ryoku doctor again to switch back"))
 	}
 	modprobe := readFileSafe("/etc/modprobe.d/nvidia.conf")
 	mkinit := readFileSafe("/etc/mkinitcpio.conf.d/nvidia.conf")
-	ok := nvidiaConfigOK(modprobe, mkinit)
+	ok := strings.Contains(modprobe, "blacklist nouveau") &&
+		strings.Contains(modprobe, "nvidia_drm modeset=1 fbdev=1") &&
+		(!needsMkinit || strings.Contains(mkinit, "nvidia_drm"))
 	if ok {
 		return okRes(i18n.T("NVIDIA modeset + fbdev + nouveau blacklist in place"))
 	}
 	if checkOnly {
+		fix := "ryoku doctor (writes /etc/modprobe.d/nvidia.conf and rebuilds the initramfs)"
 		return wouldRes(i18n.T("NVIDIA driver in use but nouveau is not blacklisted / DRM modeset + fbdev not set; the GPU or an external display can fail to come up on some boots")).
-			withFix(i18n.T("ryoku doctor  (writes /etc/modprobe.d/nvidia.conf and rebuilds the initramfs)"))
+			withFix(fix)
+	}
+	if err := markPending(); err != nil {
+		return failRes("record pending initramfs: %v", err)
 	}
 	if err := writeRootFile("/etc/modprobe.d/nvidia.conf", nvidiaModprobeConf, "0644"); err != nil {
 		return failRes(i18n.T("could not write /etc/modprobe.d/nvidia.conf: %v"), err).
 			withFix(i18n.T("re-run with sudo access"))
 	}
-	if err := writeRootFile("/etc/mkinitcpio.conf.d/nvidia.conf", nvidiaMkinitcpioConf, "0644"); err != nil {
-		return failRes(i18n.T("could not write /etc/mkinitcpio.conf.d/nvidia.conf: %v"), err).
-			withFix(i18n.T("re-run with sudo access"))
+	if needsMkinit {
+		if err := writeRootFile("/etc/mkinitcpio.conf.d/nvidia.conf", nvidiaMkinitcpioConf, "0644"); err != nil {
+			return failRes(i18n.T("could not write /etc/mkinitcpio.conf.d/nvidia.conf: %v"), err).
+				withFix(i18n.T("re-run with sudo access"))
+		}
 	}
 	if err := rebuildInitramfs(); err != nil {
 		return warnRes(i18n.T("wrote the NVIDIA reliability config, but the initramfs rebuild failed: %v"), err).
-			withFix(i18n.T("sudo limine-mkinitcpio  (or: sudo mkinitcpio -P)"))
+			withFix(i18n.T("ryoku doctor (retries the pending initramfs rebuild)"))
 	}
+	_ = os.Remove(pending)
 	return fixedRes(i18n.T("blacklisted nouveau, enabled NVIDIA DRM modeset, and rebuilt the initramfs"))
 }
 
 // rebuildInitramfs regenerates the boot image after a module/blacklist
-// change. limine-mkinitcpio when present (the UKI path Ryoku uses), else
-// plain mkinitcpio -P.
+// change using the host boot-image tooling.
 func rebuildInitramfs() error {
-	if _, err := exec.LookPath("limine-mkinitcpio"); err == nil {
-		return sys.Run("sudo", "limine-mkinitcpio")
+	for _, args := range [][]string{{"limine-mkinitcpio"}, {"mkinitcpio", "-P"}, {"dracut", "--regenerate-all", "--force"}} {
+		if sys.Has(args[0]) {
+			return sys.Sudo(args...)
+		}
 	}
-	return sys.Run("sudo", "mkinitcpio", "-P")
+	return fmt.Errorf("no supported initramfs builder (mkinitcpio or dracut)")
 }
 
 // ---- reconciler: NVIDIA update guard hook ------------------------------------
@@ -370,6 +409,9 @@ func reconcileNvidiaGuardHook(checkOnly bool) recResult {
 	if !nvidiaDriverActive() {
 		return okRes(i18n.T("no proprietary NVIDIA driver in use"))
 	}
+	if !sys.Has("pacman") {
+		return okRes("pacman hooks not used on this system")
+	}
 	if nvidiaGuardHookOK(readFileSafe(nvidiaGuardHookPath)) {
 		return okRes(i18n.T("NVIDIA update guard hook in place"))
 	}
@@ -382,4 +424,46 @@ func reconcileNvidiaGuardHook(checkOnly bool) recResult {
 			withFix(i18n.T("re-run with sudo access"))
 	}
 	return fixedRes(i18n.T("installed the NVIDIA update guard hook so a failed DKMS rebuild can't strand the login"))
+}
+
+// ---- reconciler: NVIDIA Wayland autostart ------------------------------------
+
+const (
+	nvidiaSysAutostartDesktop = "/etc/xdg/autostart/nvidia-settings-user.desktop"
+	nvidiaAutostartMask       = "[Desktop Entry]\nType=Application\nName=nvidia-settings\nExec=nvidia-settings -l\nHidden=true\nX-systemd-skip=true\n"
+)
+
+// nvidiaAutostartMasked checks if an autostart desktop entry has been disabled
+// via Hidden=true or X-systemd-skip=true.
+func nvidiaAutostartMasked(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.EqualFold(trimmed, "Hidden=true") || strings.EqualFold(trimmed, "X-systemd-skip=true") {
+			return true
+		}
+	}
+	return false
+}
+
+func reconcileNvidiaAutostart(checkOnly bool) recResult {
+	if !sys.Exists(nvidiaSysAutostartDesktop) {
+		return okRes("no conflicting X11 nvidia-settings autostart entry")
+	}
+	userFile := filepath.Join(sys.ConfigHome(), "autostart", "nvidia-settings-user.desktop")
+	if sys.Exists(userFile) && nvidiaAutostartMasked(readFileSafe(userFile)) {
+		return okRes("nvidia-settings autostart masked for Wayland")
+	}
+	if checkOnly {
+		return wouldRes("nvidia-settings autostart is active but fails under Wayland (NV-CONTROL is X11-only)").
+			withFix("ryoku doctor  (masks it in ~/.config/autostart)")
+	}
+	if err := os.MkdirAll(filepath.Dir(userFile), 0o755); err != nil {
+		return failRes("creating autostart dir: %v", err)
+	}
+	if err := os.WriteFile(userFile, []byte(nvidiaAutostartMask), 0o644); err != nil {
+		return failRes("writing %s: %v", userFile, err)
+	}
+	_ = sys.Run("systemctl", "--user", "daemon-reload")
+	_ = sys.Run("systemctl", "--user", "reset-failed", "app-nvidia\\x2dsettings\\x2duser@autostart.service")
+	return fixedRes("masked nvidia-settings autostart in ~/.config/autostart (fails under Wayland)")
 }

@@ -51,6 +51,9 @@ func repoBase() string {
 	if b := strings.TrimSpace(os.Getenv("RYOKU_RELEASE_BASE")); b != "" {
 		return strings.TrimSuffix(b, "/")
 	}
+	if sys.RPMManager() != "" {
+		return ""
+	}
 	return sys.RepoBase
 }
 
@@ -85,9 +88,11 @@ func fetchCached(name, url string, ttl time.Duration) []byte {
 // channelServes reads what a channel currently serves, or a zero value when
 // the channel is unreachable and nothing is cached.
 func channelServes(channel string) channelRelease {
+	if sys.RPMManager() != "" {
+		return channelRelease{}
+	}
 	var r channelRelease
-	url := strings.Replace(sys.ChannelServer(channel), sys.RepoBase, repoBase(), 1)
-	url = strings.Replace(url, "$arch", "x86_64", 1)
+	url := strings.Replace(sys.ChannelURL(channel), sys.RepoBase, repoBase(), 1)
 	if url == "" {
 		return r
 	}
@@ -99,6 +104,9 @@ func channelServes(channel string) channelRelease {
 
 // ledger reads the release ledger, newest first.
 func ledger() releaseLedger {
+	if sys.RPMManager() != "" {
+		return releaseLedger{}
+	}
 	var l releaseLedger
 	if b := fetchCached("releases-index.json", repoBase()+"/releases/index.json", releaseFetchTTL); b != nil {
 		_ = json.Unmarshal(b, &l)
@@ -124,6 +132,9 @@ func sanitize(s string) string {
 // retired as the update source (the ~/ryoku-arch clone stays on disk but no
 // longer drives updates). Building from a checkout is `ryoku track ... --source`.
 func Track(channel string) error {
+	if sys.RPMManager() != "" && channel != sys.ChannelCOPR {
+		return fmt.Errorf(i18n.T("Fedora uses one rolling COPR repository; use ryoku track copr. Stable/testing channels and tag rollback are unavailable"))
+	}
 	if sys.ChannelServer(channel) == "" {
 		return fmt.Errorf(i18n.T("unknown channel %q: stable, testing, or a release tag (see `ryoku rollback` for the list)"), channel)
 	}
@@ -141,7 +152,7 @@ func Track(channel string) error {
 	}
 	// Already on the channel, package box, nothing to migrate: only move the set
 	// if the channel now serves something newer than what is installed.
-	if !source && !install && sys.PackagedChannel() == channel {
+	if sys.RPMManager() == "" && !source && !install && sys.PackagedChannel() == channel {
 		if serves := channelServes(channel).Release; serves == "" || serves == sys.ReadRelease().Release {
 			fmt.Printf(i18n.T("already on %s\n"), channel)
 			return nil
@@ -178,14 +189,14 @@ func Track(channel string) error {
 // clone) and rewrite the [ryoku] Server to channel. It touches no pacman and no
 // network, so it is unit-testable; the caller runs the pacman side after.
 func switchToPackageChannel(channel string) (migrated bool, err error) {
+	if err := sys.SetPackagedChannel(channel); err != nil {
+		return false, err
+	}
 	if sys.SourceTracked() {
 		if err := sys.RetireSourceTracking(); err != nil {
 			return false, fmt.Errorf(i18n.T("could not retire the source checkout: %w"), err)
 		}
 		migrated = true
-	}
-	if err := sys.SetPackagedChannel(channel); err != nil {
-		return migrated, err
 	}
 	return migrated, nil
 }

@@ -1,0 +1,101 @@
+name: Fedora RPM build and install
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release:
+        type: string
+        default: ''
+      channel:
+        type: string
+        default: testing
+  pull_request:
+    paths:
+      - 'release/rpm/**'
+      - 'release/packages/**'
+      - 'system/**'
+      - 'bin/**'
+      - 'CODENAME'
+      - 'ryoku-shell-installer/**'
+      - 'ryoku/**'
+      - 'installation/tests/fedora-*.sh'
+      - '.github/workflows/fedora-rpm.yml'
+      - '.github/workflows/publish-copr.yml'
+permissions:
+  contents: read
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    container: fedora:44
+    steps:
+      - name: Bootstrap source tools
+        run: dnf -y install git golang rpm-build rpm-sign gnupg2 createrepo_c python3 tar gzip
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check release tooling
+        run: |
+          python3 -m unittest discover -s release/rpm/tests -v
+          installation/tests/fedora-signatures.sh
+      - name: Prepare self-contained SRPMs
+        env:
+          RYOKU_SRPM_OUT: /tmp/srpms
+          RYOKU_RELEASE: ${{ inputs.release || format('v0.0.0-alpha.{0}', github.run_number) }}
+          RYOKU_CHANNEL: ${{ inputs.channel || 'testing' }}
+          RYOKU_RPM_REVISION: ${{ github.run_number }}
+        run: release/rpm/prepare-srpms.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fedora-srpms
+          path: /tmp/srpms
+          if-no-files-found: error
+  rebuild:
+    needs: sources
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:44
+      options: --privileged
+    steps:
+      - run: dnf -y install git mock
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: fedora-srpms
+          path: /tmp/srpms
+      - name: Rebuild every SRPM in a clean root
+        run: |
+          release/rpm/rebuild-srpms.sh /tmp/srpms /tmp/fedora-rpms
+          cp /tmp/srpms/release.json /tmp/fedora-rpms/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fedora-rebuilt-rpms
+          path: /tmp/fedora-rpms
+          if-no-files-found: error
+  fedora:
+    needs: rebuild
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora: ['44']
+        compositor: [hyprland, niri]
+        dnf: [dnf, dnf4]
+    container: fedora:${{ matrix.fedora }}
+    steps:
+      - run: dnf -y install git python3-dnf
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: fedora-rebuilt-rpms
+          path: /tmp/fedora-rpms
+      - name: Install the locally rebuilt RPM set and test channels
+        env:
+          RYOKU_TEST_DNF: ${{ matrix.dnf }}
+          RYOKU_TEST_PREBUILT: '1'
+        run: installation/tests/fedora-rpm.sh '${{ matrix.compositor }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fedora-${{ matrix.fedora }}-${{ matrix.compositor }}-${{ matrix.dnf }}
+          path: /tmp/fedora-evidence

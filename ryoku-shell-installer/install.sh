@@ -4,15 +4,28 @@
 # on an existing Arch machine. Kept deliberately dumb: every real decision
 # lives in the ryoku-shell-install binary this script downloads.
 #
-#   curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/ryoku-shell-installer/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/ryoku-shell-installer/install.sh | bash
 #
 # args after `bash -s --` are forwarded to the installer (--yes, --dry-run).
 # RYOKU_SHELL_REF picks the git ref to fetch the installer and payload from.
 set -euo pipefail
 
 main() {
-  local ref="${RYOKU_SHELL_REF:-main}"
-  local raw="https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/${ref}/ryoku-shell-installer"
+  local ref="${RYOKU_SHELL_REF:-main-fedora}"
+  local repo="${RYOKU_SHELL_REPO:-https://github.com/itsKontra/ryoku-fedora.git}"
+  local args=("$@") i
+  for ((i=0; i<${#args[@]}; i++)); do
+    case "${args[i]}" in
+      --ref) i=$((i+1)); ref="${args[i]:?--ref needs a value}" ;;
+      --ref=*) ref="${args[i]#--ref=}" ;;
+      --repo) i=$((i+1)); repo="${args[i]:?--repo needs a value}" ;;
+      --repo=*) repo="${args[i]#--repo=}" ;;
+    esac
+  done
+  [[ $repo == https://github.com/*/* ]] || { echo 'bootstrap requires an HTTPS GitHub repository URL' >&2; return 1; }
+  local slug="${repo#https://github.com/}"
+  slug="${slug%.git}"
+  local raw="https://raw.githubusercontent.com/${slug}/${ref}/ryoku-shell-installer"
 
   # English on purpose: this bootstrap runs before any Ryoku catalog exists on
   # the box to translate from; the ryoku-shell-install binary it fetches does that.
@@ -26,6 +39,8 @@ main() {
 
   # NixOS needs a nix-based engine; that work is parked (archived flake),
   # so refuse honestly instead of dying on the package-manager guard below.
+  [[ ! -e /run/ostree-booted ]] || die "immutable Fedora derivatives are not supported"
+
   [[ ! -e /etc/NIXOS ]] || die "NixOS is not supported yet; use the flake instead"
 
   local ryoku_family
@@ -33,8 +48,10 @@ main() {
     ryoku_family=arch
   elif command -v apt-get > /dev/null 2>&1; then
     ryoku_family=debian
+  elif command -v dnf > /dev/null 2>&1; then
+    ryoku_family=fedora
   else
-    die "unsupported distribution: Ryoku installs on Arch-based and Debian-based systems"
+    die "unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems"
   fi
   [[ $(uname -m) == x86_64 ]] || die "Ryoku ships x86_64 builds only"
   # the binary refuses non-systemd boots much later (session + services are
@@ -47,12 +64,14 @@ main() {
     # shellcheck source=/dev/null
     . /etc/os-release
     case "${ID:-} ${ID_LIKE:-}" in
-      *arch*|*debian*) ;;
+      *arch*|*debian*|*fedora*) ;;
       *) say "warning: ${PRETTY_NAME:-unknown distro} is not recognised; continuing as ${ryoku_family}" ;;
     esac
   fi
   if [[ $ryoku_family == debian ]]; then
     say "Debian detected: the desktop is built from source, which takes a few minutes"
+  elif [[ $ryoku_family == fedora ]]; then
+    say "Fedora detected: released packages are the default; --install-mode=source builds a checkout"
   fi
 
   local work
@@ -70,9 +89,9 @@ main() {
   local rc=0
   # piped stdin (curl | bash) is useless to a TUI; hand it the real terminal.
   if [[ ! -t 0 && -r /dev/tty ]]; then
-    RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" < /dev/tty || rc=$?
+    RYOKU_SHELL_REPO="$repo" RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" < /dev/tty || rc=$?
   else
-    RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" || rc=$?
+    RYOKU_SHELL_REPO="$repo" RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" || rc=$?
   fi
   return "$rc"
 }

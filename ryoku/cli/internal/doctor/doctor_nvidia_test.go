@@ -133,3 +133,23 @@ func TestKeplerRemovalFailureUsesScopedRemedy(t *testing.T) {
 		t.Fatalf("remedy = %q, want %q", got.remedy, want)
 	}
 }
+
+func TestNvidiaAutostartMasked(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{"empty file", "", false},
+		{"normal autostart without mask", "[Desktop Entry]\nType=Application\nExec=nvidia-settings -l\n", false},
+		{"Hidden=true", "[Desktop Entry]\nType=Application\nExec=nvidia-settings -l\nHidden=true\n", true},
+		{"X-systemd-skip=true", "[Desktop Entry]\nType=Application\nExec=nvidia-settings -l\nX-systemd-skip=true\n", true},
+		{"Hidden=false", "[Desktop Entry]\nType=Application\nExec=nvidia-settings -l\nHidden=false\n", false},
+	}
+	for _, c := range cases {
+		if got := nvidiaAutostartMasked(c.content); got != c.want {
+			t.Errorf("%s: nvidiaAutostartMasked(...) = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+

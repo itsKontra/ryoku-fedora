@@ -55,10 +55,16 @@ check_renderer() {
   fi
   say "ryoku-shell NOT restarted: quickshell cannot start"
   printf '%s\n' "$out" | sed 's/^/    /' >&2
-  cat >&2 <<'EOF'
+  local hint="sudo pacman -S quickshell"
+  if command -v dnf >/dev/null 2>&1; then
+    hint="sudo dnf install quickshell"
+  elif command -v apt-get >/dev/null 2>&1; then
+    hint="sudo apt-get install quickshell"
+  fi
+  cat >&2 <<EOF
     Quickshell links Qt's private API, so a build made against another Qt will
     not load. The repo package is rebuilt with Qt; quickshell-git is not:
-        sudo pacman -S quickshell
+        $hint
     Then run this deploy again. The desktop you have now was left running.
 EOF
   return 1
@@ -114,7 +120,13 @@ restart_shell() {
 # bare "go: command not found"; name the problem and the fix.
 if ! command -v go >/dev/null 2>&1; then
   printf '  the Go toolchain is required to build the desktop from a checkout, but go is not installed.\n' >&2
-  printf '    install it:  sudo pacman -S --needed go\n' >&2
+  if command -v dnf >/dev/null 2>&1; then
+    printf '    install it:  sudo dnf install golang\n' >&2
+  elif command -v apt-get >/dev/null 2>&1; then
+    printf '    install it:  sudo apt-get install golang\n' >&2
+  else
+    printf '    install it:  sudo pacman -S --needed go\n' >&2
+  fi
   printf '    (a packaged install updates through pacman and does not build from source; check ryoku status.)\n' >&2
   exit 1
 fi
@@ -285,26 +297,37 @@ if command -v sudo >/dev/null 2>&1; then
   bootsrc="$here/../../system/boot"
   sudo install -d /usr/share/plymouth/themes/ryoku
   sudo cp -a "$bootsrc/plymouth/ryoku/." /usr/share/plymouth/themes/ryoku/
-  sudo install -Dm644 "$bootsrc/limine/limine.conf" /usr/share/ryoku/boot/limine.conf
-  sudo install -Dm644 "$bootsrc/limine/default.conf" /usr/share/ryoku/boot/default.conf
-  sudo install -Dm755 "$bootsrc/ryoku-boot-apply" /usr/bin/ryoku-boot-apply
-  # the mkinitcpio install hook the HOOKS drop-in names: mkinitcpio aborts on a
-  # hook it cannot find, and ryoku-boot-apply rebuilds the images right below.
-  sudo install -Dm644 "$bootsrc/mkinitcpio/install/ryoku-gpu-trim" \
-    /usr/lib/initcpio/install/ryoku-gpu-trim
-  sudo ryoku-boot-apply || true
-  say "installed and applied the boot splash + Limine theme"
+  if command -v limine >/dev/null 2>&1 || [[ -d /boot/limine ]]; then
+    sudo install -Dm644 "$bootsrc/limine/limine.conf" /usr/share/ryoku/boot/limine.conf
+    sudo install -Dm644 "$bootsrc/limine/default.conf" /usr/share/ryoku/boot/default.conf
+    sudo install -Dm755 "$bootsrc/ryoku-boot-apply" /usr/bin/ryoku-boot-apply
+    sudo install -Dm644 "$bootsrc/mkinitcpio/install/ryoku-gpu-trim" \
+      /usr/lib/initcpio/install/ryoku-gpu-trim
+    sudo ryoku-boot-apply || true
+    say "installed and applied the boot splash + Limine theme"
+  else
+    say "installed boot splash (Limine theme skipped: Limine not present)"
+  fi
 fi
 
 # Record the checkout this deploy came from and the commit it laid down, so the
 # deployed `ryoku` binary (on PATH, far from the repo) can track the update
 # channel in `ryoku status`: it compares this commit (what is now running)
 # against origin/main. One way, like every step: the repo is the source.
+install -Dm755 "$here/scripts/ryoku-install-extra" "$bindir/ryoku-install-extra"
 repo_root="$(cd "$here/../.." && pwd)"
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku"
 mkdir -p "$state_dir"
 printf '%s\n' "$repo_root" > "$state_dir/repo"
 git -C "$repo_root" rev-parse HEAD > "$state_dir/deployed" 2>/dev/null || rm -f "$state_dir/deployed"
+if [[ -n ${RYOKU_SHELL_REF:-} ]]; then
+  git check-ref-format "refs/heads/$RYOKU_SHELL_REF"
+  mkdir -p "$cfg/environment.d"
+  channel_file="$cfg/environment.d/ryoku.conf"
+  touch "$channel_file"
+  sed -i '/^RYOKU_CHANNEL=/d' "$channel_file"
+  printf 'RYOKU_CHANNEL=%s\n' "$RYOKU_SHELL_REF" >> "$channel_file"
+fi
 say "recorded update-channel checkout -> $state_dir/repo"
 
 # The `ryoku` agent skill resolves through the repo pointer just recorded:
@@ -328,7 +351,16 @@ fi
 # module built against another Qt fails to load and takes the whole surface with
 # it, so a Qt update has to force a rebuild.
 qmldir="$HOME/.local/lib/qt6/qml"
-qtver="$(pacman -Q qt6-base 2>/dev/null | awk '{print $2}')"
+qtver=""
+if command -v pacman >/dev/null 2>&1; then
+  qtver="$(pacman -Q qt6-base 2>/dev/null | awk '{print $2}')"
+elif command -v rpm >/dev/null 2>&1; then
+  qtver="$(rpm -q --qf "%{VERSION}" qt6-qtbase 2>/dev/null || true)"
+elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists Qt6Core 2>/dev/null; then
+  qtver="$(pkg-config --modversion Qt6Core 2>/dev/null || true)"
+elif command -v dpkg-query >/dev/null 2>&1; then
+  qtver="$(dpkg-query -W -f='${Version}' libqt6core6 2>/dev/null || true)"
+fi
 qtstamp="$qmldir/Ryoku/Blobs/.qt-version"
 if command -v cmake >/dev/null 2>&1 && command -v ninja >/dev/null 2>&1; then
   if [ -n "$qtver" ] && [ "$(cat "$qtstamp" 2>/dev/null)" = "$qtver" ] \
@@ -700,7 +732,7 @@ seed_once() { [[ -e $2 ]] || cp -a "$1" "$2"; }
 
 # Palette generation, per-app config, and the user session target.
 mkdir -p "$cfg/matugen"; cp -a "$here/matugen/." "$cfg/matugen/"
-cp -a "$here/../apps/fish/config.fish" "$cfg/fish/config.fish"
+mkdir -p "$cfg/fish"; cp -a "$here/../apps/fish/config.fish" "$cfg/fish/config.fish"
 mkdir -p "$cfg/fish/conf.d"; cp -a "$here/../apps/fish/conf.d/." "$cfg/fish/conf.d/"
 mkdir -p "$cfg/ryoku-terminal"; cp -a "$here/../apps/terminal-shell/." "$cfg/ryoku-terminal/"
 mkdir -p "$cfg/bash"; cp -a "$here/../apps/bash/." "$cfg/bash/"
@@ -713,6 +745,7 @@ mkdir -p "$cfg/gtk-4.0"; cp -a "$here/gtk-4.0/settings.ini" "$cfg/gtk-4.0/settin
 mkdir -p "$cfg/btop"; cp -a "$here/../apps/btop/btop.conf" "$cfg/btop/btop.conf"
 mkdir -p "$cfg/fastfetch"
 seed_once "$here/../apps/fastfetch/config.jsonc" "$cfg/fastfetch/config.jsonc"
+seed_once "$here/../assets/brand/fastfetch-emblem.png" "$cfg/fastfetch/fastfetch-emblem.png"
 install -m755 "$here/../apps/fastfetch/ryoku-fastfetch" "$bindir/ryoku-fastfetch"
 mkdir -p "$cfg/kitty"
 cp -a "$here/../apps/kitty/kitty.conf" "$cfg/kitty/kitty.conf"
@@ -723,6 +756,21 @@ seed_once "$here/../apps/ghostty/config" "$cfg/ghostty/config"
 seed_once "$here/../apps/ghostty/ryoku-colors" "$cfg/ghostty/ryoku-colors"
 mkdir -p "$cfg/wireplumber"; cp -a "$here/../apps/wireplumber/." "$cfg/wireplumber/"
 mkdir -p "$cfg/systemd/user"; cp -a "$here/systemd/user/." "$cfg/systemd/user/"
+# On Wayland, nvidia-settings -l fails (NV-CONTROL is X11-only). If the
+# distro ships nvidia-settings-user.desktop in /etc/xdg/autostart (e.g. Fedora),
+# mask it in ~/.config/autostart so systemd-xdg-autostart-generator skips it.
+if [[ -f /etc/xdg/autostart/nvidia-settings-user.desktop && ! -f "$cfg/autostart/nvidia-settings-user.desktop" ]]; then
+  mkdir -p "$cfg/autostart"
+  cat <<'EOF' > "$cfg/autostart/nvidia-settings-user.desktop"
+[Desktop Entry]
+Type=Application
+Name=nvidia-settings
+Exec=nvidia-settings -l
+Hidden=true
+X-systemd-skip=true
+EOF
+  say "masked nvidia-settings X11 autostart for Wayland -> $cfg/autostart"
+fi
 # session environment: read at the next login, so niri and its spawns carry what
 # env.lua gives a Hyprland session
 mkdir -p "$cfg/environment.d"; cp -a "$here/environment.d/." "$cfg/environment.d/"
@@ -763,8 +811,37 @@ if command -v sudo >/dev/null 2>&1; then
 fi
 # chromium reads ~/.config/chromium-flags.conf, Google Chrome reads chrome-flags.conf;
 # lay the one source to both (GNOME keyring password store + native Wayland).
-cp -a "$here/../apps/chromium-flags.conf" "$cfg/chromium-flags.conf"
-cp -a "$here/../apps/chromium-flags.conf" "$cfg/chrome-flags.conf"
+for browser in chromium chrome; do
+  [[ -e "$cfg/$browser-flags.conf" ]] || cp -a "$here/../apps/chromium-flags.conf" "$cfg/$browser-flags.conf"
+done
+# Provide a ~/.local/bin/chromium wrapper that reads flags and execs chromium-browser.
+if ! command -v chromium >/dev/null 2>&1 || [[ "$(command -v chromium)" == "$bindir/chromium" ]]; then
+  if command -v chromium-browser >/dev/null 2>&1; then
+    cat > "$bindir/chromium" <<'EOF'
+#!/usr/bin/env bash
+flags=()
+flags_file="${XDG_CONFIG_HOME:-$HOME/.config}/chromium-flags.conf"
+if [[ -r "$flags_file" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="$(echo "$line" | xargs)"
+    [[ -n "$line" ]] && flags+=("$line")
+  done < "$flags_file"
+fi
+exec /usr/bin/chromium-browser "${flags[@]}" "$@"
+EOF
+    chmod +x "$bindir/chromium"
+    ln -sf chromium "$bindir/chromium-browser"
+  fi
+fi
+if [[ -f /usr/share/applications/chromium-browser.desktop ]]; then
+  mkdir -p "$appshare/applications"
+  if [[ ! -f "$appshare/applications/chromium-browser.desktop" ]]; then
+    sed 's|^Exec=/usr/bin/chromium-browser|Exec=chromium|g; s|^Exec=chromium-browser|Exec=chromium|g' \
+      /usr/share/applications/chromium-browser.desktop > "$appshare/applications/chromium-browser.desktop"
+  fi
+  ln -sf chromium-browser.desktop "$appshare/applications/chromium.desktop"
+fi
 # the screen-share source chooser xdph launches (hypr/xdph.conf names it). Its
 # stylesheet is matugen's, rendered to ~/.cache/ryoku/share-picker.css.
 mkdir -p "$cfg/hyprland-preview-share-picker"

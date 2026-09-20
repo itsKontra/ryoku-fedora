@@ -94,7 +94,7 @@ var sudoLike = map[string]bool{"sudo": true, "doas": true, "pkexec": true, "run0
 
 // systemLevel change packages, services, or machine state.
 var systemLevel = map[string]bool{
-	"pacman": true, "yay": true, "paru": true, "systemctl": true, "mount": true,
+	"pacman": true, "yay": true, "paru": true, "dnf": true, "rpm": true, "apt-get": true, "apt": true, "systemctl": true, "mount": true,
 	"umount": true, "modprobe": true, "sysctl": true, "timedatectl": true,
 	"hostnamectl": true, "localectl": true, "mkinitcpio": true, "grub-mkconfig": true,
 	"useradd": true, "usermod": true, "groupadd": true, "passwd": true,
@@ -215,6 +215,15 @@ func classifyArgv(argv []string) (dangerTier, string) {
 		}
 		for _, read := range []string{"-Q", "-F", "-Ss", "-Si", "-T", "-h", "--query", "--help"} {
 			if strings.HasPrefix(op, read) {
+				return tierRead, ""
+			}
+		}
+		return tierSystem, "changes installed packages"
+	case name == "dnf" || name == "dnf5":
+		return classifyDNF(argv[1:])
+	case name == "rpm":
+		for _, a := range argv[1:] {
+			if a == "--query" || a == "-q" || (strings.HasPrefix(a, "-q") && !strings.HasPrefix(a, "--")) {
 				return tierRead, ""
 			}
 		}
@@ -529,4 +538,26 @@ func underAny(p string, roots []string) bool {
 		}
 	}
 	return false
+}
+
+// Unknown options are conservative: their argument might otherwise look like a query verb.
+func classifyDNF(args []string) (dangerTier, string) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		key, _, equal := strings.Cut(a, "=")
+		switch key {
+		case "-q", "--quiet", "-y", "--assumeyes", "--assumeno", "--refresh", "-C", "--cacheonly":
+			continue
+		case "--config", "-c", "--installroot", "--releasever", "--setopt", "--repo", "--enablerepo", "--disablerepo", "--enable-repo", "--disable-repo", "--color", "--exclude", "-x":
+			if !equal {
+				i++
+			}
+			continue
+		case "repoquery", "search", "info", "check-update", "check-upgrade", "list", "provides", "repolist", "repoinfo":
+			return tierRead, ""
+		default:
+			return tierSystem, "changes installed packages"
+		}
+	}
+	return tierSystem, "changes installed packages"
 }

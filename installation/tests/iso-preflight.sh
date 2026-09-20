@@ -109,7 +109,7 @@ packages_gate() {
     while IFS= read -r line; do
       [[ $line =~ ^[[:space:]]*(#|$) ]] && continue
       [[ $line =~ ^\[[a-z0-9_-]+\]$ ]] && continue
-      [[ $line =~ ^[a-z0-9][a-z0-9@._+-]*$ ]] && continue
+      [[ $line =~ ^[@a-zA-Z0-9][a-zA-Z0-9@._+-]*$ ]] && continue
       printf 'malformed package name in %s: %q\n' "$f" "$line" >&2
       rc=1
     done <"$f"

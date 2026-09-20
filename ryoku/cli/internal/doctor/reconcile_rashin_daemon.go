@@ -201,9 +201,20 @@ func reconcileProwlAgent(checkOnly bool) recResult {
 		}
 		return okRes(i18n.T("prowl-agent is present for the rashin agent index"))
 	}
+	fix := "sudo pacman -S prowl-agent"
+	if !sys.Has("pacman") {
+		fix = "ryoku-install-extra prowl-agent"
+		if !checkOnly {
+			if installProwlAgent() {
+				return fixedRes("installed prowl-agent for rashin agent index")
+			}
+		}
+	}
 	return warnRes(i18n.T("rashin is enabled but prowl-agent is missing; the vault code index and agent skills will not refresh")).
-		withFix("sudo pacman -S prowl-agent")
+		withFix("%s", fix)
 }
+
+func installProwlAgent() bool { return installDesktopExtra("prowl-agent") == nil }
 
 // prowlAgentNeeded reports whether a box should be told to install prowl-agent:
 // rashin is enabled but the binary is absent. Split out so the decision is
