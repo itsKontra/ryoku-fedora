@@ -167,7 +167,7 @@ class Publication(unittest.TestCase):
         client.project_proxy.get.return_value = {'disable_createrepo': True}
         client.build_proxy.get.return_value = dict(ownername='itskontra', projectname='ryoku', state='succeeded')
         client.build_chroot_proxy.get.return_value = {'state': 'succeeded'}
-        client.build_proxy.get_list.return_value = {'items': [{'id': 10}, {'id': 9}]}
+        client.build_proxy.get_list.return_value = [{'id': 10}, {'id': 9}]
         return client
 
     def test_tested_candidate_requests_publication(self):
@@ -177,7 +177,7 @@ class Publication(unittest.TestCase):
 
     def test_newer_or_interleaved_build_prevents_stale_publication(self):
         client = self.client()
-        client.build_proxy.get_list.return_value = {'items': [{'id': 11}, {'id': 10}]}
+        client.build_proxy.get_list.return_value = [{'id': 11}, {'id': 10}]
         with self.assertRaises(ValueError): publisher.publish(client, self.candidate())
         client.project_proxy.regenerate_repos.assert_not_called()
 
