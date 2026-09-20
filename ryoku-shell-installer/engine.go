@@ -27,7 +27,9 @@ import (
 // line-anchored so a commented-out "#[ryoku]" stanza does not count.
 var ryokuStanzaRe = regexp.MustCompile(`(?m)^\[ryoku\]`)
 
-var repoURL = "https://github.com/itsKontra/ryoku-fedora.git"
+const defaultRepoURL = "https://github.com/itsKontra/ryoku-fedora.git"
+
+var repoURL = defaultRepoURL
 
 const pacmanStanza = `
 [ryoku]
@@ -82,7 +84,7 @@ var devPkgs = []string{"go", "nodejs", "npm", "python", "python-pip", "python-pi
 var sparsePaths = []string{
 	"ryoku/lockscreen", "ryoku/assets", "ryoku/apps",
 	"system/hardware/drivers", "system/hardware/input",
-	"system/packages", "release/packages/ryoku-keyring",
+	"system/packages", "release/packages/ryoku-keyring", "release/rpm",
 }
 
 type plan struct {
@@ -225,7 +227,11 @@ func newEngine(f *facts, p *plan, dry bool, ref, payloadOverride string) *engine
 	// resuming continues the previous run's backup dir so restore.sh stays
 	// one script; declining starts a fresh state (the file is rewritten at
 	// the first completed step).
-	if p.resume && f.prevRun != nil {
+	mode := "packages"
+	if e.fromSource() {
+		mode = "source"
+	}
+	if p.resume && f.prevRun != nil && f.prevRun.Mode == mode && f.prevRun.Provider == p.compositor {
 		e.state = f.prevRun
 		if f.prevRun.BackupDir != "" {
 			if fi, err := os.Stat(f.prevRun.BackupDir); err == nil && fi.IsDir() {
@@ -248,6 +254,7 @@ func newEngine(f *facts, p *plan, dry bool, ref, payloadOverride string) *engine
 		{"packages", i18n.T("Installing the Ryoku desktop"), stepPackages},
 		{"drivers", i18n.T("Setting up GPU drivers"), stepDrivers},
 		{"build", i18n.T("Building the Ryoku desktop from source"), stepBuild},
+		{"package-migration", i18n.T("Retiring the previous source deployment"), stepPackageMigration},
 		{"session", i18n.T("Wiring the login session (SDDM, network)"), stepSession},
 		{"configs", i18n.T("Laying down your Ryoku configs"), stepConfigs},
 		{"aur", i18n.T("Building the AUR extras"), stepAUR},
@@ -255,9 +262,12 @@ func newEngine(f *facts, p *plan, dry bool, ref, payloadOverride string) *engine
 		{"doctor", i18n.T("Converging the system (ryoku doctor)"), stepDoctor},
 		{"verify", i18n.T("Verifying the install"), stepVerify},
 	}
-	src := f.distro != nil && f.distro.fromSource
+	src := e.fromSource()
 	for _, s := range all {
-		if src && pacmanOnly[s.id] {
+		if s.id == "package-migration" && (src || e.d().id != "fedora") {
+			continue
+		}
+		if (src || e.d().id != "arch") && pacmanOnly[s.id] {
 			if s.id == "repo" && f.distro != nil && f.distro.id == "fedora" {
 				// Fedora runs stepRepo to configure COPR repositories (quickshell, matugen, awww, cursors)
 			} else {
@@ -564,7 +574,10 @@ func stepSysupgrade(e *engine) error {
 
 func stepTools(e *engine) error {
 	d := e.d()
-	pkgs := []string{"git", d.local("base-devel")}
+	pkgs := []string{"git"}
+	if e.fromSource() || d.id == "arch" {
+		pkgs = append(pkgs, d.local("base-devel"))
+	}
 	if d.id == "fedora" {
 		plugin := "dnf-plugins-core"
 		if command, err := exec.LookPath(d.installCmd[0]); err == nil {
@@ -573,7 +586,7 @@ func stepTools(e *engine) error {
 				plugin = "dnf5-plugins"
 			}
 		}
-		pkgs = append(pkgs, plugin)
+		pkgs = append(pkgs, plugin, "python3", "gnupg2")
 	}
 	return e.sudo(d.installArgs(pkgs)...)
 }
@@ -617,10 +630,10 @@ func stepPayload(e *engine) error {
 			return err
 		}
 	}
-	paths := sparsePaths
-	if e.d().fromSource {
+	paths := append(append([]string{}, sparsePaths...), "release/rpm")
+	if e.fromSource() {
 		paths = []string{
-			"ryoku", "system", "bin", "ryoku-shell-installer", "release/packages/ryoku-keyring",
+			"ryoku", "system", "bin", "ryoku-shell-installer", "release/packages/ryoku-keyring", "release/rpm",
 		}
 	}
 	if err := e.cmd(e.payload, nil, "git", append([]string{"sparse-checkout", "set"}, paths...)...); err != nil {
@@ -807,26 +820,7 @@ func stepConflicts(e *engine) error {
 
 func stepRepo(e *engine) error {
 	if e.d().id == "fedora" {
-		coprs := []struct{ name, desc string }{
-			{"sdegler/hyprland", "compositor and desktop helper tools"},
-			{"errornointernet/quickshell", "Quickshell desktop engine"},
-			{"atim/starship", "Starship prompt"},
-			{"atim/lazygit", "lazygit"},
-			{"lihaohong/yazi", "yazi"},
-		}
-		for _, c := range coprs {
-			if e.dry {
-				e.say("DRYRUN: dnf copr enable -y " + c.name)
-				continue
-			}
-			e.say("enabling " + c.desc + " COPR (" + c.name + ")")
-			if err := e.sudo(e.d().installCmd[0], "-y", "copr", "enable", c.name); err != nil {
-				return fmt.Errorf("enable required COPR %s: %w", c.name, err)
-			} else {
-				e.say("enabled " + c.desc + " COPR (" + c.name + ")")
-			}
-		}
-		return nil
+		return stepFedoraRepo(e)
 	}
 
 	// on a box that already has ryoku-keyring, the keyring files under
@@ -922,7 +916,7 @@ func (e *engine) asusAura() bool {
 // live compositor.
 func (e *engine) providerAnswers() bool {
 	binary := "ryoku-wm-" + e.p.compositor
-	if e.d().fromSource {
+	if e.fromSource() {
 		binary = filepath.Join(e.f.homeDir, ".local/bin", binary)
 	}
 	return exec.Command(binary, "caps").Run() == nil
@@ -938,13 +932,15 @@ func stepPackages(e *engine) error {
 		e.say(i18n.T("DRYRUN: payload not cloned; would read system/packages/base.packages"))
 	}
 	var pkgs []string
-	if d.fromSource {
+	if e.fromSource() {
 		// no [ryoku] repository here: the desktop is built from the payload, so
 		// install its dependencies plus the toolchain that builds it.
 		pkgs, err = e.sourceDependencies(base)
 		if err != nil {
 			return err
 		}
+	} else if d.id == "fedora" {
+		pkgs = []string{"ryoku-desktop", "ryoku-desktop-" + e.p.compositor}
 	} else {
 		pkgs = append(append([]string{}, ryokuPkgs...), base...)
 		// name the chosen variant so pacman installs it directly instead of
@@ -1262,7 +1258,7 @@ EOF`); err != nil {
 }
 
 func stepConfigs(e *engine) error {
-	if !e.d().fromSource {
+	if !e.fromSource() {
 		ryoku := e.ryokuBin()
 		if !e.dry && ryoku == "" {
 			return errors.New(i18n.T("the ryoku CLI is missing; the package step did not finish"))
@@ -1460,6 +1456,9 @@ func (e *engine) installDesktopExtras() {
 	if e.dry || e.f == nil || e.f.homeDir == "" {
 		return
 	}
+	if e.d().id == "fedora" && (!e.fromSource() || e.d().installedPkg("ryoku-extras")) {
+		return
+	}
 	if runtime.GOARCH != "amd64" {
 		e.say("desktop extras require x86_64")
 		return
@@ -1565,10 +1564,16 @@ func stepVerify(e *engine) error {
 			e.say(gBad + " " + what)
 		}
 	}
-	if e.d().fromSource {
+	if e.fromSource() {
 		check(e.ryokuBin() != "", i18n.T("ryoku CLI built and installed"))
 		_, err := os.Stat(filepath.Join(e.f.homeDir, ".local/bin/ryoku-shell"))
 		check(err == nil, i18n.T("ryoku-shell daemon built"))
+	} else if e.d().id == "fedora" {
+		conf, _ := os.ReadFile("/etc/yum.repos.d/ryoku.repo")
+		check(strings.Contains(string(conf), "[ryoku]"), "[ryoku] RPM repository configured")
+		check(e.d().installedPkg("ryoku-desktop"), "ryoku-desktop RPM installed")
+		check(e.d().installedPkg("ryoku-desktop-"+e.p.compositor), "selected provider RPM installed")
+		check(pathExists("/usr/bin/ryoku"), "packaged ryoku CLI installed")
 	} else {
 		conf, _ := os.ReadFile("/etc/pacman.conf")
 		check(strings.Contains(string(conf), "[ryoku]"), i18n.T("[ryoku] repository in /etc/pacman.conf"))

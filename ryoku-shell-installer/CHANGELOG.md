@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+- Fedora can install released desktop RPMs with DNF while explicit source and
+  local-payload installs keep their checkout builds. Repository setup shares
+  its dependency list with CI and requires a release URL and trusted key
+  fingerprints. Package mode skips direct extras downloads. Mode/provider
+  changes do not reuse source-install resume state, and conversion preserves
+  edited or untracked source artifacts by stopping before conflict removal.
+
 ### Added
 - **Fedora Linux support.** The standalone shell installer supports Fedora
   and mutable downstream distributions via DNF and native

@@ -276,7 +276,9 @@ func (e *engine) d() *distro {
 func (e *engine) ryokuBin() string {
 	cands := []string{"/usr/bin/ryoku"}
 	if e.f != nil && e.f.homeDir != "" {
-		cands = append(cands, filepath.Join(e.f.homeDir, ".local", "bin", "ryoku"))
+		if e.fromSource() {
+			cands = append([]string{filepath.Join(e.f.homeDir, ".local", "bin", "ryoku")}, cands...)
+		}
 	}
 	for _, c := range cands {
 		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {

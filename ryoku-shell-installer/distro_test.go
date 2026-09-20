@@ -75,7 +75,7 @@ func TestStepsPerDistro(t *testing.T) {
 	}
 
 	fed := strings.Join(ids(&facts{distro: fedoraLinux}), " ")
-	wantFed := "sysupgrade tools payload backup repo conflicts packages build session configs shell doctor verify"
+	wantFed := "sysupgrade tools payload backup repo conflicts packages package-migration session configs shell doctor verify"
 	if fed != wantFed {
 		t.Errorf("fedora steps = %q, want %q", fed, wantFed)
 	}

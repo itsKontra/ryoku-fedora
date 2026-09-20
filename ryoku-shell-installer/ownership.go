@@ -151,7 +151,7 @@ func recordArtifacts(home string, before map[string]artifact) error {
 	return writeOwnership(home, entries)
 }
 func (e *engine) runOwnedStep(step estep) error {
-	if e.dry || !e.d().fromSource {
+	if e.dry || !e.fromSource() {
 		return step.fn(e)
 	}
 	// A corrupt receipt must fail before anything can overwrite the originals.

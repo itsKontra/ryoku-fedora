@@ -778,7 +778,11 @@ func main() {
 	compositor := flag.String("compositor", "", i18n.T("window manager to install: hyprland or niri (default hyprland)"))
 	flag.StringVar(&repoURL, "repo", envOr("RYOKU_SHELL_REPO", repoURL), i18n.T("git repository URL for the installer payload"))
 	dependencyList := flag.Bool("dependency-list", false, "print host source dependencies without installing")
+	flag.StringVar(&installMode, "install-mode", envOr("RYOKU_INSTALL_MODE", "auto"), i18n.T("installation mode: auto, packages, or source (Fedora)"))
 	flag.Parse()
+	if installMode != "auto" && installMode != "packages" && installMode != "source" {
+		die(i18n.T("install-mode must be auto, packages, or source"))
+	}
 	if strings.HasPrefix(repoURL, "-") || strings.ContainsAny(repoURL, "\r\n") {
 		die("invalid repository URL")
 	}
@@ -824,6 +828,15 @@ func main() {
 	// pass the pacman check but every session/service step would fail.
 	if !systemdBooted() {
 		die(i18n.T("this system does not boot with systemd (Artix or another init detected); Ryoku needs systemd and cannot install here"))
+	}
+
+	if !*uninstall && activeDistro.id == "fedora" && !sourceMode(activeDistro, installMode, *payload, *ref) {
+		if _, _, _, err := fedoraRepositoryConfig(); err != nil {
+			die(err.Error())
+		}
+		if out("rpm", "-E", "%fedora") != "44" {
+			die(i18n.T("packaged Fedora installs currently support Fedora 44 x86_64"))
+		}
 	}
 
 	if !*dry {

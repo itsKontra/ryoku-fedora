@@ -7,6 +7,10 @@
   publishing integration is tracked in fork issue #4.
 
 ### Added
+- Fedora COPR publishing prepares self-contained SRPMs, gates submission on
+  clean Mock builds and installs, verifies the resulting COPR signatures, and
+  gates channel promotion on installation of those same RPMs. The HTTPS release
+  base is a required variable; publisher setup is documented in `rpm/README.md`.
 - **`ryoku-desktop` ships the `ryoku-gpu-trim` initramfs hook.**
   `/usr/lib/initcpio/install/ryoku-gpu-trim`, from
   `system/boot/mkinitcpio/install/`. The HOOKS drop-in names it and mkinitcpio

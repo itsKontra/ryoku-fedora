@@ -71,7 +71,7 @@ main() {
   if [[ $ryoku_family == debian ]]; then
     say "Debian detected: the desktop is built from source, which takes a few minutes"
   elif [[ $ryoku_family == fedora ]]; then
-    say "Fedora detected: the desktop is built from source, which takes a few minutes"
+    say "Fedora detected: released packages are the default; --install-mode=source builds a checkout"
   fi
 
   local work

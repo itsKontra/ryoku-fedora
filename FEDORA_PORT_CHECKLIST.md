@@ -215,6 +215,13 @@ The implementation follow-up below records subsequent disposable-container tests
 
 ### Implementation follow-up (2026-09-19)
 
+The COPR implementation and additional Fedora 44 validation from 2026-09-20
+are recorded in [the issue #4 plan](docs/fedora-copr-plan.md).
+All 11 SRPMs built in clean Mock roots, and container installs passed across
+both providers and DNF generations, including tests preserving package
+signatures. External publication, graphical sessions and SELinux acceptance
+remain pending.
+
 The review fixes are implemented in this working tree. Completion here refers
 to code and automated checks, not approval to distribute the Fedora port.
 FED-56 remains a release gate until the graphical, SELinux and hardware smoke

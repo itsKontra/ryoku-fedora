@@ -2,6 +2,16 @@
 
 Install the Ryoku desktop on an existing machine, without the ISO.
 
+Mutable Fedora 44 x86_64 supports `--install-mode=packages` through the signed
+RPM channel. Set the required `RYOKU_RPM_BASE_URL`, `RYOKU_COPR_FINGERPRINT`,
+and `RYOKU_RPM_SIGNING_KEY` deployment values first; see
+[Fedora delivery](../release/rpm/README.md). No public URL is assumed.
+Default `--install-mode=auto` selects packages on Fedora unless a local payload
+or custom repository/ref was selected. Use `--install-mode=source` to keep compiling and
+deploying the checkout. Packaged installs use DNF for desktop binaries and
+extras, and preserve locally edited source artifacts by refusing an unsafe
+conversion. An interrupted install resumes only with the same mode/provider.
+
 Arch-based hosts get the signed `[ryoku]` packages. Debian-based hosts have no
 `[ryoku]` repository, so the desktop is built from the cloned payload with
 `ryoku/shell/deploy.sh`: dependencies come from apt, and the Go programs, QML
