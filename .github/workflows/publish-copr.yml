@@ -21,7 +21,9 @@ jobs:
     environment: fedora-publish
     container: fedora:44
     steps:
-      - run: dnf -y install git python3-copr gnupg2 rpm rpm-sign createrepo_c curl
+      - run: |
+          dnf -y install git python3-copr gnupg2 rpm rpm-sign createrepo_c curl
+          git config --global --add safe.directory '*'
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -68,7 +70,9 @@ jobs:
         dnf: [dnf, dnf4]
     container: fedora:44
     steps:
-      - run: dnf -y install git python3-dnf
+      - run: |
+          dnf -y install git python3-dnf
+          git config --global --add safe.directory '*'
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
@@ -92,7 +96,9 @@ jobs:
     environment: fedora-publish
     container: fedora:44
     steps:
-      - run: dnf -y install git python3-copr
+      - run: |
+          dnf -y install git python3-copr
+          git config --global --add safe.directory '*'
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:

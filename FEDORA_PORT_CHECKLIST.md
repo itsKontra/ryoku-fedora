@@ -29,7 +29,7 @@ The implementation follow-up below records subsequent disposable-container tests
   Evidence: [engine.go:880](ryoku-shell-installer/engine.go#L880),
   [engine.go:930](ryoku-shell-installer/engine.go#L930),
   [distro.go:122](ryoku-shell-installer/distro.go#L122),
-  [fedora-base.packages:45](system/packages/fedora-base.packages#L45).
+  `fedora-base.packages:45`.
   Verify both compositor choices on a Fedora image without either preinstalled,
   including portal, authentication-agent, session-file and renderer checks.
 
@@ -41,7 +41,7 @@ The implementation follow-up below records subsequent disposable-container tests
   repository builder, which stops on the first failed spec.
   Evidence: [ryogami.spec:14](release/rpm/ryogami.spec#L14),
   [ryoku-shell.spec:31](release/rpm/ryoku-shell.spec#L31),
-  [ryotunes.spec:19](release/rpm/ryotunes.spec#L19),
+  `ryotunes.spec:19`,
   [build-rpm-repo.sh:22](release/rpm/build-rpm-repo.sh#L22).
   Verify all specs in clean Fedora build roots, then run the whole builder.
 
@@ -731,7 +731,7 @@ builds, Fedora transactions, graphical login and hardware tests were not run.
   - Added fallback package count resolution in `ryoku-sysinfo` using `rpm -qa --nodigest --nosignature | wc -l` and `dpkg-query` when `pacman` is absent.
 
 #### FED-25: Stash Package Installer Architecture
-- **Files**: [`ryoku/hyprland/scripts/stash-install.sh`](ryoku/hyprland/scripts/stash-install.sh#L40-L360)
+- **Files**: [`ryoku/shell/scripts/stash-install.sh`](ryoku/shell/scripts/stash-install.sh#L40-L360)
 - **Severity**: High
 - **Description**:
   - `.rpm` files are unpacked into `~/.local/share/ryoku-apps` using `bsdtar` instead of being installed natively via the system package manager.

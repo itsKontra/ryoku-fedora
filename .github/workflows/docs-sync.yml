@@ -13,6 +13,7 @@ on:
       - '.github/workflows/docs-sync.yml'
   push:
     branches:
+      - main-fedora
       - main
     paths:
       - '**/*.md'

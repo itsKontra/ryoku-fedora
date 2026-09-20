@@ -49,9 +49,9 @@ official_repo() {
 }
 # shipped_app: the other delivery path. An application a user may delete is not a
 # hard depend (pacman would put it back on the next upgrade); `ryoku doctor`
-# delivers it once and then honours the removal. Membership is the doctor's own
+# delivers it once and then honours the removal. Membership is the manifest's own
 # table, so a name cannot fall out of delivery and still pass this gate.
-shipped_apps_go="$ROOT/ryoku/cli/internal/doctor/reconcile_shipped_apps.go"
+shipped_apps_go="$ROOT/ryoku/cli/internal/ryokumanifest/manifest.go"
 shipped_app() {
   grep -qE "^[[:space:]]*\{\"$1\", " "$shipped_apps_go"
 }

@@ -5,6 +5,7 @@ out=$(realpath -m "${RYOKU_SRPM_OUT:-$root/release/rpm/srpms}")
 channel=${RYOKU_CHANNEL:-testing}
 die() { echo "prepare-srpms: $*" >&2; exit 1; }
 for tool in rpmbuild python3 tar gzip go git; do command -v "$tool" >/dev/null || die "missing $tool"; done
+git config --global --add safe.directory "$root" 2>/dev/null || true
 [[ ${RYOKU_RPM_REVISION:-1} =~ ^[1-9][0-9]*$ ]] || die 'RPM revision must be a positive integer'
 if [[ ${RYOKU_RPM_LOCAL:-0} != 1 ]]; then
   [[ -z $(git -C "$root" status --porcelain) ]] || die 'release sources require a clean checkout; use RYOKU_RPM_LOCAL=1 for local tests'

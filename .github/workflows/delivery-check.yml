@@ -8,8 +8,9 @@ name: Delivery check
 on:
   push:
     branches:
-      - unstable-dev
+      - main-fedora
       - main
+      - unstable-dev
   pull_request:
   workflow_dispatch:
 

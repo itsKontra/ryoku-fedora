@@ -17,6 +17,7 @@ on:
       - '.woke.yml'
   push:
     branches:
+      - main-fedora
       - main
     paths:
       - '**/*.bash'
