@@ -36,25 +36,66 @@ def wait_for_build(client, build_id, chroot, deadline, sleep=time.sleep):
     raise TimeoutError(f'COPR build {build_id} timed out; repository was not published')
 
 
-def collect(client, build_id, chroot, out):
-    urls = client.build_chroot_proxy.get_results_urls(build_id, chroot)
-    if not urls:
-        raise RuntimeError(f'COPR build {build_id} produced no RPMs')
+def collect(client, build_id, chroot, out, project_info=None):
+    build = client.build_proxy.get(build_id)
+    built_data = client.build_proxy.get_built_packages(build_id)
+    packages = built_data.get(chroot, {}).get('packages', [])
+    binary_packages = [p for p in packages if p.get('arch') != 'src']
+    if not binary_packages:
+        raise RuntimeError(f'COPR build {build_id} produced no binary RPMs in {chroot}')
+
+    owner = build['ownername']
+    project = build['projectname']
+    repo_url = build.get('repo_url') or f'https://download.copr.fedorainfracloud.org/results/{owner}/{project}'
+
+    if project_info is None:
+        project_info = client.project_proxy.get(owner, project)
+
+    is_devel = bool(project_info.get('devel_mode'))
+    repo_chroot = f'{chroot}-devel' if is_devel else chroot
+    repo_base = f"{repo_url.rstrip('/')}/{repo_chroot}"
+
+    chroot_info = client.build_chroot_proxy.get(build_id, chroot)
+    result_url = chroot_info.get('result_url', '').rstrip('/')
+
     checksums = {}
-    for url in urls:
-        parsed = urllib.parse.urlparse(url)
-        name = Path(parsed.path).name
-        if parsed.scheme != 'https' or not name.endswith('.rpm') or name.endswith('.src.rpm'):
-            raise ValueError(f'unexpected COPR result URL: {url}')
-        target = out / name
+    for p in binary_packages:
+        name = p['name']
+        filename = f"{name}-{p['version']}-{p['release']}.{p['arch']}.rpm"
+        initial = name[0].lower()
+
+        candidates = [
+            f"{repo_base}/Packages/{initial}/{filename}",
+            f"{result_url}/{filename}",
+            f"{repo_base}/{filename}",
+        ]
+        target = out / filename
         if target.exists():
-            raise ValueError(f'duplicate COPR output: {name}')
-        with urllib.request.urlopen(url, timeout=120) as response, target.open('wb') as stream:
-            if urllib.parse.urlsplit(response.url).scheme != 'https':
-                raise ValueError('COPR result redirected outside HTTPS')
-            while chunk := response.read(1024 * 1024):
-                stream.write(chunk)
-        checksums[name] = hashlib.sha256(target.read_bytes()).hexdigest()
+            raise ValueError(f'duplicate COPR output: {filename}')
+
+        downloaded = False
+        last_error = None
+        for url in candidates:
+            if not url or not url.startswith('https://'):
+                continue
+            try:
+                with urllib.request.urlopen(url, timeout=120) as response, target.open('wb') as stream:
+                    if urllib.parse.urlsplit(response.url).scheme != 'https':
+                        raise ValueError('COPR result redirected outside HTTPS')
+                    while chunk := response.read(1024 * 1024):
+                        stream.write(chunk)
+                downloaded = True
+                break
+            except Exception as exc:
+                last_error = exc
+                if target.exists():
+                    target.unlink()
+
+        if not downloaded:
+            raise RuntimeError(f'failed to download {filename} from COPR: {last_error}')
+
+        checksums[filename] = hashlib.sha256(target.read_bytes()).hexdigest()
+
     return checksums
 
 
@@ -94,7 +135,7 @@ def main():
                 stream.write(f'- [{name}]({url})\n')
     for build in builds:
         wait_for_build(client, build['id'], args.chroot, deadline)
-        metadata['rpms'].update(collect(client, build['id'], args.chroot, args.out))
+        metadata['rpms'].update(collect(client, build['id'], args.chroot, args.out, project_info=project_info))
         report.write_text(json.dumps(metadata, indent=2) + '\n')
 
 

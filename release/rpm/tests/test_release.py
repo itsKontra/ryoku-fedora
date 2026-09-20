@@ -59,6 +59,57 @@ class CoprBuilds(unittest.TestCase):
             with self.assertRaises(ValueError):
                 copr.verify_sources(root)
 
+    def test_collect_downloads_binary_rpms_and_computes_checksums(self):
+        import hashlib
+        client = Mock()
+        client.build_proxy.get.return_value = {
+            'ownername': 'itskontra',
+            'projectname': 'ryoku',
+            'repo_url': 'https://download.copr.fedorainfracloud.org/results/itskontra/ryoku',
+        }
+        client.build_proxy.get_built_packages.return_value = {
+            'fedora-44-x86_64': {
+                'packages': [
+                    {'name': 'pkg', 'version': '1.0', 'release': '1.fc44', 'arch': 'src'},
+                    {'name': 'pkg', 'version': '1.0', 'release': '1.fc44', 'arch': 'x86_64'},
+                ]
+            }
+        }
+        client.build_chroot_proxy.get.return_value = {
+            'result_url': 'https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64/1-pkg'
+        }
+        project_info = {'devel_mode': True}
+
+        rpm_bytes = b'fake-binary-rpm-content'
+        expected_hash = hashlib.sha256(rpm_bytes).hexdigest()
+
+        response = Mock()
+        response.url = 'https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64-devel/Packages/p/pkg-1.0-1.fc44.x86_64.rpm'
+        response.read.side_effect = [rpm_bytes, b'']
+
+        with tempfile.TemporaryDirectory() as out_dir:
+            out_path = Path(out_dir)
+            with patch.object(copr.urllib.request, 'urlopen') as urlopen_mock:
+                urlopen_mock.return_value.__enter__.return_value = response
+                csums = copr.collect(client, 1, 'fedora-44-x86_64', out_path, project_info=project_info)
+
+            self.assertEqual(csums, {'pkg-1.0-1.fc44.x86_64.rpm': expected_hash})
+            self.assertEqual((out_path / 'pkg-1.0-1.fc44.x86_64.rpm').read_bytes(), rpm_bytes)
+
+    def test_collect_no_binary_rpms_raises(self):
+        client = Mock()
+        client.build_proxy.get.return_value = {'ownername': 'itskontra', 'projectname': 'ryoku'}
+        client.build_proxy.get_built_packages.return_value = {
+            'fedora-44-x86_64': {
+                'packages': [
+                    {'name': 'pkg', 'version': '1.0', 'release': '1.fc44', 'arch': 'src'},
+                ]
+            }
+        }
+        with tempfile.TemporaryDirectory() as out_dir:
+            with self.assertRaises(RuntimeError):
+                copr.collect(client, 1, 'fedora-44-x86_64', Path(out_dir))
+
 
 class CleanBuildGate(unittest.TestCase):
     def test_build_failure_retains_logs_and_fails_the_gate(self):
