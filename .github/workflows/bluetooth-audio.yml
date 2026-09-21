@@ -45,6 +45,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Cache APT packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ github.workflow }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-apt-${{ github.workflow }}-
+
       - name: Install jq (the codec memory is JSON)
         run: sudo apt-get update && sudo apt-get install -y jq
 
