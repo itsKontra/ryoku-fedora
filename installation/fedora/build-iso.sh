@@ -25,6 +25,8 @@
 #   --stage-only             Prepare staging tree and provenance without building the final ISO
 #   --skip-key-verify        Skip GPG key fingerprint checks
 #   --skip-closure-verify    Skip isolated installroot closure resolution check
+#   --cmdline <string>       Extra kernel cmdline arguments to append
+#   --fast-boot              Set Grub default=0 and timeout=5 for faster/direct boot
 #   -h, --help               Show this help message
 set -euo pipefail
 
@@ -44,6 +46,8 @@ ISO_NAME=""
 STAGE_ONLY=0
 SKIP_KEY_VERIFY=0
 SKIP_CLOSURE_VERIFY=0
+CMDLINE=""
+FAST_BOOT=0
 
 log() { printf '\033[1;35m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m:: WARNING:\033[0m %s\n' "$*" >&2; }
@@ -76,8 +80,12 @@ while [[ $# -gt 0 ]]; do
       SKIP_KEY_VERIFY=1; shift ;;
     --skip-closure-verify)
       SKIP_CLOSURE_VERIFY=1; shift ;;
+    --cmdline)
+      CMDLINE="$2"; shift 2 ;;
+    --fast-boot)
+      FAST_BOOT=1; shift ;;
     -h|--help)
-      grep '^#' "$0" | cut -c 3- | head -n 25
+      grep '^#' "$0" | cut -c 3- | head -n 30
       exit 0 ;;
     *)
       die "Unknown option: $1" ;;
@@ -245,14 +253,25 @@ if [[ -n "$BOOT_ISO" && -f "$BOOT_ISO" ]]; then
   if command -v mkksiso >/dev/null 2>&1; then
     log "Using mkksiso to remaster $BOOT_ISO into $FINAL_ISO..."
     rm -f "$FINAL_ISO"
-    mkksiso \
-      --ks "$ISO_STAGE/ryoku.ks" \
-      --add "$ISO_STAGE/repo:/repo" \
-      --add "$ISO_STAGE/installation:/installation" \
-      --volid "$VOLID" \
-      --skip-mkefiboot \
-      "$BOOT_ISO" \
-      "$FINAL_ISO"
+    mkksiso_args=(
+      --ks "$ISO_STAGE/ryoku.ks"
+      --add "$ISO_STAGE/installation"
+      --volid "$VOLID"
+      --skip-mkefiboot
+    )
+    if [[ -d "$ISO_STAGE/repo" && $(ls -A "$ISO_STAGE/repo" 2>/dev/null) ]]; then
+      mkksiso_args+=(--add "$ISO_STAGE/repo")
+    fi
+    if [[ -n "$CMDLINE" ]]; then
+      mkksiso_args+=(-c "$CMDLINE")
+    fi
+    if [[ $FAST_BOOT -eq 1 ]]; then
+      mkksiso_args+=(
+        -R 'set default="1"' 'set default="0"'
+        -R 'set timeout=60' 'set timeout=5'
+      )
+    fi
+    mkksiso "${mkksiso_args[@]}" "$BOOT_ISO" "$FINAL_ISO"
   elif command -v xorriso >/dev/null 2>&1; then
     log "Extracting $BOOT_ISO and remastering with xorriso..."
     WORK_EXTRACT="$WORK_DIR/extracted_iso"
