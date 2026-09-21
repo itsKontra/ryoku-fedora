@@ -64,7 +64,7 @@ jobs:
       - name: Test ISO builder and kickstart recipe without network access
         run: |
           set -o pipefail
-          podman run --rm --network=none -e RYOKU_TEST_DISPOSABLE=1 \
+          podman run --rm --network=none --cap-add=SYS_ADMIN --device /dev/loop-control -e RYOKU_TEST_DISPOSABLE=1 \
             -v "$PWD:/src:ro" ryoku-firstboot-test \
             bash /src/installation/tests/fedora-iso.sh \
             2>&1 | tee /tmp/firstboot-evidence/iso.log
