@@ -28,6 +28,7 @@
 #   --skip-closure-verify    Skip isolated installroot closure resolution check
 #   --cmdline <string>       Extra kernel cmdline arguments to append
 #   --fast-boot              Set Grub default=0 and timeout=5 for faster/direct boot
+#   --skip-mkefiboot         Skip rebuilding the EFI boot image (safe when remastering an existing ISO)
 #   -h, --help               Show this help message
 set -euo pipefail
 
@@ -50,6 +51,7 @@ SKIP_CLOSURE_VERIFY=0
 VERIFY_NETINSTALL=0
 CMDLINE=""
 FAST_BOOT=0
+SKIP_MKEFIBOOT=0
 
 log() { printf '\033[1;35m::\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m:: WARNING:\033[0m %s\n' "$*" >&2; }
@@ -88,6 +90,8 @@ while [[ $# -gt 0 ]]; do
       CMDLINE="$2"; shift 2 ;;
     --fast-boot)
       FAST_BOOT=1; shift ;;
+    --skip-mkefiboot)
+      SKIP_MKEFIBOOT=1; shift ;;
     -h|--help)
       grep '^#' "$0" | cut -c 3- | head -n 30
       exit 0 ;;
@@ -133,7 +137,9 @@ command -v python3 >/dev/null 2>&1 || die "python3 is required but not installed
 if [[ $STAGE_ONLY -eq 0 ]]; then
   command -v mkksiso >/dev/null 2>&1 || die "mkksiso (lorax) is required to preserve ISO boot metadata"
   command -v xorriso >/dev/null 2>&1 || die "xorriso is required to verify ISO boot metadata"
-  [[ $EUID -eq 0 ]] || die "ISO composition requires root to update the embedded EFI boot image"
+  if [[ $SKIP_MKEFIBOOT -eq 0 ]]; then
+    [[ $EUID -eq 0 ]] || die "ISO composition requires root to update the embedded EFI boot image (use --skip-mkefiboot to skip)"
+  fi
   if [[ -n "$BOOT_ISO" ]]; then
     [[ -f "$BOOT_ISO" ]] || die "Boot ISO not found: $BOOT_ISO"
   else
@@ -243,6 +249,9 @@ fi
 if [[ -d "$REPO_ROOT/ryoku/lockscreen/qylock" ]]; then
   mkdir -p "$ISO_STAGE/ryoku/lockscreen"
   cp -a "$REPO_ROOT/ryoku/lockscreen/qylock" "$ISO_STAGE/ryoku/lockscreen/"
+  # Remove absolute symlinks (e.g. Qt imports pointing to /usr/lib/qt6/...)
+  # that would be dangling on the ISO and crash mkksiso's CheckBigFiles.
+  find "$ISO_STAGE/ryoku/lockscreen/qylock" -type l ! -exec test -e {} \; -delete 2>/dev/null || true
 fi
 if [[ -f "$REPO_ROOT/ryoku/shell/scripts/ryoku-install-extra" ]]; then
   mkdir -p "$ISO_STAGE/ryoku/shell/scripts"
@@ -333,6 +342,9 @@ if [[ $FAST_BOOT -eq 1 ]]; then
     -R 'set default="1"' 'set default="0"'
     -R 'set timeout=60' 'set timeout=5'
   )
+fi
+if [[ $SKIP_MKEFIBOOT -eq 1 ]]; then
+  mkksiso_args+=(--skip-mkefiboot)
 fi
 [[ "$BOOT_ISO" -ef "$FINAL_ISO" ]] && die "Source and output ISO must be different files"
 rm -f "$FINAL_ISO"
