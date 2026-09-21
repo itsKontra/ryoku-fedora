@@ -137,8 +137,7 @@ nautilus-python
 flatpak
 libnotify
 fuzzel
-gpu-screen-recorder
-songrec
+wf-recorder
 fira-code-fonts
 source-foundry-hack-fonts
 gamemode
