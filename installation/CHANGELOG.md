@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Fixed
+- Fedora ISO selects a named Ryoku Desktop environment, preserves accounts and
+  regional settings chosen in Anaconda, and validates the complete network
+  package selection before compose. Correct missing dependency repositories and
+  package names, and use the Fedora multimedia stack required by Ryoku RPMs.
 - **A second disk shows its partitions and its free space.** The alongside probe
   returned before reporting anything when the target disk was not GPT or had no
   EFI System Partition, and the free-region math read `firstlba`/`lastlba`, which

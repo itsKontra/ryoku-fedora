@@ -5,7 +5,7 @@
 graphical
 
 # Keyboard, language, and timezone defaults during installation
-# (Target settings are armed and prompted on tty1 at first boot via ryoku-firstboot)
+# These defaults remain editable in Anaconda and are preserved on the target.
 keyboard us
 lang en_US.UTF-8
 timezone UTC --utc
@@ -19,11 +19,14 @@ repo --name="FedoraUpdates" --metalink="https://mirrors.fedoraproject.org/metali
 repo --name="RyokuCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64/" --cost=20
 repo --name="StarshipCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/atim/starship/fedora-44-x86_64/" --cost=20
 repo --name="QuickshellCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/errornointernet/quickshell/fedora-44-x86_64/" --cost=20
+repo --name="HyprlandCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/sdegler/hyprland/fedora-44-x86_64/" --cost=20
+repo --name="LazygitCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/atim/lazygit/fedora-44-x86_64/" --cost=20
+repo --name="YaziCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/lihaohong/yazi/fedora-44-x86_64/" --cost=20
 repo --name="RPMFusionFree" --metalink="https://mirrors.rpmfusion.org/metalink?repo=free-fedora-44&arch=x86_64" --cost=20
 repo --name="RPMFusionNonfree" --metalink="https://mirrors.rpmfusion.org/metalink?repo=nonfree-fedora-44&arch=x86_64" --cost=20
 
 # Repository configuration: Local installation media with highest priority (lowest cost)
-repo --name="RyokuMedia" --baseurl="file:///run/install/repo" --cost=10
+repo --name="RyokuMedia" --baseurl="file:///run/install/repo/repo" --cost=10
 
 # Target safety: Require explicit target disk selection and user confirmation
 # Unattended whole-disk wiping is strictly forbidden
@@ -44,108 +47,16 @@ btrfs /home --subvol --name=home btrfs.01
 bootloader --timeout=1
 
 # Accounts and authentication
-# Passwords are not embedded; accounts are locked until interactive first-boot setup
+# Create your administrator account and password in Anaconda User Creation.
 rootpw --lock
-user --name=ryoku --homedir=/home/ryoku --shell=/usr/bin/fish --groups=wheel --lock
 
 # System services
 services --enabled="sddm,NetworkManager,firewalld,bluetooth"
 
 # Package payload referencing the local media repository
 %packages --excludedocs
-@core
-kernel
-kernel-core
-kernel-modules
-dracut
-dracut-config-generic
-grub2-efi-x64
-grub2-common
-shim-x64
-efibootmgr
-btrfs-progs
-dosfstools
-e2fsprogs
-cryptsetup
-selinux-policy-targeted
-setfiles
-policycoreutils
-policycoreutils-python-utils
-shadow-utils
-sudo
-authselect
-glibc
-glibc-all-langpacks
-rootfiles
-util-linux
-systemd
-systemd-udev
-systemd-resolved
-systemd-networkd
-kbd
-kbd-misc
-tzdata
-dnf5
-rpm
-tar
-gzip
-iproute
-iputils
-chrony
-mesa-dri-drivers
-mesa-vulkan-drivers
-vulkan-loader
-xorg-x11-server-Xwayland
-mesa-va-drivers
-mesa-vdpau-drivers
-libva-utils
-linux-firmware
-amd-ucode-firmware
-microcode_ctl
-chromium
-tmux
-neovim
-vim-enhanced
-bat
-lua
-python3
-alacritty
-fish
-fzf
-less
-grep
-ripgrep
-nano
-zsh
-bash
-firewalld
-NetworkManager
-NetworkManager-wifi
-bluez
-pipewire
-wireplumber
-sddm
-ffmpeg
-ffmpeg-libs
-libavdevice
-rpmfusion-free-release
-rpmfusion-nonfree-release
-ryoku-desktop
-ryoku-desktop-niri
-niri
-xwayland-satellite
-quickshell
+@^ryoku-desktop-environment
 
-# Exclude Fedora ffmpeg-free libraries so RPM Fusion full stack is guaranteed
--ffmpeg-free
--libavcodec-free
--libavdevice-free
--libavfilter-free
--libavformat-free
--libavutil-free
--libpostproc-free
--libswresample-free
--libswscale-free
 %end
 
 # Post-installation execution: Run the offline desktop provisioner
@@ -170,7 +81,7 @@ fi
 
 if [ -n "$PROVISION_SCRIPT" ] && [ -f "$PROVISION_SCRIPT" ]; then
     echo "Found provisioner at: $PROVISION_SCRIPT"
-    python3 "$PROVISION_SCRIPT" /mnt/sysroot
+    python3 "$PROVISION_SCRIPT" /mnt/sysroot --anaconda
 else
     echo "ERROR: Could not locate provision-target.py on installation media" >&2
     exit 1

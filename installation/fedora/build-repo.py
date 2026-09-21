@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 
 PINNED_KEYS = {
     "RPM-GPG-KEY-fedora-44-primary": "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6",
@@ -249,12 +250,40 @@ def generate_manifest(repo_dir, output_path=None):
     return manifest
 
 
-def create_repo(repo_dir, createrepo_bin="createrepo_c"):
+def write_comps(packages, output_path):
+    """Describe the installer payload as one mandatory desktop group."""
+    comps = ET.Element("comps")
+    group = ET.SubElement(comps, "group")
+    for key, value in (("id", "ryoku-desktop"), ("name", "Ryoku Desktop"),
+                       ("description", "The complete Ryoku desktop and system utilities."),
+                       ("default", "true"), ("uservisible", "false")):
+        ET.SubElement(group, key).text = value
+    package_list = ET.SubElement(group, "packagelist")
+    for package in packages:
+        ET.SubElement(package_list, "packagereq", type="mandatory").text = package
+    environment = ET.SubElement(comps, "environment")
+    for key, value in (("id", "ryoku-desktop-environment"), ("name", "Ryoku Desktop"),
+                       ("description", "Ryoku desktop with its complete application selection."),
+                       ("display_order", "1")):
+        ET.SubElement(environment, key).text = value
+    groups = ET.SubElement(environment, "grouplist")
+    for group_id in ("core", "ryoku-desktop"):
+        ET.SubElement(groups, "groupid").text = group_id
+    ET.SubElement(environment, "optionlist")
+    ET.indent(comps)
+    ET.ElementTree(comps).write(output_path, encoding="utf-8", xml_declaration=True)
+
+
+def create_repo(repo_dir, createrepo_bin="createrepo_c", packages=None):
     """Execute createrepo_c to build repodata with SHA256 checksums."""
     path = Path(repo_dir)
     if not path.is_dir():
         raise NotADirectoryError(f"Directory not found: {repo_dir}")
-    cmd = [createrepo_bin, "--checksum=sha256", str(path)]
+    comps = path / "comps.xml"
+    if packages is None:
+        packages = read_packages_list(Path(__file__).resolve().parent / "packages.list")
+    write_comps(packages, comps)
+    cmd = [createrepo_bin, "--update", "--checksum=sha256", "--groupfile", str(comps.resolve()), str(path)]
     subprocess.check_call(cmd)
 
 
@@ -343,7 +372,7 @@ def main():
 
     if args.create_repo:
         print(f"Creating repository metadata in {args.dest}...")
-        create_repo(args.dest)
+        create_repo(args.dest, packages=packages)
 
     if args.manifest:
         print(f"Generating manifest at {args.manifest}...")

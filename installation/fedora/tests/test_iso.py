@@ -58,25 +58,34 @@ class TestKickstartSpecification(unittest.TestCase):
         has_local_repo = any("repo" in line and "--cost=10" in line and "run/install/repo" in line for line in self.lines)
         self.assertTrue(has_local_repo, "Kickstart must define local media repository with --cost=10")
 
-    def test_accounts_are_locked_without_embedded_passwords(self):
-        """Accounts: ryoku and root are pre-created locked; no embedded credentials."""
-        self.assertIn("rootpw --lock", self.content, "Root password must be locked")
-        has_locked_user = any("user" in line and "--name=ryoku" in line and "--lock" in line for line in self.lines)
-        self.assertTrue(has_locked_user, "ryoku user must be created locked")
-        self.assertNotIn("--plaintext", self.content, "Kickstart must never contain plaintext passwords")
+    def test_dependency_coprs_match_packaged_installer(self):
+        dependency_file = REPO_ROOT / "release/rpm/dependency-coprs"
+        for line in dependency_file.read_text().splitlines():
+            repo = line.split("#", 1)[0].strip()
+            if repo:
+                self.assertIn(f"/results/{repo}/fedora-44-x86_64/", self.content)
 
-    def test_packages_section_and_exclusions(self):
-        """Packages payload: Contains core packages from packages.list and excludes ffmpeg-free."""
+    def test_accounts_are_collected_in_anaconda(self):
+        self.assertIn("rootpw --lock", self.lines)
+        self.assertFalse(any(line.startswith("user ") for line in self.lines))
+        self.assertIn("/mnt/sysroot --anaconda", self.content)
+        self.assertIn("keyboard us", self.lines)
+        self.assertNotIn("--plaintext", self.content)
+
+    def test_packages_section_and_multimedia(self):
+        """The environment uses the codec stack required by published Ryoku RPMs."""
         self.assertIn("%packages", self.content)
         self.assertIn("%end", self.content)
 
-        # Ensure required core packages are listed
-        for pkg in ["kernel", "btrfs-progs", "chromium", "tmux", "neovim", "fish", "firewalld", "NetworkManager", "sddm", "ffmpeg", "niri", "ryoku-desktop"]:
-            self.assertIn(pkg, self.content, f"Kickstart %packages missing required package: {pkg}")
+        self.assertIn("@^ryoku-desktop-environment", self.lines)
 
-        # Ensure ffmpeg-free packages are excluded
-        for free_lib in ["-ffmpeg-free", "-libavcodec-free", "-libavdevice-free", "-libavfilter-free", "-libavformat-free", "-libavutil-free"]:
-            self.assertIn(free_lib, self.content, f"Kickstart %packages must exclude: {free_lib}")
+        self.assertNotIn("-ffmpeg-free", self.lines)
+        packages = PACKAGES_LIST_PATH.read_text().splitlines()
+        self.assertIn("ffmpeg-free", packages)
+        self.assertNotIn("ffmpeg", packages)
+        self.assertNotIn("setfiles", packages)
+        self.assertNotIn("mesa-va-drivers", packages)
+        self.assertNotIn("mesa-vdpau-drivers", packages)
 
     def test_post_nochroot_executes_provisioner(self):
         """Post script: Executes offline desktop provisioner on /mnt/sysroot."""

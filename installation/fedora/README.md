@@ -7,14 +7,13 @@ pipeline are implemented and tested against Fedora 44.
 
 ## Offline desktop provisioner
 
-`provision-target.py TARGET_ROOT` prepares an offline, mounted Fedora 44 target
-sysroot (intended for execution from Anaconda's `%post --nochroot --erroronfail`
-section) into a complete Ryoku desktop installation before first boot:
+`provision-target.py TARGET_ROOT --anaconda` prepares the mounted Fedora 44
+sysroot from Anaconda's `%post --nochroot --erroronfail`:
 
-1. **Accounts and Sudo**: Pre-creates the `ryoku` account with home `/home/ryoku`,
-   login shell `/usr/bin/fish`, `wheel` group membership, and a locked password;
-   ensures `root` is locked. Configures `sudo` with `/etc/sudoers.d/10-ryoku-wheel`
-   (mode `0440`) requiring password authentication, and removes any `NOPASSWD` drop-ins.
+1. **Accounts and Sudo**: Uses the login accounts, home directories, passwords,
+   shells and group memberships created in Anaconda. Choose “Make this user
+   administrator” in User Creation for password-authenticated wheel sudo.
+   No fixed `ryoku` account or password is injected.
 2. **Session and Greeter Selection**:
    - Writes SDDM Wayland drop-in `/etc/sddm.conf.d/10-ryoku-wayland.conf`.
    - Writes SDDM theme and session drop-in `/etc/sddm.conf.d/99-ryoku.conf`,
@@ -25,23 +24,23 @@ section) into a complete Ryoku desktop installation before first boot:
 3. **Base System Services**: Enables `NetworkManager.service`, `firewalld.service`,
    and `bluetooth.service` offline.
 4. **Lockscreen**: Seeds the qylock in-session lockscreen bundle and `clockwork/orbital`
-   theme into `/home/ryoku`, wiring the themes link and setting theme preference.
+   theme into each login account’s home, wiring the themes link and setting theme preference.
 5. **Assets and Integration**: Seeds desktop entries, vendor MIME defaults
    (`niri-mimeapps.list` and `mimeapps.list`), wallpapers into `~/Pictures/Wallpapers`,
    decor art into `~/Pictures/ryodecors`, brand assets into `~/.local/share/ryoku/assets/brand`,
    and `.npmrc` from `/usr/share/ryoku`.
-6. **Configuration Materialization**: Runs `ryoku materialize` as user `ryoku`
-   with explicit `HOME=/home/ryoku` against the target, and ensures recursive `ryoku:ryoku`
-   ownership across `/home/ryoku`.
-7. **First-Boot Setup**: Invokes `prepare-firstboot.py` on the target sysroot.
-8. **SELinux Relabeling**: Runs `setfiles` using the target's policy across `/etc`,
-   `/var`, and `/home/ryoku`.
-
-From the future Anaconda `%post --nochroot --erroronfail` section:
+6. **Configuration Materialization**: Runs `ryoku materialize` for each login
+   account with its own `HOME`, and assigns the generated files to that account.
+7. **Installer Settings**: Preserves Anaconda's keyboard, locale and timezone;
+   does not arm console setup or clear settings on the installed target.
+8. **SELinux Relabeling**: Relabels `/etc`, `/var` and the login home directories.
 
 ```sh
-python3 /path/on/media/installation/fedora/provision-target.py /mnt/sysroot
+python3 /path/on/media/installation/fedora/provision-target.py /mnt/sysroot --anaconda
 ```
+
+Without `--anaconda`, the provisioner retains the separate console-firstboot
+workflow: it creates a locked `ryoku` account and arms the setup described below.
 
 ## First-boot component
 
@@ -164,13 +163,21 @@ Real prompt/resume, offline provisioning, offline repository, ISO compose, and U
    - Remaining disk as Btrfs with `root` and `home` subvolumes mounted at `/` and `/home`
    - Fedora zram swap policy (no disk swap partition)
 3. **Interactive Encryption**: Supports LUKS2 encryption prompted interactively without embedded secrets.
-4. **Offline Package Repository**: Registers local media at `/run/install/repo` with `--cost=10`.
-5. **Packages Payload**: Contains the complete closure from `packages.list` and excludes Fedora's `ffmpeg-free` and related subpackages to enforce the full RPM Fusion FFmpeg stack.
-6. **Offline Provisioning**: Executes `provision-target.py` on `/mnt/sysroot` during `%post --nochroot --erroronfail`.
+4. **Offline Package Repository**: Registers the staged `repo/` directory at `/run/install/repo/repo` with `--cost=10`.
+5. **Packages Payload**: Selects `@^ryoku-desktop-environment` and uses Fedora `ffmpeg-free`, as required by the published Ryoku RPMs.
+6. **Offline Provisioning**: Executes `provision-target.py --anaconda` on `/mnt/sysroot` during `%post --nochroot --erroronfail`.
+
+The generated environment is named **Ryoku Desktop**. Its required groups are
+Fedora `core` (provided by the enabled Fedora repository) and `ryoku-desktop`;
+every entry in `packages.list` is mandatory in the latter. Opening Software
+Selection and accepting Ryoku Desktop therefore keeps the manifest selection.
+Selecting another environment deliberately changes the package selection.
+Username and password are entered in User Creation; Keyboard remains editable.
+No password is shipped in the recipe.
 
 `build-iso.sh` orchestrates the compose pipeline:
 1. **Preflight and Verification**: Checks dependencies, verifies pinned GPG keys, and validates the Kickstart recipe.
-2. **Repository Staging**: Runs `createrepo_c` with SHA256 checksums, computes `manifest.json`, and verifies the offline dependency closure.
+2. **Repository Staging**: Generates `comps.xml` from `packages.list` and refreshes metadata with `createrepo_c --update --groupfile`, computes `manifest.json`, and verifies the offline dependency closure.
 3. **Payload Staging**: Stages Kickstart, local RPMs, offline provisioner, and stamped media metadata into `iso_root`.
 4. **Hybrid ISO Composition**: Produces hybrid UEFI bootable media using `mkksiso`, `xorriso`, or `lorax`.
 5. **Checksums and Provenance**: Computes the final `.sha256` checksum file and generates structured `provenance.json` recording build environment, tool versions, and git commit details.
@@ -185,7 +192,7 @@ installation, organized into categories:
 - `[drivers]`: Open graphics drivers (`mesa-dri-drivers`, `mesa-vulkan-drivers`, `vulkan-loader`, `xorg-x11-server-Xwayland`) and firmware (`linux-firmware`, `amd-ucode-firmware`, `microcode_ctl`).
 - `[utilities]`: Core utilities: `chromium`, `tmux`, `neovim`, `vim-enhanced`, `bat`, `lua`, `python3`, `alacritty`, `fish`, `fzf`, `less`, `grep`, `ripgrep`, `nano`, `zsh`, `bash`.
 - `[services]`: Base system services: `firewalld`, `NetworkManager`, `bluez`, `pipewire`, `wireplumber`, `sddm`.
-- `[multimedia]`: Full RPM Fusion FFmpeg stack (`ffmpeg`, `ffmpeg-libs`, `libavdevice`) and pinned release packages.
+- `[multimedia]`: Fedora FFmpeg (`ffmpeg-free`) and RPM Fusion release packages.
 - `[desktop]`: Ryoku desktop components (`ryoku-desktop`, `ryoku-desktop-niri`) and compositor runtime (`niri`, `xwayland-satellite`, `quickshell`).
 
 `build-repo.py` manages offline repository construction and verification:
@@ -194,7 +201,7 @@ installation, organized into categories:
    - RPM Fusion Free 2020: `E9A491A3DE247814E7E067EAE06F8ECDD651FF2E`
    - RPM Fusion Nonfree 2020: `79BDB88F9BBF73910FD4095B6A2AF96194843C65`
    - Ryoku COPR: `7575D19C9D8ECDC212702114ED1C392039749395`
-2. **FFmpeg Transaction Solving**: Excludes Fedora's `ffmpeg-free` and `libav*-free` subpackages during transaction solve, ensuring the full RPM Fusion FFmpeg stack is selected without conflicting packages or requiring `--allowerasing`.
+2. **Netinstall Transaction Solving**: `verify-netinstall.py` checks the complete environment against the configured repositories, including the Fedora FFmpeg dependencies of published Ryoku RPMs.
 3. **Repository Metadata**: Runs `createrepo_c` with SHA256 checksums to create standard RPM-MD metadata.
 4. **Manifest Generation**: Inspects all packages, computing file sizes, SHA256 digests, and NEVRA records into `manifest.json`.
 5. **Offline Closure Verification**: Validates the composed repository in an empty, isolated installroot with `--disablerepo=*` and networking disabled.
@@ -232,15 +239,13 @@ The planned installation contract is:
   against packages already installed on the build host. Preserve RPM ownership,
   signatures, modes, dependencies and target SELinux labels.
 - Include the requested applications (`chromium`, `tmux`, `neovim`, `vim`, `bat`,
-  `lua`, `python3`, `alacritty`, `ffmpeg`, `fish`, `fzf`, `less`, `grep`, `ripgrep`,
+  `lua`, `python3`, `alacritty`, `ffmpeg-free`, `fish`, `fzf`, `less`, `grep`, `ripgrep`,
   `nano`, `zsh`, and bash), base services (`firewalld`, `NetworkManager`, `bluez`),
   signed `ryoku-desktop` and `ryoku-desktop-niri`, and their runtime closure.
   Enable the firewall, NetworkManager and Bluetooth services in the target.
-- Full FFmpeg comes from RPM Fusion. Pin the Fedora 44 RPM Fusion release
-  packages and verified signing fingerprints. Explicitly solve the replacement
-  of Fedora's `ffmpeg-free` libraries with RPM Fusion's full stack during
-  compose; reject a transaction that removes required desktop packages. Never
-  rely on an unexplained `--allowerasing` at install or first boot.
+- Use Fedora `ffmpeg-free` for compatibility with the published Ryoku RPMs.
+  Validate the complete transaction before composing the ISO; do not use
+  `--allowerasing` or skip broken dependencies to hide conflicts.
 - Preserve the existing `[ryoku]` release/channel repository contract for
   subsequent updates. The local media repository is an installation source,
   not the installed machine's permanent update URL.
@@ -298,3 +303,20 @@ Publish only after those gates pass, with checksums, provenance and installation
 instructions. UEFI boot, Secure Boot, GPUs and physical Bluetooth currently have
 **no ISO test coverage**. Secure Boot and proprietary NVIDIA support are not
 claimed. Keep hardware-only checks separate from VM evidence.
+
+### Netinstall dependency validation
+
+Before composing network installation media, pass `--verify-netinstall`
+(alongside `--skip-closure-verify`, which applies only to offline RPM payloads).
+This resolves the selected environment and every manifest package in an empty
+installroot using exactly the repositories in Kickstart. It requires DNF5 and
+pykickstart, downloads repository metadata, and does not install packages.
+Missing packages or unsatisfied dependencies abort the build.
+
+The ISO enables every dependency COPR listed in `release/rpm/dependency-coprs`.
+`policycoreutils` supplies `setfiles`; it is not a separate Fedora package.
+The removed `mesa-va-drivers` and `mesa-vdpau-drivers` package names are not
+available in the configured Fedora 44 repositories. The Mesa DRI/Vulkan stack
+remains selected; Fedora’s `mesa-libgallium` supplies the VA-API driver files.
+Fedora's FFmpeg packages match the current published Ryoku
+RPM requirements; forcing full RPM Fusion FFmpeg conflicts with those RPMs.

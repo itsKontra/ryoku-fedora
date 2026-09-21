@@ -207,6 +207,32 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], "setfiles")
 
+    def test_anaconda_preserves_accounts_and_keyboard(self):
+        self.write("etc/passwd", "root:x:0:0:root:/root:/bin/bash\nalice:x:1001:1001:Alice:/home/alice:/bin/bash\n")
+        self.write("etc/group", "root:x:0:\nwheel:x:10:alice\nalice:x:1001:\n")
+        self.write("etc/shadow", "root:!::0:99999:7:::\nalice:$6$testhash::0:99999:7:::\n")
+        self.write("etc/vconsole.conf", "KEYMAP=de\n")
+        self.write("etc/X11/xorg.conf.d/00-keyboard.conf", 'Option "XkbLayout" "de"\n')
+        self.write("etc/locale.conf", "LANG=de_AT.UTF-8\n")
+        preserved = {path: path.read_bytes() for path in (self.root / "etc").rglob("*") if path.is_file()}
+        calls = []
+        with patch.object(provision_target, "arm_firstboot") as arm:
+            provision_target.provision(self.root, runner=calls.append, anaconda=True)
+            arm.assert_not_called()
+        for path, content in preserved.items():
+            if path.name != "sddm":
+                self.assertEqual(path.read_bytes(), content, str(path))
+        self.assertFalse((self.root / "home/ryoku").exists())
+        self.assertTrue((self.root / "home/alice/Pictures/Wallpapers/default.png").is_file())
+        self.assertIn("alice", calls[0])
+        self.assertIn("HOME=/home/alice", calls[0])
+        self.assertFalse((self.root / "var/lib/ryoku-firstboot/armed").exists())
+
+    def test_anaconda_requires_a_login_account(self):
+        with self.assertRaisesRegex(ValueError, "Create a login account"):
+            provision_target.provision(self.root, anaconda=True)
+        self.assertFalse((self.root / "home/ryoku").exists())
+
     def test_full_provision_flow(self):
         calls = []
 

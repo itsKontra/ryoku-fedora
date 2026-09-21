@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from unittest.mock import MagicMock, patch
 
 import importlib.util
@@ -75,7 +76,7 @@ bash
         packages = build_repo.read_packages_list(official_path)
         self.assertGreater(len(packages), 50)
         # Required core packages from Milestone 2 plan
-        for required in ["kernel", "chromium", "tmux", "neovim", "fish", "firewalld", "NetworkManager", "ffmpeg"]:
+        for required in ["kernel", "chromium", "tmux", "neovim", "fish", "firewalld", "NetworkManager", "ffmpeg-free"]:
             self.assertIn(required, packages, f"Missing required package {required}")
 
 
@@ -194,7 +195,19 @@ class TestManifestAndRepoCreation(unittest.TestCase):
     def test_create_repo(self, mock_call):
         with tempfile.TemporaryDirectory() as td:
             build_repo.create_repo(td)
-            mock_call.assert_called_once_with(["createrepo_c", "--checksum=sha256", td])
+            mock_call.assert_called_once_with([
+                "createrepo_c", "--update", "--checksum=sha256", "--groupfile",
+                str(Path(td) / "comps.xml"), td,
+            ])
+            comps = ET.parse(Path(td) / "comps.xml").getroot()
+            self.assertEqual(comps.findtext("environment/id"), "ryoku-desktop-environment")
+            self.assertEqual(comps.findtext("environment/name"), "Ryoku Desktop")
+            self.assertEqual([g.text for g in comps.findall("environment/grouplist/groupid")],
+                             ["core", "ryoku-desktop"])
+            packages = comps.findall("group/packagelist/packagereq")
+            self.assertTrue(all(p.attrib["type"] == "mandatory" for p in packages))
+            self.assertEqual([p.text for p in packages], build_repo.read_packages_list(
+                BUILD_REPO_PATH.parent / "packages.list"))
 
     def test_verify_offline_closure_missing_repomd(self):
         with tempfile.TemporaryDirectory() as td:

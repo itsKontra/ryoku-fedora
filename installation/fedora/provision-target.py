@@ -229,7 +229,7 @@ def enable_base_services(root):
         bt_link.symlink_to("/usr/lib/systemd/system/bluetooth.service")
 
 
-def seed_lockscreen(root, repo_dir=None):
+def seed_lockscreen(root, repo_dir=None, home=RYOKU_HOME):
     candidates = [
         root / "usr/share/ryoku/lockscreen/qylock",
     ]
@@ -241,7 +241,7 @@ def seed_lockscreen(root, repo_dir=None):
     if not bundle:
         return
 
-    user_home = root / RYOKU_HOME.lstrip("/")
+    user_home = root / home.lstrip("/")
     lock_dir = user_home / ".local/share/quickshell-lockscreen"
     lock_dir.parent.mkdir(parents=True, exist_ok=True)
 
@@ -287,8 +287,8 @@ def seed_lockscreen(root, repo_dir=None):
         pref.chmod(0o644)
 
 
-def seed_assets_and_integration(root, repo_dir=None):
-    user_home = root / RYOKU_HOME.lstrip("/")
+def seed_assets_and_integration(root, repo_dir=None, home=RYOKU_HOME):
+    user_home = root / home.lstrip("/")
     repo = Path(repo_dir) if repo_dir else Path(__file__).resolve().parents[2]
 
     # 1. Desktop entries and MIME defaults
@@ -352,9 +352,9 @@ def seed_assets_and_integration(root, repo_dir=None):
         npmrc_dst.chmod(0o644)
 
 
-def materialize_config(root, runner=None):
+def materialize_config(root, runner=None, user=RYOKU_USER, home=RYOKU_HOME):
     ryoku_bin = root / "usr/bin/ryoku"
-    user_home = root / RYOKU_HOME.lstrip("/")
+    user_home = root / home.lstrip("/")
 
     if runner:
         runner([
@@ -362,12 +362,12 @@ def materialize_config(root, runner=None):
             str(root),
             "runuser",
             "-u",
-            RYOKU_USER,
+            user,
             "--",
             "env",
-            f"HOME={RYOKU_HOME}",
-            f"USER={RYOKU_USER}",
-            f"LOGNAME={RYOKU_USER}",
+            f"HOME={home}",
+            f"USER={user}",
+            f"LOGNAME={user}",
             "ryoku",
             "materialize",
         ])
@@ -379,12 +379,12 @@ def materialize_config(root, runner=None):
                     str(root),
                     "runuser",
                     "-u",
-                    RYOKU_USER,
+                    user,
                     "--",
                     "env",
-                    f"HOME={RYOKU_HOME}",
-                    f"USER={RYOKU_USER}",
-                    f"LOGNAME={RYOKU_USER}",
+                    f"HOME={home}",
+                    f"USER={user}",
+                    f"LOGNAME={user}",
                     "ryoku",
                     "materialize",
                 ],
@@ -410,16 +410,16 @@ def materialize_config(root, runner=None):
                 str(root),
                 "runuser",
                 "-u",
-                RYOKU_USER,
+                user,
                 "--",
                 "env",
-                f"HOME={RYOKU_HOME}",
-                f"USER={RYOKU_USER}",
-                f"LOGNAME={RYOKU_USER}",
+                f"HOME={home}",
+                f"USER={user}",
+                f"LOGNAME={user}",
                 "XDG_CURRENT_DESKTOP=niri",
                 "/usr/bin/ryoku-wm-niri",
                 "apply",
-                f"{RYOKU_HOME}/.config/ryoku/desktop.json",
+                f"{home}/.config/ryoku/desktop.json",
             ])
         elif (root / "usr/bin/runuser").is_file() and (root / "lib64/libc.so.6").is_file() and shutil.which("chroot"):
             try:
@@ -429,16 +429,16 @@ def materialize_config(root, runner=None):
                         str(root),
                         "runuser",
                         "-u",
-                        RYOKU_USER,
+                        user,
                         "--",
                         "env",
-                        f"HOME={RYOKU_HOME}",
-                        f"USER={RYOKU_USER}",
-                        f"LOGNAME={RYOKU_USER}",
+                        f"HOME={home}",
+                        f"USER={user}",
+                        f"LOGNAME={user}",
                         "XDG_CURRENT_DESKTOP=niri",
                         "/usr/bin/ryoku-wm-niri",
                         "apply",
-                        f"{RYOKU_HOME}/.config/ryoku/desktop.json",
+                        f"{home}/.config/ryoku/desktop.json",
                     ],
                     check=True,
                 )
@@ -462,9 +462,9 @@ def materialize_config(root, runner=None):
     passwd_path = root / "etc/passwd"
     if passwd_path.exists() and os.geteuid() == 0:
         accounts = dict((p[0], p) for p in (line.split(":") for line in passwd_path.read_text().splitlines() if line))
-        if RYOKU_USER in accounts:
-            uid = int(accounts[RYOKU_USER][2])
-            gid = int(accounts[RYOKU_USER][3])
+        if user in accounts:
+            uid = int(accounts[user][2])
+            gid = int(accounts[user][3])
             for path in user_home.rglob("*"):
                 try:
                     os.lchown(path, uid, gid)
@@ -488,7 +488,7 @@ def arm_firstboot(root, runner=None, allow_running=False):
         subprocess.run(cmd, check=True)
 
 
-def relabel_selinux(root, runner=None):
+def relabel_selinux(root, runner=None, home=RYOKU_HOME):
     contexts = root / "etc/selinux/targeted/contexts/files/file_contexts"
     if not contexts.is_file():
         return
@@ -496,29 +496,57 @@ def relabel_selinux(root, runner=None):
     targets = [
         str(root / "etc"),
         str(root / "var"),
-        str(root / RYOKU_HOME.lstrip("/")),
+        str(root / home.lstrip("/")),
     ]
     if runner:
         runner(["setfiles", "-r", str(root), str(contexts), *targets])
     elif shutil.which("setfiles"):
         subprocess.run(["setfiles", "-r", str(root), str(contexts), *targets], check=True)
     elif shutil.which("chroot") and (root / "usr/sbin/restorecon").is_file():
-        subprocess.run(["chroot", str(root), "restorecon", "-Rv", "/etc", "/var", RYOKU_HOME], check=True)
+        subprocess.run(["chroot", str(root), "restorecon", "-Rv", "/etc", "/var", home], check=True)
 
 
-def provision(root, repo_dir=None, runner=None, allow_running=False):
+def anaconda_accounts(root):
+    """Use the accounts created by Anaconda without rewriting credentials."""
+    accounts = []
+    for line in (root / "etc/passwd").read_text().splitlines():
+        fields = line.split(":")
+        if len(fields) == 7 and 1000 <= int(fields[2]) < 65534 and fields[6] not in (
+            "/sbin/nologin", "/usr/sbin/nologin", "/bin/false",
+        ):
+            home = Path(fields[5])
+            if not home.is_absolute() or ".." in home.parts or home == Path("/"):
+                raise ValueError("Invalid installation account home")
+            accounts.append((fields[0], str(home)))
+    if not accounts:
+        raise ValueError("Create a login account in Anaconda User Creation before installing")
+    sudoers = root / "etc/sudoers.d/10-ryoku-wheel"
+    sudoers.parent.mkdir(parents=True, exist_ok=True)
+    sudoers.write_text("%wheel ALL=(ALL:ALL) ALL\n")
+    sudoers.chmod(0o440)
+    return accounts
+
+
+def provision(root, repo_dir=None, runner=None, allow_running=False, anaconda=False):
     root = validate_target(root, allow_running=allow_running)
-    configure_accounts_and_sudo(root)
+    if anaconda:
+        accounts = anaconda_accounts(root)
+    else:
+        configure_accounts_and_sudo(root)
+        accounts = [(RYOKU_USER, RYOKU_HOME)]
     configure_session_and_greeter(root)
     enable_base_services(root)
-    seed_assets_and_integration(root, repo_dir=repo_dir)
-    seed_lockscreen(root, repo_dir=repo_dir)
-    materialize_config(root, runner=runner)
-    if allow_running:
-        arm_firstboot(root, runner=runner, allow_running=True)
-    else:
-        arm_firstboot(root, runner=runner)
-    relabel_selinux(root, runner=runner)
+    for user, home in accounts:
+        seed_assets_and_integration(root, repo_dir=repo_dir, home=home)
+        seed_lockscreen(root, repo_dir=repo_dir, home=home)
+        materialize_config(root, runner=runner, user=user, home=home)
+    if not anaconda:
+        if allow_running:
+            arm_firstboot(root, runner=runner, allow_running=True)
+        else:
+            arm_firstboot(root, runner=runner)
+    for _, home in accounts:
+        relabel_selinux(root, runner=runner, home=home)
 
 
 def main():
@@ -530,12 +558,13 @@ def main():
         action="store_true",
         help="allow execution against a running system (test use only)",
     )
+    parser.add_argument("--anaconda", action="store_true", help="preserve accounts and regional settings configured in Anaconda")
     args = parser.parse_args()
 
     try:
         if os.geteuid() != 0:
             raise ValueError("Provisioning an installation target requires root")
-        provision(args.root, repo_dir=args.repo, allow_running=args.allow_running_system)
+        provision(args.root, repo_dir=args.repo, allow_running=args.allow_running_system, anaconda=args.anaconda)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         sys.exit(str(error))
 

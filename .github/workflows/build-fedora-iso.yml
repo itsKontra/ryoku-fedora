@@ -77,11 +77,14 @@ jobs:
       - name: Compose Ryoku Fedora ISO
         run: |
           set -euo pipefail
-          mkdir -p out work
+          mkdir -p out work/repo
           bash installation/fedora/build-iso.sh \
             --boot-iso /tmp/base-netinst.iso \
             --out-dir out \
             --work-dir work \
+            --repo-dir work/repo \
+            --skip-closure-verify \
+            --verify-netinstall \
             --iso-name "$ISO_NAME" \
             --volid "Ryoku-44-x86_64"
 

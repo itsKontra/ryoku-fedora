@@ -24,6 +24,7 @@
 #   --iso-name <string>      Output ISO filename (default: ryoku-fedora-44-x86_64.iso)
 #   --stage-only             Prepare staging tree and provenance without building the final ISO
 #   --skip-key-verify        Skip GPG key fingerprint checks
+#   --verify-netinstall      Resolve the netinstall payload against Kickstart repositories
 #   --skip-closure-verify    Skip isolated installroot closure resolution check
 #   --cmdline <string>       Extra kernel cmdline arguments to append
 #   --fast-boot              Set Grub default=0 and timeout=5 for faster/direct boot
@@ -46,6 +47,7 @@ ISO_NAME=""
 STAGE_ONLY=0
 SKIP_KEY_VERIFY=0
 SKIP_CLOSURE_VERIFY=0
+VERIFY_NETINSTALL=0
 CMDLINE=""
 FAST_BOOT=0
 
@@ -78,6 +80,8 @@ while [[ $# -gt 0 ]]; do
       STAGE_ONLY=1; shift ;;
     --skip-key-verify)
       SKIP_KEY_VERIFY=1; shift ;;
+    --verify-netinstall)
+      VERIFY_NETINSTALL=1; shift ;;
     --skip-closure-verify)
       SKIP_CLOSURE_VERIFY=1; shift ;;
     --cmdline)
@@ -137,16 +141,14 @@ fi
 
 # Step 3: Local repository metadata & manifest
 if [[ -d "$REPO_DIR" ]]; then
-  if [[ ! -f "$REPO_DIR/repodata/repomd.xml" ]]; then
-    if command -v createrepo_c >/dev/null 2>&1; then
-      log "Generating repository metadata with createrepo_c..."
-      createrepo_c --checksum=sha256 "$REPO_DIR"
-    elif command -v createrepo >/dev/null 2>&1; then
-      log "Generating repository metadata with createrepo..."
-      createrepo --checksum=sha256 "$REPO_DIR"
-    else
-      warn "Neither createrepo_c nor createrepo found; skipping repodata generation"
-    fi
+  if command -v createrepo_c >/dev/null 2>&1; then
+    log "Updating repository metadata and Ryoku Desktop environment..."
+    python3 "$SCRIPT_DIR/build-repo.py" --packages "$PACKAGES_LIST" \
+      --dest "$REPO_DIR" --create-repo
+  elif [[ $STAGE_ONLY -eq 1 ]]; then
+    warn "createrepo_c unavailable; stage-only output has no refreshed group metadata"
+  else
+    die "createrepo_c is required to include the Ryoku Desktop environment"
   fi
 
   log "Generating repository manifest..."
@@ -166,9 +168,16 @@ if [[ -d "$REPO_DIR" ]]; then
     fi
   fi
 else
+  [[ $STAGE_ONLY -eq 1 ]] || die "Repository directory does not exist: $REPO_DIR"
   warn "Repository directory $REPO_DIR does not exist yet; creating empty placeholder for staging"
   mkdir -p "$REPO_DIR"
   echo '{"total_packages": 0, "packages": {}, "sha256": {}}' > "$MANIFEST_FILE"
+fi
+
+if [[ $VERIFY_NETINSTALL -eq 1 ]]; then
+  log "Resolving the complete netinstall payload against Kickstart repositories..."
+  python3 "$SCRIPT_DIR/verify-netinstall.py" --ks "$KS_FILE" \
+    --repo-dir "$REPO_DIR" --packages "$PACKAGES_LIST"
 fi
 
 # Step 4: Staging installer payload

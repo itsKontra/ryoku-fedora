@@ -17,7 +17,6 @@ shadow-utils
 sudo
 authselect
 selinux-policy-targeted
-setfiles
 policycoreutils
 policycoreutils-python-utils
 btrfs-progs
@@ -56,8 +55,6 @@ mesa-dri-drivers
 mesa-vulkan-drivers
 vulkan-loader
 xorg-x11-server-Xwayland
-mesa-va-drivers
-mesa-vdpau-drivers
 libva-utils
 linux-firmware
 amd-ucode-firmware
@@ -93,10 +90,8 @@ wireplumber
 sddm
 
 [multimedia]
-# RPM Fusion full FFmpeg stack (replaces Fedora ffmpeg-free)
-ffmpeg
-ffmpeg-libs
-libavdevice
+# Published Ryoku components require Fedora FFmpeg
+ffmpeg-free
 rpmfusion-free-release
 rpmfusion-nonfree-release
 
