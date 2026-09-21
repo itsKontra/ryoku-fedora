@@ -75,44 +75,66 @@ test -f "$work/out/provenance.json"
 
 echo "Staged tree and metadata verified."
 
-echo "=== 5. Testing ISO creation with xorriso ==="
-if ! command -v xorriso >/dev/null 2>&1; then
-  echo "Installing xorriso..."
-  dnf -y install xorriso >/dev/null 2>&1 || true
+echo "=== 5. Rejecting composition without a boot source ==="
+# A bare staging tree must never become a successful data-only ISO.
+if PATH=/usr/bin:/bin "$root/installation/fedora/build-iso.sh" \
+  --repo-dir "$work/repo" --out-dir "$work/out" --work-dir "$work/staging" \
+  --boot-iso "$work/missing.iso" --iso-name rejected.iso --skip-closure-verify \
+  > "$work/rejected.log" 2>&1; then
+  echo "Unexpected successful composition without a boot source" >&2
+  exit 1
+fi
+test ! -e "$work/out/rejected.iso"
+
+if command -v mkksiso >/dev/null && command -v xorriso >/dev/null; then
+  mkdir "$work/data"
+  echo "not bootable" > "$work/data/README"
+  xorriso -as mkisofs -o "$work/data.iso" "$work/data" > "$work/data.log" 2>&1
+  if "$root/installation/fedora/build-iso.sh" \
+    --boot-iso "$work/data.iso" --repo-dir "$work/repo" --out-dir "$work/out" \
+    --work-dir "$work/staging" --iso-name rejected.iso --skip-closure-verify \
+    > "$work/rejected.log" 2>&1; then
+    echo "Unexpected successful composition from a data-only ISO" >&2
+    exit 1
+  fi
+  grep -q 'no UEFI El Torito boot entry' "$work/rejected.log"
+  test ! -e "$work/out/rejected.iso"
 fi
 
-if command -v xorriso >/dev/null 2>&1; then
-  "$root/installation/fedora/build-iso.sh" \
-    --ks "$root/installation/fedora/kickstart/ryoku.ks" \
-    --packages "$root/installation/fedora/packages.list" \
-    --keys-dir "$root/installation/fedora/keys" \
-    --repo-dir "$work/repo" \
-    --out-dir "$work/out" \
-    --work-dir "$work/staging" \
-    --iso-name "test-ryoku-44.iso" \
-    --skip-closure-verify
+if [[ -z ${RYOKU_TEST_BOOT_ISO:-} ]]; then
+  echo "No RYOKU_TEST_BOOT_ISO supplied; remaster validation skipped."
+  exit 0
+fi
+command -v mkksiso >/dev/null
+command -v xorriso >/dev/null
 
-  test -f "$work/out/test-ryoku-44.iso"
-  test -f "$work/out/test-ryoku-44.iso.sha256"
+echo "=== 6. Remastering existing boot media and inspecting boot metadata ==="
+"$root/installation/fedora/build-iso.sh" \
+  --boot-iso "$RYOKU_TEST_BOOT_ISO" \
+  --repo-dir "$work/repo" --out-dir "$work/out" --work-dir "$work/staging" \
+  --iso-name test-ryoku-44.iso --skip-closure-verify
+(cd "$work/out" && sha256sum -c test-ryoku-44.iso.sha256)
+grep -Eq 'El Torito boot img :.*UEFI' "$work/out/boot-metadata.txt"
+grep -Eq 'System area summary:.*GPT' "$work/out/boot-metadata.txt"
 
-  # Validate SHA256 checksum
-  (cd "$work/out" && sha256sum -c "test-ryoku-44.iso.sha256")
-
-  # Validate provenance records
-  python3 -c "
+xorriso -osirrox on -indev "$work/out/test-ryoku-44.iso" \
+  -extract /ryoku.ks "$work/ryoku.ks" \
+  -extract /installation/fedora/provision-target.py "$work/provision-target.py" \
+  -extract /.ryoku-media "$work/media" \
+  -extract /repo/repodata/repomd.xml "$work/repomd.xml" \
+  -extract /EFI/BOOT/grub.cfg "$work/grub.cfg"
+cmp "$work/ryoku.ks" "$root/installation/fedora/kickstart/ryoku.ks"
+cmp "$work/provision-target.py" "$root/installation/fedora/provision-target.py"
+grep -q inst.ks= "$work/grub.cfg"
+python3 - "$work/out/provenance.json" <<'PYTEST'
 import json
+import sys
 from pathlib import Path
-
-prov = json.loads(Path('$work/out/provenance.json').read_text())
+prov = json.loads(Path(sys.argv[1]).read_text())
 assert prov['fedora_version'] == '44'
 assert prov['iso']['filename'] == 'test-ryoku-44.iso'
 assert prov['iso']['size_bytes'] > 0
 assert len(prov['iso']['sha256']) == 64
-print('Provenance verified successfully.')
-"
-  echo "ISO creation and provenance verified."
-else
-  echo "xorriso not available; skipping full ISO packaging step."
-fi
+PYTEST
 
-echo "=== Fedora ISO builder tests passed! ==="
+echo "Fedora ISO remaster checks passed; no VM was booted."

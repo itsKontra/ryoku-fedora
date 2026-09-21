@@ -121,37 +121,24 @@ verification uses a placeholder display-manager service; it is not a boot test.
 `installation/tests/fedora-provision.sh` runs inside the same disposable container
 against an isolated target sysroot to prove offline user creation, sudo policy,
 SDDM configuration drop-ins, service enablement, lockscreen and wallpaper assets,
-materialization ownership (`ryoku:ryoku`), first-boot arming, and systemd unit verification.
+materialization through real `chroot` and `runuser` with UID/GID checks, generated
+configuration, first-boot arming, and systemd unit verification.
 
 `installation/tests/fedora-repo.sh` runs inside the disposable container to prove
 pinned key verification, repository creation with `createrepo_c`, SHA256 manifest
 generation, and dependency closure resolution in an empty installroot with `--network=none`.
 
-`installation/tests/fedora-iso.sh` runs inside the disposable container to prove
-Kickstart recipe validation with `ksvalidator -v F44`, stage-only compose tree staging,
-hybrid UEFI ISO composition with `xorriso`, and SHA256 checksum/provenance verification
-with `--network=none`.
+`installation/tests/fedora-iso.sh` checks Kickstart syntax, staging and rejection
+of composition without boot media. To exercise remastering, provide an existing
+Fedora netinstall ISO through `RYOKU_TEST_BOOT_ISO` and run in a disposable rootful
+container with loop-device and mount access (`--privileged`). It checks the UEFI
+El Torito entry, hybrid GPT layout, injected Kickstart and provisioning payload,
+boot configuration, checksum and provenance without booting a VM.
 
-`installation/tests/fedora-iso-vm.sh` drives end-to-end testing in QEMU with OVMF
-UEFI firmware and disconnected network (`-nic none`):
-1. **Kickstart Installation**: Boots the composed ISO against a 40 GiB virtual disk,
-   capturing serial console and Anaconda install logs.
-2. **First-Boot Console Setup**: Drives interactive setup on tty1 through
-   `systemd-firstboot` and `passwd` (locale, keymap, timezone, hostname, root password,
-   and ryoku user password), verifying interruption handling and answer preservation.
-3. **SDDM Gating**: Asserts that `sddm.service` remains gated until
-   `/var/lib/ryoku-firstboot/complete` is written, and unblocks successfully once complete.
-4. **Desktop Launch**: Verifies graphical session launch into Hyprland Wayland desktop
-   with Ryoku Quickshell running.
-5. **SELinux Policy**: Asserts enforcing status (`getenforce` is `Enforcing`) and
-   confirms zero AVC denials via `ausearch -m avc`.
-6. **Encryption**: Validates both plain partitioning and LUKS2-encrypted Btrfs paths.
-
-Local evidence, 2026-09-20: Fedora container
-`cb17dd9ebff1`, `systemd-259.9-1.fc44.x86_64`, `shadow-utils-4.19.0-7.fc44.x86_64`,
-`glibc-2.43-8.fc44.x86_64`, `kbd-2.9.0-4.fc44.x86_64`, `dnf5-5.4.5.0-1.fc44.x86_64`,
-`createrepo_c-1.2.1-1.fc44.x86_64`, `xorriso-1.5.8-2.fc44.x86_64`, `pykickstart-3.69-1.fc44.noarch`.
-Real prompt/resume, offline provisioning, offline repository, ISO compose, and UEFI VM harness tests passed offline.
+VM validation is deferred. The existing `fedora-iso-vm` harness and workflow need
+to be aligned with the Anaconda account-creation and network-install flow before
+their results can establish successful installation, desktop startup or SELinux
+health. Stage-only harness checks are not evidence of a booted installation.
 
 ## Anaconda Kickstart and ISO compose pipeline
 
@@ -179,7 +166,7 @@ No password is shipped in the recipe.
 1. **Preflight and Verification**: Checks dependencies, verifies pinned GPG keys, and validates the Kickstart recipe.
 2. **Repository Staging**: Generates `comps.xml` from `packages.list` and refreshes metadata with `createrepo_c --update --groupfile`, computes `manifest.json`, and verifies the offline dependency closure.
 3. **Payload Staging**: Stages Kickstart, local RPMs, offline provisioner, and stamped media metadata into `iso_root`.
-4. **Hybrid ISO Composition**: Produces hybrid UEFI bootable media using `mkksiso`, `xorriso`, or `lorax`.
+4. **Hybrid ISO Composition**: Requires `mkksiso` to remaster `--boot-iso` or a Lorax-generated `images/boot.iso`, preserving boot metadata and updating the embedded EFI image. Requires root with loop-device and mount access; plain data-ISO fallbacks are rejected. Source and output boot metadata are recorded and checked with `xorriso`.
 5. **Checksums and Provenance**: Computes the final `.sha256` checksum file and generates structured `provenance.json` recording build environment, tool versions, and git commit details.
 
 ## Offline package closure and repository setup
@@ -320,3 +307,11 @@ available in the configured Fedora 44 repositories. The Mesa DRI/Vulkan stack
 remains selected; Fedora’s `mesa-libgallium` supplies the VA-API driver files.
 Fedora's FFmpeg packages match the current published Ryoku
 RPM requirements; forcing full RPM Fusion FFmpeg conflicts with those RPMs.
+
+Provisioning sets ownership of the seeded home before running materialization
+and desktop configuration as the target user. Either command failing aborts
+provisioning. Required desktop extras are checked individually; missing assets
+are installed through the checksum-verifying extras helper. Missing helpers,
+download failures and absent installation outputs also abort provisioning.
+For disconnected installs, supply all extras in the target or populate the
+helper's `RYOKU_EXTRA_CACHE` with the pinned downloads.

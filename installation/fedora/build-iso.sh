@@ -6,7 +6,7 @@
 #   2. Local repository metadata creation (createrepo_c) and SHA256 manifest generation
 #   3. Offline dependency closure validation
 #   4. Staging of Anaconda Kickstart, offline provisioner, and local RPM repository
-#   5. Lorax installer tree generation / mkksiso / xorriso hybrid UEFI ISO creation
+#   5. mkksiso remastering of a Fedora or Lorax hybrid UEFI boot ISO
 #   6. Provenance metadata and SHA256 checksum generation
 #
 # Usage:
@@ -129,6 +129,17 @@ log "  Output ISO: $FINAL_ISO"
 mkdir -p "$OUT_DIR" "$WORK_DIR"
 
 command -v python3 >/dev/null 2>&1 || die "python3 is required but not installed"
+
+if [[ $STAGE_ONLY -eq 0 ]]; then
+  command -v mkksiso >/dev/null 2>&1 || die "mkksiso (lorax) is required to preserve ISO boot metadata"
+  command -v xorriso >/dev/null 2>&1 || die "xorriso is required to verify ISO boot metadata"
+  [[ $EUID -eq 0 ]] || die "ISO composition requires root to update the embedded EFI boot image"
+  if [[ -n "$BOOT_ISO" ]]; then
+    [[ -f "$BOOT_ISO" ]] || die "Boot ISO not found: $BOOT_ISO"
+  else
+    command -v lorax >/dev/null 2>&1 || die "Supply --boot-iso or install lorax to generate a boot ISO"
+  fi
+fi
 
 # Step 2: Key verification
 if [[ $SKIP_KEY_VERIFY -eq 0 && -d "$KEYS_DIR" ]]; then
@@ -284,99 +295,49 @@ Path('$PROVENANCE_FILE').write_text(json.dumps(provenance, indent=2) + '\n')
   exit 0
 fi
 
-# Step 6: Build the ISO using mkksiso, lorax, or xorriso
-log "Composing hybrid UEFI ISO..."
-
-if [[ -n "$BOOT_ISO" && -f "$BOOT_ISO" ]]; then
-  if command -v mkksiso >/dev/null 2>&1; then
-    log "Using mkksiso to remaster $BOOT_ISO into $FINAL_ISO..."
-    rm -f "$FINAL_ISO"
-    mkksiso_args=(
-      --ks "$ISO_STAGE/ryoku.ks"
-      --add "$ISO_STAGE/installation"
-      --volid "$VOLID"
-      --skip-mkefiboot
-    )
-    if [[ -d "$ISO_STAGE/ryoku" ]]; then
-      mkksiso_args+=(--add "$ISO_STAGE/ryoku")
-    fi
-    if [[ -d "$ISO_STAGE/repo" && $(ls -A "$ISO_STAGE/repo" 2>/dev/null) ]]; then
-      mkksiso_args+=(--add "$ISO_STAGE/repo")
-    fi
-    if [[ -n "$CMDLINE" ]]; then
-      mkksiso_args+=(-c "$CMDLINE")
-    fi
-    if [[ $FAST_BOOT -eq 1 ]]; then
-      mkksiso_args+=(
-        -R 'set default="1"' 'set default="0"'
-        -R 'set timeout=60' 'set timeout=5'
-      )
-    fi
-    mkksiso "${mkksiso_args[@]}" "$BOOT_ISO" "$FINAL_ISO"
-  elif command -v xorriso >/dev/null 2>&1; then
-    log "Extracting $BOOT_ISO and remastering with xorriso..."
-    WORK_EXTRACT="$WORK_DIR/extracted_iso"
-    rm -rf "$WORK_EXTRACT"
-    mkdir -p "$WORK_EXTRACT"
-    xorriso -osirx_p on -indev "$BOOT_ISO" -extract / "$WORK_EXTRACT"
-    chmod -R u+w "$WORK_EXTRACT"
-
-    # Merge staged files into extracted tree
-    cp -rf "$ISO_STAGE"/* "$WORK_EXTRACT/"
-
-    # Build hybrid UEFI image
-    xorriso -as mkisofs \
-      -V "$VOLID" \
-      -r -J -joliet-long \
-      -o "$FINAL_ISO" \
-      "$WORK_EXTRACT"
-  else
-    die "Remastering from --boot-iso requires either mkksiso or xorriso"
-  fi
-elif command -v lorax >/dev/null 2>&1; then
+# Step 6: Preserve the source ISO's boot layout while adding the payload.
+if [[ -z "$BOOT_ISO" ]]; then
   log "Building Anaconda installation tree using lorax..."
   LORAX_OUT="$WORK_DIR/lorax_out"
   rm -rf "$LORAX_OUT"
-  mkdir -p "$LORAX_OUT"
-
-  lorax_args=(
-    --product="Ryoku"
-    --version="44"
-    --release="1"
-    --source="file://$REPO_DIR"
-    --volid="$VOLID"
-    --nomacboot
-    --noupdates
-    "$LORAX_OUT"
-  )
-  lorax "${lorax_args[@]}"
-
-  # Merge Lorax boot/installer tree into ISO stage
-  if [[ -d "$LORAX_OUT/images" ]]; then
-    cp -rf "$LORAX_OUT"/* "$ISO_STAGE/"
-  fi
-
-  if command -v xorriso >/dev/null 2>&1; then
-    xorriso -as mkisofs \
-      -V "$VOLID" \
-      -r -J -joliet-long \
-      -o "$FINAL_ISO" \
-      "$ISO_STAGE"
-  elif [[ -f "$LORAX_OUT/images/boot.iso" ]]; then
-    cp -f "$LORAX_OUT/images/boot.iso" "$FINAL_ISO"
-  else
-    die "Lorax completed but could not produce bootable ISO image"
-  fi
-elif command -v xorriso >/dev/null 2>&1; then
-  log "Building hybrid ISO image with xorriso..."
-  xorriso -as mkisofs \
-    -V "$VOLID" \
-    -r -J -joliet-long \
-    -o "$FINAL_ISO" \
-    "$ISO_STAGE"
-else
-  die "No suitable ISO builder found. Install lorax, mkksiso, or xorriso to build ISO."
+  lorax --product="Ryoku" --version="44" --release="1" \
+    --source="file://$REPO_DIR" --volid="$VOLID" --nomacboot --noupdates "$LORAX_OUT"
+  BOOT_ISO="$LORAX_OUT/images/boot.iso"
+  [[ -f "$BOOT_ISO" ]] || die "Lorax did not produce images/boot.iso"
 fi
+
+verify_boot_metadata() {
+  local iso=$1 report
+  report=$(xorriso -indev "$iso" -report_el_torito plain -report_system_area plain 2>&1) \
+    || die "Cannot inspect boot metadata: $iso"
+  printf '%s\n' "$report" > "$2"
+  grep -Eq 'El Torito boot img :.*UEFI' <<< "$report" \
+    || die "ISO has no UEFI El Torito boot entry: $iso"
+  grep -Eq 'System area summary:.*GPT' <<< "$report" \
+    || die "ISO has no hybrid GPT boot layout: $iso"
+}
+
+verify_boot_metadata "$BOOT_ISO" "$OUT_DIR/source-boot-metadata.txt"
+log "Using mkksiso to remaster $BOOT_ISO into $FINAL_ISO..."
+mkksiso_args=(--ks "$ISO_STAGE/ryoku.ks" --volid "$VOLID")
+for payload in installation ryoku repo .ryoku-media; do
+  if [[ -e "$ISO_STAGE/$payload" ]]; then
+    mkksiso_args+=(--add "$ISO_STAGE/$payload")
+  fi
+done
+if [[ -n "$CMDLINE" ]]; then
+  mkksiso_args+=(-c "$CMDLINE")
+fi
+if [[ $FAST_BOOT -eq 1 ]]; then
+  mkksiso_args+=(
+    -R 'set default="1"' 'set default="0"'
+    -R 'set timeout=60' 'set timeout=5'
+  )
+fi
+[[ "$BOOT_ISO" -ef "$FINAL_ISO" ]] && die "Source and output ISO must be different files"
+rm -f "$FINAL_ISO"
+mkksiso "${mkksiso_args[@]}" "$BOOT_ISO" "$FINAL_ISO"
+verify_boot_metadata "$FINAL_ISO" "$OUT_DIR/boot-metadata.txt"
 
 # Step 7: Checksum and Provenance
 [[ -f "$FINAL_ISO" ]] || die "Failed to produce ISO at $FINAL_ISO"

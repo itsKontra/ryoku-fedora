@@ -28,7 +28,9 @@ jobs:
   build:
     name: "Compose Fedora 44 Ryoku ISO"
     runs-on: ubuntu-latest
-    container: fedora:44
+    container:
+      image: fedora:44
+      options: --privileged
     steps:
       - name: Install build toolchain
         run: |

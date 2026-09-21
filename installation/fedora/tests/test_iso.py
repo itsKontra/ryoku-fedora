@@ -2,6 +2,8 @@
 """Unit tests for Fedora 44 Anaconda Kickstart recipe and ISO compose pipeline."""
 
 import json
+import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -110,6 +112,24 @@ class TestComposePipelineScript(unittest.TestCase):
         res = subprocess.run([str(BUILD_ISO_PATH), "--ks", "/nonexistent/kickstart.ks"], capture_output=True, text=True)
         self.assertNotEqual(res.returncode, 0)
         self.assertIn("Kickstart file not found", res.stderr)
+
+    def test_compose_rejects_missing_mkksiso_before_staging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tools = root / "bin"
+            tools.mkdir()
+            for name in ("bash", "dirname", "git", "date", "mkdir", "python3"):
+                executable = shutil.which(name)
+                if executable:
+                    (tools / name).symlink_to(executable)
+            result = subprocess.run([
+                str(BUILD_ISO_PATH), "--work-dir", str(root / "work"),
+                "--out-dir", str(root / "out"),
+            ], env={**os.environ, "PATH": str(tools)}, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("mkksiso (lorax) is required", result.stderr)
+            self.assertFalse((root / "work/iso_root").exists())
+            self.assertFalse(list((root / "out").glob("*.iso")))
 
     def test_build_iso_stage_only_execution(self):
         """Verify build-iso.sh --stage-only prepares staging tree and writes provenance."""

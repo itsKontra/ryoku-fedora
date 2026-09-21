@@ -1,6 +1,9 @@
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -28,6 +31,14 @@ class ProvisionTargetTest(unittest.TestCase):
         for binary in provision_target.REQUIRED_BINARIES:
             self.write(binary, "#!/bin/sh\nexit 0\n")
         self.write("usr/bin/ryoku", "#!/bin/sh\nexit 0\n")
+        for asset in (
+            "share/icons/Bibata-Modern-Ice/cursors/left_ptr",
+            "share/fonts/SpaceGrotesk/regular.otf",
+            "share/fonts/MaterialSymbolsRounded.ttf",
+            "share/fonts/JetBrainsMonoNerdFont/regular.ttf",
+            "bin/matugen",
+        ):
+            self.write("usr/" + asset, "installed asset\n")
         self.write("usr/share/ryoku/config/sample.conf", "sample config\n")
         self.write("usr/share/ryoku/wallpapers/default.png", "image\n")
         self.write("usr/share/ryoku/ryodecors/card.png", "decor\n")
@@ -172,17 +183,19 @@ class ProvisionTargetTest(unittest.TestCase):
         mime_apps = self.root / "usr/share/applications/mimeapps.list"
         self.assertTrue(mime_apps.exists())
 
-    def test_materialize_config_runs_command_or_copies(self):
+    def test_materialize_config_runs_as_target_user(self):
+        provision_target.configure_accounts_and_sudo(self.root)
         calls = []
 
         def mock_runner(cmd):
             calls.append(cmd)
 
         provision_target.materialize_config(self.root, runner=mock_runner)
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(calls), 2)
         self.assertIn("materialize", calls[0])
 
-    def test_materialize_config_applies_hyprland_when_present(self):
+    def test_materialize_config_applies_hyprland(self):
+        provision_target.configure_accounts_and_sudo(self.root)
         calls = []
         self.write("usr/bin/ryoku-wm-hyprland", "#!/bin/sh\n")
 
@@ -195,6 +208,80 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertIn("ryoku-wm-hyprland", calls[1][11])
         self.assertIn("apply", calls[1][12])
 
+
+    def test_materialization_failures_abort_before_firstboot(self):
+        for failed_command in ("materialize", "apply"):
+            with self.subTest(command=failed_command):
+                sudoers = self.root / "etc/sudoers.d/10-ryoku-wheel"
+                if sudoers.exists():
+                    sudoers.chmod(0o600)
+
+                def fail(cmd):
+                    if failed_command in cmd:
+                        raise subprocess.CalledProcessError(1, cmd)
+
+                with patch.object(provision_target, "arm_firstboot") as arm:
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        provision_target.provision(self.root, runner=fail)
+                    arm.assert_not_called()
+                self.assertFalse((self.root / "home/ryoku/.config/hypr/settings.lua").exists())
+
+    def test_extras_load_extensionless_helper_without_changing_command_discovery(self):
+        font = self.root / "usr/share/fonts/MaterialSymbolsRounded.ttf"
+        font.unlink()
+        repo = self.root / "repo"
+        script = repo / "ryoku/shell/scripts/ryoku-install-extra"
+        script.parent.mkdir(parents=True)
+        script.write_text(
+            "import shutil\n"
+            "def install(name, root):\n"
+            "    assert name == 'material-symbols'\n"
+            "    (root / 'share/fonts/MaterialSymbolsRounded.ttf').write_bytes(b'font')\n"
+        )
+        which = shutil.which
+        provision_target.seed_desktop_extras(self.root, repo)
+        self.assertEqual(font.read_bytes(), b"font")
+        self.assertIs(shutil.which, which)
+
+    def test_real_extras_helper_installs_verified_cached_font(self):
+        font = self.root / "usr/share/fonts/MaterialSymbolsRounded.ttf"
+        font.unlink()
+        data = b"\x00\x01\x00\x00test font"
+        digest = hashlib.sha256(data).hexdigest()
+        cache = self.root / "cache"
+        cache.mkdir()
+        (cache / digest).write_bytes(data)
+        repo = self.root / "repo"
+        helper = repo / "ryoku/shell/scripts/ryoku-install-extra"
+        helper.parent.mkdir(parents=True)
+        source = SOURCE.parents[1] / "ryoku/shell/scripts/ryoku-install-extra"
+        helper.write_text(source.read_text() + (
+            f"\nRELEASES['material-symbols'] = ('test', 'https://example.invalid/font', "
+            f"'{digest}', 'share/fonts/MaterialSymbolsRounded.ttf')\n"
+        ))
+        with patch.dict("os.environ", {"RYOKU_EXTRA_CACHE": str(cache)}):
+            provision_target.seed_desktop_extras(self.root, repo)
+        self.assertEqual(font.read_bytes(), data)
+        receipt = self.root / "usr/state/ryoku/extras/material-symbols.json"
+        self.assertEqual(json.loads(receipt.read_text())["sha256"], digest)
+
+    def test_real_extras_helper_reports_download_failure(self):
+        (self.root / "usr/share/fonts/MaterialSymbolsRounded.ttf").unlink()
+        with patch("urllib.request.urlopen", side_effect=OSError("download unavailable")):
+            with self.assertRaisesRegex(ValueError, "material-symbols: download unavailable"):
+                provision_target.seed_desktop_extras(self.root)
+
+    def test_extras_require_helper_and_installed_asset(self):
+        (self.root / "usr/share/fonts/MaterialSymbolsRounded.ttf").unlink()
+        repo = self.root / "repo"
+        repo.mkdir()
+        with self.assertRaisesRegex(ValueError, "Missing desktop extras helper"):
+            provision_target.seed_desktop_extras(self.root, repo)
+        helper = repo / "ryoku/shell/scripts/ryoku-install-extra"
+        helper.parent.mkdir(parents=True)
+        helper.write_text("def install(name, root): pass\n")
+        with self.assertRaisesRegex(ValueError, "Missing required desktop extra.*material-symbols"):
+            provision_target.seed_desktop_extras(self.root, repo)
 
     def test_arm_firstboot_invokes_prepare_script(self):
         calls = []

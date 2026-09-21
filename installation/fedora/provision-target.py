@@ -2,6 +2,8 @@
 """Transform an offline Fedora 44 target into a configured Ryoku desktop."""
 
 import argparse
+from importlib.machinery import SourceFileLoader
+import importlib.util
 import os
 from pathlib import Path
 import re
@@ -276,31 +278,35 @@ def resolve_repo_dir(repo_dir=None):
 
 
 def seed_desktop_extras(root, repo_dir=None):
-    bibata_dir = root / "usr/share/icons/Bibata-Modern-Ice"
-    if bibata_dir.is_dir():
-        return
+    assets = {
+        "bibata": "share/icons/Bibata-Modern-Ice/cursors/left_ptr",
+        "space-grotesk": "share/fonts/SpaceGrotesk/*.otf",
+        "material-symbols": "share/fonts/MaterialSymbolsRounded.ttf",
+        "jetbrains-mono-nerd-fonts": "share/fonts/JetBrainsMonoNerdFont/*.ttf",
+        "matugen": "bin/matugen",
+    }
+    prefix = root / "usr"
 
-    repo = resolve_repo_dir(repo_dir)
-    script_candidates = [
-        repo / "ryoku/shell/scripts/ryoku-install-extra",
-    ]
-    script_path = next((p for p in script_candidates if p.is_file()), None)
-    if not script_path:
-        return
+    def installed(name):
+        return any(path.is_file() and path.stat().st_size for path in prefix.glob(assets[name]))
 
-    try:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("install_extra", script_path)
-        extra = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(extra)
-        extra.shutil.which = lambda name: None
-        for name in ("bibata", "space-grotesk", "material-symbols", "jetbrains-mono-nerd-fonts", "matugen"):
-            try:
-                extra.install(name, root=root / "usr")
-            except Exception:
-                pass
-    except Exception:
-        pass
+    missing = [name for name in assets if not installed(name)]
+    if not missing:
+        return
+    script_path = resolve_repo_dir(repo_dir) / "ryoku/shell/scripts/ryoku-install-extra"
+    if not script_path.is_file():
+        raise ValueError(f"Missing desktop extras helper: {script_path}")
+    loader = SourceFileLoader("install_extra", str(script_path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    extra = importlib.util.module_from_spec(spec)
+    loader.exec_module(extra)
+    for name in missing:
+        try:
+            extra.install(name, root=prefix)
+        except Exception as error:
+            raise ValueError(f"Failed to install desktop extra {name}: {error}") from error
+        if not installed(name):
+            raise ValueError(f"Missing required desktop extra after installation: {name}")
 
 
 def seed_lockscreen(root, repo_dir=None, home=RYOKU_HOME):
@@ -426,127 +432,40 @@ def seed_assets_and_integration(root, repo_dir=None, home=RYOKU_HOME):
 
 
 def materialize_config(root, runner=None, user=RYOKU_USER, home=RYOKU_HOME):
-    ryoku_bin = root / "usr/bin/ryoku"
     user_home = root / home.lstrip("/")
-
-    if runner:
-        runner([
-            "chroot",
-            str(root),
-            "runuser",
-            "-u",
-            user,
-            "--",
-            "env",
-            f"HOME={home}",
-            f"USER={user}",
-            f"LOGNAME={user}",
-            "ryoku",
-            "materialize",
-        ])
-    elif ryoku_bin.is_file() and (root / "usr/bin/runuser").is_file() and (root / "lib64/libc.so.6").is_file() and shutil.which("chroot"):
-        try:
-            subprocess.run(
-                [
-                    "chroot",
-                    str(root),
-                    "runuser",
-                    "-u",
-                    user,
-                    "--",
-                    "env",
-                    f"HOME={home}",
-                    f"USER={user}",
-                    f"LOGNAME={user}",
-                    "ryoku",
-                    "materialize",
-                ],
-                check=True,
-            )
-        except Exception:
-            if (root / "usr/share/ryoku/config").is_dir():
-                shutil.copytree(root / "usr/share/ryoku/config", user_home / ".config", dirs_exist_ok=True, symlinks=True)
-    elif (root / "usr/share/ryoku/config").is_dir():
-        shutil.copytree(root / "usr/share/ryoku/config", user_home / ".config", dirs_exist_ok=True, symlinks=True)
-
     ryoku_cfg = user_home / ".config/ryoku"
     ryoku_cfg.mkdir(parents=True, exist_ok=True)
     desktop_json = ryoku_cfg / "desktop.json"
     if not desktop_json.exists():
         desktop_json.write_text('{"desktop":{},"wm":{"hyprland":{}}}\n')
 
-    hypr_bin = root / "usr/bin/ryoku-wm-hyprland"
-    if hypr_bin.is_file():
+    accounts = dict((p[0], p) for p in (
+        line.split(":") for line in (root / "etc/passwd").read_text().splitlines() if line
+    ))
+    if user not in accounts:
+        raise ValueError(f"Missing target account: {user}")
+    if os.geteuid() == 0:
+        uid, gid = map(int, accounts[user][2:4])
+        os.lchown(user_home, uid, gid)
+        for path in user_home.rglob("*"):
+            os.lchown(path, uid, gid)
+
+    command = [
+        "chroot", str(root), "runuser", "-u", user, "--", "env",
+        f"HOME={home}", f"USER={user}", f"LOGNAME={user}",
+    ]
+
+    def run(args):
         if runner:
-            runner([
-                "chroot",
-                str(root),
-                "runuser",
-                "-u",
-                user,
-                "--",
-                "env",
-                f"HOME={home}",
-                f"USER={user}",
-                f"LOGNAME={user}",
-                "XDG_CURRENT_DESKTOP=Hyprland",
-                "/usr/bin/ryoku-wm-hyprland",
-                "apply",
-                f"{home}/.config/ryoku/desktop.json",
-            ])
-        elif (root / "usr/bin/runuser").is_file() and (root / "lib64/libc.so.6").is_file() and shutil.which("chroot"):
-            try:
-                subprocess.run(
-                    [
-                        "chroot",
-                        str(root),
-                        "runuser",
-                        "-u",
-                        user,
-                        "--",
-                        "env",
-                        f"HOME={home}",
-                        f"USER={user}",
-                        f"LOGNAME={user}",
-                        "XDG_CURRENT_DESKTOP=Hyprland",
-                        "/usr/bin/ryoku-wm-hyprland",
-                        "apply",
-                        f"{home}/.config/ryoku/desktop.json",
-                    ],
-                    check=True,
-                )
-            except Exception:
-                pass
+            runner(command + args)
+        else:
+            subprocess.run(command + args, check=True)
 
-    niri_dir = user_home / ".config/niri"
-    if niri_dir.is_dir():
-        for gen in ("settings.kdl", "rebinds.kdl"):
-            gen_path = niri_dir / gen
-            if not gen_path.exists():
-                gen_path.touch()
-
-    hypr_dir = user_home / ".config/hypr"
-    if hypr_dir.is_dir():
-        for gen in ("settings.lua", "rebinds.lua"):
-            gen_path = hypr_dir / gen
-            if not gen_path.exists():
-                gen_path.touch()
-
-    passwd_path = root / "etc/passwd"
-    if passwd_path.exists() and os.geteuid() == 0:
-        accounts = dict((p[0], p) for p in (line.split(":") for line in passwd_path.read_text().splitlines() if line))
-        if user in accounts:
-            uid = int(accounts[user][2])
-            gid = int(accounts[user][3])
-            for path in user_home.rglob("*"):
-                try:
-                    os.lchown(path, uid, gid)
-                except OSError:
-                    pass
-            try:
-                os.lchown(user_home, uid, gid)
-            except OSError:
-                pass
+    run(["ryoku", "materialize"])
+    run([
+        "XDG_CURRENT_DESKTOP=Hyprland", "/usr/bin/ryoku-wm-hyprland",
+        "apply", f"{home}/.config/ryoku/desktop.json",
+    ])
 
 
 def arm_firstboot(root, runner=None, allow_running=False):

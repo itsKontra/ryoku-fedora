@@ -17,6 +17,7 @@ python3 -m unittest discover -s "$root/installation/fedora/tests" -v
 # 2. Prepare isolated target sysroot
 target=$(mktemp -d /tmp/target-sysroot.XXXXXX)
 trap 'rm -rf "$target"' EXIT
+chmod 755 "$target"
 
 mkdir -p "$target"/{etc,usr/bin,usr/sbin,usr/share,var/lib,home,run}
 mkdir -p "$target"/etc/{pam.d,sudoers.d,systemd/system,sddm.conf.d}
@@ -41,33 +42,56 @@ for bin in python3 fish passwd systemd-firstboot chroot; do
   fi
 done
 
-# In a synthetic target sysroot, provide a runuser wrapper that executes as the user
-cat > "$target/usr/bin/runuser" <<'EOF'
-#!/bin/sh
-shift 2 # skip -u <user> --
-"$@"
-EOF
-chmod +x "$target/usr/bin/runuser"
-
-for bin in test true; do
-  if [[ -f "/usr/bin/$bin" ]]; then
-    install -Dm755 "/usr/bin/$bin" "$target/usr/bin/$bin"
-  fi
+# Exercise chroot and runuser with real binaries and PAM, including their libraries.
+copy_runtime() {
+  local binary=$1 library
+  cp -L --parents "$binary" "$target"
+  while read -r library; do
+    [[ -f $library ]] && cp -L --parents "$library" "$target"
+  done < <(ldd "$binary" | awk '/=> \// {print $3} /^[[:space:]]*\// {print $1}')
+}
+for binary in sh runuser env id mkdir cp test true; do
+  copy_runtime "/usr/bin/$binary"
 done
+ln -s usr/bin "$target/bin"
+for module in pam_rootok pam_permit; do
+  copy_runtime "/usr/lib64/security/$module.so"
+done
+cat > "$target/etc/pam.d/runuser" <<'EOF'
+auth sufficient pam_rootok.so
+account required pam_permit.so
+session required pam_permit.so
+EOF
 
-# Provide placeholder desktop provider binary for materialization
 cat > "$target/usr/bin/ryoku" <<'EOF'
 #!/bin/sh
-if [ "$1" = "materialize" ]; then
-  mkdir -p "$HOME/.config/ryoku"
-  if [ -d /usr/share/ryoku/config ]; then
-    cp -a /usr/share/ryoku/config/. "$HOME/.config/"
-  fi
-  exit 0
-fi
-exit 0
+set -eu
+[ "$(id -u)" = 1000 ]
+[ "$(id -g)" = 1000 ]
+[ "$1" = materialize ]
+mkdir -p "$HOME/.config/ryoku" "$HOME/.local/state/ryoku"
+cp -r /usr/share/ryoku/config/. "$HOME/.config/"
+echo materialized > "$HOME/.local/state/ryoku/materialized"
 EOF
-chmod 755 "$target/usr/bin/ryoku"
+cat > "$target/usr/bin/ryoku-wm-hyprland" <<'EOF'
+#!/bin/sh
+set -eu
+[ "$(id -u)" = 1000 ]
+[ "$1" = apply ]
+[ -s "$2" ]
+[ -s "$HOME/.local/state/ryoku/materialized" ]
+mkdir -p "$HOME/.config/hypr"
+echo 'return {}' > "$HOME/.config/hypr/settings.lua"
+echo 'return {}' > "$HOME/.config/hypr/rebinds.lua"
+EOF
+chmod 755 "$target/usr/bin/ryoku" "$target/usr/bin/ryoku-wm-hyprland"
+
+# Model extras already supplied by the package payload, with no network needed.
+for asset in share/icons/Bibata-Modern-Ice/cursors/left_ptr \
+  share/fonts/SpaceGrotesk/regular.otf share/fonts/MaterialSymbolsRounded.ttf \
+  share/fonts/JetBrainsMonoNerdFont/regular.ttf bin/matugen; do
+  install -Dm644 /etc/hostname "$target/usr/$asset"
+done
 
 # Create minimal service units for base services
 cat > "$target/usr/lib/systemd/system/sddm.service" <<'EOF'
@@ -148,7 +172,9 @@ test -f "$target/usr/share/applications/ryoku-mimeapps.list"
 test -f "$target/usr/share/applications/mimeapps.list"
 
 # 9. Verify materialization and file ownership
-test -d "$target/home/ryoku/.config"
+test -s "$target/home/ryoku/.local/state/ryoku/materialized"
+test -s "$target/home/ryoku/.config/hypr/settings.lua"
+test -s "$target/home/ryoku/.config/hypr/rebinds.lua"
 [[ $(stat -c '%u:%g' "$target/home/ryoku") == "1000:1000" ]]
 unowned=$(find "$target/home/ryoku" -not -user 1000 -or -not -group 1000 | head -n 5)
 if [[ -n $unowned ]]; then
@@ -166,5 +192,18 @@ test -f "$target/etc/systemd/system/sddm.service.d/10-firstboot.conf"
 
 # 11. Verify systemd unit linkage
 systemd-analyze --root="$target" verify ryoku-firstboot.service sddm.service
+
+for binary in ryoku ryoku-wm-hyprland; do
+  cp "$target/usr/bin/$binary" "$target/usr/bin/$binary.saved"
+  printf '#!/bin/sh\necho intentional-test-failure >&2\nexit 7\n' > "$target/usr/bin/$binary"
+  rm -f "$target/var/lib/ryoku-firstboot/armed"
+  if python3 "$root/installation/fedora/provision-target.py" "$target" > "$target/failure.log" 2>&1; then
+    echo "Provisioning incorrectly succeeded after $binary failed" >&2
+    exit 1
+  fi
+  grep -q intentional-test-failure "$target/failure.log"
+  test ! -e "$target/var/lib/ryoku-firstboot/armed"
+  mv "$target/usr/bin/$binary.saved" "$target/usr/bin/$binary"
+done
 
 echo "Offline target provisioning validation passed."

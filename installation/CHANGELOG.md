@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Fixed
+- Set target-home ownership before user configuration and stop provisioning on
+  materialization, desktop apply or required extras failures. Load the extras
+  helper explicitly and check each required asset.
+- Preserve Fedora ISO boot metadata by requiring mkksiso remastering, including
+  the embedded EFI image, and reject nonbootable data-ISO fallbacks.
 - Require a password-protected administrator for Anaconda installs, include Go,
   use RyokuCOPR consistently, and align provisioning checks with the desktop.
 
