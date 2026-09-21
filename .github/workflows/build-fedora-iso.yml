@@ -94,6 +94,7 @@ jobs:
             --work-dir work \
             --repo-dir work/repo \
             --skip-closure-verify \
+            --skip-mkefiboot \
             --verify-netinstall \
             --iso-name "$ISO_NAME" \
             --volid "Ryoku-44-x86_64"
