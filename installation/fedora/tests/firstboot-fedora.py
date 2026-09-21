@@ -82,7 +82,10 @@ def main():
     subprocess.run(["useradd", "--create-home", "--groups", "wheel", "--shell", "/usr/bin/fish", "ryoku"], check=True)
     subprocess.run(["usermod", "--password", "!", "root"], check=True)
     for _, relative in firstboot.SETTINGS:
-        (Path("/") / relative).unlink(missing_ok=True)
+        target = Path("/") / relative
+        if relative == "etc/hostname" and target.exists():
+            subprocess.run(["umount", str(target)], check=False, stderr=subprocess.DEVNULL)
+        target.unlink(missing_ok=True)
     state = Path("/") / firstboot.STATE
     state.mkdir(mode=0o700, parents=True)
     (state / "armed").write_text("1\n")

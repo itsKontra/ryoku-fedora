@@ -43,35 +43,35 @@ jobs:
         run: |
           mkdir -p /tmp/firstboot-evidence
           set -o pipefail
-          podman run --rm --network=none --no-hostname -e RYOKU_TEST_DISPOSABLE=1 \
+          podman run --rm --network=none --cap-add=SYS_ADMIN -e RYOKU_TEST_DISPOSABLE=1 \
             -v "$PWD:/src:ro" ryoku-firstboot-test \
             bash /src/installation/tests/fedora-firstboot.sh \
             2>&1 | tee /tmp/firstboot-evidence/firstboot.log
       - name: Test offline provisioning without network access
         run: |
           set -o pipefail
-          podman run --rm --network=none --no-hostname -e RYOKU_TEST_DISPOSABLE=1 \
+          podman run --rm --network=none -e RYOKU_TEST_DISPOSABLE=1 \
             -v "$PWD:/src:ro" ryoku-firstboot-test \
             bash /src/installation/tests/fedora-provision.sh \
             2>&1 | tee /tmp/firstboot-evidence/provision.log
       - name: Test offline repository setup and package closure
         run: |
           set -o pipefail
-          podman run --rm --network=none --no-hostname -e RYOKU_TEST_DISPOSABLE=1 \
+          podman run --rm --network=none -e RYOKU_TEST_DISPOSABLE=1 \
             -v "$PWD:/src:ro" ryoku-firstboot-test \
             bash /src/installation/tests/fedora-repo.sh \
             2>&1 | tee /tmp/firstboot-evidence/repo.log
       - name: Test ISO builder and kickstart recipe without network access
         run: |
           set -o pipefail
-          podman run --rm --network=none --no-hostname -e RYOKU_TEST_DISPOSABLE=1 \
+          podman run --rm --network=none -e RYOKU_TEST_DISPOSABLE=1 \
             -v "$PWD:/src:ro" ryoku-firstboot-test \
             bash /src/installation/tests/fedora-iso.sh \
             2>&1 | tee /tmp/firstboot-evidence/iso.log
       - name: Test VM harness and kickstart variants without network access
         run: |
           set -o pipefail
-          podman run --rm --network=none --no-hostname -e RYOKU_TEST_DISPOSABLE=1 \
+          podman run --rm --network=none -e RYOKU_TEST_DISPOSABLE=1 \
             -v "$PWD:/src:ro" ryoku-firstboot-test \
             bash /src/installation/tests/fedora-iso-vm.sh --stage-only \
             2>&1 | tee /tmp/firstboot-evidence/vm-stage.log

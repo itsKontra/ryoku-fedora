@@ -107,9 +107,9 @@ python3 -m unittest discover -s installation/fedora/tests -v
 
 The [first-boot workflow](../../.github/workflows/fedora-firstboot.yml) prepares
 a disposable Fedora 44 container, then runs
-`installation/tests/fedora-firstboot.sh` with `--network=none` and
-`RYOKU_TEST_DISPOSABLE=1`. Use Podman's `--no-hostname`: systemd atomically
-replaces `/etc/hostname`, which cannot work on a container-generated bind mount.
+`installation/tests/fedora-firstboot.sh` with `--network=none`,
+`--cap-add=SYS_ADMIN` and `RYOKU_TEST_DISPOSABLE=1`. If `/etc/hostname` is a
+container bind mount, the test unmounts it so systemd can atomically replace it.
 The test is destructive to the container's accounts and settings; never run it
 on a workstation or a target intended for installation.
 

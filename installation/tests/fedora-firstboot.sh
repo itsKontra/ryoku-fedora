@@ -8,6 +8,13 @@ set -euo pipefail
   echo 'refusing to change accounts outside a disposable container' >&2
   exit 1
 }
+
+# If running in a container where /etc/hostname is a mountpoint, unmount it so
+# systemd-firstboot can atomically replace it.
+if mountpoint -q /etc/hostname; then
+  umount /etc/hostname || true
+fi
+
 root=$(cd "$(dirname "$0")/../.." && pwd)
 python3 -m unittest discover -s "$root/installation/fedora/tests" -v
 install -Dm755 "$root/installation/fedora/firstboot.py" /usr/libexec/ryoku-firstboot
