@@ -260,13 +260,13 @@ func TestFedoraUpdateLanes(t *testing.T) {
 	}
 	t.Setenv("PATH", bin)
 	got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-desktop", "ryoku/ryoku-shell"}), " ")
-	if got != "sudo dnf -y --repo=ryoku distro-sync ryoku-desktop ryoku-shell" {
+	if got != "sudo dnf -y --repo=RyokuCOPR distro-sync ryoku-desktop ryoku-shell" {
 		t.Fatalf("Ryoku lane: %s", got)
 	}
 	if got := strings.Join(systemUpgradeArgs(), " "); got != "sudo dnf -y upgrade" {
 		t.Fatalf("system lane: %s", got)
 	}
-	if got := strings.Join(refreshDBArgs(true), " "); got != "sudo dnf --repo=ryoku --refresh makecache" {
+	if got := strings.Join(refreshDBArgs(true), " "); got != "sudo dnf --repo=RyokuCOPR --refresh makecache" {
 		t.Fatalf("refresh: %s", got)
 	}
 }
@@ -278,7 +278,7 @@ func TestDNFSymlinkAndEmptyRyokuSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
-	if got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-shell"}), " "); got != "sudo dnf -y --repo=ryoku distro-sync ryoku-shell" {
+	if got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-shell"}), " "); got != "sudo dnf -y --repo=RyokuCOPR distro-sync ryoku-shell" {
 		t.Fatal(got)
 	}
 	if got := strings.Join(ryokuInstallArgs(nil), " "); got != "true" {

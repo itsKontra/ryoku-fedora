@@ -183,7 +183,7 @@ func SetPackagedChannel(channel string) error {
 // lets the next -Sy pull a matched pair. Callers refresh afterwards.
 func DropRyokuSyncDB() error {
 	if manager := RPMManager(); manager != "" {
-		return Sudo(manager, "--repo=ryoku", "clean", "metadata")
+		return Sudo(manager, "--repo="+RPMRepoName, "clean", "metadata")
 	}
 	names := []string{"ryoku.db", "ryoku.db.sig", "ryoku.files", "ryoku.files.sig"}
 	paths := make([]string, len(names))

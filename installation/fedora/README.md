@@ -246,7 +246,7 @@ The planned installation contract is:
 - Use Fedora `ffmpeg-free` for compatibility with the published Ryoku RPMs.
   Validate the complete transaction before composing the ISO; do not use
   `--allowerasing` or skip broken dependencies to hide conflicts.
-- Preserve the existing `[ryoku]` release/channel repository contract for
+- Preserve the `[RyokuCOPR]` release/channel repository contract for
   subsequent updates. The local media repository is an installation source,
   not the installed machine's permanent update URL.
 

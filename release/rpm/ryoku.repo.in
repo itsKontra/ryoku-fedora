@@ -1,4 +1,4 @@
-[ryoku]
+[RyokuCOPR]
 name=Ryoku desktop
 baseurl=@BASE_URL@/fedora-$releasever-$basearch/
 enabled=1

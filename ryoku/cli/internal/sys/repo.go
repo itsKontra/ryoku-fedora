@@ -43,7 +43,7 @@ func ResolveRepo() string {
 	}
 	candidates := []string{"ryoku-arch"}
 	if RPMManager() != "" {
-		candidates = []string{"ryoku-fedora", "ryoku-arch"}
+		candidates = []string{"ryoku-fedora"}
 	}
 	for _, name := range candidates {
 		track := filepath.Join(Home(), name)

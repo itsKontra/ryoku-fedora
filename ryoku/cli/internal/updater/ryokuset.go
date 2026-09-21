@@ -71,26 +71,12 @@ func ryokuSet(repoNames, installed []string) []string {
 	return out
 }
 
-// rpmRepoName determines whether "ryoku" or "RyokuCOPR" is the configured repo name.
-func rpmRepoName() string {
-	manager := sys.RPMManager()
-	if manager == "" {
-		return ryokuRepo
-	}
-	if out, err := sys.RunOut(manager, "repolist", "--enabled"); err == nil {
-		if strings.Contains(out, "RyokuCOPR") && !strings.Contains(out, "ryoku") {
-			return "RyokuCOPR"
-		}
-	}
-	return ryokuRepo
-}
-
 // installedRyokuSet reads the box. An error means the question could not be
 // answered (no [ryoku] section, an unsynced db, no pacman): the caller must
 // stop rather than fall back to a system upgrade, which is the other lane.
 func installedRyokuSet() ([]string, error) {
 	if manager := sys.RPMManager(); manager != "" {
-		repo, err := sys.RunOut(manager, "repoquery", "--repo", rpmRepoName(), "--qf", "%{name}\n")
+		repo, err := sys.RunOut(manager, "repoquery", "--repo", sys.RPMRepoName, "--qf", "%{name}\n")
 		if err != nil {
 			return nil, err
 		}
@@ -134,7 +120,7 @@ func lines(out string) []string {
 // failed with "invalid or corrupted database (PGP signature)".
 func refreshDBArgs(force bool) []string {
 	if manager := sys.RPMManager(); manager != "" {
-		return []string{"sudo", manager, "--repo=" + rpmRepoName(), "--refresh", "makecache"}
+		return []string{"sudo", manager, "--repo=" + sys.RPMRepoName, "--refresh", "makecache"}
 	}
 	op := "-Sy"
 	if force {
@@ -159,7 +145,7 @@ func ryokuInstallArgs(set []string) []string {
 		return []string{"true"}
 	}
 	if manager := sys.RPMManager(); manager != "" {
-		args := []string{"sudo", manager, "-y", "--repo=" + rpmRepoName(), "distro-sync"}
+		args := []string{"sudo", manager, "-y", "--repo=" + sys.RPMRepoName, "distro-sync"}
 		for _, p := range set {
 			args = append(args, strings.TrimPrefix(p, ryokuRepo+"/"))
 		}

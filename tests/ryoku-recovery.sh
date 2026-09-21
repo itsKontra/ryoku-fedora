@@ -72,7 +72,9 @@ present() { if [[ -e $1 || -L $1 ]]; then echo "  ok: $2"; else echo "::error::F
 # recovery must drag ~/ryoku-arch back to main in place and consolidate the
 # stray data-root trees so `ryoku update` can never re-strand the box.
 home1="$work/home1"
-arch1="$home1/ryoku-arch"
+checkout_name=ryoku-arch
+if command -v dnf >/dev/null 2>&1; then checkout_name=ryoku-fedora; fi
+arch1="$home1/$checkout_name"
 data1="$home1/.local/share/ryoku"
 mkdir -p "$home1/.local/lib" "$data1"
 git_q clone -q "$origin" "$arch1"
@@ -114,7 +116,7 @@ check "$(git_q -C "$data1/keep" rev-parse --abbrev-ref HEAD)" "unstable-dev" \
 
 # case 2: clean machine, no prior checkout. clones ~/ryoku-arch on main-fedora.
 home2="$work/home2"
-arch2="$home2/ryoku-arch"
+arch2="$home2/$checkout_name"
 HOME="$home2" XDG_DATA_HOME="$home2/.local/share" \
   XDG_STATE_HOME="$home2/.local/state" XDG_CONFIG_HOME="$home2/.config" \
   RYOKU_RECOVERY_URL="$origin" RYOKU_CHANNEL="unstable-dev" \
@@ -122,7 +124,7 @@ HOME="$home2" XDG_DATA_HOME="$home2/.local/share" \
   "$RECOVERY" --yes --no-packages >/dev/null
 
 check "$(git_q -C "$arch2" rev-parse --abbrev-ref HEAD)" "main-fedora" \
-  "clean machine clones ~/ryoku-arch on main-fedora"
+  "clean machine clones the distro checkout on main-fedora"
 
 # A recorded source installation follows its own fork/ref, including recovery.
 state3="$work/home3/.local/state/ryoku"

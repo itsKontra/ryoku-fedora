@@ -77,7 +77,7 @@ func reconcileRepoPointer(checkOnly bool) recResult {
 	}
 	trackCandidates := []string{"ryoku-arch"}
 	if sys.RPMManager() != "" {
-		trackCandidates = []string{"ryoku-fedora", "ryoku-arch"}
+		trackCandidates = []string{"ryoku-fedora"}
 	}
 	var track string
 	for _, name := range trackCandidates {

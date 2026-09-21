@@ -42,7 +42,8 @@ def configure(copr_fingerprint, root=Path('/')):
     atomic_write(root / key_path, data)
     template = Path(__file__).with_name('ryoku.repo.in').read_text()
     config = template.replace('@BASE_URL@', COPR_ROOT).replace('@KEY_URL@', 'file:///' + key_path)
-    atomic_write(root / 'etc/yum.repos.d/ryoku.repo', config.encode())
+    atomic_write(root / 'etc/yum.repos.d/RyokuCOPR.repo', config.encode())
+    (root / 'etc/yum.repos.d/ryoku.repo').unlink(missing_ok=True)
     (root / 'etc/dnf/vars/ryoku_baseurl').unlink(missing_ok=True)
 
 

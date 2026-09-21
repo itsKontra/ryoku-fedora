@@ -11,7 +11,7 @@ Use COPR to build Fedora RPMs, use DNF to install released software, and retain 
 - Fedora has `fromSource: true` in `ryoku-shell-installer/distro.go`. `stepPackages` installs dependencies and compilers; `stepBuild` runs `ryoku/shell/deploy.sh`.
 - Installer and test independently list five dependency COPRs: `sdegler/hyprland`, `errornointernet/quickshell`, `atim/starship`, `atim/lazygit`, and `lihaohong/yazi`.
 - `ryoku-install-extra` downloads upstream binaries for `matugen`, `gpk`, and `prowl-agent`, plus Bibata, Space Grotesk, Material Symbols, and JetBrains Mono Nerd Font assets. Those binaries are not compiled from this checkout. `ryoku-extras.spec` currently bundles all of them into an RPM.
-- `ryoku/cli/internal/sys/rpm.go` expects `/etc/yum.repos.d/ryoku.repo`, repository ID `ryoku`, and `/etc/dnf/vars/ryoku_baseurl`. A normal COPR enable operation does not satisfy that contract.
+- `ryoku/cli/internal/sys/rpm.go` expects `/etc/yum.repos.d/RyokuCOPR.repo` and repository ID `RyokuCOPR`. A normal COPR enable operation does not satisfy that contract.
 - `reconcileDevResidue` in `ryoku/cli/internal/doctor/doctor.go` still invokes `pacman -Qoq` to identify local binary shadows. RPM migration must fix this, including packaged names such as `ryogami` that do not start with `ryoku`.
 
 **COPR projects and initial support**

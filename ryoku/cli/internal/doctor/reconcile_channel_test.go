@@ -152,7 +152,11 @@ func TestReconcileRepoPointerRepoints(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(state, "repo"), []byte("/gone\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	track := filepath.Join(home, "ryoku-arch")
+	name := "ryoku-arch"
+	if sys.RPMManager() != "" {
+		name = "ryoku-fedora"
+	}
+	track := filepath.Join(home, name)
 	mkRyokuArch(t, root, track)
 	// the box still opts into source tracking (a recorded RYOKU_CHANNEL), so a
 	// lost pointer self-heals to the clone.

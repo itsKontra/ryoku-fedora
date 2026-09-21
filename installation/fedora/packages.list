@@ -80,6 +80,7 @@ vim-enhanced
 bat
 lua
 python3
+golang
 alacritty
 fish
 fzf

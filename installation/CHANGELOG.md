@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Fixed
+- Require a password-protected administrator for Anaconda installs, include Go,
+  use RyokuCOPR consistently, and align provisioning checks with the desktop.
+
+### Fixed
 - Fedora ISO selects a named Ryoku Desktop environment, preserves accounts and
   regional settings chosen in Anaconda, and validates the complete network
   package selection before compose. Correct missing dependency repositories and

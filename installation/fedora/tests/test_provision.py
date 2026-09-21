@@ -243,6 +243,26 @@ class ProvisionTargetTest(unittest.TestCase):
             provision_target.provision(self.root, anaconda=True)
         self.assertFalse((self.root / "home/ryoku").exists())
 
+    def test_anaconda_requires_password_protected_administrator(self):
+        self.write("etc/passwd", "root:x:0:0:root:/root:/bin/bash\nalice:x:1001:1001:Alice:/home/alice:/bin/bash\n")
+        for password, member in (("!", "alice"), ("!$6$hash", "alice"), ("*", "alice"), ("", "alice"), ("$6$hash", "")):
+            with self.subTest(password=password, member=member):
+                self.write("etc/shadow", f"root:!::0:99999:7:::\nalice:{password}::0:99999:7:::\n")
+                self.write("etc/group", f"wheel:x:10:{member}\n")
+                with self.assertRaisesRegex(ValueError, "administrator"):
+                    provision_target.anaconda_accounts(self.root)
+        self.write("etc/group", "wheel:x:10:alice\n")
+        self.assertEqual(provision_target.anaconda_accounts(self.root), [("alice", "/home/alice")])
+
+    def test_normalize_dnf_repository_migrates_legacy_name(self):
+        self.write("etc/yum.repos.d/ryoku.repo", "[ryoku]\nbaseurl=https://example.test/repo\ngpgcheck=1\n")
+        provision_target.normalize_dnf_repositories(self.root)
+        canonical = self.root / "etc/yum.repos.d/RyokuCOPR.repo"
+        self.assertIn("[RyokuCOPR]", canonical.read_text())
+        self.assertFalse((self.root / "etc/yum.repos.d/ryoku.repo").exists())
+        provision_target.normalize_dnf_repositories(self.root)
+        self.assertIn("gpgcheck=1", canonical.read_text())
+
     def test_full_provision_flow(self):
         calls = []
 

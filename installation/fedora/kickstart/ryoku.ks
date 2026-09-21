@@ -16,7 +16,7 @@ network --bootproto=dhcp --device=link --activate
 # Repository configuration: Online network sources for netinstall media
 url --metalink="https://mirrors.fedoraproject.org/metalink?repo=fedora-44&arch=x86_64"
 repo --name="FedoraUpdates" --metalink="https://mirrors.fedoraproject.org/metalink?repo=updates-released-f44&arch=x86_64" --cost=20
-repo --name="ryoku" --baseurl="https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64/" --cost=20 --install
+repo --name="RyokuCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64/" --cost=20 --install
 repo --name="RyotunesCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/itskontra/ryotunes/fedora-44-x86_64/" --cost=20 --install
 repo --name="StarshipCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/atim/starship/fedora-44-x86_64/" --cost=20 --install
 repo --name="QuickshellCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/errornointernet/quickshell/fedora-44-x86_64/" --cost=20 --install
@@ -49,7 +49,8 @@ btrfs /.snapshots --subvol --name=snapshots btrfs.01
 bootloader --timeout=1
 
 # Accounts and authentication
-# Create your administrator account and password in Anaconda User Creation.
+# A password-protected wheel account is required in Anaconda User Creation.
+# The provisioner rejects targets without a usable administrator.
 rootpw --lock
 
 # System services

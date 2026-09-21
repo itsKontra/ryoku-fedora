@@ -201,6 +201,9 @@ class Repository(unittest.TestCase):
     def test_direct_copr_configuration_preserves_package_checks(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            legacy = root / 'etc/yum.repos.d/ryoku.repo'
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text('[ryoku]\nbaseurl=https://example.invalid/old\n')
             response = Mock()
             response.url = repository.COPR_ROOT + '/pubkey.gpg'
             response.read.return_value = b'public key'
@@ -209,7 +212,9 @@ class Repository(unittest.TestCase):
                 with patch.object(repository.verify, 'verify_key') as verify:
                     repository.configure('a' * 40, root)
                     verify.assert_called_once()
-            config = (root / 'etc/yum.repos.d/ryoku.repo').read_text()
+            config = (root / 'etc/yum.repos.d/RyokuCOPR.repo').read_text()
+            self.assertIn('[RyokuCOPR]', config)
+            self.assertFalse(legacy.exists())
             self.assertIn(repository.COPR_ROOT + '/fedora-$releasever-$basearch/', config)
             self.assertIn('gpgcheck=1', config)
             self.assertIn('repo_gpgcheck=0', config)
@@ -227,7 +232,7 @@ class Repository(unittest.TestCase):
                 with patch.object(repository.verify, 'verify_key', side_effect=ValueError('wrong fingerprint')):
                     with self.assertRaises(ValueError):
                         repository.configure('a' * 40, root)
-            self.assertFalse((root / 'etc/yum.repos.d/ryoku.repo').exists())
+            self.assertFalse((root / 'etc/yum.repos.d/RyokuCOPR.repo').exists())
 
 
 if __name__ == '__main__':

@@ -170,9 +170,9 @@ func runUninstall(yes, dry bool) int {
 	}
 
 	// 2. the [ryoku] repo stanza; original kept next to it.
-	if activeDistro.id == "fedora" && pathExists("/etc/yum.repos.d/ryoku.repo") {
-		if confirm(rd, "disable the [ryoku] RPM repository?", yes) {
-			if err := run("sudo", "-n", "mv", "/etc/yum.repos.d/ryoku.repo", "/etc/yum.repos.d/ryoku.repo.disabled"); err != nil {
+	if activeDistro.id == "fedora" && pathExists("/etc/yum.repos.d/RyokuCOPR.repo") {
+		if confirm(rd, "disable the [RyokuCOPR] RPM repository?", yes) {
+			if err := run("sudo", "-n", "mv", "/etc/yum.repos.d/RyokuCOPR.repo", "/etc/yum.repos.d/RyokuCOPR.repo.disabled"); err != nil {
 				fmt.Println("could not disable the Ryoku repository: " + err.Error())
 				return 1
 			}

@@ -10,6 +10,7 @@ CHANNEL="${RYOKU_RECOVERY_REF:-main-fedora}"
 # Converge every box onto the one checkout `ryoku track` uses, so update and
 # recovery never track different trees; legacy checkouts are consolidated below.
 DATA_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/ryoku"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku"
 if [[ -z ${RYOKU_RECOVERY_DIR:-} ]]; then
   if [[ -d $HOME/ryoku-fedora ]] || command -v dnf >/dev/null 2>&1; then
     RECOVERY_DIR="$HOME/ryoku-fedora"

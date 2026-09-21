@@ -26,14 +26,14 @@ func stepFedoraRepo(e *engine) error {
 		if err := e.sudo("python3", filepath.Join(e.payload, "release/rpm/configure-repo.py"), copr); err != nil {
 			return err
 		}
-		if err := e.sudo("dnf", "--refresh", "--repo=ryoku", "makecache"); err != nil {
+		if err := e.sudo("dnf", "--refresh", "--repo=RyokuCOPR", "makecache"); err != nil {
 			return fmt.Errorf(i18n.T("refresh the signed Ryoku repository: %w"), err)
 		}
 		if !e.dry {
 			for _, pkg := range []string{"ryoku-desktop", "ryoku-desktop-" + e.p.compositor} {
-				output, err := exec.Command("dnf", "-q", "--repo=ryoku", "repoquery", "--available", pkg).Output()
+				output, err := exec.Command("dnf", "-q", "--repo=RyokuCOPR", "repoquery", "--available", pkg).Output()
 				if err != nil || len(strings.TrimSpace(string(output))) == 0 {
-					return fmt.Errorf(i18n.T("required package %s is unavailable in [ryoku]; check the Fedora release, architecture and published channel"), pkg)
+					return fmt.Errorf(i18n.T("required package %s is unavailable in [RyokuCOPR]; check the Fedora release, architecture and published channel"), pkg)
 				}
 			}
 		}

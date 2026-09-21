@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Configure and verify the Fedora desktop repository as RyokuCOPR.
+
 ### Changed
 - Fedora can install released desktop RPMs with DNF while explicit source and
   local-payload installs keep their checkout builds. Repository setup shares

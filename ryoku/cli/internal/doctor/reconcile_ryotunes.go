@@ -30,9 +30,7 @@ const ryotunesSocketUnit = "ryotunesd.socket"
 // stale repo copy), so it lands the current build even before a repo re-import
 // has propagated.
 func reconcileRyotunes(checkOnly bool) recResult {
-	if !sys.Has("pacman") {
-		return okRes(i18n.T("ryotunes package tracking is pacman-only"))
-	}
+	rpmManager := sys.RPMManager()
 	var problems, fixes []string
 
 	bin := filepath.Join(sys.Home(), ".local", "bin", "ryotunes")
@@ -57,6 +55,9 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		fixes = append(fixes, "systemctl --user enable --now ryotunesd.socket")
 	}
 	if len(problems) == 0 {
+		if rpmManager != "" {
+			return okRes(i18n.T("ryotunes is the packaged app"))
+		}
 		if _, err := sys.RunOut("pacman", "-Qoq", "/usr/bin/ryotunes"); err != nil && sys.Exists("/usr/bin/ryotunes") {
 			return warnRes(i18n.T("/usr/bin/ryotunes is not owned by the ryotunes package")).
 				withFix("sudo pacman -S --overwrite /usr/bin/ryotunes ryotunes")
@@ -85,19 +86,20 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		}
 	}
 	if desktopMissingRyotunes {
-		// Install from the official GitHub release, verified and re-checked
-		// against its own pacman metadata, rather than `pacman -S` from the
-		// [ryoku] repo: it delivers the current native build on any box (dev
-		// checkout or packaged) without depending on the repo being configured
-		// or a re-import having propagated. Ryotunes' own channel, like Upgrade.
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		_, err := ryotunesrelease.Ensure(ctx)
-		cancel()
+		// Fedora consumes RPMs; Arch tracks the verified upstream release.
+		var err error
+		if rpmManager != "" {
+			err = sys.Sudo(rpmManager, "-y", "install", "ryotunes")
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			_, err = ryotunesrelease.Ensure(ctx)
+			cancel()
+		}
 		if err != nil {
 			return failRes(i18n.T("could not install ryotunes: %v"), err).withFix("ryoku update")
 		}
 	}
-	if socketMissing {
+	if socketMissing || (desktopMissingRyotunes && sys.PkgInstalled("ryotunes") && !ryotunesSocketEnabled()) {
 		// daemon-reload so a unit the package just delivered is known, then
 		// enable --now: the socket binds in this session without a relogin.
 		_ = exec.Command("systemctl", "--user", "daemon-reload").Run()

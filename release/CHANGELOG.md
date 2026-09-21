@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Write the Fedora repository as RyokuCOPR and retire the old ryoku.repo file.
+
 ### Changed
 - Fedora RPM checks invoke the standard `dnf` command. COPR build and
   publishing integration is tracked in fork issue #4.

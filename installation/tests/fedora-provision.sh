@@ -119,7 +119,7 @@ test -f "$target/etc/sddm.conf.d/10-ryoku-wayland.conf"
 grep -q 'DisplayServer=wayland' "$target/etc/sddm.conf.d/10-ryoku-wayland.conf"
 test -f "$target/etc/sddm.conf.d/99-ryoku.conf"
 grep -q 'Current=ryoku' "$target/etc/sddm.conf.d/99-ryoku.conf"
-grep -q 'Session=niri.desktop' "$target/etc/sddm.conf.d/99-ryoku.conf"
+grep -q 'Session=hyprland.desktop' "$target/etc/sddm.conf.d/99-ryoku.conf"
 [[ -L "$target/etc/systemd/system/display-manager.service" ]]
 [[ $(readlink "$target/etc/systemd/system/display-manager.service") == "/usr/lib/systemd/system/sddm.service" ]]
 [[ -L "$target/etc/systemd/system/default.target" ]]
@@ -144,7 +144,7 @@ test -f "$target/home/ryoku/.local/share/qylock/themes/clockwork/orbital/Main.qm
 test -d "$target/home/ryoku/Pictures/Wallpapers"
 test -d "$target/home/ryoku/Pictures/ryodecors"
 test -d "$target/home/ryoku/.local/share/ryoku/assets/brand"
-test -f "$target/usr/share/applications/niri-mimeapps.list"
+test -f "$target/usr/share/applications/ryoku-mimeapps.list"
 test -f "$target/usr/share/applications/mimeapps.list"
 
 # 9. Verify materialization and file ownership

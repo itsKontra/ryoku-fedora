@@ -581,6 +581,11 @@ def relabel_selinux(root, runner=None, home=RYOKU_HOME):
 
 def anaconda_accounts(root):
     """Use the accounts created by Anaconda without rewriting credentials."""
+    shadow = dict(line.split(":", 2)[:2] for line in (root / "etc/shadow").read_text().splitlines() if ":" in line)
+    wheel = next((line.split(":") for line in (root / "etc/group").read_text().splitlines()
+                  if line.startswith("wheel:")), None)
+    administrators = set(wheel[3].split(",")) if wheel else set()
+    usable_admin = False
     accounts = []
     for line in (root / "etc/passwd").read_text().splitlines():
         fields = line.split(":")
@@ -591,8 +596,14 @@ def anaconda_accounts(root):
             if not home.is_absolute() or ".." in home.parts or home == Path("/"):
                 raise ValueError("Invalid installation account home")
             accounts.append((fields[0], str(home)))
+            password = shadow.get(fields[0], "")
+            if password and not password.startswith(("!", "*")):
+                if wheel and (fields[0] in administrators or fields[3] == wheel[2]):
+                    usable_admin = True
     if not accounts:
         raise ValueError("Create a login account in Anaconda User Creation before installing")
+    if not usable_admin:
+        raise ValueError("Create an administrator in Anaconda User Creation with a password and wheel membership before installing")
     sudoers = root / "etc/sudoers.d/10-ryoku-wheel"
     sudoers.parent.mkdir(parents=True, exist_ok=True)
     sudoers.write_text("%wheel ALL=(ALL:ALL) ALL\n")
@@ -606,12 +617,11 @@ def normalize_dnf_repositories(root):
         return
     copr_repo = repos_d / "RyokuCOPR.repo"
     ryoku_repo = repos_d / "ryoku.repo"
-    if copr_repo.is_file() and not ryoku_repo.is_file():
-        content = copr_repo.read_text().replace("[RyokuCOPR]", "[ryoku]")
-        ryoku_repo.write_text(content)
-        copr_repo.unlink(missing_ok=True)
-    elif copr_repo.is_file() and ryoku_repo.is_file():
-        copr_repo.unlink(missing_ok=True)
+    if ryoku_repo.is_file():
+        if not copr_repo.is_file():
+            content = ryoku_repo.read_text().replace("[ryoku]", "[RyokuCOPR]")
+            copr_repo.write_text(content)
+        ryoku_repo.unlink()
 
     for repo_file in sorted(repos_d.glob("*.repo")):
         try:

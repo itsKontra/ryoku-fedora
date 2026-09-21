@@ -6,7 +6,9 @@ import (
 	"strings"
 )
 
-var RPMRepoFile = "/etc/yum.repos.d/ryoku.repo"
+const RPMRepoName = "RyokuCOPR"
+
+var RPMRepoFile = "/etc/yum.repos.d/" + RPMRepoName + ".repo"
 
 const COPRServer = "https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-$releasever-$basearch"
 const ChannelCOPR = "copr"
@@ -32,24 +34,13 @@ func rpmChannelOfServer(server string) string {
 	}
 	return ""
 }
-func activeRPMRepoFile() string {
-	if _, err := os.Stat(RPMRepoFile); err == nil {
-		return RPMRepoFile
-	}
-	const coprFile = "/etc/yum.repos.d/RyokuCOPR.repo"
-	if _, err := os.Stat(coprFile); err == nil {
-		return coprFile
-	}
-	return RPMRepoFile
-}
-
 func rpmRepoServer() string {
-	b, _ := os.ReadFile(activeRPMRepoFile())
+	b, _ := os.ReadFile(RPMRepoFile)
 	in := false
 	for _, line := range strings.Split(string(b), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "[") {
-			in = line == "[ryoku]" || line == "[RyokuCOPR]"
+			in = line == "["+RPMRepoName+"]"
 			continue
 		}
 		k, v, ok := strings.Cut(line, "=")
@@ -64,7 +55,7 @@ func setRPMChannel(channel string) error {
 	if server == "" {
 		return fmt.Errorf("Fedora uses the copr channel; stable, testing and frozen release tags are unavailable")
 	}
-	repoFile := activeRPMRepoFile()
+	repoFile := RPMRepoFile
 	b, err := os.ReadFile(repoFile)
 	if err != nil {
 		return err
@@ -74,7 +65,7 @@ func setRPMChannel(channel string) error {
 	for i, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "[") {
-			in = line == "[ryoku]" || line == "[RyokuCOPR]"
+			in = line == "["+RPMRepoName+"]"
 			continue
 		}
 		k, _, ok := strings.Cut(line, "=")
@@ -84,7 +75,7 @@ func setRPMChannel(channel string) error {
 		}
 	}
 	if !done {
-		return fmt.Errorf("no [ryoku] or [RyokuCOPR] baseurl in %s", repoFile)
+		return fmt.Errorf("no [RyokuCOPR] baseurl in %s", repoFile)
 	}
 	return WriteRootFile(repoFile, strings.Join(lines, "\n"), "0644")
 }

@@ -457,7 +457,7 @@ func systemUpgradeArgs() []string {
 // pulling the umbrella's exact-version depends with it.
 func channelSwitchArgs() []string {
 	if manager := sys.RPMManager(); manager != "" {
-		return []string{"sudo", manager, "-y", "--repo=ryoku", "install", "ryoku-desktop"}
+		return []string{"sudo", manager, "-y", "--repo=" + sys.RPMRepoName, "install", "ryoku-desktop"}
 	}
 	if sys.Has("apt-get") && !sys.Has("pacman") {
 		return []string{"true"}
@@ -1280,7 +1280,7 @@ func latestAvailable(pkg string) string {
 			}
 		}
 	} else if manager := sys.RPMManager(); manager != "" {
-		out, err := sys.RunOut(manager, "repoquery", "--repo=ryoku", "--qf", "%{VERSION}-%{RELEASE}", pkg)
+		out, err := sys.RunOut(manager, "repoquery", "--repo="+sys.RPMRepoName, "--qf", "%{VERSION}-%{RELEASE}", pkg)
 		if err == nil && strings.TrimSpace(out) != "" {
 			return strings.TrimSpace(out)
 		}
