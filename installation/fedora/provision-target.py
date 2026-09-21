@@ -261,15 +261,29 @@ def initialize_boot_guard(root):
         subprocess.run(["systemd-tmpfiles", f"--root={root}", "--create", str(tmpfiles_conf)], check=False, stderr=subprocess.DEVNULL)
 
 
+def resolve_repo_dir(repo_dir=None):
+    if repo_dir:
+        candidate = Path(repo_dir)
+        if candidate.is_dir():
+            return candidate
+    script_parent = Path(__file__).resolve().parents[2]
+    if (script_parent / "ryoku/assets").is_dir():
+        return script_parent
+    for mount in (Path("/run/install/repo"), Path("/run/install/source"), Path("/mnt/install/source")):
+        if (mount / "ryoku/assets").is_dir():
+            return mount
+    return script_parent
+
+
 def seed_desktop_extras(root, repo_dir=None):
     bibata_dir = root / "usr/share/icons/Bibata-Modern-Ice"
     if bibata_dir.is_dir():
         return
 
-    script_candidates = []
-    if repo_dir:
-        script_candidates.append(Path(repo_dir) / "ryoku/shell/scripts/ryoku-install-extra")
-    script_candidates.append(Path(__file__).resolve().parents[2] / "ryoku/shell/scripts/ryoku-install-extra")
+    repo = resolve_repo_dir(repo_dir)
+    script_candidates = [
+        repo / "ryoku/shell/scripts/ryoku-install-extra",
+    ]
     script_path = next((p for p in script_candidates if p.is_file()), None)
     if not script_path:
         return
@@ -290,12 +304,11 @@ def seed_desktop_extras(root, repo_dir=None):
 
 
 def seed_lockscreen(root, repo_dir=None, home=RYOKU_HOME):
+    repo = resolve_repo_dir(repo_dir)
     candidates = [
         root / "usr/share/ryoku/lockscreen/qylock",
+        repo / "ryoku/lockscreen/qylock",
     ]
-    if repo_dir:
-        candidates.append(Path(repo_dir) / "ryoku/lockscreen/qylock")
-    candidates.append(Path(__file__).resolve().parents[2] / "ryoku/lockscreen/qylock")
 
     bundle = next((p for p in candidates if (p / "themes/clockwork/orbital/Main.qml").is_file()), None)
     if not bundle:
@@ -349,7 +362,7 @@ def seed_lockscreen(root, repo_dir=None, home=RYOKU_HOME):
 
 def seed_assets_and_integration(root, repo_dir=None, home=RYOKU_HOME):
     user_home = root / home.lstrip("/")
-    repo = Path(repo_dir) if repo_dir else Path(__file__).resolve().parents[2]
+    repo = resolve_repo_dir(repo_dir)
 
     # 1. Desktop entries and MIME defaults
     apps_dir = root / "usr/share/applications"

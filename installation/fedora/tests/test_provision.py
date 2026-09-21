@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -272,6 +273,19 @@ class ProvisionTargetTest(unittest.TestCase):
         updated = (self.root / copr_file).read_text()
         self.assertIn("gpgcheck = 1", updated)
         self.assertIn("gpgkey = https://download.copr.fedorainfracloud.org/results/itskontra/ryotunes/pubkey.gpg", updated)
+
+    def test_seed_assets_falls_back_to_repo_dir_when_target_lacks_wallpapers(self):
+        # Remove target wallpapers so target lacks usr/share/ryoku/wallpapers
+        shutil.rmtree(self.root / "usr/share/ryoku/wallpapers")
+        with tempfile.TemporaryDirectory() as temp_repo:
+            repo_path = Path(temp_repo)
+            wall_dir = repo_path / "ryoku/assets/wallpapers"
+            wall_dir.mkdir(parents=True, exist_ok=True)
+            (wall_dir / "fallback.png").write_text("fallback wallpaper\n")
+
+            user_home = self.root / "home/ryoku"
+            provision_target.seed_assets_and_integration(self.root, repo_dir=repo_path, home="/home/ryoku")
+            self.assertTrue((user_home / "Pictures/Wallpapers/fallback.png").is_file())
 
 
 if __name__ == "__main__":

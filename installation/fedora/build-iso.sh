@@ -209,6 +209,35 @@ if [[ -d "$REPO_DIR" ]]; then
   cp -a "$REPO_DIR"/* "$ISO_STAGE/repo/" 2>/dev/null || true
 fi
 
+# Inject Ryoku payload assets and configurations for provisioner fallback
+mkdir -p "$ISO_STAGE/ryoku/assets"
+if [[ -d "$REPO_ROOT/ryoku/assets/wallpapers" ]]; then
+  cp -a "$REPO_ROOT/ryoku/assets/wallpapers" "$ISO_STAGE/ryoku/assets/"
+fi
+if [[ -d "$REPO_ROOT/ryoku/assets/brand" ]]; then
+  cp -a "$REPO_ROOT/ryoku/assets/brand" "$ISO_STAGE/ryoku/assets/"
+fi
+if [[ -d "$REPO_ROOT/ryoku/assets/ryodecors" ]]; then
+  cp -a "$REPO_ROOT/ryoku/assets/ryodecors" "$ISO_STAGE/ryoku/assets/"
+fi
+if [[ -d "$REPO_ROOT/ryoku/apps" ]]; then
+  mkdir -p "$ISO_STAGE/ryoku/apps/npm"
+  if [[ -f "$REPO_ROOT/ryoku/apps/mimeapps.list" ]]; then
+    cp -a "$REPO_ROOT/ryoku/apps/mimeapps.list" "$ISO_STAGE/ryoku/apps/"
+  fi
+  if [[ -f "$REPO_ROOT/ryoku/apps/npm/npmrc" ]]; then
+    cp -a "$REPO_ROOT/ryoku/apps/npm/npmrc" "$ISO_STAGE/ryoku/apps/npm/"
+  fi
+fi
+if [[ -d "$REPO_ROOT/ryoku/lockscreen/qylock" ]]; then
+  mkdir -p "$ISO_STAGE/ryoku/lockscreen"
+  cp -a "$REPO_ROOT/ryoku/lockscreen/qylock" "$ISO_STAGE/ryoku/lockscreen/"
+fi
+if [[ -f "$REPO_ROOT/ryoku/shell/scripts/ryoku-install-extra" ]]; then
+  mkdir -p "$ISO_STAGE/ryoku/shell/scripts"
+  cp -a "$REPO_ROOT/ryoku/shell/scripts/ryoku-install-extra" "$ISO_STAGE/ryoku/shell/scripts/"
+fi
+
 # Payload stamp
 cat > "$ISO_STAGE/.ryoku-media" <<EOF
 NAME="Ryoku Fedora Installation Media"
@@ -268,6 +297,9 @@ if [[ -n "$BOOT_ISO" && -f "$BOOT_ISO" ]]; then
       --volid "$VOLID"
       --skip-mkefiboot
     )
+    if [[ -d "$ISO_STAGE/ryoku" ]]; then
+      mkksiso_args+=(--add "$ISO_STAGE/ryoku")
+    fi
     if [[ -d "$ISO_STAGE/repo" && $(ls -A "$ISO_STAGE/repo" 2>/dev/null) ]]; then
       mkksiso_args+=(--add "$ISO_STAGE/repo")
     fi

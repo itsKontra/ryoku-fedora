@@ -404,6 +404,8 @@ EOF
 
   # pip: PEP 668 --user installs (materialized to ~/.config/pip/pip.conf).
   install -Dm644 "$_repo/ryoku/apps/pip/pip.conf" "$cfg/pip/pip.conf"
+  # npm: default config seeded for package managers
+  install -Dm644 "$_repo/ryoku/apps/npm/npmrc" "$cfg/npm/npmrc"
   # neovim as the default text/code editor: the handler ships system-wide and
   # the mimeapps map is materialized, so the mapping reaches installs on update.
   install -Dm644 "$_repo/ryoku/apps/nvim/ryoku-nvim.desktop" \

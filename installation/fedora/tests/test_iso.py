@@ -138,6 +138,10 @@ class TestComposePipelineScript(unittest.TestCase):
             self.assertTrue((stage_dir / "ks.cfg").is_file())
             self.assertTrue((stage_dir / "installation/fedora/provision-target.py").is_file())
             self.assertTrue((stage_dir / "installation/fedora/prepare-firstboot.py").is_file())
+            self.assertTrue((stage_dir / "ryoku/assets/wallpapers").is_dir())
+            self.assertTrue((stage_dir / "ryoku/assets/brand").is_dir())
+            self.assertTrue((stage_dir / "ryoku/assets/ryodecors").is_dir())
+            self.assertTrue((stage_dir / "ryoku/apps/npm/npmrc").is_file())
             self.assertTrue((stage_dir / ".ryoku-media").is_file())
 
             # Verify output files

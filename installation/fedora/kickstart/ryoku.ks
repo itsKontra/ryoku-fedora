@@ -83,7 +83,23 @@ fi
 
 if [ -n "$PROVISION_SCRIPT" ] && [ -f "$PROVISION_SCRIPT" ]; then
     echo "Found provisioner at: $PROVISION_SCRIPT"
-    python3 "$PROVISION_SCRIPT" /mnt/sysroot --anaconda
+    MEDIA_REPO=""
+    for candidate_repo in \
+        /run/install/repo \
+        /run/install/source \
+        /mnt/install/source; do
+        if [ -d "$candidate_repo/ryoku/assets" ]; then
+            MEDIA_REPO="$candidate_repo"
+            break
+        fi
+    done
+
+    REPO_OPT=""
+    if [ -n "$MEDIA_REPO" ]; then
+        echo "Found media assets at: $MEDIA_REPO"
+        REPO_OPT="--repo $MEDIA_REPO"
+    fi
+    python3 "$PROVISION_SCRIPT" /mnt/sysroot --anaconda $REPO_OPT
 else
     echo "ERROR: Could not locate provision-target.py on installation media" >&2
     exit 1
