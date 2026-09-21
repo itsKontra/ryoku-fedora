@@ -55,7 +55,7 @@ for bin in test true; do
   fi
 done
 
-# Provide dummy desktop provider binary for materialization
+# Provide placeholder desktop provider binary for materialization
 cat > "$target/usr/bin/ryoku" <<'EOF'
 #!/bin/sh
 if [ "$1" = "materialize" ]; then

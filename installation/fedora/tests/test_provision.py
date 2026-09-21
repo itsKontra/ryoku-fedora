@@ -27,7 +27,7 @@ class ProvisionTargetTest(unittest.TestCase):
         for binary in provision_target.REQUIRED_BINARIES:
             self.write(binary, "#!/bin/sh\nexit 0\n")
         self.write("usr/bin/ryoku", "#!/bin/sh\nexit 0\n")
-        self.write("usr/share/ryoku/config/dummy.conf", "dummy config\n")
+        self.write("usr/share/ryoku/config/sample.conf", "sample config\n")
         self.write("usr/share/ryoku/wallpapers/default.png", "image\n")
         self.write("usr/share/ryoku/ryodecors/card.png", "decor\n")
         self.write("usr/share/ryoku/brand/logo.svg", "<svg></svg>\n")

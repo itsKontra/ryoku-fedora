@@ -13,7 +13,7 @@ python3 -m unittest discover -s "$root/installation/fedora/tests" -v
 install -Dm755 "$root/installation/fedora/firstboot.py" /usr/libexec/ryoku-firstboot
 install -Dm644 "$root/installation/fedora/ryoku-firstboot.service" /etc/systemd/system/ryoku-firstboot.service
 install -Dm644 "$root/installation/fedora/firstboot-gate.conf" /etc/systemd/system/sddm.service.d/10-firstboot.conf
-# The prompt test needs no graphical packages; verify ordering against a dummy DM.
+# The prompt test needs no graphical packages; verify ordering against a placeholder DM.
 cat > /etc/systemd/system/sddm.service <<'EOF'
 [Unit]
 After=systemd-user-sessions.service

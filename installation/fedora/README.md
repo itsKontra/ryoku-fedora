@@ -117,7 +117,7 @@ The test drives the actual tools through a pseudo-terminal, kills setup after
 the root password is saved, resumes through the user-password prompt, verifies
 the saved settings and credentials, and reruns with stdin closed. Passwords are
 random per run and terminal transcripts are never printed. Static unit
-verification uses a dummy display-manager service; it is not a boot test.
+verification uses a placeholder display-manager service; it is not a boot test.
 
 `installation/tests/fedora-provision.sh` runs inside the same disposable container
 against an isolated target sysroot to prove offline user creation, sudo policy,

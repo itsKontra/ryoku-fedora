@@ -100,15 +100,15 @@ uid:u::::1750000000::FEDORA44::Test <test@example.com>:
     @patch("build_repo.extract_key_fingerprint")
     def test_verify_key_success_and_mismatch(self, mock_extract):
         mock_extract.return_value = "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6"
-        dummy_path = Path("/dummy/key.asc")
+        sample_path = Path("/sample/key.asc")
 
         # Success case with formatted spaces
-        res = build_repo.verify_key(dummy_path, "36F6 12DC F27F 7D1A 48A8 35E4 DBFC F71C 6D9F 90A6")
+        res = build_repo.verify_key(sample_path, "36F6 12DC F27F 7D1A 48A8 35E4 DBFC F71C 6D9F 90A6")
         self.assertEqual(res, "36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6")
 
         # Mismatch case
         with self.assertRaises(ValueError):
-            build_repo.verify_key(dummy_path, "0000000000000000000000000000000000000000")
+            build_repo.verify_key(sample_path, "0000000000000000000000000000000000000000")
 
     def test_verify_all_pinned_keys_against_repo(self):
         keys_dir = REPO_ROOT / "installation" / "fedora" / "keys"
@@ -176,15 +176,15 @@ class TestManifestAndRepoCreation(unittest.TestCase):
     def test_generate_manifest(self):
         with tempfile.TemporaryDirectory() as td:
             repo_dir = Path(td)
-            dummy_pkg = repo_dir / "test-pkg-1.0-1.fc44.x86_64.rpm"
-            dummy_pkg.write_bytes(b"rpm package content binary payload")
+            sample_pkg = repo_dir / "test-pkg-1.0-1.fc44.x86_64.rpm"
+            sample_pkg.write_bytes(b"rpm package content binary payload")
 
             manifest_path = repo_dir / "manifest.json"
             manifest = build_repo.generate_manifest(repo_dir, manifest_path)
 
             self.assertEqual(manifest["total_packages"], 1)
-            self.assertIn(dummy_pkg.name, manifest["packages"])
-            self.assertIn(dummy_pkg.name, manifest["sha256"])
+            self.assertIn(sample_pkg.name, manifest["packages"])
+            self.assertIn(sample_pkg.name, manifest["sha256"])
             self.assertTrue(manifest_path.is_file())
 
             loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
