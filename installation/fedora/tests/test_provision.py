@@ -172,6 +172,20 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertIn("materialize", calls[0])
 
+    def test_materialize_config_applies_niri_when_present(self):
+        calls = []
+        self.write("usr/bin/ryoku-wm-niri", "#!/bin/sh\n")
+
+        def mock_runner(cmd):
+            calls.append(cmd)
+
+        provision_target.materialize_config(self.root, runner=mock_runner)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("materialize", calls[0])
+        self.assertIn("ryoku-wm-niri", calls[1][11])
+        self.assertIn("apply", calls[1][12])
+
+
     def test_arm_firstboot_invokes_prepare_script(self):
         calls = []
 

@@ -22,7 +22,7 @@ REQUIRED_BINARIES = (
 
 def validate_target(root, allow_running=False):
     root = root.resolve(strict=True)
-    if not allow_running and (root == Path("/") or (root / "run/systemd/system").exists()):
+    if not allow_running and root == Path("/"):
         raise ValueError("Expected an offline installation target, not a running system")
     release = (root / "etc/os-release").read_text()
     values = dict(line.split("=", 1) for line in release.splitlines() if "=" in line)
@@ -247,6 +247,8 @@ def seed_lockscreen(root, repo_dir=None):
 
     src_lock = bundle / "quickshell-lockscreen"
     if src_lock.is_dir():
+        if lock_dir.is_dir():
+            shutil.rmtree(lock_dir)
         shutil.copytree(src_lock, lock_dir, dirs_exist_ok=True, symlinks=True)
         lock_sh = lock_dir / "lock.sh"
         if lock_sh.exists():
@@ -269,6 +271,8 @@ def seed_lockscreen(root, repo_dir=None):
 
     src_orbital = bundle / "themes/clockwork/orbital"
     if src_orbital.is_dir():
+        if orbital_dir.is_dir():
+            shutil.rmtree(orbital_dir)
         shutil.copytree(src_orbital, orbital_dir, dirs_exist_ok=True, symlinks=True)
 
     themes_link = lock_dir / "themes_link"
@@ -392,6 +396,69 @@ def materialize_config(root, runner=None):
     elif (root / "usr/share/ryoku/config").is_dir():
         shutil.copytree(root / "usr/share/ryoku/config", user_home / ".config", dirs_exist_ok=True, symlinks=True)
 
+    ryoku_cfg = user_home / ".config/ryoku"
+    ryoku_cfg.mkdir(parents=True, exist_ok=True)
+    desktop_json = ryoku_cfg / "desktop.json"
+    if not desktop_json.exists():
+        desktop_json.write_text('{"desktop":{},"wm":{"niri":{}}}\n')
+
+    niri_bin = root / "usr/bin/ryoku-wm-niri"
+    if niri_bin.is_file():
+        if runner:
+            runner([
+                "chroot",
+                str(root),
+                "runuser",
+                "-u",
+                RYOKU_USER,
+                "--",
+                "env",
+                f"HOME={RYOKU_HOME}",
+                f"USER={RYOKU_USER}",
+                f"LOGNAME={RYOKU_USER}",
+                "XDG_CURRENT_DESKTOP=niri",
+                "/usr/bin/ryoku-wm-niri",
+                "apply",
+                f"{RYOKU_HOME}/.config/ryoku/desktop.json",
+            ])
+        elif (root / "usr/bin/runuser").is_file() and (root / "lib64/libc.so.6").is_file() and shutil.which("chroot"):
+            try:
+                subprocess.run(
+                    [
+                        "chroot",
+                        str(root),
+                        "runuser",
+                        "-u",
+                        RYOKU_USER,
+                        "--",
+                        "env",
+                        f"HOME={RYOKU_HOME}",
+                        f"USER={RYOKU_USER}",
+                        f"LOGNAME={RYOKU_USER}",
+                        "XDG_CURRENT_DESKTOP=niri",
+                        "/usr/bin/ryoku-wm-niri",
+                        "apply",
+                        f"{RYOKU_HOME}/.config/ryoku/desktop.json",
+                    ],
+                    check=True,
+                )
+            except Exception:
+                pass
+
+    niri_dir = user_home / ".config/niri"
+    if niri_dir.is_dir():
+        for gen in ("settings.kdl", "rebinds.kdl"):
+            gen_path = niri_dir / gen
+            if not gen_path.exists():
+                gen_path.touch()
+
+    hypr_dir = user_home / ".config/hypr"
+    if hypr_dir.is_dir():
+        for gen in ("settings.lua", "rebinds.lua"):
+            gen_path = hypr_dir / gen
+            if not gen_path.exists():
+                gen_path.touch()
+
     passwd_path = root / "etc/passwd"
     if passwd_path.exists() and os.geteuid() == 0:
         accounts = dict((p[0], p) for p in (line.split(":") for line in passwd_path.read_text().splitlines() if line))
@@ -409,12 +476,16 @@ def materialize_config(root, runner=None):
                 pass
 
 
-def arm_firstboot(root, runner=None):
+def arm_firstboot(root, runner=None, allow_running=False):
     prepare_script = Path(__file__).resolve().parent / "prepare-firstboot.py"
+    cmd = [sys.executable, str(prepare_script)]
+    if allow_running:
+        cmd.append("--allow-running-system")
+    cmd.append(str(root))
     if runner:
-        runner([sys.executable, str(prepare_script), str(root)])
+        runner(cmd)
     else:
-        subprocess.run([sys.executable, str(prepare_script), str(root)], check=True)
+        subprocess.run(cmd, check=True)
 
 
 def relabel_selinux(root, runner=None):
@@ -443,7 +514,10 @@ def provision(root, repo_dir=None, runner=None, allow_running=False):
     seed_assets_and_integration(root, repo_dir=repo_dir)
     seed_lockscreen(root, repo_dir=repo_dir)
     materialize_config(root, runner=runner)
-    arm_firstboot(root, runner=runner)
+    if allow_running:
+        arm_firstboot(root, runner=runner, allow_running=True)
+    else:
+        arm_firstboot(root, runner=runner)
     relabel_selinux(root, runner=runner)
 
 

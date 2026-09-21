@@ -10,9 +10,9 @@ import sys
 from firstboot import SETTINGS, STATE, password_set
 
 
-def prepare(root):
+def prepare(root, allow_running=False):
     root = root.resolve(strict=True)
-    if root == Path("/") or (root / "run/systemd/system").exists():
+    if not allow_running and root == Path("/"):
         raise ValueError("Expected an offline installation target, not a running system")
     release = (root / "etc/os-release").read_text()
     values = dict(line.split("=", 1) for line in release.splitlines() if "=" in line)
@@ -78,10 +78,15 @@ def prepare(root):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path, help="mounted target root after package installation")
+    parser.add_argument(
+        "--allow-running-system",
+        action="store_true",
+        help="allow execution against a running system (test use only)",
+    )
     args = parser.parse_args()
     try:
         if os.geteuid() != 0:
             raise ValueError("Preparing an installation target requires root")
-        prepare(args.root)
+        prepare(args.root, allow_running=args.allow_running_system)
     except (OSError, ValueError) as error:
         sys.exit(str(error))
