@@ -105,7 +105,7 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertTrue(sddm_conf.exists())
         content = sddm_conf.read_text()
         self.assertIn("Current=ryoku", content)
-        self.assertIn("Session=niri.desktop", content)
+        self.assertIn("Session=hyprland.desktop", content)
 
         cursor_theme = self.root / "usr/share/icons/default/index.theme"
         self.assertTrue(cursor_theme.exists())
@@ -181,9 +181,9 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertIn("materialize", calls[0])
 
-    def test_materialize_config_applies_niri_when_present(self):
+    def test_materialize_config_applies_hyprland_when_present(self):
         calls = []
-        self.write("usr/bin/ryoku-wm-niri", "#!/bin/sh\n")
+        self.write("usr/bin/ryoku-wm-hyprland", "#!/bin/sh\n")
 
         def mock_runner(cmd):
             calls.append(cmd)
@@ -191,7 +191,7 @@ class ProvisionTargetTest(unittest.TestCase):
         provision_target.materialize_config(self.root, runner=mock_runner)
         self.assertEqual(len(calls), 2)
         self.assertIn("materialize", calls[0])
-        self.assertIn("ryoku-wm-niri", calls[1][11])
+        self.assertIn("ryoku-wm-hyprland", calls[1][11])
         self.assertIn("apply", calls[1][12])
 
 

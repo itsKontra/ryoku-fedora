@@ -30,6 +30,9 @@ func ryokuRepoSlug() string {
 	if s := strings.TrimSpace(os.Getenv("RYOKU_REPO_SLUG")); s != "" {
 		return s
 	}
+	if sys.RPMManager() != "" {
+		return "itsKontra/ryoku-fedora"
+	}
 	return "ryoku-dev/ryoku-arch"
 }
 

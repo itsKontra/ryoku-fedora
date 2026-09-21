@@ -75,8 +75,22 @@ func reconcileRepoPointer(checkOnly bool) recResult {
 	if b, err := os.ReadFile(repoFile); err == nil {
 		recorded = strings.TrimSpace(string(b))
 	}
-	track := filepath.Join(sys.Home(), "ryoku-arch")
-	// Only adopt ~/ryoku-arch for a box that still opts into source tracking (a
+	trackCandidates := []string{"ryoku-arch"}
+	if sys.RPMManager() != "" {
+		trackCandidates = []string{"ryoku-fedora", "ryoku-arch"}
+	}
+	var track string
+	for _, name := range trackCandidates {
+		candidate := filepath.Join(sys.Home(), name)
+		if isRyokuArchTree(candidate) {
+			track = candidate
+			break
+		}
+	}
+	if track == "" {
+		track = filepath.Join(sys.Home(), trackCandidates[0])
+	}
+	// Only adopt ~/ryoku-arch or ~/ryoku-fedora for a box that still opts into source tracking (a
 	// recorded RYOKU_CHANNEL). A box migrated onto packages carries no tracked
 	// channel and left its clone on disk deliberately; re-adopting it would undo
 	// the migration.
@@ -105,7 +119,7 @@ func reconcileRepoPointer(checkOnly bool) recResult {
 }
 
 // isRyokuArchTree reports whether p is a git work tree whose origin is a
-// ryoku-arch remote, so a stray unrelated repo is never adopted as the channel.
+// ryoku-arch or ryoku-fedora remote, so a stray unrelated repo is never adopted as the channel.
 func isRyokuArchTree(p string) bool {
 	if p == "" {
 		return false
@@ -114,7 +128,7 @@ func isRyokuArchTree(p string) bool {
 		return false
 	}
 	url, err := sys.RunOut("git", "-C", p, "remote", "get-url", "origin")
-	return err == nil && strings.Contains(url, "ryoku-arch")
+	return err == nil && (strings.Contains(url, "ryoku-arch") || strings.Contains(url, "ryoku-fedora"))
 }
 
 // desymlinkStateDir turns a symlinked state dir into a real one, migrating the

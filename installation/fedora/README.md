@@ -17,7 +17,7 @@ sysroot from Anaconda's `%post --nochroot --erroronfail`:
 2. **Session and Greeter Selection**:
    - Writes SDDM Wayland drop-in `/etc/sddm.conf.d/10-ryoku-wayland.conf`.
    - Writes SDDM theme and session drop-in `/etc/sddm.conf.d/99-ryoku.conf`,
-     selecting `Current=ryoku` and `Session=niri.desktop`.
+     selecting `Current=ryoku` and `Session=hyprland.desktop`.
    - Sets the default cursor fallback to `Bibata-Modern-Ice` in `/usr/share/icons/default/index.theme`.
    - Wires `pam_gnome_keyring.so` into `/etc/pam.d/sddm` for unlock-on-login.
    - Enables `sddm.service` and sets `graphical.target` as default.
@@ -26,7 +26,7 @@ sysroot from Anaconda's `%post --nochroot --erroronfail`:
 4. **Lockscreen**: Seeds the qylock in-session lockscreen bundle and `clockwork/orbital`
    theme into each login account’s home, wiring the themes link and setting theme preference.
 5. **Assets and Integration**: Seeds desktop entries, vendor MIME defaults
-   (`niri-mimeapps.list` and `mimeapps.list`), wallpapers into `~/Pictures/Wallpapers`,
+   (`ryoku-mimeapps.list` and `mimeapps.list`), wallpapers into `~/Pictures/Wallpapers`,
    decor art into `~/Pictures/ryodecors`, brand assets into `~/.local/share/ryoku/assets/brand`,
    and `.npmrc` from `/usr/share/ryoku`.
 6. **Configuration Materialization**: Runs `ryoku materialize` for each login
@@ -141,7 +141,7 @@ UEFI firmware and disconnected network (`-nic none`):
    and ryoku user password), verifying interruption handling and answer preservation.
 3. **SDDM Gating**: Asserts that `sddm.service` remains gated until
    `/var/lib/ryoku-firstboot/complete` is written, and unblocks successfully once complete.
-4. **Desktop Launch**: Verifies graphical session launch into `niri` Wayland desktop
+4. **Desktop Launch**: Verifies graphical session launch into Hyprland Wayland desktop
    with Ryoku Quickshell running.
 5. **SELinux Policy**: Asserts enforcing status (`getenforce` is `Enforcing`) and
    confirms zero AVC denials via `ausearch -m avc`.
@@ -193,7 +193,7 @@ installation, organized into categories:
 - `[utilities]`: Core utilities: `chromium`, `tmux`, `neovim`, `vim-enhanced`, `bat`, `lua`, `python3`, `alacritty`, `fish`, `fzf`, `less`, `grep`, `ripgrep`, `nano`, `zsh`, `bash`.
 - `[services]`: Base system services: `firewalld`, `NetworkManager`, `bluez`, `pipewire`, `wireplumber`, `sddm`.
 - `[multimedia]`: Fedora FFmpeg (`ffmpeg-free`) and RPM Fusion release packages.
-- `[desktop]`: Ryoku desktop components (`ryoku-desktop`, `ryoku-desktop-niri`) and compositor runtime (`niri`, `xwayland-satellite`, `quickshell`).
+- `[desktop]`: Ryoku desktop components (`ryoku-desktop`, `ryoku-desktop-hyprland`) and compositor runtime (`hyprland`, `quickshell`).
 
 `build-repo.py` manages offline repository construction and verification:
 1. **Key Verification**: Validates all pinned GPG keys in `keys/` against hardcoded fingerprints:
@@ -241,7 +241,7 @@ The planned installation contract is:
 - Include the requested applications (`chromium`, `tmux`, `neovim`, `vim`, `bat`,
   `lua`, `python3`, `alacritty`, `ffmpeg-free`, `fish`, `fzf`, `less`, `grep`, `ripgrep`,
   `nano`, `zsh`, and bash), base services (`firewalld`, `NetworkManager`, `bluez`),
-  signed `ryoku-desktop` and `ryoku-desktop-niri`, and their runtime closure.
+  signed `ryoku-desktop` and `ryoku-desktop-hyprland`, and their runtime closure.
   Enable the firewall, NetworkManager and Bluetooth services in the target.
 - Use Fedora `ffmpeg-free` for compatibility with the published Ryoku RPMs.
   Validate the complete transaction before composing the ISO; do not use
@@ -295,7 +295,7 @@ Next milestones are the signed offline dependency closure, the shared offline
 desktop provisioner, and the installation DVD prototype. Then add automated
 OVMF VMs with disconnected NICs for both plain and encrypted whole-disk installs.
 Exercise erase confirmation, interruption/reboot at every setup step, distinct
-machine IDs, Btrfs mounts and encryption unlock, real SDDM ordering, niri/Ryoku,
+machine IDs, Btrfs mounts and encryption unlock, real SDDM ordering, Hyprland/Ryoku,
 settings, terminal, lock, audio, portals, firewall and update/overlay preservation.
 Retain journals, Anaconda logs, RPM/configuration manifests and SELinux AVCs.
 

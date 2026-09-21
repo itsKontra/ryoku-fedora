@@ -41,10 +41,16 @@ func ResolveRepo() string {
 	if TrackedChannel() == "" {
 		return ""
 	}
-	track := filepath.Join(Home(), "ryoku-arch")
-	if _, err := RunOut("git", "-C", track, "rev-parse", "--git-dir"); err == nil {
-		if url, e := RunOut("git", "-C", track, "remote", "get-url", "origin"); e == nil && strings.Contains(url, "ryoku-arch") {
-			return track
+	candidates := []string{"ryoku-arch"}
+	if RPMManager() != "" {
+		candidates = []string{"ryoku-fedora", "ryoku-arch"}
+	}
+	for _, name := range candidates {
+		track := filepath.Join(Home(), name)
+		if _, err := RunOut("git", "-C", track, "rev-parse", "--git-dir"); err == nil {
+			if url, e := RunOut("git", "-C", track, "remote", "get-url", "origin"); e == nil && (strings.Contains(url, "ryoku-arch") || strings.Contains(url, "ryoku-fedora")) {
+				return track
+			}
 		}
 	}
 	return ""

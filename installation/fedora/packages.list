@@ -148,10 +148,12 @@ gstreamer1-plugin-libav
 [desktop]
 # Ryoku desktop packages and Wayland environment
 ryoku-desktop
-ryoku-desktop-niri
+ryoku-desktop-hyprland
 ryoku-extras
-niri
-xwayland-satellite
+hyprland
+hyprpolkitagent
+hypridle
+hyprpicker
 quickshell
 nautilus
 nautilus-python
@@ -174,7 +176,7 @@ cava
 openrgb
 ddcutil
 xdg-desktop-portal-gtk
-xdg-desktop-portal-gnome
+xdg-desktop-portal-hyprland
 qt6-qtwayland
 qt5-qtwayland
 qt6-qt5compat

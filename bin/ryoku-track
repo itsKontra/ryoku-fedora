@@ -11,7 +11,15 @@
 #   curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-track | bash -s -- unstable-dev
 set -euo pipefail
 
-CHANNEL="${1:-unstable-dev}"
+if [[ -z ${1:-} ]]; then
+  if command -v dnf >/dev/null 2>&1; then
+    CHANNEL="main-fedora"
+  else
+    CHANNEL="unstable-dev"
+  fi
+else
+  CHANNEL="$1"
+fi
 case "$CHANNEL" in
   main | main-fedora | unstable-dev) ;;
   -h | --help)
@@ -24,6 +32,10 @@ esac
 
 REPO="$HOME/ryoku-arch"
 REPO_URL="${RYOKU_TRACK_URL:-https://github.com/ryoku-dev/ryoku-arch.git}"
+if command -v dnf >/dev/null 2>&1 || [[ -d $HOME/ryoku-fedora ]]; then
+  REPO="$HOME/ryoku-fedora"
+  REPO_URL="${RYOKU_TRACK_URL:-https://github.com/itsKontra/ryoku-fedora.git}"
+fi
 say() { printf '\n==> %s\n' "$*"; }
 
 if [[ $CHANNEL == unstable-dev ]]; then

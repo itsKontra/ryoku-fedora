@@ -190,7 +190,11 @@ func Update(args []string) error {
 		if _, err = runRyokuUpgrade(set); err != nil {
 			// only advertise `ryoku rollback` when the pre snapshot it needs exists;
 			// snapperPre is best-effort and returns "" when it was skipped.
-			hint := i18n.T("no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with pacman directly")
+			pkgManager := "pacman"
+			if sys.RPMManager() != "" {
+				pkgManager = sys.RPMManager()
+			}
+			hint := fmt.Sprintf(i18n.T("no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly"), pkgManager)
 			if pre != "" {
 				hint = i18n.T("see `ryoku rollback` (pre-update snapshot ") + pre + ")"
 			}

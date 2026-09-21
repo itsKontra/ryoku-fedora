@@ -160,7 +160,7 @@ def configure_session_and_greeter(root):
         "[Theme]\n"
         "Current=ryoku\n\n"
         "[Autologin]\n"
-        "Session=niri.desktop\n"
+        "Session=hyprland.desktop\n"
     )
     session_conf.chmod(0o644)
 
@@ -353,7 +353,7 @@ def seed_assets_and_integration(root, repo_dir=None, home=RYOKU_HOME):
     # 1. Desktop entries and MIME defaults
     apps_dir = root / "usr/share/applications"
     apps_dir.mkdir(parents=True, exist_ok=True)
-    niri_mime = apps_dir / "niri-mimeapps.list"
+    ryoku_mime = apps_dir / "ryoku-mimeapps.list"
     std_mime = apps_dir / "mimeapps.list"
 
     mime_source = None
@@ -362,13 +362,13 @@ def seed_assets_and_integration(root, repo_dir=None, home=RYOKU_HOME):
             mime_source = src
             break
 
-    if not niri_mime.exists() and mime_source:
-        shutil.copyfile(mime_source, niri_mime)
-        niri_mime.chmod(0o644)
+    if not ryoku_mime.exists() and mime_source:
+        shutil.copyfile(mime_source, ryoku_mime)
+        ryoku_mime.chmod(0o644)
 
     if not std_mime.exists() and not std_mime.is_symlink():
-        if niri_mime.exists():
-            std_mime.symlink_to("niri-mimeapps.list")
+        if ryoku_mime.exists():
+            std_mime.symlink_to("ryoku-mimeapps.list")
         elif mime_source:
             shutil.copyfile(mime_source, std_mime)
             std_mime.chmod(0o644)
@@ -459,10 +459,10 @@ def materialize_config(root, runner=None, user=RYOKU_USER, home=RYOKU_HOME):
     ryoku_cfg.mkdir(parents=True, exist_ok=True)
     desktop_json = ryoku_cfg / "desktop.json"
     if not desktop_json.exists():
-        desktop_json.write_text('{"desktop":{},"wm":{"niri":{}}}\n')
+        desktop_json.write_text('{"desktop":{},"wm":{"hyprland":{}}}\n')
 
-    niri_bin = root / "usr/bin/ryoku-wm-niri"
-    if niri_bin.is_file():
+    hypr_bin = root / "usr/bin/ryoku-wm-hyprland"
+    if hypr_bin.is_file():
         if runner:
             runner([
                 "chroot",
@@ -475,8 +475,8 @@ def materialize_config(root, runner=None, user=RYOKU_USER, home=RYOKU_HOME):
                 f"HOME={home}",
                 f"USER={user}",
                 f"LOGNAME={user}",
-                "XDG_CURRENT_DESKTOP=niri",
-                "/usr/bin/ryoku-wm-niri",
+                "XDG_CURRENT_DESKTOP=Hyprland",
+                "/usr/bin/ryoku-wm-hyprland",
                 "apply",
                 f"{home}/.config/ryoku/desktop.json",
             ])
@@ -494,8 +494,8 @@ def materialize_config(root, runner=None, user=RYOKU_USER, home=RYOKU_HOME):
                         f"HOME={home}",
                         f"USER={user}",
                         f"LOGNAME={user}",
-                        "XDG_CURRENT_DESKTOP=niri",
-                        "/usr/bin/ryoku-wm-niri",
+                        "XDG_CURRENT_DESKTOP=Hyprland",
+                        "/usr/bin/ryoku-wm-hyprland",
                         "apply",
                         f"{home}/.config/ryoku/desktop.json",
                     ],
@@ -586,8 +586,21 @@ def anaconda_accounts(root):
     return accounts
 
 
+def normalize_dnf_repositories(root):
+    repos_d = root / "etc/yum.repos.d"
+    copr_repo = repos_d / "RyokuCOPR.repo"
+    ryoku_repo = repos_d / "ryoku.repo"
+    if copr_repo.is_file() and not ryoku_repo.is_file():
+        content = copr_repo.read_text().replace("[RyokuCOPR]", "[ryoku]")
+        ryoku_repo.write_text(content)
+        copr_repo.unlink(missing_ok=True)
+    elif copr_repo.is_file() and ryoku_repo.is_file():
+        copr_repo.unlink(missing_ok=True)
+
+
 def provision(root, repo_dir=None, runner=None, allow_running=False, anaconda=False):
     root = validate_target(root, allow_running=allow_running)
+    normalize_dnf_repositories(root)
     if anaconda:
         accounts = anaconda_accounts(root)
     else:
