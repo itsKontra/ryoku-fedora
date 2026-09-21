@@ -29,10 +29,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache APT packages
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ github.workflow }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-apt-${{ github.workflow }}-
       - name: Install the container runner
         run: |
           sudo apt-get update
           sudo apt-get install -y podman
+      - name: Cache Podman storage
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/containers/storage
+          key: ${{ runner.os }}-podman-fedora44-${{ hashFiles('.github/workflows/fedora-firstboot.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-podman-fedora44-
       - name: Prepare Fedora 44 test tools
         run: |
           podman build -t ryoku-firstboot-test - <<'EOF'

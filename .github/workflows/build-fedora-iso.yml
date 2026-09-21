@@ -68,7 +68,15 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Building $ISO_NAME..."
 
+      - name: Cache base ISO
+        uses: actions/cache@v4
+        id: cache-iso
+        with:
+          path: /tmp/base-netinst.iso
+          key: ${{ runner.os }}-fedora-iso-${{ github.event.inputs.base_iso_url || 'default' }}
+
       - name: Download base Fedora installation media
+        if: steps.cache-iso.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           BASE_URL="${{ github.event.inputs.base_iso_url || 'https://download.fedoraproject.org/pub/fedora/linux/releases/44/Everything/x86_64/iso/Fedora-Everything-netinst-x86_64-44-1.7.iso' }}"
