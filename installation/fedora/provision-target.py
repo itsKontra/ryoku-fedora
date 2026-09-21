@@ -211,13 +211,24 @@ def configure_session_and_greeter(root):
 
 
 def enable_base_services(root):
-    services = ["NetworkManager.service", "firewalld.service", "bluetooth.service"]
+    services = [
+        "NetworkManager.service",
+        "firewalld.service",
+        "bluetooth.service",
+        "power-profiles-daemon.service",
+        "ryoku-boot-guard.service",
+    ]
     if shutil.which("systemctl"):
         subprocess.run(["systemctl", f"--root={root}", "enable", *services], check=False, stderr=subprocess.DEVNULL)
 
     multi_wants = root / "etc/systemd/system/multi-user.target.wants"
     multi_wants.mkdir(parents=True, exist_ok=True)
-    for service in ("NetworkManager.service", "firewalld.service"):
+    for service in (
+        "NetworkManager.service",
+        "firewalld.service",
+        "power-profiles-daemon.service",
+        "ryoku-boot-guard.service",
+    ):
         link = multi_wants / service
         if not link.exists() and not link.is_symlink():
             link.symlink_to(f"/usr/lib/systemd/system/{service}")
@@ -227,6 +238,54 @@ def enable_base_services(root):
     bt_link = bt_wants / "bluetooth.service"
     if not bt_link.exists() and not bt_link.is_symlink():
         bt_link.symlink_to("/usr/lib/systemd/system/bluetooth.service")
+
+
+def initialize_boot_guard(root):
+    ryoku_var = root / "var/lib/ryoku"
+    ryoku_var.mkdir(mode=0o755, parents=True, exist_ok=True)
+    try:
+        os.chmod(ryoku_var, 0o755)
+    except OSError:
+        pass
+
+    boot_var = ryoku_var / "boot"
+    boot_var.mkdir(mode=0o1777, parents=True, exist_ok=True)
+    try:
+        os.chmod(boot_var, 0o1777)
+    except OSError:
+        pass
+
+    tmpfiles_conf = root / "usr/lib/tmpfiles.d/ryoku.conf"
+    if shutil.which("systemd-tmpfiles") and tmpfiles_conf.is_file():
+        subprocess.run(["systemd-tmpfiles", f"--root={root}", "--create", str(tmpfiles_conf)], check=False, stderr=subprocess.DEVNULL)
+
+
+def seed_desktop_extras(root, repo_dir=None):
+    bibata_dir = root / "usr/share/icons/Bibata-Modern-Ice"
+    if bibata_dir.is_dir():
+        return
+
+    script_candidates = []
+    if repo_dir:
+        script_candidates.append(Path(repo_dir) / "ryoku/shell/scripts/ryoku-install-extra")
+    script_candidates.append(Path(__file__).resolve().parents[2] / "ryoku/shell/scripts/ryoku-install-extra")
+    script_path = next((p for p in script_candidates if p.is_file()), None)
+    if not script_path:
+        return
+
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("install_extra", script_path)
+        extra = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(extra)
+        extra.shutil.which = lambda name: None
+        for name in ("bibata", "space-grotesk", "material-symbols", "matugen"):
+            try:
+                extra.install(name, root=root / "usr")
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 
 def seed_lockscreen(root, repo_dir=None, home=RYOKU_HOME):
@@ -536,6 +595,8 @@ def provision(root, repo_dir=None, runner=None, allow_running=False, anaconda=Fa
         accounts = [(RYOKU_USER, RYOKU_HOME)]
     configure_session_and_greeter(root)
     enable_base_services(root)
+    initialize_boot_guard(root)
+    seed_desktop_extras(root, repo_dir=repo_dir)
     for user, home in accounts:
         seed_assets_and_integration(root, repo_dir=repo_dir, home=home)
         seed_lockscreen(root, repo_dir=repo_dir, home=home)

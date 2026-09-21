@@ -30,6 +30,9 @@ const ryotunesSocketUnit = "ryotunesd.socket"
 // stale repo copy), so it lands the current build even before a repo re-import
 // has propagated.
 func reconcileRyotunes(checkOnly bool) recResult {
+	if !sys.Has("pacman") {
+		return okRes(i18n.T("ryotunes package tracking is pacman-only"))
+	}
 	var problems, fixes []string
 
 	bin := filepath.Join(sys.Home(), ".local", "bin", "ryotunes")

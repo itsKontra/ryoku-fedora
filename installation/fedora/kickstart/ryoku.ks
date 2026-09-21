@@ -16,14 +16,15 @@ network --bootproto=dhcp --device=link --activate
 # Repository configuration: Online network sources for netinstall media
 url --metalink="https://mirrors.fedoraproject.org/metalink?repo=fedora-44&arch=x86_64"
 repo --name="FedoraUpdates" --metalink="https://mirrors.fedoraproject.org/metalink?repo=updates-released-f44&arch=x86_64" --cost=20
-repo --name="RyokuCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64/" --cost=20
-repo --name="StarshipCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/atim/starship/fedora-44-x86_64/" --cost=20
-repo --name="QuickshellCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/errornointernet/quickshell/fedora-44-x86_64/" --cost=20
-repo --name="HyprlandCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/sdegler/hyprland/fedora-44-x86_64/" --cost=20
-repo --name="LazygitCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/atim/lazygit/fedora-44-x86_64/" --cost=20
-repo --name="YaziCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/lihaohong/yazi/fedora-44-x86_64/" --cost=20
-repo --name="RPMFusionFree" --metalink="https://mirrors.rpmfusion.org/metalink?repo=free-fedora-44&arch=x86_64" --cost=20
-repo --name="RPMFusionNonfree" --metalink="https://mirrors.rpmfusion.org/metalink?repo=nonfree-fedora-44&arch=x86_64" --cost=20
+repo --name="RyokuCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64/" --cost=20 --install
+repo --name="RyotunesCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/itskontra/ryotunes/fedora-44-x86_64/" --cost=20 --install
+repo --name="StarshipCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/atim/starship/fedora-44-x86_64/" --cost=20 --install
+repo --name="QuickshellCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/errornointernet/quickshell/fedora-44-x86_64/" --cost=20 --install
+repo --name="HyprlandCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/sdegler/hyprland/fedora-44-x86_64/" --cost=20 --install
+repo --name="LazygitCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/atim/lazygit/fedora-44-x86_64/" --cost=20 --install
+repo --name="YaziCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/lihaohong/yazi/fedora-44-x86_64/" --cost=20 --install
+repo --name="RPMFusionFree" --metalink="https://mirrors.rpmfusion.org/metalink?repo=free-fedora-44&arch=x86_64" --cost=20 --install
+repo --name="RPMFusionNonfree" --metalink="https://mirrors.rpmfusion.org/metalink?repo=nonfree-fedora-44&arch=x86_64" --cost=20 --install
 
 # Repository configuration: Local installation media with highest priority (lowest cost)
 repo --name="RyokuMedia" --baseurl="file:///run/install/repo/repo" --cost=10
@@ -37,11 +38,12 @@ clearpart --none
 part /boot/efi --fstype="efi" --size=600
 # 2. 2 GiB ext4 dedicated boot partition
 part /boot --fstype="ext4" --size=2048
-# 3. Remaining space as Btrfs with root and home subvolumes
+# 3. Remaining space as Btrfs with root, home, and snapshot subvolumes
 # Optional LUKS2 encryption is prompted interactively when selected by the user
 part btrfs.01 --fstype="btrfs" --size=1024 --grow
 btrfs / --subvol --name=root btrfs.01
 btrfs /home --subvol --name=home btrfs.01
+btrfs /.snapshots --subvol --name=snapshots btrfs.01
 
 # Bootloader configuration
 bootloader --timeout=1
@@ -51,7 +53,7 @@ bootloader --timeout=1
 rootpw --lock
 
 # System services
-services --enabled="sddm,NetworkManager,firewalld,bluetooth"
+services --enabled="sddm,NetworkManager,firewalld,bluetooth,power-profiles-daemon,ryoku-boot-guard"
 
 # Package payload referencing the local media repository
 %packages --excludedocs

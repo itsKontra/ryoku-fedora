@@ -128,9 +128,18 @@ class ProvisionTargetTest(unittest.TestCase):
         wants = self.root / "etc/systemd/system/multi-user.target.wants"
         self.assertTrue((wants / "NetworkManager.service").is_symlink())
         self.assertTrue((wants / "firewalld.service").is_symlink())
+        self.assertTrue((wants / "power-profiles-daemon.service").is_symlink())
+        self.assertTrue((wants / "ryoku-boot-guard.service").is_symlink())
 
         bt_wants = self.root / "etc/systemd/system/bluetooth.target.wants"
         self.assertTrue((bt_wants / "bluetooth.service").is_symlink())
+
+    def test_initialize_boot_guard(self):
+        provision_target.initialize_boot_guard(self.root)
+
+        boot_var = self.root / "var/lib/ryoku/boot"
+        self.assertTrue(boot_var.is_dir())
+        self.assertEqual(boot_var.stat().st_mode & 0o1777, 0o1777)
 
     def test_seed_lockscreen(self):
         provision_target.seed_lockscreen(self.root)
