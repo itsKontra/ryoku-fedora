@@ -27,7 +27,7 @@ SPEC
   createrepo_c "$work/v$version"
 done
 # Keep the actual desktop repo intact; these isolated repo IDs have the same
-# restriction semantics as the updater's --repo=ryoku transaction.
+# restriction semantics as the updater's --repo=RyokuCOPR transaction.
 cat > /etc/yum.repos.d/ryoku-channel-test.repo <<REPO
 [ryoku-test]
 name=selected channel

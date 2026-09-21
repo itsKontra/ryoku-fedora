@@ -1569,8 +1569,8 @@ func stepVerify(e *engine) error {
 		_, err := os.Stat(filepath.Join(e.f.homeDir, ".local/bin/ryoku-shell"))
 		check(err == nil, i18n.T("ryoku-shell daemon built"))
 	} else if e.d().id == "fedora" {
-		conf, _ := os.ReadFile("/etc/yum.repos.d/ryoku.repo")
-		check(strings.Contains(string(conf), "[ryoku]"), "[ryoku] RPM repository configured")
+		conf, _ := os.ReadFile("/etc/yum.repos.d/RyokuCOPR.repo")
+		check(strings.Contains(string(conf), "[RyokuCOPR]"), "[RyokuCOPR] RPM repository configured")
 		check(e.d().installedPkg("ryoku-desktop"), "ryoku-desktop RPM installed")
 		check(e.d().installedPkg("ryoku-desktop-"+e.p.compositor), "selected provider RPM installed")
 		check(pathExists("/usr/bin/ryoku"), "packaged ryoku CLI installed")

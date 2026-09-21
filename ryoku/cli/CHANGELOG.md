@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- Use RyokuCOPR consistently for Fedora package queries and updates. Fedora
+  source tracking adopts only ryoku-fedora, and doctor installs Ryotunes through
+  DNF and enables its socket. Restore recovery startup after the path change.
+
 ### Changed
 - **Fedora updates retain the upstream package split.** DNF updates the installed
   Ryoku set, while a full system upgrade remains behind `--system`.

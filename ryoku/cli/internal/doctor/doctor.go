@@ -4066,13 +4066,13 @@ var ryokuSystemGlobs = []string{
 
 var pkgOwnsFile = func(path string) bool {
 	if sys.Has("pacman") {
-		return sys.Run("pacman", "-Qo", path) == nil
+		return exec.Command("pacman", "-Qo", path).Run() == nil
 	}
 	if sys.Has("rpm") {
-		return sys.Run("rpm", "-qf", path) == nil
+		return exec.Command("rpm", "-qf", path).Run() == nil
 	}
 	if sys.Has("dpkg-query") {
-		return sys.Run("dpkg-query", "-S", path) == nil
+		return exec.Command("dpkg-query", "-S", path).Run() == nil
 	}
 	return false
 }

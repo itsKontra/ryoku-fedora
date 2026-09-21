@@ -4,6 +4,11 @@ Everything needed to get Ryoku onto a computer: the live ISO, the guided
 installer TUI, and the backend that does the real work. This file is the map;
 each subsystem has its own README with the detail.
 
+The Fedora installation ISO work lives in [fedora/](fedora/README.md). Its
+first-boot console setup and offline desktop provisioner are implemented; the
+offline Anaconda compose and ISO builder remain in progress. The Arch ISO paths
+below remain separate.
+
 ## The tree
 
 ```

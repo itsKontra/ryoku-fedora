@@ -1,0 +1,82 @@
+name: Fedora first-boot setup
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'installation/fedora/**'
+      - 'installation/tests/fedora-firstboot.sh'
+      - 'installation/tests/fedora-provision.sh'
+      - 'installation/tests/fedora-repo.sh'
+      - 'installation/tests/fedora-iso.sh'
+      - 'installation/tests/fedora-iso-vm.sh'
+      - 'installation/tests/fedora-iso-vm.py'
+      - '.github/workflows/fedora-firstboot.yml'
+  push:
+    branches: [main-fedora]
+    paths:
+      - 'installation/fedora/**'
+      - 'installation/tests/fedora-firstboot.sh'
+      - 'installation/tests/fedora-provision.sh'
+      - 'installation/tests/fedora-repo.sh'
+      - 'installation/tests/fedora-iso.sh'
+      - 'installation/tests/fedora-iso-vm.sh'
+      - 'installation/tests/fedora-iso-vm.py'
+      - '.github/workflows/fedora-firstboot.yml'
+permissions:
+  contents: read
+jobs:
+  firstboot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the container runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+      - name: Prepare Fedora 44 test tools
+        run: |
+          podman build -t ryoku-firstboot-test - <<'EOF'
+          FROM registry.fedoraproject.org/fedora:44
+          RUN dnf -y install systemd python3 passwd fish sudo kbd glibc-all-langpacks rpm-build createrepo_c xorriso pykickstart
+          EOF
+      - name: Test without network access
+        run: |
+          mkdir -p /tmp/firstboot-evidence
+          set -o pipefail
+          podman run --rm --network=none --cap-add=SYS_ADMIN -e RYOKU_TEST_DISPOSABLE=1 \
+            -v "$PWD:/src:ro" ryoku-firstboot-test \
+            bash /src/installation/tests/fedora-firstboot.sh \
+            2>&1 | tee /tmp/firstboot-evidence/firstboot.log
+      - name: Test offline provisioning without network access
+        run: |
+          set -o pipefail
+          podman run --rm --network=none -e RYOKU_TEST_DISPOSABLE=1 \
+            -v "$PWD:/src:ro" ryoku-firstboot-test \
+            bash /src/installation/tests/fedora-provision.sh \
+            2>&1 | tee /tmp/firstboot-evidence/provision.log
+      - name: Test offline repository setup and package closure
+        run: |
+          set -o pipefail
+          podman run --rm --network=none -e RYOKU_TEST_DISPOSABLE=1 \
+            -v "$PWD:/src:ro" ryoku-firstboot-test \
+            bash /src/installation/tests/fedora-repo.sh \
+            2>&1 | tee /tmp/firstboot-evidence/repo.log
+      - name: Test ISO builder and kickstart recipe without network access
+        run: |
+          set -o pipefail
+          podman run --rm --network=none --cap-add=SYS_ADMIN --device /dev/loop-control -e RYOKU_TEST_DISPOSABLE=1 \
+            -v "$PWD:/src:ro" ryoku-firstboot-test \
+            bash /src/installation/tests/fedora-iso.sh \
+            2>&1 | tee /tmp/firstboot-evidence/iso.log
+      - name: Test VM harness and kickstart variants without network access
+        run: |
+          set -o pipefail
+          podman run --rm --network=none -e RYOKU_TEST_DISPOSABLE=1 \
+            -v "$PWD:/src:ro" ryoku-firstboot-test \
+            bash /src/installation/tests/fedora-iso-vm.sh --stage-only \
+            2>&1 | tee /tmp/firstboot-evidence/vm-stage.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fedora-firstboot-evidence
+          path: /tmp/firstboot-evidence

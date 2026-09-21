@@ -49,8 +49,8 @@ else
   keys="file://$logdir/key.asc"
   metadata_check=1
 fi
-cat > /etc/yum.repos.d/ryoku.repo <<REPO
-[ryoku]
+cat > /etc/yum.repos.d/RyokuCOPR.repo <<REPO
+[RyokuCOPR]
 name=Ryoku test
 baseurl=file://$out
 enabled=1

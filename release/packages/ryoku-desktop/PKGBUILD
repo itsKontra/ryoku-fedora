@@ -404,6 +404,8 @@ EOF
 
   # pip: PEP 668 --user installs (materialized to ~/.config/pip/pip.conf).
   install -Dm644 "$_repo/ryoku/apps/pip/pip.conf" "$cfg/pip/pip.conf"
+  # npm: default config seeded for package managers
+  install -Dm644 "$_repo/ryoku/apps/npm/npmrc" "$cfg/npm/npmrc"
   # neovim as the default text/code editor: the handler ships system-wide and
   # the mimeapps map is materialized, so the mapping reaches installs on update.
   install -Dm644 "$_repo/ryoku/apps/nvim/ryoku-nvim.desktop" \
@@ -487,6 +489,13 @@ EOF
   # seeds a fresh install straight from the repo. the chmod below covers it.
   install -d "$pkgdir/usr/share/ryoku/ryodecors"
   cp -a "$_repo/ryoku/assets/ryodecors/." "$pkgdir/usr/share/ryoku/ryodecors/"
+
+  # Wallpapers and brand assets, shipped so the offline provisioner can seed
+  # them into the user's home without needing the git checkout or network.
+  install -d "$pkgdir/usr/share/ryoku/wallpapers"
+  cp -a "$_repo/ryoku/assets/wallpapers/." "$pkgdir/usr/share/ryoku/wallpapers/"
+  install -d "$pkgdir/usr/share/ryoku/brand"
+  cp -a "$_repo/ryoku/assets/brand/." "$pkgdir/usr/share/ryoku/brand/"
 
   # cp -a kept source mode bits; normalize so hypr/scripts stays executable
   # and the rest is world-readable data.

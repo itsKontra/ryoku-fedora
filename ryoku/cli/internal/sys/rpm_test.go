@@ -11,7 +11,7 @@ func TestCOPRChannelPreservesRepositorySecurity(t *testing.T) {
 	oldFile := RPMRepoFile
 	t.Cleanup(func() { RPMRepoFile = oldFile })
 	RPMRepoFile = filepath.Join(t.TempDir(), "ryoku.repo")
-	original := "[other]\nbaseurl=https://other.example\n[ryoku]\nbaseurl=" + COPRServer + "/\ngpgcheck=1\nrepo_gpgcheck=0\ngpgkey=file:///key\n"
+	original := "[other]\nbaseurl=https://other.example\n[RyokuCOPR]\nbaseurl=" + COPRServer + "/\ngpgcheck=1\nrepo_gpgcheck=0\ngpgkey=file:///key\n"
 	if err := os.WriteFile(RPMRepoFile, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -106,7 +106,11 @@ func TestResolveRepoFallbackNeedsTracking(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state")) // no recorded pointer
 
-	clone := filepath.Join(home, "ryoku-arch")
+	name := "ryoku-arch"
+	if RPMManager() != "" {
+		name = "ryoku-fedora"
+	}
+	clone := filepath.Join(home, name)
 	gitInitRyokuArch(t, clone)
 
 	if got := ResolveRepo(); got != "" {
@@ -122,5 +126,40 @@ func TestResolveRepoFallbackNeedsTracking(t *testing.T) {
 	}
 	if got := ResolveRepo(); got != clone {
 		t.Fatalf("ResolveRepo with tracking = %q, want %q (self-heal a lost pointer)", got, clone)
+	}
+}
+
+func TestFedoraResolveRepoDoesNotAdoptArchFallback(t *testing.T) {
+	home, bin := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".state"))
+	t.Setenv("RYOKU_REPO", "")
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(git, filepath.Join(bin, "git")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "dnf"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	gitInitRyokuArch(t, filepath.Join(home, "ryoku-arch"))
+	env := filepath.Join(ConfigHome(), "environment.d", "ryoku.conf")
+	if err := os.MkdirAll(filepath.Dir(env), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(env, []byte("RYOKU_CHANNEL=main-fedora\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ResolveRepo(); got != "" {
+		t.Fatalf("adopted Arch checkout: %s", got)
+	}
+	fedora := filepath.Join(home, "ryoku-fedora")
+	gitInitRyokuArch(t, fedora)
+	if got := ResolveRepo(); got != fedora {
+		t.Fatalf("got %s, want %s", got, fedora)
 	}
 }

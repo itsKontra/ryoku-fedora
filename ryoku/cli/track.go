@@ -10,10 +10,12 @@ import (
 	"strings"
 )
 
-// where the track script lives, for boxes with no local checkout that ask to
-// build from source (`--source`). Always the main copy: the stable script moves
-// a box in either direction, so a packaged box can still reach it.
-const trackURL = "https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-track"
+func trackURL() string {
+	if sys.RPMManager() != "" {
+		return "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/bin/ryoku-track"
+	}
+	return "https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-track"
+}
 
 // sourceChannels are the git branches `ryoku track ... --source` builds from.
 var sourceChannels = map[string]bool{"main": true, "main-fedora": true, "unstable-dev": true}
@@ -102,8 +104,9 @@ func trackFromSource(channel string) error {
 			return sys.Run("bash", script, channel)
 		}
 	}
+	url := trackURL()
 	if !sys.Has("curl") {
-		return fmt.Errorf(i18n.T("no local track script and curl is missing; run it by hand:\n  curl -fsSL %s | bash -s -- %s"), trackURL, channel)
+		return fmt.Errorf(i18n.T("no local track script and curl is missing; run it by hand:\n  curl -fsSL %s | bash -s -- %s"), url, channel)
 	}
 	tmp, err := os.CreateTemp("", "ryoku-track-*.sh")
 	if err != nil {
@@ -111,8 +114,8 @@ func trackFromSource(channel string) error {
 	}
 	tmp.Close()
 	defer os.Remove(tmp.Name())
-	if err := sys.Run("curl", "-fsSL", trackURL, "-o", tmp.Name()); err != nil {
-		return fmt.Errorf(i18n.T("fetch track script from %s: %w"), trackURL, err)
+	if err := sys.Run("curl", "-fsSL", url, "-o", tmp.Name()); err != nil {
+		return fmt.Errorf(i18n.T("fetch track script from %s: %w"), url, err)
 	}
 	return sys.Run("bash", tmp.Name(), channel)
 }

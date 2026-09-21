@@ -1,0 +1,21 @@
+[Unit]
+Description=Ryoku initial console setup
+After=local-fs.target systemd-user-sessions.service plymouth-quit-wait.service
+Before=display-manager.service getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/ryoku-firstboot
+RemainAfterExit=yes
+TimeoutStartSec=infinity
+StandardInput=tty-force
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

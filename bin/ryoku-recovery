@@ -11,7 +11,15 @@ CHANNEL="${RYOKU_RECOVERY_REF:-main-fedora}"
 # recovery never track different trees; legacy checkouts are consolidated below.
 DATA_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/ryoku"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku"
-RECOVERY_DIR="${RYOKU_RECOVERY_DIR:-$HOME/ryoku-arch}"
+if [[ -z ${RYOKU_RECOVERY_DIR:-} ]]; then
+  if [[ -d $HOME/ryoku-fedora ]] || command -v dnf >/dev/null 2>&1; then
+    RECOVERY_DIR="$HOME/ryoku-fedora"
+  else
+    RECOVERY_DIR="$HOME/ryoku-arch"
+  fi
+else
+  RECOVERY_DIR="$RYOKU_RECOVERY_DIR"
+fi
 if [[ -f $STATE_DIR/repo ]]; then
   source_repo=$(cat "$STATE_DIR/repo")
   if git -C "$source_repo" rev-parse --git-dir >/dev/null 2>&1; then

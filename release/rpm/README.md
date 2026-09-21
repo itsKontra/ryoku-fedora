@@ -122,24 +122,17 @@ ID is not that contract. Host signed output at:
 <base>/releases/<tag>/<fedora-version>/x86_64/
 ```
 
-Install `ryoku.repo.in` as `/etc/yum.repos.d/ryoku.repo`, replacing `@BASE_URL@`
-with that base and `@KEY_URL@` with the publisher's verified public key URL.
-Write the same base, alone on one line, to `/etc/dnf/vars/ryoku_baseurl`.
-Keep `gpgcheck=1` and `repo_gpgcheck=1`. Each directory carries `release.json`
-and signed `repodata/repomd.xml`; retain frozen release directories for rollback.
-Publish only after the matching Fedora build/install gate passes. Upload a
-frozen directory first, then atomically move the channel pointer onto it.
+`configure-repo.py` verifies the COPR public key and installs `ryoku.repo.in`
+as `/etc/yum.repos.d/RyokuCOPR.repo`, with repository ID `RyokuCOPR`. It removes
+the legacy `ryoku.repo` file so DNF sees only one desktop repository. RPM
+signature checking stays enabled; COPR metadata is not separately signed.
 
 Install `ryoku-desktop` and the selected `ryoku-desktop-<provider>` together.
-`ryoku track` changes only the `[ryoku]` baseurl. Updates refresh that repository
-and run `distro-sync` with `--repo=ryoku`, restricting candidates to it; missing
-new dependencies must be installed through the host's normal package transaction
-before retrying. No unrestricted system downgrade is substituted.
-
-The raw desktop COPR repository is a build output, not a supported client
-channel. Do not enable it alongside `[ryoku]`: its individual builds bypass
-whole-desktop install gating. The configured `[ryoku]` consumes the promoted
-COPR-signed RPMs. Dependency COPRs retain their normal DNF IDs.
+The supported Fedora channel is `copr`. `ryoku track copr` selects its base URL;
+updates refresh `RyokuCOPR` and run `distro-sync` restricted to that repository.
+Missing dependencies must be installed through the host's normal transaction
+before retrying. Stable, testing, and frozen release channels are unavailable.
+Dependency COPRs retain their own DNF IDs.
 
 DNF option semantics are documented in the
 [DNF5 manual](https://dnf5.readthedocs.io/en/latest/dnf5.8.html) and
@@ -147,14 +140,11 @@ DNF option semantics are documented in the
 
 ## Installer modes
 
-For a packaged Fedora install, export `RYOKU_RPM_BASE_URL`,
-`RYOKU_COPR_FINGERPRINT`, and `RYOKU_RPM_SIGNING_KEY` with the published values,
-then run the shell installer with `--install-mode=packages`. It validates
-downloaded public keys before writing `[ryoku]`, installs the desktop and
-selected provider with DNF, and materializes their config. The initial install
-selects testing; `ryoku track stable` switches once stable has been published.
-Missing configuration or unavailable packages fail explicitly, with no automatic
-fallback to compilation.
+For a packaged Fedora install, run the shell installer with
+`--install-mode=packages`. It verifies the pinned COPR key before configuring
+`RyokuCOPR`, installs the desktop and selected provider with DNF, and
+materializes their config. Package mode skips direct extras downloads.
+Unavailable packages fail explicitly, with no automatic fallback to compilation.
 
 `--install-mode=auto` is the default: Fedora uses packages unless a local payload
 or a custom repository/ref was selected. `--install-mode=source` always keeps Fedora's

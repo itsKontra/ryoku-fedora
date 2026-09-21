@@ -3,6 +3,19 @@
 ## Unreleased
 
 ### Fixed
+- Set target-home ownership before user configuration and stop provisioning on
+  materialization, desktop apply or required extras failures. Load the extras
+  helper explicitly and check each required asset.
+- Preserve Fedora ISO boot metadata by requiring mkksiso remastering, including
+  the embedded EFI image, and reject nonbootable data-ISO fallbacks.
+- Require a password-protected administrator for Anaconda installs, include Go,
+  use RyokuCOPR consistently, and align provisioning checks with the desktop.
+
+### Fixed
+- Fedora ISO selects a named Ryoku Desktop environment, preserves accounts and
+  regional settings chosen in Anaconda, and validates the complete network
+  package selection before compose. Correct missing dependency repositories and
+  package names, and use the Fedora multimedia stack required by Ryoku RPMs.
 - **A second disk shows its partitions and its free space.** The alongside probe
   returned before reporting anything when the target disk was not GPT or had no
   EFI System Partition, and the free-region math read `firstlba`/`lastlba`, which
@@ -13,6 +26,50 @@
   its space is listed but needs GPT (`backend/lib/disk.sh`, `tui/system.go`).
 
 ### Added
+- **Automated UEFI VM test harness and validation for Fedora 44 Ryoku ISO.** Provide
+  the automated test harness (`tests/fedora-iso-vm.sh`, `tests/fedora-iso-vm.py`)
+  driving QEMU with OVMF firmware, 40 GiB virtual disk, and disconnected network
+  (`-nic none`). Automate Kickstart installation with test target adaptation and
+  capture serial and Anaconda install logs. Drive interactive console first-boot setup
+  on tty1 through `systemd-firstboot` and `passwd` (locale, keymap, timezone, hostname,
+  root password, ryoku user password) with interruption recovery. Verify SDDM gating
+  preconditions and unblocking upon setup completion, graphical session launch into
+  `niri` desktop with Ryoku Quickshell, and SELinux enforcing status with zero AVC denials
+  (`ausearch -m avc`). Test both unencrypted and LUKS2-encrypted installation paths
+  with 11 unit tests in `fedora/tests/test_vm.py` (58 tests total), and integrate into
+  CI (`.github/workflows/fedora-iso-vm.yml`, `.github/workflows/fedora-firstboot.yml`).
+- **Anaconda Kickstart and ISO compose pipeline for Fedora 44.** Define the
+  single-source-of-truth Kickstart recipe (`fedora/kickstart/ryoku.ks`) with UEFI
+  GPT partitioning (600 MiB ESP, 2 GiB `/boot`, Btrfs with `root` and `home` subvolumes,
+  and Fedora zram swap policy), strict whole-disk safety (`clearpart --none`),
+  interactive LUKS2 encryption prompt, local media repository priority (`--cost=10`),
+  full RPM Fusion FFmpeg selection via `-ffmpeg-free` exclusions, and `%post` offline
+  provisioning. Provide the automated compose pipeline script (`fedora/build-iso.sh`)
+  supporting GPG key validation, repository metadata/manifest generation, staging,
+  hybrid UEFI ISO packaging via `xorriso`/`mkksiso`/`lorax`, and structured
+  provenance recording (`fedora/build-iso.sh`, `tests/fedora-iso.sh`).
+- **Offline RPM package closure and repository setup for Fedora 44.** Define the
+  declarative package payload (`packages.list`) covering minimal base, standard
+  kernel, open graphics drivers, core utilities (`chromium`, `tmux`, `neovim`,
+  `fish`, etc.), base services, and desktop runtime. Pin Fedora 44 Primary,
+  RPM Fusion Free/Nonfree 2020, and Ryoku COPR signing keys. Provide offline
+  repository tooling (`fedora/build-repo.py`) with explicit FFmpeg transaction
+  solving to replace `ffmpeg-free` without package removals, SHA256 manifest
+  generation, `createrepo_c` metadata, and disconnected installroot closure
+  validation (`fedora/build-repo.py`, `tests/fedora-repo.sh`).
+- **Offline desktop provisioner for Fedora 44.** Transform an offline, mounted
+  Fedora sysroot into a fully configured Ryoku desktop target: pre-create locked
+  `ryoku` with fish and wheel, enforce password-required sudo, write SDDM
+  configuration drop-ins for Wayland and niri, enable sddm and base system
+  services, seed qylock lockscreen and wallpapers/decor/brand assets from
+  `/usr/share/ryoku`, materialize user configuration with proper `ryoku:ryoku`
+  ownership, arm console first-boot, and relabel SELinux contexts
+  (`fedora/provision-target.py`, `tests/fedora-provision.sh`).
+- Fedora ISO groundwork: prepare a fresh target for resumable console setup,
+  explicitly prompt for hostname and both account passwords, and keep SDDM
+  gated until setup succeeds. Add offline Fedora 44 prompt tests and CI, plus
+  the Anaconda compose direction and provisioning audit. ISO composition and
+  booted VM validation remain unfinished (`fedora/README.md`).
 - **Install into the free space on a disk that has no ESP.** A GPT disk with free
   space but no EFI System Partition of its own (a second, OS-less drive) now gets
   the `create-esp` verdict: the installer offers "Install in the free space",

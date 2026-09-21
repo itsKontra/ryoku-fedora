@@ -116,11 +116,11 @@ there; the CLI needs no server and is the first choice.
 
 Auto-generated from the Prowl index, refreshed on each `overview`/`init`. Prefer retrieving from Prowl (and reading the cited files) over grepping or relying on training memory; this is the current shape of the repo.
 
-- size: 3159 files, 310608 symbols, 9383 edges (resolved 3192, external deps 4520, unresolved 1671)
-- languages: go:1515 qml:851 bash:237 javascript:174 markdown:103 json:70 yaml:57 lua:42
-- subsystems: ryoku/shell(620,qml) · ryoku/hub(63,qml) · ryoku/ui(53,qml) · ryoku/apps(50,qml) · ryoku/rashin(16,javascript) · ryoku/hyprland(15,lua) · ryoku/shell(15,css) · ryoku/lockscreen(12,qml)
-- entrypoints: ryoku/shell/quickshell/shell/shell.qml · ryoku/shell/ryogami/wall-ui/qml/wallpaper/WallpaperSelector.qml · ryoku/hub/quickshell/pages/InputPage.qml · ryoku/shell/quickshell/shell/modules/bar/MenuWidgetHost.qml · ryoku/hub/quickshell/pages/RecordingPage.qml · ryoku/hub/quickshell/pages/AddonsPage.qml · ryoku/hub/quickshell/pages/DisplaysPage.qml · ryoku/hyprland/hyprland.lua · (+191 more)
-- central files (most depended-on): ryoku/lockscreen/qylock/themes/clockwork/orbital/i18n/I18n.qml · ryoku/shell/ryogami/wall-ui/qml/Config.qml · ryoku/ui/Singletons/Tokens.qml · ryoku/shell/ryogami/wall-ui/qml/services/BootstrapService.qml · ryoku/shell/quickshell/shell/modules/bar/barstyles/qsbar/Theme.qml
+- size: 3308 files, 302910 symbols, 10127 edges (resolved 3237, external deps 5197, unresolved 1693)
+- languages: go:1638 qml:855 bash:248 javascript:171 markdown:113 json:72 lua:43 yaml:43
+- subsystems: ryoku/shell(622,qml) · ryoku/hub(64,qml) · ryoku/ui(52,qml) · ryoku/apps(50,qml) · ryoku/rashin(16,javascript) · ryoku/hyprland(15,lua) · ryoku/shell(15,css) · ryoku/lockscreen(12,qml)
+- entrypoints: ryoku/shell/quickshell/shell/shell.qml · ryoku/shell/ryogami/wall-ui/qml/wallpaper/WallpaperSelector.qml · ryoku/hub/quickshell/pages/InputPage.qml · ryoku/shell/quickshell/shell/modules/bar/MenuWidgetHost.qml · ryoku/hub/quickshell/pages/RecordingPage.qml · ryoku/hub/quickshell/pages/AddonsPage.qml · ryoku/hub/quickshell/pages/DisplaysPage.qml · ryoku/hub/quickshell/pages/LauncherPage.qml · (+189 more)
+- central files (most depended-on): ryoku/lockscreen/qylock/themes/clockwork/orbital/i18n/I18n.qml · ryoku/ui/Singletons/Tokens.qml · ryoku/shell/quickshell/shell/modules/bar/barstyles/qsbar/Theme.qml · ryoku/shell/quickshell/shell/services/Perf.qml · ryoku/shell/ryogami/wall-ui/qml/Config.qml
 - read these guides first: README.md · AGENTS.md · CONTRIBUTING.md · docs/development.md · docs/structure.md
 
 Depth on demand: `prowl-agent find|def|outline|references <name>`, `search <text>`, `context search "<question>"`, `sketch <ui>`.
