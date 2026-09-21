@@ -4,6 +4,7 @@
 import argparse
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -588,6 +589,8 @@ def anaconda_accounts(root):
 
 def normalize_dnf_repositories(root):
     repos_d = root / "etc/yum.repos.d"
+    if not repos_d.is_dir():
+        return
     copr_repo = repos_d / "RyokuCOPR.repo"
     ryoku_repo = repos_d / "ryoku.repo"
     if copr_repo.is_file() and not ryoku_repo.is_file():
@@ -596,6 +599,25 @@ def normalize_dnf_repositories(root):
         copr_repo.unlink(missing_ok=True)
     elif copr_repo.is_file() and ryoku_repo.is_file():
         copr_repo.unlink(missing_ok=True)
+
+    for repo_file in sorted(repos_d.glob("*.repo")):
+        try:
+            content = repo_file.read_text()
+            if "copr.fedorainfracloud.org/results/" in content and "gpgkey" not in content:
+                match = re.search(
+                    r"baseurl\s*=\s*(https://download\.copr\.fedorainfracloud\.org/results/[^/\s]+/[^/\s]+/)",
+                    content,
+                )
+                if match:
+                    copr_base = match.group(1)
+                    pubkey_url = copr_base + "pubkey.gpg"
+                    lines = content.rstrip().splitlines()
+                    if not any(l.strip().startswith("gpgcheck") for l in lines):
+                        lines.append("gpgcheck = 1")
+                    lines.append(f"gpgkey = {pubkey_url}")
+                    repo_file.write_text("\n".join(lines) + "\n")
+        except Exception:
+            pass
 
 
 def provision(root, repo_dir=None, runner=None, allow_running=False, anaconda=False):

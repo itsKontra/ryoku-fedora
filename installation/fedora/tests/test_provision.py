@@ -258,6 +258,21 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertTrue((self.root / "etc/sudoers.d/10-ryoku-wheel").exists())
         self.assertTrue((self.root / "etc/systemd/system/display-manager.service").is_symlink())
 
+    def test_normalize_dnf_repositories_populates_copr_gpgkeys(self):
+        copr_file = "etc/yum.repos.d/RyotunesCOPR.repo"
+        content = (
+            "[RyotunesCOPR]\n"
+            "name = RyotunesCOPR\n"
+            "enabled = 1\n"
+            "baseurl = https://download.copr.fedorainfracloud.org/results/itskontra/ryotunes/fedora-44-x86_64/\n"
+            "cost = 20\n"
+        )
+        self.write(copr_file, content)
+        provision_target.normalize_dnf_repositories(self.root)
+        updated = (self.root / copr_file).read_text()
+        self.assertIn("gpgcheck = 1", updated)
+        self.assertIn("gpgkey = https://download.copr.fedorainfracloud.org/results/itskontra/ryotunes/pubkey.gpg", updated)
+
 
 if __name__ == "__main__":
     unittest.main()
