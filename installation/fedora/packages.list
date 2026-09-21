@@ -33,6 +33,11 @@ gzip
 iproute
 iputils
 chrony
+xdg-user-dirs
+xdg-utils
+pciutils
+desktop-file-utils
+adwaita-icon-theme
 
 [kernel]
 # Standard Fedora kernel and dracut
@@ -41,6 +46,8 @@ kernel-core
 kernel-modules
 dracut
 dracut-config-generic
+kernel-devel
+dkms
 
 [bootloader]
 # UEFI bootloader
@@ -48,6 +55,7 @@ grub2-efi-x64
 grub2-common
 shim-x64
 efibootmgr
+plymouth
 
 [drivers]
 # Open graphics drivers and hardware firmware
@@ -59,6 +67,7 @@ libva-utils
 linux-firmware
 amd-ucode-firmware
 microcode_ctl
+wireless-regdb
 
 [utilities]
 # Core utilities and interactive tools
@@ -78,6 +87,16 @@ ripgrep
 nano
 zsh
 bash
+firefox
+git
+bash-completion
+fd-find
+eza
+btop
+lazygit
+yazi
+zoxide
+gh
 
 [services]
 # Base system services
@@ -88,12 +107,23 @@ bluez
 pipewire
 wireplumber
 sddm
+pipewire-utils
+pipewire-pulseaudio
+pipewire-alsa
+alsa-utils
+wpa_supplicant
+iwd
 
 [multimedia]
 # Published Ryoku components require Fedora FFmpeg
 ffmpeg-free
 rpmfusion-free-release
 rpmfusion-nonfree-release
+gstreamer1-plugins-base
+gstreamer1-plugins-good
+gstreamer1-plugins-bad-free
+gstreamer1-plugins-ugly-free
+gstreamer1-plugin-libav
 
 [desktop]
 # Ryoku desktop packages and Wayland environment
@@ -102,3 +132,19 @@ ryoku-desktop-niri
 niri
 xwayland-satellite
 quickshell
+nautilus
+nautilus-python
+flatpak
+libnotify
+fuzzel
+gpu-screen-recorder
+songrec
+fira-code-fonts
+source-foundry-hack-fonts
+gamemode
+gamescope
+mangohud
+edk2-ovmf
+qemu-system-x86
+virglrenderer
+moby-engine
