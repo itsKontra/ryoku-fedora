@@ -279,7 +279,7 @@ def seed_desktop_extras(root, repo_dir=None):
         extra = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(extra)
         extra.shutil.which = lambda name: None
-        for name in ("bibata", "space-grotesk", "material-symbols", "matugen"):
+        for name in ("bibata", "space-grotesk", "material-symbols", "jetbrains-mono-nerd-fonts", "matugen"):
             try:
                 extra.install(name, root=root / "usr")
             except Exception:
