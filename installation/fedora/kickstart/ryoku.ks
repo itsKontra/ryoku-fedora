@@ -13,7 +13,16 @@ timezone UTC --utc
 # Network configuration
 network --bootproto=dhcp --device=link --activate
 
-# Repository configuration: Local installation media with high priority (low cost)
+# Repository configuration: Online network sources for netinstall media
+url --metalink="https://mirrors.fedoraproject.org/metalink?repo=fedora-44&arch=x86_64"
+repo --name="FedoraUpdates" --metalink="https://mirrors.fedoraproject.org/metalink?repo=updates-released-f44&arch=x86_64" --cost=20
+repo --name="RyokuCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64/" --cost=20
+repo --name="StarshipCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/atim/starship/fedora-44-x86_64/" --cost=20
+repo --name="QuickshellCOPR" --baseurl="https://download.copr.fedorainfracloud.org/results/errornointernet/quickshell/fedora-44-x86_64/" --cost=20
+repo --name="RPMFusionFree" --metalink="https://mirrors.rpmfusion.org/metalink?repo=free-fedora-44&arch=x86_64" --cost=20
+repo --name="RPMFusionNonfree" --metalink="https://mirrors.rpmfusion.org/metalink?repo=nonfree-fedora-44&arch=x86_64" --cost=20
+
+# Repository configuration: Local installation media with highest priority (lowest cost)
 repo --name="RyokuMedia" --baseurl="file:///run/install/repo" --cost=10
 
 # Target safety: Require explicit target disk selection and user confirmation

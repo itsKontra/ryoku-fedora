@@ -244,11 +244,13 @@ log "Composing hybrid UEFI ISO..."
 if [[ -n "$BOOT_ISO" && -f "$BOOT_ISO" ]]; then
   if command -v mkksiso >/dev/null 2>&1; then
     log "Using mkksiso to remaster $BOOT_ISO into $FINAL_ISO..."
+    rm -f "$FINAL_ISO"
     mkksiso \
       --ks "$ISO_STAGE/ryoku.ks" \
       --add "$ISO_STAGE/repo:/repo" \
       --add "$ISO_STAGE/installation:/installation" \
       --volid "$VOLID" \
+      --skip-mkefiboot \
       "$BOOT_ISO" \
       "$FINAL_ISO"
   elif command -v xorriso >/dev/null 2>&1; then
