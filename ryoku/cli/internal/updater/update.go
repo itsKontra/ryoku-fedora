@@ -343,7 +343,7 @@ func runRyokuUpgrade(set []string) ([]string, error) {
 // Ryoku set is already in, and stage2 still has to bring the desktop back.
 func runSystemLane(pending []updateItem) {
 	progress.at("system")
-	progress.logf(i18n.T("Updating %d system package(s) (pacman -Syu, kernel included)"), len(pending))
+	progress.logf(i18n.T("Updating %d system package(s) (%s, kernel included)"), len(pending), systemUpgradeCmd())
 	if err := runInhibited(i18n.T("System"), "System package upgrade", systemUpgradeArgs()); err != nil {
 		fmt.Fprintf(os.Stderr, i18n.T("warning: the system upgrade reported errors: %v\n"), err)
 	}
@@ -378,7 +378,7 @@ func reportSystemLane(pending []updateItem) {
 		progress.logf(i18n.T("The base system is current; nothing waiting outside the Ryoku set"))
 		return
 	}
-	progress.logf(i18n.T("%d system package(s) waiting from your distribution (kernel included): take them with `sudo pacman -Syu`"), len(pending))
+	progress.logf(i18n.T("%d system package(s) waiting from your distribution (kernel included): take them with `sudo %s`"), len(pending), systemUpgradeCmd())
 }
 
 // healPackageUpgrade recovers from a failed Ryoku upgrade in place, once. Files
@@ -434,6 +434,21 @@ const ryokuOverwriteGlob = "/usr/bin/ryoku-*," +
 	"/usr/share/polkit-1/rules.d/*ryoku*.rules," +
 	"/usr/share/plymouth/themes/ryoku/*," +
 	"/usr/share/ryoku/boot/*"
+
+// systemUpgradeCmd is the human-readable form of what systemUpgradeArgs runs,
+// so the update and status messages name the box's real package manager
+// instead of promising pacman on a Fedora or Debian box.
+func systemUpgradeCmd() string {
+	if !sys.Has("pacman") {
+		if manager := sys.RPMManager(); manager != "" {
+			return manager + " -y upgrade"
+		}
+		if sys.Has("apt-get") {
+			return "apt-get -y dist-upgrade"
+		}
+	}
+	return "pacman -Syu"
+}
 
 // systemUpgradeArgs is the user's lane, run only by `ryoku update --system`:
 // the full sysupgrade, kernel included, exactly what `sudo pacman -Syu` does
@@ -1096,7 +1111,7 @@ func Status(args []string) error {
 	// box that reads "up to date" above can still owe its distribution a
 	// kernel.
 	if r.SystemPending > 0 {
-		fmt.Printf(i18n.T("system:        %d package(s) waiting (sudo pacman -Syu)\n"), r.SystemPending)
+		fmt.Printf(i18n.T("system:        %d package(s) waiting (sudo %s)\n"), r.SystemPending, systemUpgradeCmd())
 	} else {
 		fmt.Println(i18n.T("system:        up to date"))
 	}
@@ -1280,7 +1295,12 @@ func latestAvailable(pkg string) string {
 			}
 		}
 	} else if manager := sys.RPMManager(); manager != "" {
-		out, err := sys.RunOut(manager, "repoquery", "--repo="+sys.RPMRepoName, "--qf", "%{VERSION}-%{RELEASE}", pkg)
+		// --latest-limit=1: a COPR repo keeps several builds in its repodata and
+		// repoquery lists every one; dnf5's --qf adds no newline, so the versions
+		// came back glued into one string that never matches the installed
+		// version, and a fully updated box reported itself behind.
+		out, err := sys.RunOut(manager, "repoquery", "--repo="+sys.RPMRepoName,
+			"--latest-limit=1", "--qf", "%{VERSION}-%{RELEASE}", pkg)
 		if err == nil && strings.TrimSpace(out) != "" {
 			return strings.TrimSpace(out)
 		}
