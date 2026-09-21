@@ -69,7 +69,7 @@ Provides:       ryovm
 Provides:       ryoku-ui = %{version}-%{release}
 Obsoletes:      ryostore < 0.2
 Obsoletes:      ryovm < 0.2
-Obsoletes:      ryoku-ui < %{version}-%{release}
+Obsoletes:      ryoku-ui < 0.2
 
 Requires:       qt6ct
 Requires:       zsh
