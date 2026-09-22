@@ -97,6 +97,12 @@ class TestKickstartSpecification(unittest.TestCase):
         self.assertIn("provision-target.py", self.content)
         self.assertIn("/mnt/sysroot", self.content)
 
+    def test_secure_boot_payload_and_bootloader(self):
+        """Verify UEFI Secure Boot bootloader components and MOK tools in packages list."""
+        packages = PACKAGES_LIST_PATH.read_text().splitlines()
+        for required in ("shim-x64", "grub2-efi-x64", "efibootmgr", "mokutil"):
+            self.assertIn(required, packages, f"Missing required Secure Boot package: {required}")
+
 
 class TestComposePipelineScript(unittest.TestCase):
     """Validate build-iso.sh command line interface and staging logic."""

@@ -57,6 +57,26 @@ class TestOVMFDetection(unittest.TestCase):
             with self.assertRaises(FileNotFoundError):
                 locator.prepare_vars_copy(Path(tmp))
 
+    def test_ovmf_locator_secure_boot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code_file = Path(tmp) / "OVMF_CODE.secboot.fd"
+            vars_file = Path(tmp) / "OVMF_VARS.secboot.fd"
+            code_file.write_bytes(b"SECBOOT_CODE")
+            vars_file.write_bytes(b"SECBOOT_VARS")
+
+            locator = OVMFLocator(str(code_file), str(vars_file), secure_boot=True)
+            self.assertTrue(locator.is_available())
+            self.assertTrue(locator.secure_boot)
+            self.assertEqual(locator.code_path, str(code_file))
+            self.assertEqual(locator.vars_path, str(vars_file))
+
+            dest_dir = Path(tmp) / "dest"
+            dest_dir.mkdir()
+            copied = locator.prepare_vars_copy(dest_dir)
+            self.assertTrue(copied.is_file())
+            self.assertEqual(copied.read_bytes(), b"SECBOOT_VARS")
+            self.assertEqual(copied.name, "OVMF_VARS.fd")
+
 
 class TestKickstartVariants(unittest.TestCase):
     """Test automated Kickstart generation for unencrypted and LUKS2 paths."""
@@ -149,6 +169,39 @@ class TestQemuCommandAssembly(unittest.TestCase):
         self.assertIn("-boot", cmd)
         self.assertEqual(cmd[cmd.index("-boot") + 1], "d")
 
+    def test_secure_boot_command_assembly(self):
+        builder = QemuCommandBuilder(
+            ovmf_code="/usr/share/OVMF/OVMF_CODE.secboot.fd",
+            ovmf_vars="/tmp/test/OVMF_VARS.secboot.fd",
+            target_disk="/fake/target.qcow2",
+            memory_mb=4096,
+            smp=4,
+            iso_path="/fake/ryoku.iso",
+            kvm_available=True,
+            secure_boot=True,
+        )
+
+        cmd = builder.build(boot_from_cdrom=True)
+        self.assertEqual(cmd[0], "qemu-system-x86_64")
+        self.assertIn("-machine", cmd)
+        self.assertEqual(cmd[cmd.index("-machine") + 1], "q35,smm=on")
+        self.assertIn("-enable-kvm", cmd)
+        self.assertIn("-cpu", cmd)
+        self.assertEqual(cmd[cmd.index("-cpu") + 1], "host")
+
+        # Assert secure flash parameters
+        self.assertIn("-global", cmd)
+        global_indices = [i for i, x in enumerate(cmd) if x == "-global"]
+        global_vals = [cmd[i + 1] for i in global_indices]
+        self.assertIn("driver=cfi.pflash01,property=secure,value=on", global_vals)
+        self.assertIn("ICH9-LPC.disable_s3=1", global_vals)
+
+        # Assert pflash drive lines
+        drive_indices = [i for i, x in enumerate(cmd) if x == "-drive"]
+        drive_vals = [cmd[i + 1] for i in drive_indices]
+        self.assertTrue(any("OVMF_CODE.secboot.fd" in d and "readonly=on" in d for d in drive_vals))
+        self.assertTrue(any("OVMF_VARS.secboot.fd" in d for d in drive_vals))
+
 
 class TestFirstBootPrompter(unittest.TestCase):
     """Test interactive first-boot console sequence model."""
@@ -226,6 +279,27 @@ class TestVMHarnessStaging(unittest.TestCase):
             self.assertEqual(prov["status"], "staged")
             self.assertTrue(prov["encrypted"])
             self.assertIn("-nic none", prov["network_policy"])
+
+    def test_stage_environment_and_provenance_secure_boot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            harness = VMHarness(
+                iso_path=str(work_dir / "test.iso"),
+                work_dir=work_dir,
+                encrypted=False,
+                secure_boot=True,
+                dry_run=True,
+            )
+
+            harness.stage_environment()
+            harness.record_provenance(status="staged")
+
+            prov_file = work_dir / "vm-provenance.json"
+            self.assertTrue(prov_file.is_file())
+            prov = json.loads(prov_file.read_text(encoding="utf-8"))
+            self.assertTrue(prov["secure_boot"])
+            self.assertTrue(prov["ovmf"]["secure_boot"])
+            self.assertIn("Secure Boot enabled validation", prov["verification_checks"])
 
 
 if __name__ == "__main__":
