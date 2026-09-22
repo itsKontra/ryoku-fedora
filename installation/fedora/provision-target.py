@@ -4,6 +4,7 @@
 import argparse
 from importlib.machinery import SourceFileLoader
 import importlib.util
+import json
 import os
 from pathlib import Path
 import re
@@ -431,13 +432,196 @@ def seed_assets_and_integration(root, repo_dir=None, home=RYOKU_HOME):
         npmrc_dst.chmod(0o644)
 
 
+def detect_target_keyboard(root):
+    layout = ""
+    variant = ""
+    options = ""
+
+    # 1. /etc/X11/xorg.conf.d/00-keyboard.conf
+    xorg_conf = root / "etc/X11/xorg.conf.d/00-keyboard.conf"
+    if xorg_conf.is_file():
+        try:
+            content = xorg_conf.read_text(encoding="utf-8")
+            m_lay = re.search(r'Option\s+"XkbLayout"\s+"([^"]+)"', content)
+            if m_lay:
+                layout = m_lay.group(1).strip()
+            m_var = re.search(r'Option\s+"XkbVariant"\s+"([^"]+)"', content)
+            if m_var:
+                variant = m_var.group(1).strip()
+            m_opt = re.search(r'Option\s+"XkbOptions"\s+"([^"]+)"', content)
+            if m_opt:
+                options = m_opt.group(1).strip()
+        except OSError:
+            pass
+
+    # 2. /etc/vconsole.conf
+    vconsole = root / "etc/vconsole.conf"
+    if vconsole.is_file():
+        try:
+            for line in vconsole.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line.startswith("XKBLAYOUT=") and not layout:
+                    layout = line.split("=", 1)[1].strip('"\'').strip()
+                elif line.startswith("XKBVARIANT=") and not variant:
+                    variant = line.split("=", 1)[1].strip('"\'').strip()
+                elif line.startswith("XKBOPTIONS=") and not options:
+                    options = line.split("=", 1)[1].strip('"\'').strip()
+                elif line.startswith("KEYMAP=") and not layout:
+                    km = line.split("=", 1)[1].strip('"\'').strip()
+                    if km:
+                        layout = km
+        except OSError:
+            pass
+
+    # 3. Kickstart logs from Anaconda
+    if not layout or layout == "us":
+        for ks_path in (root / "root/anaconda-ks.cfg", root / "var/log/anaconda/anaconda-ks.cfg"):
+            if ks_path.is_file():
+                try:
+                    for line in ks_path.read_text(encoding="utf-8").splitlines():
+                        if line.strip().startswith("keyboard "):
+                            m_xlay = re.search(r"--xlayouts='?([^'\"\n]+)'?", line)
+                            if m_xlay:
+                                raw = m_xlay.group(1).strip()
+                                m_pv = re.match(r"^([^\s\(]+)(?:\s*\((.*)\))?$", raw)
+                                if m_pv:
+                                    layout = m_pv.group(1)
+                                    if m_pv.group(2):
+                                        variant = m_pv.group(2)
+                            m_vc = re.search(r"--vckeymap=([^\s]+)", line)
+                            if m_vc and (not layout or layout == "us"):
+                                layout = m_vc.group(1).strip()
+                    if layout and layout != "us":
+                        break
+                except OSError:
+                    pass
+
+    return layout or "us", variant, options
+
+
+def detect_target_locale(root):
+    locale = ""
+    for path in (root / "etc/locale.conf", root / "root/anaconda-ks.cfg", root / "var/log/anaconda/anaconda-ks.cfg"):
+        if path.is_file():
+            try:
+                content = path.read_text(encoding="utf-8")
+                if path.name == "locale.conf":
+                    for line in content.splitlines():
+                        line = line.strip()
+                        if line.startswith("LANG="):
+                            locale = line.split("=", 1)[1].strip('"\'')
+                            break
+                else:
+                    for line in content.splitlines():
+                        line = line.strip()
+                        if line.startswith("lang "):
+                            parts = line.split()
+                            if len(parts) >= 2:
+                                locale = parts[1].strip('"\'')
+                                break
+                if locale:
+                    break
+            except OSError:
+                pass
+
+    if not locale:
+        return "", ""
+
+    base = locale.split(".")[0]
+    if base in ("pt_BR", "zh_CN", "zh_TW"):
+        code = base
+    else:
+        code = base.split("_")[0]
+    return locale, code
+
+
+def sync_keyboard_config(root, layout, variant="", options=""):
+    if not layout:
+        return
+    # Ensure /etc/X11/xorg.conf.d/00-keyboard.conf exists for SDDM ryoku-greeter
+    xorg_conf = root / "etc/X11/xorg.conf.d/00-keyboard.conf"
+    if not xorg_conf.is_file() and layout != "us":
+        xorg_conf.parent.mkdir(parents=True, exist_ok=True)
+        conf_lines = [
+            'Section "InputClass"',
+            '    Identifier "system-keyboard"',
+            '    MatchIsKeyboard "on"',
+            f'    Option "XkbLayout" "{layout}"',
+        ]
+        if variant:
+            conf_lines.append(f'    Option "XkbVariant" "{variant}"')
+        if options:
+            conf_lines.append(f'    Option "XkbOptions" "{options}"')
+        conf_lines.append("EndSection\n")
+        xorg_conf.write_text("\n".join(conf_lines), encoding="utf-8")
+        xorg_conf.chmod(0o644)
+
+    # Ensure /etc/vconsole.conf matches layout
+    vconsole_path = root / "etc/vconsole.conf"
+    if vconsole_path.is_file() and layout != "us":
+        lines = vconsole_path.read_text(encoding="utf-8").splitlines()
+        new_lines = []
+        has_keymap = False
+        for line in lines:
+            if line.strip().startswith("KEYMAP="):
+                has_keymap = True
+                curr = line.strip().split("=", 1)[1].strip('"\'')
+                if curr == "us":
+                    new_lines.append(f'KEYMAP="{layout}"')
+                else:
+                    new_lines.append(line)
+            else:
+                new_lines.append(line)
+        if not has_keymap:
+            new_lines.append(f'KEYMAP="{layout}"')
+        vconsole_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+
 def materialize_config(root, runner=None, user=RYOKU_USER, home=RYOKU_HOME):
     user_home = root / home.lstrip("/")
     ryoku_cfg = user_home / ".config/ryoku"
     ryoku_cfg.mkdir(parents=True, exist_ok=True)
+
+    layout, variant, options = detect_target_keyboard(root)
+    locale, lang_code = detect_target_locale(root)
+
+    sync_keyboard_config(root, layout, variant=variant, options=options)
+
     desktop_json = ryoku_cfg / "desktop.json"
-    if not desktop_json.exists():
-        desktop_json.write_text('{"desktop":{},"wm":{"hyprland":{}}}\n')
+    desktop_data = {}
+    if desktop_json.is_file():
+        try:
+            desktop_data = json.loads(desktop_json.read_text(encoding="utf-8"))
+        except Exception:
+            desktop_data = {}
+    if "desktop" not in desktop_data:
+        desktop_data["desktop"] = {}
+    if "wm" not in desktop_data:
+        desktop_data["wm"] = {"hyprland": {}}
+    if "input" not in desktop_data["desktop"]:
+        desktop_data["desktop"]["input"] = {}
+
+    if layout:
+        desktop_data["desktop"]["input"]["kbLayout"] = layout
+    if variant:
+        desktop_data["desktop"]["input"]["kbVariant"] = variant
+    if options:
+        desktop_data["desktop"]["input"]["kbOptions"] = options
+
+    desktop_json.write_text(json.dumps(desktop_data, indent=2) + "\n", encoding="utf-8")
+    desktop_json.chmod(0o644)
+
+    if lang_code:
+        shell_json = ryoku_cfg / "shell.json"
+        shell_data = {}
+        if shell_json.is_file():
+            try:
+                shell_data = json.loads(shell_json.read_text(encoding="utf-8"))
+            except Exception:
+                shell_data = {}
+        shell_data["language"] = lang_code
+        shell_json.write_text(json.dumps(shell_data, indent=2) + "\n", encoding="utf-8")
+        shell_json.chmod(0o644)
 
     accounts = dict((p[0], p) for p in (
         line.split(":") for line in (root / "etc/passwd").read_text().splitlines() if line
@@ -450,9 +634,15 @@ def materialize_config(root, runner=None, user=RYOKU_USER, home=RYOKU_HOME):
         for path in user_home.rglob("*"):
             os.lchown(path, uid, gid)
 
+    env_vars = [
+        f"HOME={home}", f"USER={user}", f"LOGNAME={user}",
+    ]
+    if locale:
+        env_vars.extend([f"LANG={locale}", f"LC_ALL={locale}"])
+
     command = [
         "chroot", str(root), "runuser", "-u", user, "--", "env",
-        f"HOME={home}", f"USER={user}", f"LOGNAME={user}",
+        *env_vars,
     ]
 
     def run(args):

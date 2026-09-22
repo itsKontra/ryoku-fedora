@@ -152,7 +152,7 @@ func reconcileKeyboardSeed(checkOnly bool) recResult {
 	cur, ok := hyprGetKbLayout(raw)
 	// Only the untouched shipped default is adopted over. Anything else is a
 	// choice, including a deliberate "us".
-	if !ok || cur != "us" {
+	if ok && cur != "us" {
 		mark()
 		return okRes(i18n.T("keyboard layout is a deliberate choice; leaving it"))
 	}
