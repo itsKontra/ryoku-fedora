@@ -4,11 +4,8 @@
 # Installer mode and graphical interface
 graphical
 
-# Keyboard, language, and timezone defaults during installation
-# These defaults remain editable in Anaconda and are preserved on the target.
-keyboard us
-lang en_US.UTF-8
-timezone UTC --utc
+# Localization settings (keyboard, language, timezone) are chosen interactively
+# in Anaconda during installation and preserved on the target by the provisioner.
 
 # Network configuration
 network --bootproto=dhcp --device=link --activate

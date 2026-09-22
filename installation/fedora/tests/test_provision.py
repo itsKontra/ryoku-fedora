@@ -323,6 +323,10 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertTrue((self.root / "home/alice/Pictures/Wallpapers/default.png").is_file())
         self.assertIn("alice", calls[0])
         self.assertIn("HOME=/home/alice", calls[0])
+        desktop_cfg = json.loads((self.root / "home/alice/.config/ryoku/desktop.json").read_text())
+        self.assertEqual(desktop_cfg["desktop"]["input"]["kbLayout"], "de")
+        shell_cfg = json.loads((self.root / "home/alice/.config/ryoku/shell.json").read_text())
+        self.assertEqual(shell_cfg["language"], "de")
         self.assertFalse((self.root / "var/lib/ryoku-firstboot/armed").exists())
 
     def test_anaconda_requires_a_login_account(self):

@@ -71,7 +71,9 @@ class TestKickstartSpecification(unittest.TestCase):
         self.assertIn("rootpw --lock", self.lines)
         self.assertFalse(any(line.startswith("user ") for line in self.lines))
         self.assertIn("/mnt/sysroot --anaconda", self.content)
-        self.assertIn("keyboard us", self.lines)
+        self.assertNotIn("keyboard us", self.lines)
+        self.assertNotIn("lang en_US.UTF-8", self.lines)
+        self.assertNotIn("timezone UTC --utc", self.lines)
         self.assertNotIn("--plaintext", self.content)
 
     def test_packages_section_and_multimedia(self):
