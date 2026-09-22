@@ -26,6 +26,15 @@
   its space is listed but needs GPT (`backend/lib/disk.sh`, `tui/system.go`).
 
 ### Added
+- **UEFI Secure Boot support, verification, and MOK tooling for Fedora 44.** Include
+  `mokutil` in the bootloader package set, document the full chain of trust from
+  Microsoft CA-signed Shim (`shim-x64`), Fedora-signed GRUB (`grub2-efi-x64`), and
+  signed kernel images through Anaconda target provisioning. Provide kernel lockdown
+  compatibility and MOK key enrollment guidance for out-of-tree and DKMS modules.
+  Extend the automated VM test harness (`tests/fedora-iso-vm.sh`, `tests/fedora-iso-vm.py`)
+  with `--secure-boot` support driving QEMU with SMM enabled (`-machine q35,smm=on`),
+  secure flash (`driver=cfi.pflash01,property=secure,value=on`), and `OVMF_*.secboot.fd`
+  firmware, asserting `mokutil --sb-state` reporting `SecureBoot enabled`.
 - **Automated UEFI VM test harness and validation for Fedora 44 Ryoku ISO.** Provide
   the automated test harness (`tests/fedora-iso-vm.sh`, `tests/fedora-iso-vm.py`)
   driving QEMU with OVMF firmware, 40 GiB virtual disk, and disconnected network

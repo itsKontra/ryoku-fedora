@@ -287,9 +287,72 @@ settings, terminal, lock, audio, portals, firewall and update/overlay preservati
 Retain journals, Anaconda logs, RPM/configuration manifests and SELinux AVCs.
 
 Publish only after those gates pass, with checksums, provenance and installation
-instructions. UEFI boot, Secure Boot, GPUs and physical Bluetooth currently have
-**no ISO test coverage**. Secure Boot and proprietary NVIDIA support are not
-claimed. Keep hardware-only checks separate from VM evidence.
+instructions. GPUs and physical Bluetooth keep hardware-only checks separate
+from VM evidence.
+
+## UEFI Secure Boot support and verification
+
+Fedora provides first-class UEFI Secure Boot support out-of-the-box. The Ryoku
+Fedora installation media and installed target preserve this chain of trust:
+
+1. **Boot Chain & Signature Hierarchy**:
+   - **Shim (`shim-x64`)**: Installed as `BOOTX64.EFI`, signed by the Microsoft
+     Corporation UEFI CA. Trusted by standard motherboard UEFI firmware.
+   - **GRUB (`grub2-efi-x64`)**: Loaded and verified by Shim using the embedded
+     Fedora UEFI CA certificate.
+   - **Kernel (`kernel-core`)**: Signed with Fedora's release key, verified by
+     GRUB and Shim before execution.
+   - **Target Configuration**: Anaconda installs `shim-x64` alongside
+     `grub2-efi-x64` into `/boot/efi/EFI/fedora/` and registers the primary UEFI
+     boot entry pointing to `\EFI\fedora\shimx64.efi` via `efibootmgr`.
+
+2. **ISO Remastering & Embedded EFI Image**:
+   - `build-iso.sh` remasters the boot media using `mkksiso` and `xorriso`.
+     Authenticode signatures within the PE/COFF binaries (`BOOTX64.EFI`,
+     `grubx64.efi`, `vmlinuz`) remain untouched and valid.
+   - `mkksiso` updates both root ISO configuration and the embedded El Torito
+     FAT image `images/efiboot.img`.
+   - The `--skip-mkefiboot` flag is reserved for rootless developer staging.
+     Official release builds require root to update `images/efiboot.img`,
+     guaranteeing UEFI systems booting the embedded partition execute the
+     matching Kickstart parameters.
+
+3. **Kernel Lockdown Mode Compatibility**:
+   - Booting with Secure Boot enables Linux kernel lockdown mode (`integrity`).
+   - The Ryoku desktop environment (Hyprland, SDDM, Quickshell, PipeWire,
+     WirePlumber) runs in userspace, communicating through standard DRM/KMS
+     and evdev interfaces without requiring restricted memory access.
+   - Official in-tree drivers (`amdgpu`, `i915`, `xe`, `nouveau`, Wi-Fi, audio)
+     are signed by Fedora and load without restriction.
+
+4. **Out-of-Tree Modules & MOK Enrollment**:
+   - `mokutil` is included in the base bootloader payload (`packages.list`).
+   - For DKMS or akmods packages (such as proprietary NVIDIA drivers or
+     `v4l2loopback`), enroll a local Machine Owner Key (MOK):
+     1. Generate a local MOK keypair:
+        ```sh
+        sudo /usr/sbin/kmodgenca
+        ```
+     2. Request key enrollment via `mokutil`:
+        ```sh
+        sudo mokutil --import /etc/pki/akmods/certs/public_key.der
+        ```
+        Enter a temporary enrollment password when prompted.
+     3. Reboot the machine. Shim intercepts boot and displays `MokManager`
+        (`mmx64.efi`). Select **Enroll MOK**, choose **View key** to verify,
+        select **Continue**, confirm with **Yes**, and enter the password.
+     4. On subsequent boots, locally compiled modules signed by this key are
+        trusted and loaded by the kernel.
+
+5. **Automated Testing in QEMU**:
+   - Validate Secure Boot using `installation/tests/fedora-iso-vm.sh --secure-boot`
+     or `fedora-iso-vm.py --secure-boot`.
+   - The harness drives QEMU with SMM enabled (`-machine q35,smm=on`), secure flash
+     enabled (`-global driver=cfi.pflash01,property=secure,value=on`), and S3
+     mitigation (`-global ICH9-LPC.disable_s3=1`), utilizing `OVMF_CODE.secboot.fd`
+     and a writable copy of `OVMF_VARS.secboot.fd` containing pre-enrolled
+     Microsoft certificates.
+   - Verifies that `mokutil --sb-state` reports `SecureBoot enabled` in the guest.
 
 ### Netinstall dependency validation
 

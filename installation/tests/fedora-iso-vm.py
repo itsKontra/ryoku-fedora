@@ -52,22 +52,50 @@ OVMF_VARS_PATHS = (
     "/usr/share/edk2-ovmf/x64/OVMF_VARS.fd",
 )
 
+OVMF_SECBOOT_CODE_PATHS = (
+    "/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd",
+    "/usr/share/OVMF/OVMF_CODE.secboot.fd",
+    "/usr/share/edk2/x64/OVMF_CODE.secboot.fd",
+    "/usr/share/edk2-ovmf/x64/OVMF_CODE.secboot.fd",
+    "/usr/share/OVMF/x64/OVMF_CODE.secboot.fd",
+)
+
+OVMF_SECBOOT_VARS_PATHS = (
+    "/usr/share/edk2/ovmf/OVMF_VARS.secboot.fd",
+    "/usr/share/OVMF/OVMF_VARS.secboot.fd",
+    "/usr/share/edk2/x64/OVMF_VARS.secboot.fd",
+    "/usr/share/edk2-ovmf/x64/OVMF_VARS.secboot.fd",
+    "/usr/share/OVMF/x64/OVMF_VARS.secboot.fd",
+)
+
 
 class OVMFLocator:
     """Locate and prepare OVMF UEFI firmware files."""
 
-    def __init__(self, code_path: Optional[str] = None, vars_path: Optional[str] = None):
-        self.code_path = code_path or os.environ.get("OVMF_CODE")
-        self.vars_path = vars_path or os.environ.get("OVMF_VARS")
+    def __init__(
+        self,
+        code_path: Optional[str] = None,
+        vars_path: Optional[str] = None,
+        secure_boot: bool = False,
+    ):
+        self.secure_boot = secure_boot
+        code_env = "OVMF_SECBOOT_CODE" if secure_boot else "OVMF_CODE"
+        vars_env = "OVMF_SECBOOT_VARS" if secure_boot else "OVMF_VARS"
+
+        self.code_path = code_path or os.environ.get(code_env)
+        self.vars_path = vars_path or os.environ.get(vars_env)
+
+        code_candidates = OVMF_SECBOOT_CODE_PATHS if secure_boot else OVMF_CODE_PATHS
+        vars_candidates = OVMF_SECBOOT_VARS_PATHS if secure_boot else OVMF_VARS_PATHS
 
         if not self.code_path:
-            for p in OVMF_CODE_PATHS:
+            for p in code_candidates:
                 if os.path.isfile(p):
                     self.code_path = p
                     break
 
         if not self.vars_path:
-            for p in OVMF_VARS_PATHS:
+            for p in vars_candidates:
                 if os.path.isfile(p):
                     self.vars_path = p
                     break
@@ -78,7 +106,8 @@ class OVMFLocator:
     def prepare_vars_copy(self, destination: Path) -> Path:
         if not self.vars_path or not os.path.isfile(self.vars_path):
             raise FileNotFoundError(f"OVMF VARS file not found: {self.vars_path}")
-        vars_copy = destination / "OVMF_VARS.fd"
+        vars_suffix = Path(self.vars_path).suffix or ".fd"
+        vars_copy = destination / f"OVMF_VARS{vars_suffix}"
         shutil.copyfile(self.vars_path, vars_copy)
         return vars_copy
 
@@ -128,6 +157,7 @@ class QemuCommandBuilder:
         oemdrv_path: Optional[str] = None,
         serial_log: Optional[str] = None,
         kvm_available: Optional[bool] = None,
+        secure_boot: bool = False,
     ):
         self.ovmf_code = ovmf_code
         self.ovmf_vars = ovmf_vars
@@ -137,6 +167,7 @@ class QemuCommandBuilder:
         self.iso_path = iso_path
         self.oemdrv_path = oemdrv_path
         self.serial_log = serial_log
+        self.secure_boot = secure_boot
 
         if kvm_available is None:
             self.kvm_available = os.path.exists("/dev/kvm") and os.access("/dev/kvm", os.R_OK | os.W_OK)
@@ -144,22 +175,32 @@ class QemuCommandBuilder:
             self.kvm_available = kvm_available
 
     def build(self, boot_from_cdrom: bool = False) -> List[str]:
-        cmd = ["qemu-system-x86_64", "-machine", "q35"]
+        machine_type = "q35,smm=on" if self.secure_boot else "q35"
+        cmd = ["qemu-system-x86_64", "-machine", machine_type]
 
         if self.kvm_available:
             cmd.extend(["-enable-kvm", "-cpu", "host"])
         else:
             cmd.extend(["-cpu", "max"])
 
+        if self.secure_boot:
+            cmd.extend([
+                "-global", "driver=cfi.pflash01,property=secure,value=on",
+                "-global", "ICH9-LPC.disable_s3=1",
+            ])
+
         cmd.extend(["-m", str(self.memory_mb), "-smp", str(self.smp)])
 
         # Disconnected network policy: strictly enforce offline mode
         cmd.extend(["-nic", "none"])
 
+        code_format = "qcow2" if self.ovmf_code.endswith(".qcow2") else "raw"
+        vars_format = "qcow2" if self.ovmf_vars.endswith(".qcow2") else "raw"
+
         # UEFI firmware pflash
         cmd.extend([
-            "-drive", f"if=pflash,format=raw,readonly=on,file={self.ovmf_code}",
-            "-drive", f"if=pflash,format=raw,file={self.ovmf_vars}",
+            "-drive", f"if=pflash,format={code_format},readonly=on,file={self.ovmf_code}",
+            "-drive", f"if=pflash,format={vars_format},file={self.ovmf_vars}",
         ])
 
         # Virtual target disk
@@ -254,6 +295,7 @@ class VMHarness:
         timeout_sec: int = 1800,
         ovmf_code: Optional[str] = None,
         ovmf_vars: Optional[str] = None,
+        secure_boot: bool = False,
         dry_run: bool = False,
     ):
         self.iso_path = Path(iso_path).resolve()
@@ -261,9 +303,10 @@ class VMHarness:
         self.encrypted = encrypted
         self.passphrase = passphrase
         self.timeout_sec = timeout_sec
+        self.secure_boot = secure_boot
         self.dry_run = dry_run
 
-        self.ovmf = OVMFLocator(ovmf_code, ovmf_vars)
+        self.ovmf = OVMFLocator(ovmf_code, ovmf_vars, secure_boot=secure_boot)
         self.ks_gen = KickstartGenerator()
 
         self.target_disk = self.work_dir / "target.qcow2"
@@ -277,7 +320,7 @@ class VMHarness:
 
         # Prepare OVMF vars copy if available
         if self.ovmf.is_available():
-            self.ovmf.prepare_vars_copy(self.work_dir)
+            self.vars_copy = self.ovmf.prepare_vars_copy(self.work_dir)
 
         # Generate test Kickstart
         test_ks = self.ks_gen.generate(target_disk="vda", encrypted=self.encrypted, passphrase=self.passphrase)
@@ -306,7 +349,8 @@ class VMHarness:
             )
 
     def generate_qemu_commands(self) -> Dict[str, List[str]]:
-        code_path = self.ovmf.code_path or "/usr/share/OVMF/OVMF_CODE.fd"
+        default_code = "/usr/share/OVMF/OVMF_CODE.secboot.fd" if self.secure_boot else "/usr/share/OVMF/OVMF_CODE.fd"
+        code_path = self.ovmf.code_path or default_code
         vars_path = str(self.vars_copy)
 
         builder = QemuCommandBuilder(
@@ -316,6 +360,7 @@ class VMHarness:
             iso_path=str(self.iso_path),
             oemdrv_path=str(self.oemdrv_disk),
             serial_log=str(self.serial_log),
+            secure_boot=self.secure_boot,
         )
 
         return {
@@ -327,6 +372,7 @@ class VMHarness:
                 iso_path=None,
                 oemdrv_path=None,
                 serial_log=str(self.serial_log),
+                secure_boot=self.secure_boot,
             ).build(boot_from_cdrom=False),
         }
 
@@ -337,11 +383,13 @@ class VMHarness:
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "iso_path": str(self.iso_path),
             "encrypted": self.encrypted,
+            "secure_boot": self.secure_boot,
             "target_disk": str(self.target_disk),
             "ovmf": {
                 "code": self.ovmf.code_path,
                 "vars": self.ovmf.vars_path,
                 "available": self.ovmf.is_available(),
+                "secure_boot": self.secure_boot,
             },
             "network_policy": "strictly disconnected (-nic none)",
             "verification_checks": [
@@ -350,6 +398,7 @@ class VMHarness:
                 "SDDM gate unblocking",
                 "niri desktop session launch",
                 "SELinux enforcing mode with zero AVC denials",
+                *(["Secure Boot enabled validation"] if self.secure_boot else []),
             ],
         }
         self.provenance_file.write_text(json.dumps(prov, indent=2) + "\n", encoding="utf-8")
@@ -448,6 +497,17 @@ class VMHarness:
                     child.close(force=True)
                     return False
 
+                if self.secure_boot:
+                    print("  Validating Secure Boot status inside guest...")
+                    child.sendline("mokutil --sb-state || echo SECUREBOOT_STATE_FAILED")
+                    idx = child.expect([r"SecureBoot enabled", r"SECUREBOOT_STATE_FAILED", pexpect.TIMEOUT], timeout=30)
+                    if idx == 0:
+                        print("  [✓] Verified: SecureBoot is enabled in guest.")
+                    else:
+                        print("  [!] Failed to verify SecureBoot enabled in guest.", file=sys.stderr)
+                        child.close(force=True)
+                        return False
+
                 child.sendline("poweroff")
                 child.expect([pexpect.EOF, pexpect.TIMEOUT], timeout=60)
                 child.close(force=True)
@@ -466,6 +526,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--iso", default="", help="Path to Fedora Ryoku ISO")
     parser.add_argument("--encrypted", action="store_true", help="Test LUKS2-encrypted installation path")
     parser.add_argument("--unencrypted", action="store_true", help="Test unencrypted installation path (default)")
+    parser.add_argument("--secure-boot", action="store_true", help="Enable UEFI Secure Boot with OVMF secboot firmware")
     parser.add_argument("--work-dir", default=None, help="Working directory for test artifacts")
     parser.add_argument("--timeout", type=int, default=1800, help="Test execution timeout in seconds")
     parser.add_argument("--ovmf-code", default=None, help="Path to OVMF CODE firmware file")
@@ -508,6 +569,7 @@ def main() -> int:
         timeout_sec=args.timeout,
         ovmf_code=args.ovmf_code,
         ovmf_vars=args.ovmf_vars,
+        secure_boot=args.secure_boot,
         dry_run=args.dry_run or args.stage_only,
     )
 
@@ -515,6 +577,7 @@ def main() -> int:
     print(f"  Working directory: {work_dir}")
     print(f"  ISO:               {iso_path or '(stage-only placeholder)'}")
     print(f"  Encrypted (LUKS2): {args.encrypted}")
+    print(f"  Secure Boot:       {args.secure_boot}")
     print(f"  Network policy:    -nic none (strictly disconnected)")
     print(f"  OVMF firmware:     CODE={harness.ovmf.code_path or 'missing'} VARS={harness.ovmf.vars_path or 'missing'}")
 

@@ -8,6 +8,7 @@ harness="$root/installation/tests/fedora-iso-vm.py"
 
 ISO_PATH=""
 ENCRYPTED=0
+SECURE_BOOT=${RYOKU_SECURE_BOOT:-0}
 STAGE_ONLY=0
 DRY_RUN=0
 TIMEOUT=1800
@@ -25,6 +26,8 @@ while [[ $# -gt 0 ]]; do
       ENCRYPTED=1; shift ;;
     --unencrypted)
       ENCRYPTED=0; shift ;;
+    --secure-boot)
+      SECURE_BOOT=1; shift ;;
     --stage-only)
       STAGE_ONLY=1; shift ;;
     --dry-run)
@@ -43,6 +46,7 @@ Options:
   --iso <path>       Path to Fedora Ryoku ISO image
   --encrypted        Test LUKS2-encrypted installation path
   --unencrypted      Test unencrypted installation path (default)
+  --secure-boot      Test with UEFI Secure Boot enabled (OVMF secboot)
   --stage-only       Validate staging, kickstart variants, and unit tests
   --dry-run          Dry-run QEMU commands without booting
   --timeout <sec>    Timeout for installer and first-boot passes (default: 1800)
@@ -85,6 +89,9 @@ stage_args=(
 if [[ $ENCRYPTED -eq 1 ]]; then
   stage_args+=(--encrypted)
 fi
+if [[ $SECURE_BOOT -eq 1 ]]; then
+  stage_args+=(--secure-boot)
+fi
 
 python3 "$harness" "${stage_args[@]}"
 
@@ -101,6 +108,8 @@ prov = json.loads(Path('$stage_work/vm-provenance.json').read_text())
 assert prov['harness'] == 'ryoku-fedora-iso-vm'
 assert prov['status'] == 'staged'
 assert '-nic none' in prov['network_policy']
+if $SECURE_BOOT == 1:
+    assert prov['secure_boot'] is True
 print('Staged VM provenance verified successfully.')
 "
 
@@ -111,7 +120,14 @@ fi
 
 if [[ $DRY_RUN -eq 1 ]]; then
   echo "=== 4. Running dry-run QEMU generation ==="
-  python3 "$harness" --dry-run --work-dir "$stage_work"
+  dry_run_args=(--dry-run --work-dir "$stage_work")
+  if [[ $ENCRYPTED -eq 1 ]]; then
+    dry_run_args+=(--encrypted)
+  fi
+  if [[ $SECURE_BOOT -eq 1 ]]; then
+    dry_run_args+=(--secure-boot)
+  fi
+  python3 "$harness" "${dry_run_args[@]}"
   echo "=== Dry-run completed successfully! ==="
   exit 0
 fi
@@ -136,6 +152,9 @@ live_args=(
 )
 if [[ $ENCRYPTED -eq 1 ]]; then
   live_args+=(--encrypted)
+fi
+if [[ $SECURE_BOOT -eq 1 ]]; then
+  live_args+=(--secure-boot)
 fi
 
 python3 "$harness" "${live_args[@]}"
