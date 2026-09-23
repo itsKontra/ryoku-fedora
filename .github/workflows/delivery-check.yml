@@ -9,7 +9,6 @@ on:
   push:
     branches:
       - main
-      - main
       - unstable-dev
   pull_request:
   workflow_dispatch:

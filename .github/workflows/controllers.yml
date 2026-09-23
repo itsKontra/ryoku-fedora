@@ -35,7 +35,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'system/hardware/input/**'
       - 'system/packages/base.packages'

@@ -31,7 +31,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'ryoku/hyprland/scripts/ryoku-cmd-game-mode'
       - 'system/hardware/power/ryoku-game-tune'

@@ -18,7 +18,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'ryoku/lockscreen/sddm/ryoku-wayland-session'
       - 'tests/wayland-session-settle.sh'

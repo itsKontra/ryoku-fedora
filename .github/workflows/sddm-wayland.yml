@@ -12,7 +12,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'ryoku/lockscreen/sddm/setup'
       - 'ryoku/cli/internal/doctor/doctor.go'

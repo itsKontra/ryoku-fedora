@@ -20,7 +20,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'system/containers/**'
       - 'ryoku/shell/scripts/stash-cobalt-server.sh'

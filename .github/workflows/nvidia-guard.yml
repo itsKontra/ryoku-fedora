@@ -17,7 +17,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'system/hardware/drivers/ryoku-nvidia-guard'
       - 'system/hardware/drivers/nvidia.sh'

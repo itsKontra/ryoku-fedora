@@ -14,7 +14,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'ryoku/hyprland/**'
       - 'ryoku/shell/ipc/**'

@@ -42,7 +42,7 @@ and atomic rename. Its HTTPS server must follow the channel symlinks. Keep
 the `.incoming` directory and `.publish.lock` inaccessible through HTTP.
 The SSH account only needs write access to the dedicated Fedora release root.
 
-Main-fedora pushes and manual runs on main publish testing snapshots. Version tags
+Main branch pushes and manual runs on main publish testing snapshots. Version tags
 reachable from main build and test a stable candidate. Tags must match the
 updater's release syntax, for example `v1.0.0` or `v1.0.0-beta.1`. Each run
 uses its run number as the RPM Release revision. All components of a candidate

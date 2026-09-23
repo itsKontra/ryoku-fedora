@@ -15,7 +15,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'bin/ryoku-recovery'
       - 'tests/ryoku-recovery.sh'

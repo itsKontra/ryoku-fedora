@@ -16,7 +16,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'system/hardware/display/ryoku-monitor'
       - 'tests/monitor-profiles.sh'

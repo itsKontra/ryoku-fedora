@@ -25,7 +25,6 @@ on:
   push:
     branches:
       - main
-      - main
     paths:
       - 'ryoku/apps/wireplumber/**'
       - 'system/hardware/audio/ryoku-bt-audio'

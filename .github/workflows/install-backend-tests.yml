@@ -63,8 +63,6 @@ on:
   push:
     branches:
       - main
-      - main
-      - main
       - unstable-dev
     paths:
       - 'installation/backend/**'
