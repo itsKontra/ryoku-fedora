@@ -14,7 +14,7 @@ on:
       - 'tests/shell-tool-availability.sh'
   push:
     branches:
-      - main-fedora
+      - main
       - main
     paths:
       - 'system/packages/base.packages'

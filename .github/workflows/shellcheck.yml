@@ -14,7 +14,7 @@ on:
       - '.github/workflows/**'
   push:
     branches:
-      - main-fedora
+      - main
       - main
     paths:
       - '**/*.sh'

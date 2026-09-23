@@ -24,8 +24,8 @@ on:
       - '.github/workflows/go-unit-tests.yml'
   push:
     branches:
-      - main-fedora
-      - main-fedora
+      - main
+      - main
       - main
       - unstable-dev
     paths:

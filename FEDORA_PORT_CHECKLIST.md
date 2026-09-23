@@ -90,7 +90,7 @@ The implementation follow-up below records subsequent disposable-container tests
   not the repository. Fetching the bootstrap from this fork does not fetch this
   fork's installer or payload. Source deployment records its checkout, but
   does not persist the installer's chosen ref as the update channel; the updater
-  defaults to `main-fedora`. Make repository/ref selection coherent and persistent.
+  defaults to `main`. Make repository/ref selection coherent and persistent.
   Evidence: [install.sh:14](ryoku-shell-installer/install.sh#L14),
   [engine.go:30](ryoku-shell-installer/engine.go#L30),
   [deploy.sh:317](ryoku/shell/deploy.sh#L317),
@@ -233,7 +233,7 @@ results in [the RPM guide](release/rpm/README.md#required-vm-evidence) are recor
 | FED-43, FED-44 | RPMs reuse the existing package payload recipes, including the CLI, both provider variants, QML modules, apps, translations, helpers and services. Ryogami ships `ryogami-live`. Removed duplicate app specs and the empty external Ryotunes spec. Fedora Qt compatibility links use `/usr/lib64`. |
 | FED-45 | Deployment seeds browser flags only when absent; neither deployment nor the installer changes the password-store backend to `basic`. Existing SDDM PAM integration is retained. |
 | FED-46 | DNF/DNF5 global options are parsed separately from RPM queries, with regression cases for quiet mutations and package queries. |
-| FED-47 | Bootstrap and binary accept the same repository/ref; this fork defaults to `itsKontra/ryoku-fedora`, `main-fedora`. Deployment records the chosen branch, and recovery uses the recorded origin and branch. The downloadable installer binary and checksum are rebuilt. |
+| FED-47 | Bootstrap and binary accept the same repository/ref; this fork defaults to `itsKontra/ryoku-fedora`, `main`. Deployment records the chosen branch, and recovery uses the recorded origin and branch. The downloadable installer binary and checksum are rebuilt. |
 | FED-48 | Source installation records changed binaries, QML files and user units with originals. Uninstall removes/restores only unchanged recorded artifacts, stops recorded units, and preserves unrelated or subsequently edited files. Old installs without receipts are preserved for manual cleanup. |
 | FED-49, FED-50 | Defined the `ryoku` RPM repository and channel layout, repository-constrained updates/downgrades, persistent source metadata, complete SRPM sources, commit-count versions, deterministic build inputs, package/metadata signing and immutable output directories. |
 | FED-51 | Recovery repairs Fedora runtime/build dependencies before clearing configuration, using the same dependency resolver as installation. Failed repair stops before reset. |

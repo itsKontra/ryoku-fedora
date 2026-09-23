@@ -30,7 +30,7 @@ on:
       - '.github/workflows/game-mode.yml'
   push:
     branches:
-      - main-fedora
+      - main
       - main
     paths:
       - 'ryoku/hyprland/scripts/ryoku-cmd-game-mode'

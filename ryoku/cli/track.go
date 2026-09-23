@@ -12,13 +12,13 @@ import (
 
 func trackURL() string {
 	if sys.RPMManager() != "" {
-		return "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/bin/ryoku-track"
+		return "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-track"
 	}
 	return "https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-track"
 }
 
 // sourceChannels are the git branches `ryoku track ... --source` builds from.
-var sourceChannels = map[string]bool{"main": true, "main-fedora": true, "unstable-dev": true}
+var sourceChannels = map[string]bool{"main": true, "main": true, "unstable-dev": true}
 
 // cmdTrack points the box at an update channel. By default a track selects a
 // package channel and hands off to updater.Track (which rewrites the [ryoku]
@@ -33,12 +33,12 @@ func cmdTrack(args []string) error {
 	}
 	if source {
 		if !sourceChannels[channel] {
-			return fmt.Errorf(i18n.T("`--source` builds from a checkout and takes main, main-fedora, or unstable-dev, not %q"), channel)
+			return fmt.Errorf(i18n.T("`--source` builds from a checkout and takes main, main, or unstable-dev, not %q"), channel)
 		}
 		return trackFromSource(channel)
 	}
 	if sys.RPMManager() != "" {
-		if channel == "main" || channel == "main-fedora" {
+		if channel == "main" || channel == "main" {
 			channel = sys.ChannelCOPR
 		}
 		return updater.Track(channel)
@@ -46,8 +46,8 @@ func cmdTrack(args []string) error {
 	pkg := packageChannelFor(channel)
 	if pkg == "" {
 		return fmt.Errorf(i18n.T("unknown channel %q\n"+
-			"  packaged: stable, testing, unstable-dev, main, main-fedora, or a release tag (v0.55.7-beta.19)\n"+
-			"  source:   main, main-fedora, or unstable-dev, with --source"), channel)
+			"  packaged: stable, testing, unstable-dev, main, main, or a release tag (v0.55.7-beta.19)\n"+
+			"  source:   main, main, or unstable-dev, with --source"), channel)
 	}
 	return updater.Track(pkg)
 }
@@ -82,7 +82,7 @@ func packageChannelFor(name string) string {
 	switch name {
 	case "unstable-dev":
 		return sys.ChannelTesting
-	case "main", "main-fedora":
+	case "main", "main":
 		return sys.ChannelStable
 	case sys.ChannelStable, sys.ChannelTesting:
 		return name

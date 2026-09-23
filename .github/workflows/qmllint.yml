@@ -14,7 +14,7 @@ on:
       - '.github/workflows/qmllint.yml'
   push:
     branches:
-      - main-fedora
+      - main
       - main
     paths:
       - '**/*.qml'

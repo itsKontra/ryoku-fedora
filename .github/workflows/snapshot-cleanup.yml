@@ -17,7 +17,7 @@ on:
       - '.github/workflows/snapshot-cleanup.yml'
   push:
     branches:
-      - main-fedora
+      - main
       - main
     paths:
       - 'ryoku/cli/internal/updater/update.go'

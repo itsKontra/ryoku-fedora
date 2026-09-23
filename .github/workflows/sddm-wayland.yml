@@ -11,7 +11,7 @@ on:
       - '.github/workflows/sddm-wayland.yml'
   push:
     branches:
-      - main-fedora
+      - main
       - main
     paths:
       - 'ryoku/lockscreen/sddm/setup'

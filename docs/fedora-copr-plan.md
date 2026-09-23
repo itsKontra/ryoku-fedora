@@ -51,11 +51,11 @@ COPR's normal repository URL and ID alone cannot provide the existing channel UR
 
 The installer enables required dependency COPRs through DNF. For desktop packages, configure canonical `[ryoku]` backed by promoted COPR artifacts. If desktop COPR enablement is used to bootstrap its configuration/key, disable its generated raw repository afterward; otherwise ordinary DNF operations could install an unpromoted build. Document this distinction explicitly. Pure COPR-only hosting would instead require a broader redesign of channel and rollback handling, not just renaming a repository ID.
 
-Publish main-fedora pushes to **testing**; promote a tested tagged commit to **stable**, consistent with the existing release convention. Issue #4 requires publication on main-fedora pushes but does not require treating every push as a stable release. Never label a tag's newly rebuilt, untested artifacts as the previously tested release.
+Publish main pushes to **testing**; promote a tested tagged commit to **stable**, consistent with the existing release convention. Issue #4 requires publication on main pushes but does not require treating every push as a stable release. Never label a tag's newly rebuilt, untested artifacts as the previously tested release.
 
 **GitHub workflow**
 
-Implement `.github/workflows/publish-copr.yml`, with `push` to `main-fedora` and manual dispatch restricted to the trusted main-fedora ref. Add reusable invocation support to `fedora-rpm.yml`; PR validation stays credential-free. COPR supports uploaded SRPMs and monitored submissions through [copr-cli](https://developer.fedoraproject.org/deployment/copr/copr-cli.html).
+Implement `.github/workflows/publish-copr.yml`, with `push` to `main` and manual dispatch restricted to the trusted main ref. Add reusable invocation support to `fedora-rpm.yml`; PR validation stays credential-free. COPR supports uploaded SRPMs and monitored submissions through [copr-cli](https://developer.fedoraproject.org/deployment/copr/copr-cli.html).
 
 1. Prepare SRPMs once from the exact full-history commit. Extract source preparation from `build-rpm-repo.sh` and use `rpmbuild -bs`; retain the existing local binary/repository builder as a consumer. Include vendored Go modules, local module replacements, packaging recipes, assets, and `.rpm-release`. Avoid network fetches in `%build`. Record commit, version, source checksums, and package list.
 2. Rebuild all desktop SRPMs in clean Fedora 44 mock roots, then run the install/channel checks for both providers and DNF versions. Audit BuildRequires against clean roots instead of relying on the container's broad tool list. This gate must succeed before COPR submission.
@@ -110,7 +110,7 @@ variables, secrets, host layout and project requirements are documented in
 [the RPM guide](../release/rpm/README.md).
 
 Normal Fedora installs now select DNF packages. Explicit source mode, local
-payloads, custom repositories and non-main-fedora refs retain checkout builds.
+payloads, custom repositories and non-main refs retain checkout builds.
 Migration removes only unchanged artifacts covered by the source installation
 receipt and refuses unknown shadows before removing conflicting packages.
 

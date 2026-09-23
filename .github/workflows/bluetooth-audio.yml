@@ -24,7 +24,7 @@ on:
       - '.github/workflows/bluetooth-audio.yml'
   push:
     branches:
-      - main-fedora
+      - main
       - main
     paths:
       - 'ryoku/apps/wireplumber/**'

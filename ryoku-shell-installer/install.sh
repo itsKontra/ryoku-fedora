@@ -4,14 +4,14 @@
 # on an existing Arch machine. Kept deliberately dumb: every real decision
 # lives in the ryoku-shell-install binary this script downloads.
 #
-#   curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/ryoku-shell-installer/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
 #
 # args after `bash -s --` are forwarded to the installer (--yes, --dry-run).
 # RYOKU_SHELL_REF picks the git ref to fetch the installer and payload from.
 set -euo pipefail
 
 main() {
-  local ref="${RYOKU_SHELL_REF:-main-fedora}"
+  local ref="${RYOKU_SHELL_REF:-main}"
   local repo="${RYOKU_SHELL_REPO:-https://github.com/itsKontra/ryoku-fedora.git}"
   local args=("$@") i
   for ((i=0; i<${#args[@]}; i++)); do

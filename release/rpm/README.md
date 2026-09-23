@@ -3,7 +3,7 @@
 The port is experimental. Container builds verify package construction and
 installation; graphical sessions and SELinux require the VM checks below.
 Nothing in this directory implies that a public RPM repository is published.
-COPR builds, publishing on pushes to `main-fedora`, and installer repository setup
+COPR builds, publishing on pushes to `main`, and installer repository setup
 are implemented by `publish-copr.yml`; enabling the infrastructure and recording
 end-to-end evidence remain tracked in [#4](https://github.com/itsKontra/ryoku-fedora/issues/4).
 
@@ -42,8 +42,8 @@ and atomic rename. Its HTTPS server must follow the channel symlinks. Keep
 the `.incoming` directory and `.publish.lock` inaccessible through HTTP.
 The SSH account only needs write access to the dedicated Fedora release root.
 
-Main-fedora pushes and manual runs on main-fedora publish testing snapshots. Version tags
-reachable from main-fedora build and test a stable candidate. Tags must match the
+Main-fedora pushes and manual runs on main publish testing snapshots. Version tags
+reachable from main build and test a stable candidate. Tags must match the
 updater's release syntax, for example `v1.0.0` or `v1.0.0-beta.1`. Each run
 uses its run number as the RPM Release revision. All components of a candidate
 share that revision. Stable promotion uses that run's tested COPR artifacts,
@@ -162,7 +162,7 @@ changed by this implementation.
 
 ## Source installs
 
-The bootstrap defaults to `itsKontra/ryoku-fedora`, branch `main-fedora`.
+The bootstrap defaults to `itsKontra/ryoku-fedora`, branch `main`.
 Override both explicitly for another publisher:
 
 ```sh

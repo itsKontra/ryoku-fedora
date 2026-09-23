@@ -10,7 +10,7 @@ import (
 
 func recoveryURL() string {
 	if sys.RPMManager() != "" {
-		return "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main-fedora/bin/ryoku-recovery"
+		return "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-recovery"
 	}
 	return "https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-recovery"
 }

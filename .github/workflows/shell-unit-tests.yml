@@ -17,7 +17,7 @@ on:
       - '.github/workflows/shell-unit-tests.yml'
   push:
     branches:
-      - main-fedora
+      - main
       - main
     paths:
       - 'ryoku/shell/**/*.mjs'
