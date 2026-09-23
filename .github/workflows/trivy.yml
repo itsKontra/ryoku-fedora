@@ -3,11 +3,9 @@ name: Trivy
 on:
   push:
     branches:
-      - main-fedora
       - main
   pull_request:
     branches:
-      - main-fedora
       - main
   schedule:
     - cron: '17 5 * * 2'

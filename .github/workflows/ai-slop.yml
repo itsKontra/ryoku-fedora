@@ -8,7 +8,6 @@ on:
   pull_request:
   push:
     branches:
-      - main-fedora
       - main
   workflow_dispatch:
     inputs:

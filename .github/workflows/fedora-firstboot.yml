@@ -12,7 +12,7 @@ on:
       - 'installation/tests/fedora-iso-vm.py'
       - '.github/workflows/fedora-firstboot.yml'
   push:
-    branches: [main-fedora]
+    branches: [main]
     paths:
       - 'installation/fedora/**'
       - 'installation/tests/fedora-firstboot.sh'

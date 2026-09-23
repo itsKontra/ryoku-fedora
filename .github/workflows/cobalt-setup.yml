@@ -19,7 +19,6 @@ on:
       - '.github/workflows/cobalt-setup.yml'
   push:
     branches:
-      - main-fedora
       - main
     paths:
       - 'system/containers/**'

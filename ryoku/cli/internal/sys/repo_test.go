@@ -151,7 +151,7 @@ func TestFedoraResolveRepoDoesNotAdoptArchFallback(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(env), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(env, []byte("RYOKU_CHANNEL=main-fedora\n"), 0o644); err != nil {
+	if err := os.WriteFile(env, []byte("RYOKU_CHANNEL=main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if got := ResolveRepo(); got != "" {

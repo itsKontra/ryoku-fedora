@@ -15,7 +15,6 @@ on:
       - 'tests/monitor-persist.sh'
   push:
     branches:
-      - main-fedora
       - main
     paths:
       - 'system/hardware/display/ryoku-monitor'

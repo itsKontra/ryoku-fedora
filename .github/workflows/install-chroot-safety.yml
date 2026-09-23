@@ -13,7 +13,6 @@ on:
       - 'tests/install-chroot-safety.sh'
   push:
     branches:
-      - main-fedora
       - main
     paths:
       - 'installation/backend/**'

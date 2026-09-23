@@ -3,11 +3,9 @@ name: CodeQL
 on:
   push:
     branches:
-      - main-fedora
       - main
   pull_request:
     branches:
-      - main-fedora
       - main
   schedule:
     - cron: '34 4 * * 1'

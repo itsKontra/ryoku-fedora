@@ -13,7 +13,6 @@ on:
       - 'tests/install-mirrors.sh'
   push:
     branches:
-      - main-fedora
       - main
     paths:
       - 'installation/backend/**'

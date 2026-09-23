@@ -13,7 +13,6 @@ on:
       - 'bin/**'
   push:
     branches:
-      - main-fedora
       - main
     paths:
       - 'ryoku/hyprland/**'

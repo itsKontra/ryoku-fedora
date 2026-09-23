@@ -16,7 +16,6 @@ on:
       - '.github/workflows/nvidia-guard.yml'
   push:
     branches:
-      - main-fedora
       - main
     paths:
       - 'system/hardware/drivers/ryoku-nvidia-guard'

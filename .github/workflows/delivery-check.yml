@@ -8,7 +8,6 @@ name: Delivery check
 on:
   push:
     branches:
-      - main-fedora
       - main
       - unstable-dev
   pull_request:
