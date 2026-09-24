@@ -46,7 +46,7 @@ desktop. See `docs/structure.md` for the repo-wide map.
 Fonts (JetBrains Mono Nerd, Noto, Inter) ship as packages in `system/packages`.
 The cursor theme (Bibata) is an AUR package, selected by the Hyprland environment.
 The Go binaries (`ryoku`, `ryoku-shell`, `ryoku-hub`) and the `Ryoku.Blobs`
-plugin ship as signed packages from the `[ryoku]` repo (`release/packages/`),
-built from source, so the installed target needs no build toolchain.
+plugin ship as signed Fedora RPMs from `release/rpm/`, built from source, so
+the installed target needs no build toolchain.
 System helper scripts live next to what they serve under `system/hardware/` and
 ship to `/usr/bin` via the `ryoku-desktop` package.

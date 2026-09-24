@@ -10,7 +10,7 @@ import (
 func makeCheckout(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	for _, d := range []string{"ryoku/cli", "docs", "release/packages"} {
+	for _, d := range []string{"ryoku/cli", "docs", "release/rpm"} {
 		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
 			t.Fatal(err)
 		}

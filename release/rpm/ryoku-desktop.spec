@@ -71,6 +71,8 @@ Requires:       sudo
 Requires:       ImageMagick
 Requires:       curl
 Requires:       python3
+Requires:       matugen
+Requires:       gpu-screen-recorder
 Requires:       rsms-inter-fonts
 Requires:       google-noto-sans-fonts
 Requires:       google-noto-sans-cjk-fonts

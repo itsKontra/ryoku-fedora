@@ -339,7 +339,7 @@ redeploy the configs without the package step. Details in
 | `ryoku/` | The desktop: the window-manager seam and per-compositor configs (Hyprland in Lua, niri in KDL), the Quickshell shell, the lockscreen, app configs, brand assets. |
 | `system/` | The machine definition: boot chain, hardware policy, package sets. |
 | `installation/` | How a machine is built: the TUI, the backend installer, the ISO profile. |
-| `release/` | Packaging: the desktop PKGBUILDs, the `[ryoku]` repo builder, signing keyring, and Fedora RPM delivery under [`release/rpm/`](release/rpm/README.md). |
+| `release/` | Fedora RPM packaging and publication under [`release/rpm/`](release/rpm/README.md). |
 | `docs/` | The guides. Start with [`docs/ryoku.md`](docs/ryoku.md) and [`docs/structure.md`](docs/structure.md). |
 
 ## Channels

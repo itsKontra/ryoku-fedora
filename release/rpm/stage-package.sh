@@ -6,12 +6,15 @@ libdir=${3:-/usr/lib64}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 export GOFLAGS="-mod=vendor -trimpath" CGO_ENABLED=0 GOTOOLCHAIN=local
 export RYOKU_PKGVER=${RYOKU_PKGVER:?version required}
-startdir="$root/release/packages/$name"
+startdir="$root/release/rpm/payload"
 srcdir="$root/.rpm-build/$name"
 pkgdir="$stage"
 mkdir -p "$srcdir" "$pkgdir"
-# Reuse the authoritative payload; no makepkg hooks or host installation runs.
-source "$startdir/PKGBUILD"
+# The payload recipe is Fedora release input. It stages files only: no host
+# installation hooks run while building an RPM.
+recipe="$startdir/$name.sh"
+[[ -f $recipe ]] || { echo "unknown RPM payload: $name" >&2; exit 2; }
+source "$recipe"
 if declare -F build >/dev/null; then build; fi
 package
 if [[ -d $stage/usr/lib/qt6 ]]; then

@@ -84,7 +84,7 @@ var devPkgs = []string{"go", "nodejs", "npm", "python", "python-pip", "python-pi
 var sparsePaths = []string{
 	"ryoku/lockscreen", "ryoku/assets", "ryoku/apps",
 	"system/hardware/drivers", "system/hardware/input",
-	"system/packages", "release/packages/ryoku-keyring", "release/rpm",
+	"system/packages", "release/rpm",
 }
 
 type plan struct {
@@ -628,7 +628,7 @@ func stepPayload(e *engine) error {
 	paths := append(append([]string{}, sparsePaths...), "release/rpm")
 	if e.fromSource() {
 		paths = []string{
-			"ryoku", "system", "bin", "ryoku-shell-installer", "release/packages/ryoku-keyring", "release/rpm",
+			"ryoku", "system", "bin", "ryoku-shell-installer", "release/rpm",
 		}
 	}
 	if err := e.cmd(e.payload, nil, "git", append([]string{"sparse-checkout", "set"}, paths...)...); err != nil {

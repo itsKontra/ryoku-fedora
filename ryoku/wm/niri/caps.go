@@ -50,7 +50,7 @@ var capsManifest = []wm.Capability{
 // The packages ryoku-desktop-niri is made of: the variant package itself, niri,
 // the xwayland-satellite X11 bridge, and the GNOME portal backend its caps
 // report. Kept in step with that package's depends
-// (release/packages/ryoku-desktop-niri/PKGBUILD); this is the list a switch
+// (release/rpm/ryoku-desktop-niri.spec); this is the list a switch
 // away from niri reclaims, minus ryoku-desktop, which is shared with the
 // compositor that replaces it. The variant package belongs in the list: on a
 // packaged box it owns every satellite below, so a reclaim that left it out

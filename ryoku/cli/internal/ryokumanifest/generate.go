@@ -62,11 +62,15 @@ func HardwareSets(text string) map[string][]string {
 	return out
 }
 
-// Pkgname extracts pkgname= from a PKGBUILD, honouring the quoted and bare
-// forms. It returns "" when the file carries none (a README.md in the tree).
-func Pkgname(pkgbuild string) string {
+// PackageName extracts the package name from either an RPM spec or a legacy
+// package recipe. It returns "" when the file carries neither field.
+func PackageName(body string) string {
+	rpm := regexp.MustCompile(`(?m)^Name:\s*([A-Za-z0-9@._+-]+)\s*$`)
+	if m := rpm.FindStringSubmatch(body); m != nil {
+		return m[1]
+	}
 	re := regexp.MustCompile(`(?m)^pkgname=(?:"([^"]+)"|'([^']+)'|([A-Za-z0-9@._+-]+))`)
-	m := re.FindStringSubmatch(pkgbuild)
+	m := re.FindStringSubmatch(body)
 	if m == nil {
 		return ""
 	}
@@ -118,7 +122,7 @@ type Inputs struct {
 	Dev      string // system/packages/dev.packages
 	Hardware string // system/packages/hardware.packages
 	AUR      string // system/packages/aur.packages
-	// FirstParty maps a release/packages/<dir> name to its PKGBUILD contents.
+	// FirstParty maps an RPM spec name to its contents.
 	FirstParty map[string]string
 	// Compositor maps a provider name to its caps.go contents.
 	Compositor map[string]string
@@ -149,7 +153,7 @@ func Build(in Inputs) Manifest {
 func firstPartyNames(pkgbuilds map[string]string) []string {
 	var out []string
 	for _, body := range pkgbuilds {
-		if n := Pkgname(body); n != "" {
+		if n := PackageName(body); n != "" {
 			out = append(out, n)
 		}
 	}

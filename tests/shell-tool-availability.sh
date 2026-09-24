@@ -10,9 +10,7 @@ pkgs="$ROOT/system/packages"
 
 ships() {
   grep -qxF "$1" "$pkgs/base.packages" "$pkgs/dev.packages" "$pkgs/aur.packages" 2>/dev/null && return 0
-  # first-party [ryoku] repo packages (ryogami, ...) ship from release/packages,
-  # not the package sets.
-  [[ -d "$ROOT/release/packages/$1" ]]
+  grep -qE "^(Name|Requires):[[:space:]]+$1([[:space:]]|$)" "$ROOT"/release/rpm/*.spec
 }
 
 # reach: a tool merely in base.packages ships on the ISO (pacstrap) but NEVER
@@ -25,27 +23,26 @@ ships() {
 # array of one of those PKGBUILDs (version pin ignored). This is the guard the
 # ddcutil regression slipped past -- ddcutil was added to base.packages but not
 # to depends, so the pill DISPLAY faders were dead on every packaged box.
-desktop_pkgbuilds=("$ROOT/release/packages/ryoku-desktop/PKGBUILD"
-  "$ROOT"/release/packages/ryoku-desktop-*/PKGBUILD)
+desktop_specs=("$ROOT/release/rpm/ryoku-desktop.spec"
+  "$ROOT"/release/rpm/ryoku-desktop-*.spec)
 hard_depend() {
   # capture the block first, then grep a here-string: piping awk into `grep -q`
   # lets grep close the pipe on the first match, and under `set -o pipefail`
   # awk's SIGPIPE would make the pipeline (nondeterministically) report failure.
-  local pkgbuild block
-  for pkgbuild in "${desktop_pkgbuilds[@]}"; do
-    [[ -f $pkgbuild ]] || continue
-    block=$(awk '/^depends=\(/{d=1;next} d&&/^\)/{d=0} d' "$pkgbuild")
-    grep -qE "[\"']$1(=[^\"']*)?[\"']" <<<"$block" && return 0
+  local spec
+  for spec in "${desktop_specs[@]}"; do
+    [[ -f $spec ]] || continue
+    grep -qE "^Requires:[[:space:]]+$1([[:space:]]|$)" "$spec" && return 0
   done
   return 1
 }
-# official_repo: shipped from base/dev (an Arch repo), not AUR, not first-party
+# official_repo: shipped from base/dev, not AUR or a first-party RPM.
 # [ryoku]. AUR tools reach boxes via the post-install AUR step; first-party
 # packages are depends already. Only official-repo tools must be hard depends.
 official_repo() {
   grep -qxF "$1" "$pkgs/base.packages" "$pkgs/dev.packages" 2>/dev/null \
     && ! grep -qxF "$1" "$pkgs/aur.packages" 2>/dev/null \
-    && [[ ! -d "$ROOT/release/packages/$1" ]]
+    && ! grep -qE "^Name:[[:space:]]+$1$" "$ROOT"/release/rpm/*.spec
 }
 # shipped_app: the other delivery path. An application a user may delete is not a
 # hard depend (pacman would put it back on the next upgrade); `ryoku doctor`

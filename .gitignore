@@ -19,7 +19,8 @@
 /ryoku/apps/ryostore/backend/ryostore
 /ryoku/shell/plugin/build/
 /ryoku/shell/plugin/dist/
-/release/repo/out/
+/.rpm-build/
+/release/rpm/srpms/
 *.iso
 __pycache__/
 *.pyc

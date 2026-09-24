@@ -85,7 +85,7 @@ func RepoIndexDoc(root string) (string, error) {
 		{"Rashin (this system)", "ryoku/rashin/"},
 		{"Dev deploy loop", "ryoku/shell/deploy.sh"},
 		{"Installer backend", "installation/backend/"},
-		{"Package builds", "release/packages/"},
+		{"RPM packaging", "release/rpm/"},
 	} {
 		if _, err := os.Stat(filepath.Join(root, e[1])); err == nil {
 			fmt.Fprintf(&b, "| %s | `%s` |\n", e[0], e[1])

@@ -22,7 +22,7 @@ cd "$repo"
 
 # delivery paths: the package base config, the installer's one-time seeds, and
 sources=()
-for src in release/packages/*/PKGBUILD release/rpm/*.spec installation/fedora/provision-target.py ryoku/shell/deploy.sh; do
+for src in release/rpm/payload/*.sh release/rpm/*.spec installation/fedora/provision-target.py ryoku/shell/deploy.sh; do
 	[[ -f $src ]] && sources+=("$src")
 done
 
