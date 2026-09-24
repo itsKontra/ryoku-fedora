@@ -45,17 +45,17 @@ ok(
 );
 
 // The catalog fires ryoku-cmd-* helpers by bare name, so they must actually
-// reach /usr/bin. The ryoku-shell package ships ryoku/shell/scripts/ryoku-* in
-// one glob loop; assert that loop is present and that every helper the catalog
+// reach /usr/bin. The ryoku-shell RPM payload ships ryoku/shell/scripts/ryoku-*
+// in one glob loop; assert that loop is present and that every helper the catalog
 // names is a file that glob will pick up. This is the guard the payload audit
 // needed: a helper referenced by bare name but shipped only by the Hyprland
 // variant is dead on a niri box.
 const repoRoot = new URL("../../../../../../../../../", import.meta.url);
-const shellPkgbuild = readFileSync(
-    new URL("release/packages/ryoku-shell/PKGBUILD", repoRoot), "utf8");
+const shellPayload = readFileSync(
+    new URL("release/rpm/payload/ryoku-shell.sh", repoRoot), "utf8");
 ok(
-    /for s in "\$_repo"\/ryoku\/shell\/scripts\/ryoku-\*/.test(shellPkgbuild),
-    "ryoku-shell PKGBUILD installs ryoku/shell/scripts/ryoku-* by glob"
+    /for s in "\$_repo"\/ryoku\/shell\/scripts\/ryoku-\*/.test(shellPayload),
+    "ryoku-shell payload installs ryoku/shell/scripts/ryoku-* by glob"
 );
 const cmdHelpers = [...new Set(
     CATALOG.map(a => String(a.exec?.[0] || "")).filter(n => n.startsWith("ryoku-cmd-"))

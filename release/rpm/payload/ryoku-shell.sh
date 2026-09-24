@@ -3,26 +3,18 @@
 # Ryoku shell IPC daemon (Go). supervises the Quickshell desktop components,
 # drives wallpaper + palette, serves the ryoku-shell control socket.
 #
-# built from the in-repo source at ryoku/shell/ipc, no tarball fetched. publish
-# CI runs makepkg inside this dir against a full checkout, so the repo root is
-# three levels up. binary lands in $srcdir = source tree stays untouched.
-pkgname=ryoku-shell
-pkgver=${RYOKU_PKGVER:-0.1.0}
-pkgrel=1
-pkgdesc="Ryoku shell IPC daemon: supervises the Quickshell desktop"
-arch=('x86_64')
-url="https://ryoku.dev"
-license=('GPL-3.0-or-later')
-# uv provisions the ryostage engine's Python 3.13 venv (ryostage install); the
-# system python rolls ahead of onnxruntime's wheels, so the engine can't use it.
-depends=('quickshell' 'ffmpeg' 'wayland' 'jq' 'uv')
-makedepends=('go' 'wayland' 'wayland-protocols' 'ffmpeg')
-source=()
-
+# Built from the in-repo source at ryoku/shell/ipc. stage-package.sh sets the
+# directories below and the binary lands in $srcdir, so the source tree stays
+# untouched. uv is a runtime dependency: it provisions the ryostage engine's
+# Python 3.13 venv, because the system python rolls ahead of onnxruntime's wheels.
+# RPM metadata lives in ryoku-shell.spec.
+startdir=${startdir:?stage-package.sh must set startdir}
+srcdir=${srcdir:?stage-package.sh must set srcdir}
+pkgdir=${pkgdir:?stage-package.sh must set pkgdir}
 _repo="$startdir/../../.."
 
 build() {
-  cd "$_repo/ryoku/shell/ipc"
+  cd "$_repo/ryoku/shell/ipc" || exit
   # -mod=vendor keeps the build hermetic. godbus is vendored, so the signed-repo
   # CI builds offline regardless of whatever GOFLAGS makepkg picked up.
   CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryoku-shell" .

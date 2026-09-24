@@ -10,7 +10,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
-tool="$here/release/packages/ryoku-cursor-material/ryoku-cursor-material-recolor"
+tool="$here/ryoku/shell/scripts/ryoku-cursor-material-recolor"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 

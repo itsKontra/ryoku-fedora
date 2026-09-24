@@ -10,14 +10,14 @@ name: Cursor Recolor
 on:
   pull_request:
     paths:
-      - 'release/packages/ryoku-cursor-material/ryoku-cursor-material-recolor'
+      - 'ryoku/shell/scripts/ryoku-cursor-material-recolor'
       - 'tests/cursor-recolor.sh'
       - '.github/workflows/cursor-recolor.yml'
   push:
     branches:
       - main
     paths:
-      - 'release/packages/ryoku-cursor-material/ryoku-cursor-material-recolor'
+      - 'ryoku/shell/scripts/ryoku-cursor-material-recolor'
       - 'tests/cursor-recolor.sh'
       - '.github/workflows/cursor-recolor.yml'
   workflow_dispatch:
