@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+- **`ryoku wm caps` prints the active provider's capabilities as JSON**, the
+  same payload the daemon and the Hub gate on, so a script can read the night
+  light backend or a capability without spelling a compositor. `ryoku wm act`
+  now forwards the provider's stdout, which is how `input.touchpad status`
+  answers (`wm.go`).
+- **`ryoku update` re-authors the compositor settings.** The generated config
+  is a pure function of the store and the provider that wrote it, so after the
+  new config tree lands the live provider applies the store again; a provider
+  fix that changes what it emits (niri's border needing an explicit on) reaches
+  a box on the update instead of waiting for the next Hub edit
+  (`internal/updater/update.go`).
+
 ### Fixed
 - NVIDIA reconciliation leaves the host Fedora driver and boot configuration unchanged, including pending NVIDIA rebuilds.
 - Use RyokuCOPR consistently for Fedora package queries and updates. Fedora

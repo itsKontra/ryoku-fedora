@@ -157,7 +157,7 @@ var appearanceEmitted = map[string]bool{
 func appearanceReason(leaf string) string {
 	switch {
 	case strings.HasPrefix(leaf, "blur"):
-		return "niri has no blur."
+		return "niri 26.04's window blur renders translucent windows opaque, so Ryoku leaves it off."
 	case leaf == "shadowPower":
 		return "niri's shadow block has no sharpness or falloff field."
 	case leaf == "shadowSharp":
@@ -174,8 +174,12 @@ func appearanceReason(leaf string) string {
 		return "niri corner rounding has no power curve."
 	case leaf == "layout":
 		return "niri uses its own scrollable-tiling layout."
-	case leaf == "wobblyWindows" || leaf == "animatedBorder" || leaf == "borderAngleSpeed" || leaf == "windowStyle":
-		return "niri has no matching window animation."
+	case leaf == "windowStyle":
+		return "niri has no window-open style presets; set the window-open animation on the Animations page instead."
+	case leaf == "wobblyWindows":
+		return "niri has no wobbly-windows effect."
+	case leaf == "animatedBorder" || leaf == "borderAngleSpeed":
+		return "niri's border gradient is static; there is no rotating-gradient animation."
 	}
 	return "niri has no matching appearance control."
 }
@@ -202,9 +206,6 @@ var cursorEmitted = map[string]bool{
 }
 
 func cursorReason(leaf string) string {
-	if leaf == "material" {
-		return "Hub-only cursor toggle; not a niri setting."
-	}
 	return "niri has no matching cursor control."
 }
 
@@ -264,9 +265,6 @@ func unhonoredAppOverrides(raw json.RawMessage) []wm.Unhonored {
 	var out []wm.Unhonored
 	for i, a := range apps {
 		var lost []string
-		if a.Blur == "off" {
-			lost = append(lost, "blur")
-		}
 		if a.Shadow == "off" {
 			lost = append(lost, "shadow")
 		}

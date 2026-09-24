@@ -5,36 +5,18 @@
 # bridges the Hermes agent over ACP. Ships with the desktop but stays inert until
 # the user enables it (optional means not running, not absent).
 #
-# Built from the in-repo source at ryoku/rashin/backend; no tarball is fetched.
-# go build reads the committed vendor/ tree (-mod=vendor), so the signed-repo CI
-# builds with no network regardless of whatever GOFLAGS makepkg picked up.
-pkgname=ryoku-rashin
-pkgver=${RYOKU_PKGVER:-0.1.0}
-pkgrel=1
-pkgdesc="Ryoku Rashin: local agent OS daemon and dashboard"
-arch=('x86_64')
-url="https://ryoku.dev"
-license=('GPL-3.0-or-later')
-# Hermes itself is per-user opt-in (installed by the one-click setup, never
-# packaged), but its prerequisites ARE shipped so the install never has to
-# bootstrap a toolchain over the network and never dies with a cryptic
-# "uv lock missing": uv is the Python project/venv manager the Hermes installer
-# and runtime use; gcc backs uv's occasional native dependency builds (the
-# installer's own build-tools helper is apt-only, useless on Arch); nodejs backs
-# its npm/npx tooling. ryoku-desktop depends on ryoku-rashin, so `pacman -Syu`
-# delivers these to existing boxes too. kitty and xdg-open ship with the desktop.
-# prowl-agent is the code index rashin's `index` and `wire` drive (the vault
-# code map and each agent's Prowl skill); depending on it makes `pacman -Syu`
-# and the doctor's rashin reconciler keep it present on every rashin box.
-depends=('uv' 'nodejs' 'gcc' 'prowl-agent')
-optdepends=('sqlite: sqlite3 database introspection for the rashin agent')
-makedepends=('go')
-source=()
-
+# Built from the in-repo source at ryoku/rashin/backend. go build reads the
+# committed vendor/ tree (-mod=vendor), so the signed-repo CI builds offline.
+# RPM metadata lives in ryoku-rashin.spec. Hermes itself is per-user opt-in;
+# its prerequisites (uv, gcc, nodejs) and prowl-agent are Requires there so a
+# setup never bootstraps a toolchain over the network.
+startdir=${startdir:?stage-package.sh must set startdir}
+srcdir=${srcdir:?stage-package.sh must set srcdir}
+pkgdir=${pkgdir:?stage-package.sh must set pkgdir}
 _repo="$startdir/../../.."
 
 build() {
-  cd "$_repo/ryoku/rashin/backend"
+  cd "$_repo/ryoku/rashin/backend" || exit
   CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryoku-rashin" .
   # Pre-index the monorepo: the installed target has no checkout, so the
   # vault's ryoku-repo.md ships as a snapshot generated from this exact tree.
@@ -47,10 +29,10 @@ package() {
   # name (busybox pattern); argv0 routes a bare argument to the terminal ask.
   ln -s ryoku-rashin "$pkgdir/usr/bin/rashin"
   install -Dm644 "$srcdir/ryoku-repo.md" "$pkgdir/usr/share/ryoku/rashin/ryoku-repo.md"
-  # The `ryoku` agent skill: the source map, safety rules, and the bar and
-  # plugin guides. `ryoku-rashin wire` symlinks this dir into every agent's
-  # skills directory; the doctor's rashin reconciler re-wires it on update.
-  for f in SKILL.md bar.md plugins.md; do
+  # The `ryoku` agent skill: the source map, safety rules, the GUI map, and the
+  # bar and plugin guides. `ryoku-rashin wire` symlinks this dir into every
+  # agent's skills directory; the doctor's rashin reconciler re-wires it on update.
+  for f in SKILL.md gui.md bar.md plugins.md; do
     install -Dm644 "$_repo/ryoku/rashin/skills/ryoku/$f" \
       "$pkgdir/usr/share/ryoku/skills/ryoku/$f"
   done

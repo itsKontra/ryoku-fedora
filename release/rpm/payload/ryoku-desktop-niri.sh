@@ -9,32 +9,17 @@
 #
 # There is no plugin subsystem here: niri has no plugins, and its caps say so.
 #
-# built from in-repo sources, no tarball fetch. makepkg runs from a full
-# checkout, so the repo root is three levels up.
-pkgname=ryoku-desktop-niri
-pkgver=${RYOKU_PKGVER:-0.1.0}
-pkgrel=1
-pkgdesc="Ryoku desktop: the niri compositor, its portal and X11 satellite, and the ryoku-wm-niri provider"
-# package() builds the Go provider, so the payload is arch-specific.
-arch=('x86_64')
-url="https://ryoku.dev"
-license=('GPL-3.0-or-later')
-makedepends=('go')
-depends=(
-  "ryoku-desktop=$pkgver"
-  # compositor + Wayland session (ships /usr/share/wayland-sessions/niri.desktop)
-  'niri'
-  # niri has no built-in Xwayland; X11 apps reach a display through the satellite.
-  'xwayland-satellite'
-  # screencast/screenshot portal: ryoku-wm-niri caps reports portalBackend "gnome",
-  # and doctor's portal reconciler routes xdg-desktop-portal to this backend.
-  'xdg-desktop-portal-gnome'
-)
-provides=('ryoku-desktop-compositor')
-# deliberately not exclusive: both variants may be installed, so a switch is a
-# config change with no download and a switch back is instant.
-source=()
-
+# RPM metadata and dependencies live in ryoku-desktop-niri.spec. This sourced
+# recipe only stages the payload assembled by stage-package.sh.
+#
+# niri has no built-in Xwayland; Fedora 44's xwayland-satellite 0.8.2 regresses
+# override-redirect popups (upstream #468, fixed in add2795, no release yet).
+# The distro package is the display bridge; the popup fix is not delivered and
+# must not be claimed as ported. Screen sharing rides xdg-desktop-portal-gnome.
+# Night light rides gammastep. Both variants may be installed, so a switch is a
+# config change, not a package swap.
+startdir=${startdir:?stage-package.sh must set startdir}
+pkgdir=${pkgdir:?stage-package.sh must set pkgdir}
 _repo="$startdir/../../.."
 
 package() {

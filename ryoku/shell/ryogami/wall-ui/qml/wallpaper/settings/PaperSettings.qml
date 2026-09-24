@@ -12,46 +12,86 @@ Column {
     width: parent ? parent.width : 0
     spacing: 8
 
+    // One pool of every transition the shell can play, grouped by family. The
+    // Fade / Wipe / Warp / Break up rows are the 39 skwd shader transitions
+    // (skwd-wall v2's taxonomy; the nine gl-transition ports v2 dropped are
+    // classed by what their math visibly does, and v2's Sand family is absent
+    // because it is an instanced particle system the shell's ShaderEffect cannot
+    // run). The Reveal row is Ryogami's original 22-preset mask engine, carried
+    // over from the wallpaper daemon and the upstream ii set. Random stays first
+    // and ungrouped, and rotates across the whole pool.
     readonly property var _shaderOptions: [
-        { key: "random",             label: I18n.tr("Random") },
-        { key: "bounce",             label: I18n.tr("Bounce") },
-        { key: "chromatic-bloom",    label: I18n.tr("Chromatic Bloom") },
-        { key: "circle-crop",        label: I18n.tr("Circle Crop") },
-        { key: "colour-distance",    label: I18n.tr("Colour Distance") },
-        { key: "crazy-parametric",   label: I18n.tr("Crazy Parametric") },
-        { key: "crosswarp",          label: I18n.tr("Cross Warp") },
-        { key: "crosshatch",         label: I18n.tr("Crosshatch") },
-        { key: "directional",        label: I18n.tr("Directional") },
-        { key: "directional-scaled", label: I18n.tr("Directional Scaled") },
-        { key: "directional-wipe",   label: I18n.tr("Directional Wipe") },
-        { key: "edge-transition",    label: I18n.tr("Edge Transition") },
-        { key: "fadecolor",          label: I18n.tr("Fadecolor") },
-        { key: "flyeye",             label: I18n.tr("Fly Eye") },
-        { key: "glitch",             label: I18n.tr("Glitch") },
-        { key: "glitch-displace",    label: I18n.tr("Glitch Displace") },
-        { key: "heat-melt",          label: I18n.tr("Heat Melt") },
-        { key: "ink-splash",         label: I18n.tr("Ink Splash") },
-        { key: "inkwell-drop",       label: I18n.tr("Inkwell Drop") },
-        { key: "iris",               label: I18n.tr("Iris") },
-        { key: "liquid-ripple",      label: I18n.tr("Liquid Ripple") },
-        { key: "morph",              label: I18n.tr("Morph") },
-        { key: "mosaic-tumble",      label: I18n.tr("Mosaic Tumble") },
-        { key: "overexposure",       label: I18n.tr("Overexposure") },
-        { key: "parametric-glitch",  label: I18n.tr("Parametric Glitch") },
-        { key: "perlin",             label: I18n.tr("Perlin") },
-        { key: "pixelate",           label: I18n.tr("Pixelate") },
-        { key: "pixelfade-wave",     label: I18n.tr("Pixelfade Wave") },
-        { key: "plasma-flow",        label: I18n.tr("Plasma Flow") },
-        { key: "polar-function",     label: I18n.tr("Polar Function") },
-        { key: "polka-dots-curtain", label: I18n.tr("Polka Dots Curtain") },
-        { key: "puzzle-right",       label: I18n.tr("Puzzle Right") },
-        { key: "randomsquares",      label: I18n.tr("Randomsquares") },
-        { key: "smoke",              label: I18n.tr("Smoke") },
-        { key: "soft-warp-fade",     label: I18n.tr("Soft Warp Fade") },
-        { key: "static-fade",        label: I18n.tr("Static Fade") },
-        { key: "voronoi-shatter",    label: I18n.tr("Voronoi Shatter") },
-        { key: "wave-warp",          label: I18n.tr("Wave Warp") },
-        { key: "zoom-blur-pull",     label: I18n.tr("Zoom Blur Pull") }
+        { key: "random",             label: I18n.tr("Random"),             family: "" },
+        { key: "colour-distance",    label: I18n.tr("Colour Distance"),    family: "fade" },
+        { key: "crossfade",          label: I18n.tr("Crossfade"),          family: "fade" },
+        { key: "fadecolor",          label: I18n.tr("Fadecolor"),          family: "fade" },
+        { key: "overexposure",       label: I18n.tr("Overexposure"),       family: "fade" },
+        { key: "perlin",             label: I18n.tr("Perlin"),             family: "fade" },
+        { key: "pixelfade-wave",     label: I18n.tr("Pixelfade Wave"),     family: "fade" },
+        { key: "soft-warp-fade",     label: I18n.tr("Soft Warp Fade"),     family: "fade" },
+        { key: "static-fade",        label: I18n.tr("Static Fade"),        family: "fade" },
+        { key: "bounce",             label: I18n.tr("Bounce"),             family: "wipe" },
+        { key: "circle-crop",        label: I18n.tr("Circle Crop"),        family: "wipe" },
+        { key: "crosshatch",         label: I18n.tr("Crosshatch"),         family: "wipe" },
+        { key: "directional",        label: I18n.tr("Directional"),        family: "wipe" },
+        { key: "directional-scaled", label: I18n.tr("Directional Scaled"), family: "wipe" },
+        { key: "directional-wipe",   label: I18n.tr("Directional Wipe"),   family: "wipe" },
+        { key: "edge-transition",    label: I18n.tr("Edge Transition"),    family: "wipe" },
+        { key: "iris",               label: I18n.tr("Iris"),               family: "wipe" },
+        { key: "polka-dots-curtain", label: I18n.tr("Polka Dots Curtain"), family: "wipe" },
+        { key: "puzzle-right",       label: I18n.tr("Puzzle Right"),       family: "wipe" },
+        { key: "randomsquares",      label: I18n.tr("Randomsquares"),      family: "wipe" },
+        { key: "crazy-parametric",   label: I18n.tr("Crazy Parametric"),   family: "warp" },
+        { key: "crosswarp",          label: I18n.tr("Cross Warp"),         family: "warp" },
+        { key: "flyeye",             label: I18n.tr("Fly Eye"),            family: "warp" },
+        { key: "heat-melt",          label: I18n.tr("Heat Melt"),          family: "warp" },
+        { key: "liquid-ripple",      label: I18n.tr("Liquid Ripple"),      family: "warp" },
+        { key: "morph",              label: I18n.tr("Morph"),              family: "warp" },
+        { key: "polar-function",     label: I18n.tr("Polar Function"),     family: "warp" },
+        { key: "wave-warp",          label: I18n.tr("Wave Warp"),          family: "warp" },
+        { key: "zoom-blur-pull",     label: I18n.tr("Zoom Blur Pull"),     family: "warp" },
+        { key: "chromatic-bloom",    label: I18n.tr("Chromatic Bloom"),    family: "break" },
+        { key: "glitch",             label: I18n.tr("Glitch"),             family: "break" },
+        { key: "glitch-displace",    label: I18n.tr("Glitch Displace"),    family: "break" },
+        { key: "ink-splash",         label: I18n.tr("Ink Splash"),         family: "break" },
+        { key: "inkwell-drop",       label: I18n.tr("Inkwell Drop"),       family: "break" },
+        { key: "mosaic-tumble",      label: I18n.tr("Mosaic Tumble"),      family: "break" },
+        { key: "parametric-glitch",  label: I18n.tr("Parametric Glitch"),  family: "break" },
+        { key: "pixelate",           label: I18n.tr("Pixelate"),           family: "break" },
+        { key: "plasma-flow",        label: I18n.tr("Plasma Flow"),        family: "break" },
+        { key: "smoke",              label: I18n.tr("Smoke"),              family: "break" },
+        { key: "voronoi-shatter",    label: I18n.tr("Voronoi Shatter"),    family: "break" },
+        { key: "silk_fade",          label: I18n.tr("Silk Fade"),          family: "reveal" },
+        { key: "celeste_veil",       label: I18n.tr("Celeste Veil"),       family: "reveal" },
+        { key: "ember_burn",         label: I18n.tr("Ember Burn"),         family: "reveal" },
+        { key: "diagonal_silk",      label: I18n.tr("Diagonal Silk"),      family: "reveal" },
+        { key: "dream_curtain",      label: I18n.tr("Dream Curtain"),      family: "reveal" },
+        { key: "liquid_ribbon",      label: I18n.tr("Liquid Ribbon"),      family: "reveal" },
+        { key: "iris_open",          label: I18n.tr("Iris Open"),          family: "reveal" },
+        { key: "corner_bloom",       label: I18n.tr("Corner Bloom"),       family: "reveal" },
+        { key: "spotlight_rise",     label: I18n.tr("Spotlight Rise"),     family: "reveal" },
+        { key: "wander_iris",        label: I18n.tr("Wander Iris"),        family: "reveal" },
+        { key: "vignette_close",     label: I18n.tr("Vignette Close"),     family: "reveal" },
+        { key: "comet_streak",       label: I18n.tr("Comet Streak"),       family: "reveal" },
+        { key: "starfall_bloom",     label: I18n.tr("Starfall Bloom"),     family: "reveal" },
+        { key: "shutter_sweep",      label: I18n.tr("Shutter Sweep"),      family: "reveal" },
+        { key: "page_turn",          label: I18n.tr("Page Turn"),          family: "reveal" },
+        { key: "aurora_ripple",      label: I18n.tr("Aurora Ripple"),      family: "reveal" },
+        { key: "pond_wake",          label: I18n.tr("Pond Wake"),           family: "reveal" },
+        { key: "mosaic_swell",       label: I18n.tr("Mosaic Swell"),       family: "reveal" },
+        { key: "glass_scatter",      label: I18n.tr("Glass Scatter"),      family: "reveal" },
+        { key: "signal_tear",        label: I18n.tr("Signal Tear"),         family: "reveal" },
+        { key: "cathode_wink",       label: I18n.tr("Cathode Wink"),       family: "reveal" },
+        { key: "wax_descent",        label: I18n.tr("Wax Descent"),        family: "reveal" }
+    ]
+
+    // Family display names in dropdown order; the picker draws a header per family.
+    readonly property var _families: [
+        { key: "fade",   label: I18n.tr("Fade") },
+        { key: "wipe",   label: I18n.tr("Wipe") },
+        { key: "warp",   label: I18n.tr("Warp") },
+        { key: "break",  label: I18n.tr("Break up") },
+        { key: "reveal", label: I18n.tr("Reveal") }
     ]
 
     SettingsCard {
@@ -79,18 +119,18 @@ Column {
                 spacing: 4
                 Repeater {
                     model: [
-                        { key: "fill",    label: I18n.tr("Fill") },
-                        { key: "fit",     label: I18n.tr("Fit") },
-                        { key: "stretch", label: I18n.tr("Stretch") },
-                        { key: "center",  label: I18n.tr("Center") },
-                        { key: "tile",    label: I18n.tr("Tile") }
+                        { key: "Cover",     label: I18n.tr("Fill") },
+                        { key: "Contain",   label: I18n.tr("Fit") },
+                        { key: "Fill",      label: I18n.tr("Stretch") },
+                        { key: "Center",    label: I18n.tr("Center") },
+                        { key: "Tile",      label: I18n.tr("Tile") }
                     ]
                     FilterButton {
                         colors: root.colors
                         label: I18n.tr(modelData.label)
                         skew: 8 * Config.uiScale; height: 26 * Config.uiScale
-                        isActive: Config.fillMode === modelData.key
-                        onClicked: Config.saveKey("display.fillMode", modelData.key)
+                        isActive: Config.contentFit === modelData.key
+                        onClicked: Config._shellSet("wallpaper.content_fit", modelData.key)
                     }
                 }
             }
@@ -162,7 +202,7 @@ Column {
     SettingsCard {
         colors: root.colors
         title: I18n.tr("Transitions")
-        subtitle: I18n.tr("The 38 skwd shader transitions, rendered by the shell on every switch. Random rotates them with no repeats; picking a shader pins it. The shell's own 22 reveal presets stay reachable by setting transition.shader to \"ryoku\".")
+        subtitle: I18n.tr("Every transition the shell can play, in one list: the 39 skwd shaders (Fade, Wipe, Warp, Break up) and Ryogami's 22 reveal presets (Reveal). Random rotates the whole pool with no repeats; picking one pins it.")
 
         RowToggle {
             colors: root.colors
@@ -183,8 +223,8 @@ Column {
 
         RowToggle {
             colors: root.colors
-            title: I18n.tr("Random shader per transition")
-            description: I18n.tr("Pick a different shader for every transition.")
+            title: I18n.tr("Random transition per switch")
+            description: I18n.tr("Pick a different transition from the whole pool for every switch.")
             checked: Config.transitionShader === "random"
             onToggle: function(v) {
                 if (v) {
@@ -202,6 +242,7 @@ Column {
         ShaderPicker {
             colors: root.colors
             model: root._shaderOptions.filter(function(s) { return s.key !== "random" })
+            families: root._families
             value: Config.transitionShader
             enabled: Config.transitionEnabled && Config.transitionShader !== "random"
             opacity: (Config.transitionEnabled && Config.transitionShader !== "random") ? 1.0 : 0.4

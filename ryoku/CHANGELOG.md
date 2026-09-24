@@ -3,6 +3,61 @@
 ## Unreleased
 
 ### Added
+- **One keybind catalogue for both compositors.** `wm/binds.go` names every
+  shipped shortcut once (id, label, hint, category, default chord), and each
+  provider's `binds` verb reports the full effective legend: what it bound,
+  what the user rebound, and what it cannot do with a reason. New shortcuts on
+  both desktops: Page Up/Down and Shift for workspace navigation and sending
+  windows, Super+Alt+arrows to focus a screen and Shift/Ctrl variants to send a
+  window or a whole workspace there, Alt+Tab for the last window, Super+T for
+  a tabbed column or group, Super+D to maximise, Super+C to centre, Super+[ ]
+  to merge a window into its neighbour, and the number pad for workspaces 1 to
+  10 with NumLock on or off. niri also gains reorder-workspace (Super+Ctrl+Page
+  Up/Down), first and last column, preset window heights and a shortcut
+  inhibit toggle; Hyprland reports those as not available instead of hiding
+  them (`wm/niri/config_binds.go`, `wm/hyprland/legend.go`).
+- **The niri border follows the wallpaper palette, like Hyprland's.** The
+  provider recolours the border from the live palette on every wallpaper or
+  scheme change through a shared `paletteBorder` capability, and a new
+  `Follow the wallpaper` switch on the Hub's Borders tab pins the fixed colours
+  instead on either compositor (`wm/niri/act.go`, `wm/hyprland/act.go`,
+  `shell/ipc/matugen.go`, `hub/quickshell/schema/WindowSettings.js`).
+- **The niri provider models what niri 26.04 can do.** Blur (global passes and
+  noise, per-window and per-app background effects), a border or focus ring
+  choice with gradients, the workspace background, tabbed columns, preset
+  window heights, the overview backdrop colour and workspace shadow, nine
+  per-animation springs and curves, layer rules, the `columnwidth`, `minsize`,
+  `maxsize`, `scrollfactor`, `tiledstate`, `babaisfloat`, `noshadow`, `blur`,
+  `xray` and `blockout` window-rule actions, and the warp-to-focus, scroll
+  cap, auto back-and-forth, mod key, power key and drag-edge input knobs, each
+  a store key with a Hub row. The emitter is one concern per file and the
+  unhonored reasons name what niri really lacks (`wm/niri/config_*.go`,
+  `wm/niri/schema_*.json`, `wm/niri/apply.go`).
+- **Seam actions for what used to be Hyprland-only scripts.** `nightlight.on`
+  and `nightlight.off` with a `nightLight` capability, `input.touchpad` with
+  `touchpadToggle`, `output.cycle` and `output.enable`, `window.summon` and
+  `decoration.gameMode`; providers also publish the window-rule actions they
+  honour (`wm/caps.go`, `wm/action.go`, `wm/hyprland/act.go`, `wm/niri/act.go`).
+
+### Fixed
+- **niri draws the window border the user sized.** niri 26.04 keeps its border
+  off unless the block carries an explicit `on`, so the sized border never drew
+  and the thickness slider did nothing; per-app overrides resolve the same way
+  (`wm/niri/config_layout.go`).
+- **A packaged niri box gets every helper the shell calls.** The neutral leaf
+  scripts ship with the shell, hypridle and hyprpicker are base dependencies,
+  idle management renders its own config from the Hub policy, and the dev
+  deploy lays only the live provider's scripts so a checkout no longer masks
+  what a package is missing (`release/packages/*/PKGBUILD`, `shell/deploy.sh`,
+  `system/hardware/power/ryoku-idle`).
+- Settings rejects null desktop save and preview requests before they can
+  replace saved preferences. Empty JSON stores containing `null` now recover
+  as an editable empty store instead of crashing the next edit.
+- Saved window animation overrides using `snap` no longer report a missing
+  bezier after switching presets. The base loader supplies the Minimal curve;
+  active presets and custom curves can still override it.
+
+### Added
 - **`CardColumns`: a page body of blocks, laid into balanced columns.** It takes
   the children a page already declares, measures them at the column width, and
   splits them so the columns end level, with a `fullWidth: true` child taking a
@@ -170,6 +225,14 @@
   show: it keeps a real user alias, otherwise takes the device-reported name,
   and skips a BlueZ alias that is only the device's own address
   (`ui/lib/bluetooth.js`).
+- **Niri screen sharing works with the GNOME portal again.** Ryoku's
+  `GDK_BACKEND=wayland,x11,*` preference was inherited by
+  `xdg-desktop-portal-gnome`, which then treated the Niri session as an
+  incompatible display server and exposed Settings only, leaving OBS,
+  browsers and Electron clients without a ScreenCast backend. The portal
+  service now drops only `GDK_BACKEND`, while normal GTK applications keep
+  Ryoku's Wayland-first preference
+  (`shell/systemd/user/xdg-desktop-portal-gnome.service.d/10-ryoku.conf`).
 - **The gap stream clears when it stops instead of freezing a frame.** A silent
   bar with no drift left the last shader frame stuck in the gaps; it now hides,
   so the stream reads as off, then on when audio returns

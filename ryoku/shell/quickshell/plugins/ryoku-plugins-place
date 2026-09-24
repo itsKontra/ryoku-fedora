@@ -4,7 +4,7 @@
 # placement edit), and the installer (seed/forget a plugin's settings block).
 # Registry's file watch sees it and retunes every surface, no reload.
 #
-#   ryoku-plugins-place <id> desktopWidget <x> <y> [scale] [locked]
+#   ryoku-plugins-place <id> desktopWidget <x> <y> [scale] [locked] [opacity]
 #   ryoku-plugins-place <id> framePopout <edge> <align> <hoverW> <hoverH>
 #   ryoku-plugins-place <id> host <hostName>
 #   ryoku-plugins-place <id> enabled <true|false>
@@ -51,36 +51,42 @@ manifest_for() {
 }
 
 # fill a plugin's entry with its shipped presets (default host, default
-# settings) -- only the missing keys, so user edits survive. idempotent;
-# no manifest = nothing to seed.
+# settings, and the tile geometry the product declares for itself) -- only the
+# missing keys, so user edits survive. idempotent; no manifest = nothing to seed.
 seed_entry() {
-	local pid="$1" man defs host
+	local pid="$1" man defs host geo
 	man="$(manifest_for "$pid")" || return 0
 	# defaults come from the schema (metadata.settings[].default). older flat
 	# metadata.defaultSettings still works.
 	defs="$(jq -c 'if (.metadata.settings | type) == "array" then (.metadata.settings | map({(.key): .default}) | add // {}) else (.metadata.defaultSettings // {}) end' "$man")"
 	host="$(jq -r '.defaults.host // "desktopWidget"' "$man")"
-	jq --arg id "$pid" --argjson defs "$defs" --arg host "$host" \
+	# a product may ship the spot its tile opens at (a widget set composes a
+	# desktop layout this way); absent, the desktop's own default applies.
+	geo="$(jq -c 'if (.defaults.desktopWidget | type) == "object" then
+			(.defaults.desktopWidget | with_entries(select(.key == "x" or .key == "y" or .key == "scale" or .key == "locked") | with_entries(select(.value != null))))
+		else {} end' "$man")"
+	jq --arg id "$pid" --argjson defs "$defs" --arg host "$host" --argjson geo "$geo" \
 		'.[$id] = ((.[$id] // {}) + {
 			enabled: ((.[$id].enabled) // false),
 			host: ((.[$id].host) // $host),
 			settings: ($defs + ((.[$id].settings) // {}))
-		})' "$f" >"$tmp" && mv "$tmp" "$f"
+		} + (if ($geo == {}) or ((.[$id] // {}) | has("desktopWidget")) then {} else {desktopWidget: $geo} end))' "$f" >"$tmp" && mv "$tmp" "$f"
 }
 
 case "$field" in
 desktopWidget)
-	x="${1:?x}"; y="${2:?y}"; scale="${3:-}"; locked="${4:-}"
-	# scale/locked optional: keep existing (or a sane default) when omitted,
-	# so a position-only write doesn't drop them.
+	x="${1:?x}"; y="${2:?y}"; scale="${3:-}"; locked="${4:-}"; opacity="${5:-}"
+	# scale/locked/opacity optional: keep existing (or a sane default) when
+	# omitted, so a position-only write doesn't drop them.
 	jq --arg id "$id" --argjson x "$x" --argjson y "$y" \
-		--arg scale "$scale" --arg locked "$locked" \
+		--arg scale "$scale" --arg locked "$locked" --arg opacity "$opacity" \
 		'.[$id] = ((.[$id] // {}) + {
 			enabled: ((.[$id].enabled) // true),
 			host: ((.[$id].host) // "desktopWidget"),
 			desktopWidget: (((.[$id].desktopWidget) // {}) + { x: $x, y: $y }
 				+ (if $scale == "" then {} else { scale: ($scale | tonumber) } end)
-				+ (if $locked == "" then {} else { locked: ($locked == "true") } end))
+				+ (if $locked == "" then {} else { locked: ($locked == "true") } end)
+				+ (if $opacity == "" then {} else { opacity: ($opacity | tonumber) } end))
 		})' "$f" >"$tmp" && mv "$tmp" "$f"
 	;;
 framePopout)

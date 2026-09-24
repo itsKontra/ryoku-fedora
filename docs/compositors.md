@@ -67,8 +67,8 @@ with nothing behind it.
 Shared by both providers:
 
     animations  focusHistory  keyboardLayoutSwitch  layerRules  monitorConfig
-    outputPower  sessionExit  windowFloat  windowRules  windowWorkspaceMap
-    workspaceMoveToOutput  workspaces
+    nightLight  outputPower  paletteBorder  sessionExit  touchpadToggle
+    windowFloat  windowRules  windowWorkspaceMap  workspaceMoveToOutput  workspaces
 
 Hyprland only:
 
@@ -96,6 +96,57 @@ change what a user sees on niri:
 - **`submap`**, **`specialWorkspace`**, **`screenShader`**, **`plugins`** and
   **`cursorSet`** have no niri equivalent, so the binds and settings that need
   them are reported by `apply` rather than silently dropped.
+
+`nightLight` is the one shared capability the desktop drives through named
+actions rather than a settings row:
+
+- `nightlight.on <K>` warms the screen to a colour temperature; the provider runs
+  its own detached backend (`hyprsunset` on Hyprland, `gammastep` on niri).
+- `nightlight.off` stops that backend, and the compositor restores the gamma when
+  it goes away.
+
+`touchpadToggle` is the other shared capability the desktop drives through a
+named action, plus a Hub switch that reads it live:
+
+- `input.touchpad on|off|toggle` locks or unlocks the touchpad the FN touchpad
+  key drives; `status` prints `on` or `off`, and `restore` re-asserts a stored
+  off after a config reload. Hyprland flips the device live through `hyprctl
+  eval`; niri, which has no runtime input IPC, records the intent in a state
+  file and re-emits `off` into the config it watches.
+
+`paletteBorder` is the shared capability that keeps the window border tracking
+the wallpaper, driven by a named action both providers honour:
+
+- `decoration.borderColors <active> <inactive>` recolours the border from the
+  live palette. Hyprland pushes the colours into the running config through
+  `hyprctl eval`; niri, which has no runtime config IPC, records them in a state
+  file and regenerates the config it watches. Both are a no-op when the store
+  pins a fixed colour (`desktop.appearance.borderFollowsPalette` off), so a
+  wallpaper change never overrides a border colour the user chose.
+
+`monitorConfig` adds two output actions beside the display settings it gates:
+
+- `output.cycle` steps the output arrangement one position. Hyprland runs its
+  display engine (`ryoku-monitor toggle`); niri walks the outputs over IPC,
+  keeping the cycle position in a state file.
+- `output.enable <connector> on|off` turns one named output on or off.
+
+`workspaces` also backs `window.summon`, which the desktop's summon keybind
+drives on every compositor:
+
+- `window.summon <title>` raises an already-open window to the current
+  workspace and focuses it, matched by exact title. A single-instance app
+  strands its window on the workspace it first opened on, and a title is the
+  only handle when every window of an app shares one app id; no match exits
+  non-zero, so the keybind falls through to launching the app.
+
+`liveConfigEval` drives one named action of its own, gated so a file-only
+compositor is left alone:
+
+- `decoration.gameMode on|off` strips the compositor's decorations for a
+  latency-first gaming pass and reloads the config to restore them. A compositor
+  that cannot evaluate its config live has no equivalent, so game mode still
+  boosts power there and leaves the look untouched.
 
 ## Where the config lives
 
@@ -135,6 +186,28 @@ cross-GPU cursor plane fails niri's atomic commit there.
 `ryoku-monitor` is the same story for `monitors.lua`. Both seeds still exist on
 niri, because `config.kdl` has to be able to include them, and both are yours to
 fill in by hand if you ever need to.
+
+What a variant package ships is the same rule seen from the packaging side: a
+compositor's payload dir holds only what speaks that compositor's own IPC
+(`ryoku-monitor`, `ryoku-workspace`, `ryoku-cursor-track` under
+`ryoku/hyprland/scripts/`). Anything the shell, the Hub, the launcher or a
+keybind calls by bare name on every compositor lives in `ryoku/shell/scripts/`
+or `system/hardware/` and ships with the shell or the base package, and it
+reaches the compositor only through `ryoku wm act`. A variant-only script called
+from neutral code is exactly the bug that made a packaged niri box miss its
+app keys while a dev checkout, which used to lay every provider's scripts, never
+noticed; `deploy.sh` now lays only the live provider's own leaf scripts so the
+checkout tells the truth.
+
+The switch lays the target's leaf scripts on a checkout box before declaring it
+ready (`syncLeafScripts` in `ryoku/cli/wm.go`, resolving the directory through
+`wm.LeafScriptsDir`). It has to: a deploy under one compositor lays only that
+compositor's scripts, so switching to the other without this left the next
+session's bare-name calls falling through PATH to a stale copy: a `ryoku-monitor`
+from before the display engine's `apply` verb existed, which silently failed
+every Hub display change and recomputed the scale from DPI at each login. The
+sync is additive because the running session still belongs to the compositor
+being left; pruning stays deploy's and the package's job.
 
 ## Switching
 

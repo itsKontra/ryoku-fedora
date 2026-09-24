@@ -8,7 +8,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-calc="$here/../ryoku/hyprland/scripts/ryoku-cmd-calc"
+calc="$here/../ryoku/shell/scripts/ryoku-cmd-calc"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "SKIP: python3 required" >&2

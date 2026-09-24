@@ -2,21 +2,27 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Shapes
 import Quickshell.Io
 import Quickshell
+import Quickshell.Wayland
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
+import "../Singletons"
 import "../Combos.js" as Combos
+import "../fuzzy.js" as Fuzzy
 
-// Keybinds (DESIGN.md section 8, SYSTEM). Two surfaces under one head: the live
-// shortcut legend (every desktop bind, read straight from what Hyprland has
-// bound via `ryoku-hub keybinds`) and the custom-bind editor (add/edit/remove
-// user shortcuts layered on top). The legend is the source of truth; custom
-// binds show in it once saved and reloaded. This is a full-bleed page: it owns
-// its whole content region, so it draws its own head, its own tab switch and
-// -- because the shell hides its global action bar -- its own Save/Revert
-// controls for the shared hypr store. Custom binds live in that store under the
-// `keybinds` key; nothing writes to disk until Save. Every value is a Token.
+// Keybinds (DESIGN.md section 8, SYSTEM). Three surfaces under one head, built
+// for use and not for reading: Shortcuts is the searchable legend (a category
+// rail on the left, one calm content column on the right, read live from
+// `ryoku-hub keybinds`), Apps swaps the launcher roles and rebinds their keys,
+// and Custom is the user-bind editor. A full-width fuzzy search sits in the head
+// and drives the legend: type "clw" for Close window, "num 3" for the number-pad
+// family, "screen" for the Displays rows. The legend is the source of truth;
+// custom binds and rebinds show in it once saved. This is a full-bleed page: it
+// owns its whole content region, so it draws its own head, its own tab switch
+// and -- because the shell hides its global action bar -- its own Save/Revert
+// controls for the shared store. Every value is a Token.
 Item {
     id: pg
 
@@ -38,14 +44,18 @@ Item {
         var cf = (pg.hub && pg.hub.wmConfigFiles) ? pg.hub.wmConfigFiles : [];
         return cf.length ? "~/.config/" + cf[0] : "";
     }
+    // the running compositor's display name, for the "not on <provider>" tag on
+    // a legend row the active compositor cannot honour. Read from the provider,
+    // never a hardcoded compositor name.
+    readonly property string providerName: (Settings.provider && Settings.provider.length) ? Settings.provider : I18n.tr("this desktop")
 
-    // "apps" = app-role launchers, "system" = the shipped legend, "custom" = the
-    // editor. Transient, not persisted.
-    property string tab: "apps"
+    // "shortcuts" = the searchable legend (default), "apps" = the app-role
+    // launchers, "custom" = the user-bind editor. Transient, not persisted.
+    property string tab: "shortcuts"
 
-    // the shipped legend, parsed live from binds.lua by the backend. Owned here
-    // (a self-contained page fetches its own backend), forwarded to both the
-    // legend view and the conflict check.
+    // the shipped legend, parsed live by the backend from the neutral catalogue
+    // and the active provider. Owned here (a self-contained page fetches its own
+    // backend), forwarded to the legend view and the conflict check.
     property var categories: []
 
     Process {
@@ -145,33 +155,6 @@ Item {
     function clearApps() { if (pg.hubReady) pg.hub.hyprEdit("desktop.apps", ({})); }
     function hasApps() { return Object.keys(pg.chosen).length > 0; }
 
-    // shipped combos that launch an app role, so the System tab drops them
-    // (they live on the Apps tab, where the key rebinds beside the app).
-    readonly property var roleComboSet: {
-        var s = {};
-        for (var i = 0; i < pg.roles.length; i++) {
-            var c = pg.roles[i].combo || "";
-            if (c.length)
-                s[c] = true;
-        }
-        return s;
-    }
-    // the legend minus the app-role binds: everything that is a system action.
-    readonly property var systemCategories: {
-        var out = [];
-        for (var c = 0; c < pg.categories.length; c++) {
-            var cat = pg.categories[c];
-            var kept = [];
-            var binds = cat.binds || [];
-            for (var b = 0; b < binds.length; b++)
-                if (!pg.roleComboSet[binds[b].combo || ""])
-                    kept.push(binds[b]);
-            if (kept.length)
-                out.push({ name: cat.name, binds: kept });
-        }
-        return out;
-    }
-
     // ── the app catalogue + picker overlay (shared: roles + custom binds) ────
     // every installed application as { name, cmd } for the filterable picker; the
     // command is the parsed Exec, runnable as a keybind or a ryoku-app role.
@@ -222,10 +205,10 @@ Item {
     }
 
     // ── conflict detection (shared with the Import page via Combos.js) ───────
-    // catches what a hand-edited user.lua never would: a custom combo that
-    // shadows a shipped bind, or duplicates another custom one. The rules live
-    // in Combos so both pages classify a clash the same way; these thin readers
-    // feed it this page's live legend, custom rows and rebinds.
+    // catches what a hand-edited config never would: a custom combo that shadows
+    // a shipped bind, or duplicates another custom one. The rules live in Combos
+    // so both pages classify a clash the same way; these thin readers feed it
+    // this page's live legend, custom rows and rebinds.
     function normKeys(s) { return Combos.normKeys(s); }
     readonly property var shippedKeys: Combos.shippedKeys(pg.categories, pg.rebinds)
     function customCount(norm) { return Combos.customCount(pg.customRows, norm); }
@@ -247,7 +230,7 @@ Item {
     }
 
     // the four bind actions, key -> visible label. keys are the exact strings the
-    // Go backend switches on, so a rename here silently breaks settings.lua.
+    // Go backend switches on, so a rename here silently breaks settings.
     readonly property var actionOpts: [
         { "key": "exec", "label": I18n.tr("Run command") },
         { "key": "close", "label": I18n.tr("Close window") },
@@ -321,33 +304,52 @@ Item {
 
     // ── chord recorder ──────────────────────────────────────────────────────
     // The star of this page: instead of typing "SUPER + J", the user clicks
-    // record and presses the combo. Capture is safe because the Hub first enters
-    // a do-nothing Hyprland submap (modules/record.lua): in a submap only its
-    // own binds fire, so a live chord like SUPER + Q passes through to be read
-    // here instead of closing the Hub. recordRow is the row being recorded
-    // (-1 = idle); the overlay below drives it.
+    // record and presses the combo. Capture is compositor-neutral -- the page
+    // ShortcutInhibitor grabs the compositor's shortcuts while recording, so a
+    // live chord like SUPER + Q reaches the Hub instead of firing -- and on
+    // Hyprland a do-nothing record submap backs it up. recordRow is the row being
+    // recorded (-1 = idle); the overlay below drives it.
     property int recordRow: -1
     // recordCombo holds a shipped bind's default combo while it is being rebound
     // (recordRow stays -1); either one active means the recorder overlay is up.
     property string recordCombo: ""
+    // the chord as it forms in the overlay: the held modifiers, before the main
+    // key lands and commits.
+    property string recordForming: ""
+    // recordFamily marks a family rebind in progress: the overlay asks for a
+    // number key and stores the {n} form rather than a single chord.
+    // recordNeedNumber flashes a nudge when a non-digit key lands mid-record.
+    property bool recordFamily: false
+    property bool recordNeedNumber: false
     readonly property bool recording: pg.recordRow >= 0 || pg.recordCombo.length > 0
 
-    function enterRecordSubmap() { if (pg.hub) pg.hub.wmAct("submap.enter", ["record"]); }
-    function exitRecordSubmap() { if (pg.hub) pg.hub.wmAct("submap.reset"); }
+    // Belt and braces on Hyprland: it honours a do-nothing submap so a live chord
+    // passes through even before the inhibitor's grant lands. niri has no submap,
+    // so the ShortcutInhibitor is the whole story there; gate on the capability
+    // rather than the compositor name.
+    function enterRecordSubmap() { if (pg.hub && Settings.supports("submap")) pg.hub.wmAct("submap.enter", ["record"]); }
+    function exitRecordSubmap() { if (pg.hub && Settings.supports("submap")) pg.hub.wmAct("submap.reset"); }
 
     function startRecord(i) {
         if (!pg.hubReady || i < 0)
             return;
         pg.recordCombo = "";
+        pg.recordForming = "";
+        pg.recordFamily = false;
+        pg.recordNeedNumber = false;
         pg.recordRow = i;
         pg.enterRecordSubmap();
         recordTimeout.restart();
     }
-    // record a new chord for a shipped bind, keyed by its default combo.
+    // record a new chord for a shipped bind, keyed by its default combo. A family
+    // default ("SUPER + {n}") records a number key and stores the {n} form.
     function startRecordShipped(combo) {
         if (!pg.hubReady || !combo)
             return;
         pg.recordRow = -1;
+        pg.recordForming = "";
+        pg.recordNeedNumber = false;
+        pg.recordFamily = Combos.isFamilyChord(combo);
         pg.recordCombo = combo;
         pg.enterRecordSubmap();
         recordTimeout.restart();
@@ -360,6 +362,9 @@ Item {
         var combo = pg.recordCombo;
         pg.recordRow = -1;
         pg.recordCombo = "";
+        pg.recordForming = "";
+        pg.recordFamily = false;
+        pg.recordNeedNumber = false;
         if (!commit || !chord)
             return;
         if (combo.length > 0)
@@ -376,21 +381,11 @@ Item {
         onTriggered: pg.stopRecord(false, "")
     }
 
-    // the submap's Escape binding (or any external reset) fires this; if we were
-    // still recording, treat it as a cancel so the overlay closes cleanly.
-    Connections {
-        target: Hyprland
-        function onRawEvent(event) {
-            if (pg.recording && event.name === "submap" && (event.data === "" || event.data === "reset"))
-                pg.stopRecord(false, "");
-        }
-    }
-
     // the recorder's key reader lives in Combos.js, shared with the Import
-    // page so a captured chord reads into Hyprland's token the same way.
+    // page so a captured chord reads into the store's token the same way.
     function chordFrom(event) { return Combos.chordFrom(event); }
     // the shipped bind a normalised chord shadows, by description, for the
-    // conflict badge. "" when nothing shipped matches.
+    // custom editor's conflict note. "" when nothing shipped matches.
     function shippedDescFor(norm) {
         for (var c = 0; c < pg.categories.length; c++) {
             var binds = pg.categories[c].binds || [];
@@ -404,8 +399,8 @@ Item {
 
     // ── shipped-bind rebinds ────────────────────────────────────────────────
     // A rebind remaps a shipped chord to a user-chosen one, held as
-    // { "SUPER + Q": "SUPER + X" } in the draft and rendered to rebinds.lua, which
-    // binds.lua's K() consults. The shipped default combo is the stable id.
+    // { "SUPER + Q": "SUPER + X" } in the draft under desktop.keybindRebinds. The
+    // shipped default combo is the stable id.
     readonly property var rebinds: pg.hubReady ? (pg.hub.hyprVal("desktop.keybindRebinds") || ({})) : ({})
     function effectiveCombo(defCombo) {
         var r = pg.rebinds[defCombo];
@@ -446,9 +441,14 @@ Item {
         for (var c = 0; c < pg.categories.length; c++) {
             var binds = pg.categories[c].binds || [];
             for (var b = 0; b < binds.length; b++) {
-                var n = pg.normKeys(pg.effectiveCombo(binds[b].combo || ""));
-                if (n.length)
-                    m[n] = (m[n] || 0) + 1;
+                // a family stands for ten chords, so expand it before counting:
+                // that is how a rebound family clashes with another effective chord.
+                var chords = Combos.expandFamily(pg.effectiveCombo(binds[b].combo || ""));
+                for (var e = 0; e < chords.length; e++) {
+                    var n = pg.normKeys(chords[e]);
+                    if (n.length)
+                        m[n] = (m[n] || 0) + 1;
+                }
             }
         }
         for (var i = 0; i < pg.customRows.length; i++) {
@@ -458,45 +458,247 @@ Item {
         }
         return m;
     }
+    // a family compares its ten expanded chords against the other effective
+    // chords; a plain chord expands to itself, so both go through one path.
     function comboConflict(defCombo) {
-        var n = pg.normKeys(pg.effectiveCombo(defCombo));
-        return n.length > 0 && pg.effectiveCounts[n] > 1;
-    }
-    // the other bind an effective combo clashes with, by description.
-    function conflictNameFor(defCombo) {
-        var n = pg.normKeys(pg.effectiveCombo(defCombo));
-        for (var c = 0; c < pg.categories.length; c++) {
-            var binds = pg.categories[c].binds || [];
-            for (var b = 0; b < binds.length; b++) {
-                if ((binds[b].combo || "") === defCombo)
-                    continue;
-                if (pg.normKeys(pg.effectiveCombo(binds[b].combo || "")) === n)
-                    return binds[b].desc || I18n.tr("another shortcut");
-            }
+        var chords = Combos.expandFamily(pg.effectiveCombo(defCombo));
+        for (var i = 0; i < chords.length; i++) {
+            var n = pg.normKeys(chords[i]);
+            if (n.length > 0 && pg.effectiveCounts[n] > 1)
+                return true;
         }
-        for (var i = 0; i < pg.customRows.length; i++)
-            if (pg.normKeys(pg.customRows[i].keys) === n)
-                return I18n.tr("a custom bind");
-        return I18n.tr("another shortcut");
+        return false;
     }
 
-    // display tokens for a raw combo, matching the legend keycaps. mirrors the
-    // backend's prettyKey for the chords the recorder can produce, so a rebound
-    // row reads like the shipped ones.
+    // ── display tokens for a raw combo, matching the legend keycaps ──────────
+    // mirrors wm.DisplayKeys (ryoku/wm/binds.go) for the chords the recorder can
+    // produce, so a row rebound in the draft (before the provider recomputes its
+    // keys on save) reads exactly like a shipped one. The map is the same set as
+    // the backend's displayNames; anything unlisted passes through, except a
+    // number-pad digit which reads "Num 3".
     readonly property var capNames: ({
-        "SUPER": "Super", "SHIFT": "Shift", "ALT": "Alt", "CTRL": "Ctrl",
-        "Return": "Enter", "comma": ",", "period": ".", "grave": "\u0060",
-        "Left": "\u2190", "Right": "\u2192", "Up": "\u2191", "Down": "\u2193"
+        "SUPER": "Super", "SHIFT": "Shift", "CTRL": "Ctrl", "ALT": "Alt",
+        "Return": "Enter", "Escape": "Esc", "space": "Space",
+        "Prior": "Page Up", "Next": "Page Down",
+        "grave": "\u0060", "comma": ",", "bracketleft": "[", "bracketright": "]",
+        "mouse:272": "LMB", "mouse:273": "RMB",
+        "mouse_up": "Scroll Up", "mouse_down": "Scroll Down",
+        "XF86AudioRaiseVolume": "Vol +", "XF86AudioLowerVolume": "Vol -",
+        "XF86AudioMute": "Mute", "XF86AudioPlay": "Play",
+        "XF86AudioNext": "Next", "XF86AudioPrev": "Prev",
+        "XF86MonBrightnessUp": "Brightness +", "XF86MonBrightnessDown": "Brightness -",
+        "XF86TouchpadToggle": "Touchpad", "XF86TouchpadOn": "Touchpad On", "XF86TouchpadOff": "Touchpad Off"
     })
+    function capToken(tok) {
+        if (pg.capNames[tok] !== undefined)
+            return pg.capNames[tok];
+        // a family placeholder reads as its digit range, mirroring wm.DisplayKeys,
+        // so a rebound family's caps read like a shipped one ("1 … 0" / "Num 1 … 0").
+        if (tok === "{n}")
+            return "1 \u2026 0";
+        if (tok === "KP_{n}")
+            return "Num 1 \u2026 0";
+        // a number-pad digit reads "Num 3", mirroring wm.DisplayKeys.
+        if (tok.length === 4 && tok.substring(0, 3) === "KP_") {
+            var d = tok.charAt(3);
+            if (d >= "0" && d <= "9")
+                return "Num " + d;
+        }
+        return tok;
+    }
     function comboToCaps(raw) {
         var parts = ("" + raw).split("+");
         var out = [];
         for (var i = 0; i < parts.length; i++) {
             var t = parts[i].trim();
             if (t.length)
-                out.push(pg.capNames[t] || t);
+                out.push(pg.capToken(t));
         }
         return out;
+    }
+    // the custom-row index a legend row maps to, matched by its chord, so a
+    // custom row's edit can drop into the Custom tab and record that same row.
+    // -1 when it is not in the draft yet (only in the saved legend).
+    function customIndexFor(combo) {
+        var norm = pg.normKeys(combo);
+        if (!norm)
+            return -1;
+        for (var i = 0; i < pg.customRows.length; i++)
+            if (pg.normKeys(pg.customRows[i].keys) === norm)
+                return i;
+        return -1;
+    }
+    // a chord as one readable line ("Super + Q", "Super + 1 … 0"), for the reset
+    // button's "Back to ..." tooltip. Uses the same caps faces the row shows.
+    function comboLabel(raw) {
+        return pg.comboToCaps(raw).join(" + ");
+    }
+
+    // ── legend search + rail ─────────────────────────────────────────────────
+    // The search field (in the head) is the source of truth for the query; the
+    // rail clears it through clearSearch so tapping a category leaves search.
+    readonly property string query: searchInput.text
+    readonly property bool searching: pg.query.trim().length > 0
+    // "" = All; else a category name. Ignored while searching (search spans all).
+    property string selectedCat: ""
+    function clearSearch() { searchInput.text = ""; }
+
+    // a family row (its combo carries {n}) matches its whole digit range, so
+    // "num 3" and "workspace 3" find the number-pad family without the legend
+    // having to expand ten rows. The digits carry a "Num " face for a KP_{n}
+    // family so "num" narrows to the number pad.
+    function familyExpand(bind) {
+        var combo = bind.combo || "";
+        if (combo.indexOf("{n}") < 0)
+            return "";
+        var kp = combo.indexOf("KP_{n}") >= 0;
+        var out = [];
+        for (var n = 1; n <= 10; n++)
+            out.push((kp ? "Num " : "") + (n % 10));
+        return out.join(" ");
+    }
+    // fuzzy score for a bind against the query, over one haystack of its label,
+    // hint, category and chord tokens (a family adds its digit range, so "num 3"
+    // and "workspace 3" reach the number-pad family). >= 0 is a match; -1 none.
+    function bindScore(bind, q) {
+        if (!q)
+            return 0;
+        var keyStr = (bind.keys ? bind.keys.join(" ") : "");
+        var fam = pg.familyExpand(bind);
+        if (fam.length)
+            keyStr += " " + fam;
+        var hay = (bind.desc || "") + " " + (bind.hint || "") + " " + (bind.category || "") + " " + keyStr;
+        return Fuzzy.score(q, hay);
+    }
+    // matched (or total, when idle) binds in a category, for the rail counts.
+    function catCount(cat) {
+        var binds = cat.binds || [];
+        if (!pg.searching)
+            return binds.length;
+        var q = pg.query.trim();
+        var n = 0;
+        for (var b = 0; b < binds.length; b++)
+            if (pg.bindScore(binds[b], q) >= 0)
+                n++;
+        return n;
+    }
+    readonly property int allCount: {
+        var total = 0;
+        for (var i = 0; i < pg.categories.length; i++)
+            total += pg.catCount(pg.categories[i]);
+        return total;
+    }
+    // the rail model: All, then every category with its count.
+    readonly property var railModel: {
+        var out = [{ name: "", label: I18n.tr("All"), count: pg.allCount }];
+        for (var i = 0; i < pg.categories.length; i++) {
+            var c = pg.categories[i];
+            out.push({ name: c.name, label: c.name, count: pg.catCount(c) });
+        }
+        return out;
+    }
+    // what the content column shows: filtered categories while searching, else
+    // the selected category (All -> every category).
+    readonly property var shownCats: {
+        if (pg.searching) {
+            var q = pg.query.trim();
+            var out = [];
+            for (var i = 0; i < pg.categories.length; i++) {
+                var c = pg.categories[i];
+                var binds = c.binds || [];
+                var keep = [];
+                for (var b = 0; b < binds.length; b++)
+                    if (pg.bindScore(binds[b], q) >= 0)
+                        keep.push(binds[b]);
+                if (keep.length)
+                    out.push({ name: c.name, binds: keep });
+            }
+            return out;
+        }
+        if (pg.selectedCat === "")
+            return pg.categories;
+        for (var j = 0; j < pg.categories.length; j++)
+            if (pg.categories[j].name === pg.selectedCat)
+                return [pg.categories[j]];
+        return [];
+    }
+
+    // ── the keycap cluster, once ──────────────────────────────────────────────
+    // hairline mono caps with a "+" between them. muted dims an unhonoured row's
+    // caps to half; hot strengthens the border on a hovered rebindable row; clash
+    // inks the border when a rebound chord collides (colour-free, DESIGN.md 1).
+    component KeyCaps: Row {
+        id: kc
+        property var tokens: []
+        property bool muted: false
+        property bool rebound: false
+        property bool clash: false
+        property bool hot: false
+        spacing: Tokens.s1
+        opacity: kc.muted ? 0.45 : 1
+
+        Repeater {
+            model: kc.tokens
+            delegate: Row {
+                id: kcCap
+                required property var modelData
+                required property int index
+                spacing: Tokens.s1
+                Text {
+                    visible: kcCap.index > 0
+                    height: 22; verticalAlignment: Text.AlignVCenter
+                    text: "+"; color: Tokens.inkFaint
+                    font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
+                }
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    implicitHeight: 22
+                    implicitWidth: Math.max(22, capT.implicitWidth + 18)
+                    radius: Tokens.radius
+                    color: "transparent"
+                    border.width: Tokens.border
+                    border.color: kc.clash ? Tokens.ink : ((kc.hot || kc.rebound) ? Tokens.lineStrong : Tokens.line)
+                    Behavior on border.color { ColorAnimation { duration: Tokens.snap } }
+                    Text {
+                        id: capT
+                        anchors.centerIn: parent
+                        text: kcCap.modelData
+                        color: kc.rebound ? Tokens.inkDim : Tokens.inkFaint
+                        font.family: Tokens.mono; font.pixelSize: Tokens.fSmall
+                    }
+                }
+            }
+        }
+    }
+
+    // a small drawn padlock for a row bound to a dedicated key it cannot rebind
+    // (mouse, media, hardware). Drawn, not a font glyph, so it stays flat ink
+    // like the rest of the sheet rather than risking a colour emoji fallback.
+    component LockMark: Item {
+        id: lk
+        property color tint: Tokens.inkFaint
+        implicitWidth: 12
+        implicitHeight: 14
+        Shape {
+            x: 0; y: 0
+            width: 12; height: 8
+            preferredRendererType: Shape.CurveRenderer
+            antialiasing: true
+            ShapePath {
+                strokeColor: lk.tint
+                strokeWidth: 1.4
+                fillColor: "transparent"
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+                PathSvg { path: "M2.4 8 V4.2 A3.6 3.6 0 0 1 9.6 4.2 V8" }
+            }
+        }
+        Rectangle {
+            x: 0.5; y: 6
+            width: 11; height: 8
+            radius: 1
+            color: lk.tint
+        }
     }
 
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
@@ -537,22 +739,84 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Every desktop shortcut. Clashes are flagged as you go.")
+            text: I18n.tr("Every desktop shortcut in one place. Search, rebind, or add your own.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
     }
 
-    // ── tab switch: Shortcuts (legend) | Custom (editor) ──
+    // ── tab switch: Shortcuts (legend) | Apps | Custom ──
     Tabs {
         id: tabs
         anchors.left: parent.left
         anchors.leftMargin: Tokens.s6
         anchors.top: head.bottom
         anchors.topMargin: Tokens.s5
-        options: [I18n.tr("Apps"), I18n.tr("System"), I18n.tr("Custom")]
-        current: pg.tab === "apps" ? I18n.tr("Apps") : (pg.tab === "system" ? I18n.tr("System") : I18n.tr("Custom"))
-        onChose: (label) => pg.tab = (label === I18n.tr("Apps") ? "apps" : (label === I18n.tr("System") ? "system" : "custom"))
+        options: [I18n.tr("Shortcuts"), I18n.tr("Apps"), I18n.tr("Custom")]
+        current: pg.tab === "apps" ? I18n.tr("Apps") : (pg.tab === "custom" ? I18n.tr("Custom") : I18n.tr("Shortcuts"))
+        onChose: (label) => pg.tab = (label === I18n.tr("Apps") ? "apps" : (label === I18n.tr("Custom") ? "custom" : "shortcuts"))
+    }
+
+    // ── search: full-width fuzzy finder over the legend (Shortcuts only) ──
+    Rectangle {
+        id: searchBar
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: Tokens.s6
+        anchors.rightMargin: Tokens.s6
+        anchors.top: tabs.bottom
+        anchors.topMargin: Tokens.s4
+        height: 44
+        visible: pg.tab === "shortcuts"
+        radius: Tokens.radius
+        color: Tokens.paper
+        border.width: Tokens.border
+        border.color: searchInput.activeFocus ? Tokens.lineStrong : Tokens.line
+        Behavior on border.color { ColorAnimation { duration: Tokens.snap } }
+
+        Text {
+            id: searchGlyph
+            anchors.left: parent.left
+            anchors.leftMargin: Tokens.s4
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\uf002"
+            color: searchInput.activeFocus ? Tokens.inkDim : Tokens.inkFaint
+            font.family: Tokens.mono; font.pixelSize: Tokens.fSmall
+            Behavior on color { ColorAnimation { duration: Tokens.snap } }
+        }
+        TextInput {
+            id: searchInput
+            anchors.left: searchGlyph.right
+            anchors.leftMargin: Tokens.s3
+            anchors.right: matchCount.left
+            anchors.rightMargin: Tokens.s3
+            anchors.verticalCenter: parent.verticalCenter
+            clip: true
+            color: Tokens.ink
+            font.family: Tokens.ui; font.pixelSize: Tokens.fBody
+            selectionColor: Tokens.lineStrong
+            selectedTextColor: Tokens.ink
+            // Esc clears the query (the field never closes a page).
+            Keys.onEscapePressed: searchInput.text = ""
+        }
+        Text {
+            anchors.left: searchInput.left
+            anchors.verticalCenter: searchInput.verticalCenter
+            visible: searchInput.text.length === 0
+            text: I18n.tr("Search shortcuts")
+            color: Tokens.inkFaint
+            font: searchInput.font
+        }
+        // match count at the field's right edge, shown while searching.
+        Text {
+            id: matchCount
+            anchors.right: parent.right
+            anchors.rightMargin: Tokens.s4
+            anchors.verticalCenter: parent.verticalCenter
+            visible: pg.searching
+            text: pg.allCount === 1 ? I18n.tr("%1 match").arg(pg.allCount) : I18n.tr("%1 matches").arg(pg.allCount)
+            color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fTiny
+        }
     }
 
     // ── the tab body: a Loader swaps the whole subtree, fading the new one in ──
@@ -560,11 +824,12 @@ Item {
         id: loader
         anchors {
             left: parent.left; right: parent.right
-            top: tabs.bottom; bottom: bar.top
+            top: pg.tab === "shortcuts" ? searchBar.bottom : tabs.bottom
+            bottom: bar.top
             leftMargin: Tokens.s6; rightMargin: Tokens.s6
             topMargin: Tokens.s4; bottomMargin: Tokens.s6
         }
-        sourceComponent: pg.tab === "apps" ? appsComp : (pg.tab === "system" ? systemComp : customComp)
+        sourceComponent: pg.tab === "apps" ? appsComp : (pg.tab === "custom" ? customComp : shortcutsComp)
         onLoaded: {
             if (!item)
                 return;
@@ -597,10 +862,29 @@ Item {
                 width: appsFlick.width - Tokens.s3
                 spacing: Tokens.s5
 
+                // These are launcher shortcuts, not the system's file and link
+                // handlers: say so up top so nobody hunts for xdg defaults here.
+                SettingCard {
+                    id: appsNotice
+                    width: appsCol.width
+                    collapsible: false
+                    title: I18n.tr("Shortcuts, not default apps")
+
+                    Text {
+                        width: parent.width
+                        leftPadding: Tokens.s4; rightPadding: Tokens.s4
+                        topPadding: Tokens.s3; bottomPadding: Tokens.s3
+                        wrapMode: Text.WordWrap
+                        text: I18n.tr("These are the apps the launcher keys open (Super + Return, Super + B and the rest). They are not the system's default applications for opening files and links.")
+                        color: Tokens.inkMuted; font.family: Tokens.ui
+                        font.pixelSize: Tokens.fSmall; lineHeight: 1.3
+                    }
+                }
+
                 Text {
                     width: appsCol.width
                     wrapMode: Text.WordWrap
-                    text: I18n.tr("Pick what each launcher key opens, and rebind the key itself. The key runs the app through ryoku-app, so a swap takes effect on the next press -- no reload.")
+                    text: I18n.tr("Pick what each launcher key opens, and rebind the key itself. The key runs the app through ryoku-app, so a swap takes effect on the next press, with no reload.")
                     color: Tokens.inkMuted; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; lineHeight: 1.3
                 }
@@ -895,188 +1179,328 @@ Item {
         }
     }
 
-    // ── the shipped-bind legend (read-only) ─────────────────────────────────
+    // ── the shipped-bind legend (Shortcuts): rail + one content column ────────
     Component {
-        id: systemComp
+        id: shortcutsComp
 
-        Flickable {
-            id: legend
-            contentWidth: width
-            contentHeight: col.height
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
-            WheelScroll { }
+        Item {
+            id: shroot
+            readonly property int railW: 200
 
-            CardColumns {
+            // ── category rail: All + every category, with counts ──
+            Flickable {
+                id: railFlick
+                anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+                width: shroot.railW
+                contentWidth: width
+                contentHeight: railCol.height
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
-            id: col
-                width: legend.width - Tokens.s3   // reserve a lane for the scroll rail
-                spacing: Tokens.s5
+                Column {
+                    id: railCol
+                    width: railFlick.width
+                    spacing: 2
 
-                Repeater {
-                    model: pg.systemCategories
+                    Repeater {
+                        model: pg.railModel
+                        delegate: Rectangle {
+                            id: railItem
+                            required property var modelData
+                            required property int index
+                            width: railCol.width
+                            height: 34
+                            radius: Tokens.radius
+                            readonly property bool active: !pg.searching && pg.selectedCat === railItem.modelData.name
+                            readonly property bool dimmed: pg.searching && railItem.modelData.count === 0
+                            color: railItem.active ? Tokens.tint10 : (railHov.hovered ? Tokens.tint5 : "transparent")
+                            Behavior on color { ColorAnimation { duration: Tokens.snap } }
 
-                    delegate: Column {
-                        id: grp
-                        required property var modelData
-                        width: col.colWidth
-                        spacing: 0
-
-                        // section head: dot + category caps + hairline leader.
-                        Item {
-                            width: parent.width
-                            height: 30
-                            Row {
-                                id: grpLabel
+                            Rectangle {
                                 anchors.left: parent.left
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: Tokens.s2
-                                Rectangle {
-                                    width: 4; height: 4; color: Tokens.ink
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
-                                Text {
-                                    text: grp.modelData.name; color: Tokens.ink
-                                    font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
-                                    font.weight: Font.Medium; font.letterSpacing: Tokens.trackMark
-                                    font.capitalization: Font.AllUppercase
-                                    anchors.verticalCenter: parent.verticalCenter
-                                }
+                                width: 2; height: parent.height - Tokens.s4
+                                radius: 1; color: Tokens.ink
+                                visible: railItem.active
                             }
-                            Rectangle {
-                                anchors.left: grpLabel.right; anchors.leftMargin: Tokens.s3
-                                anchors.right: parent.right
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: Tokens.s4
+                                anchors.right: railCount.left
+                                anchors.rightMargin: Tokens.s2
                                 anchors.verticalCenter: parent.verticalCenter
-                                height: 1; color: Tokens.lineSoft
+                                text: railItem.modelData.label
+                                color: railItem.active ? Tokens.ink : (railItem.dimmed ? Tokens.inkFaint : Tokens.inkDim)
+                                font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                                elide: Text.ElideRight
                             }
-                        }
-
-                        Repeater {
-                            model: grp.modelData.binds
-
-                            delegate: Column {
-                                id: bindWrap
-                                required property var modelData
-                                required property int index
-                                readonly property string combo: bindWrap.modelData.combo || ""
-                                readonly property bool rebound: pg.isRebound(bindWrap.combo)
-                                readonly property bool clash: bindWrap.rebound && pg.comboConflict(bindWrap.combo)
-                                readonly property var effKeys: bindWrap.rebound ? pg.comboToCaps(pg.effectiveCombo(bindWrap.combo)) : (bindWrap.modelData.keys || [])
-                                width: grp.width
-
-                                // row separators inside the group.
-                                Rectangle {
-                                    visible: bindWrap.index > 0
-                                    width: parent.width; height: 1; color: Tokens.lineSoft
-                                }
-
-                                // one legend line: description left, keycaps + rebind right.
-                                Item {
-                                    width: parent.width
-                                    height: 44
-
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.right: rightCluster.left; anchors.rightMargin: Tokens.s4
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: bindWrap.modelData.desc || ""
-                                        color: Tokens.inkDim
-                                        font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Row {
-                                        id: rightCluster
-                                        anchors.right: parent.right
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        spacing: Tokens.s2
-
-                                        Row {
-                                            id: caps
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            spacing: Tokens.s1
-
-                                            Repeater {
-                                                model: bindWrap.effKeys
-
-                                                delegate: Row {
-                                                    id: capWrap
-                                                    required property var modelData
-                                                    required property int index
-                                                    spacing: Tokens.s1
-
-                                                    Text {
-                                                        visible: capWrap.index > 0
-                                                        height: 22
-                                                        verticalAlignment: Text.AlignVCenter
-                                                        text: "+"
-                                                        color: Tokens.inkFaint
-                                                        font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
-                                                    }
-                                                    // keycap: hairline rect, mono. ink border when the combo clashes.
-                                                    Rectangle {
-                                                        anchors.verticalCenter: parent.verticalCenter
-                                                        implicitHeight: 22
-                                                        implicitWidth: Math.max(22, capLabel.implicitWidth + 14)
-                                                        radius: Tokens.radius
-                                                        color: "transparent"
-                                                        border.width: Tokens.border
-                                                        border.color: bindWrap.clash ? Tokens.ink : (bindWrap.rebound ? Tokens.lineStrong : Tokens.line)
-                                                        Text {
-                                                            id: capLabel
-                                                            anchors.centerIn: parent
-                                                            text: capWrap.modelData
-                                                            color: bindWrap.rebound ? Tokens.inkDim : Tokens.inkFaint
-                                                            font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        // reset a rebound shortcut to its shipped default.
-                                        IconBtn {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            visible: bindWrap.rebound
-                                            glyph: "\u21ba"
-                                            onAct: pg.clearRebind(bindWrap.combo)
-                                        }
-                                        // record a new chord for this shortcut.
-                                        IconBtn {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            visible: bindWrap.modelData.rebindable === true && pg.hubReady
-                                            glyph: "\u25cf"
-                                            onAct: pg.startRecordShipped(bindWrap.combo)
-                                        }
-                                    }
-                                }
-
-                                // conflict note: names what the rebound chord clashes with. Ink only.
-                                Text {
-                                    visible: bindWrap.clash
-                                    width: parent.width
-                                    leftPadding: Tokens.s2
-                                    bottomPadding: Tokens.s2
-                                    text: I18n.tr("Clashes with %1").arg(pg.conflictNameFor(bindWrap.combo))
-                                    color: Tokens.ink; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
-                                    elide: Text.ElideRight
+                            Text {
+                                id: railCount
+                                anchors.right: parent.right
+                                anchors.rightMargin: Tokens.s3
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "" + railItem.modelData.count
+                                color: Tokens.inkFaint
+                                font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                            HoverHandler { id: railHov; cursorShape: Qt.PointingHandCursor }
+                            TapHandler {
+                                onTapped: {
+                                    pg.clearSearch();
+                                    pg.selectedCat = railItem.modelData.name;
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                // footer explainer: where the legend comes from, and the caveat.
-                Text {
-                    width: col.colWidth
-                    wrapMode: Text.WordWrap
-                    text: pg.wmCfgPath
-                        ? I18n.tr("Read live from Ryoku's binds plus your Hub custom shortcuts. Binds added by hand in %1 do not appear here and are not conflict-checked, so add custom shortcuts in the Custom tab.").arg(pg.wmCfgPath)
-                        : I18n.tr("Read live from Ryoku's binds plus your Hub custom shortcuts. Binds added by hand in the compositor's own config do not appear here and are not conflict-checked, so add custom shortcuts in the Custom tab.")
-                    color: Tokens.inkFaint; font.family: Tokens.ui
-                    font.pixelSize: Tokens.fSmall; lineHeight: 1.3
+            // divider between the rail and the content column
+            Rectangle {
+                id: railDiv
+                anchors.left: railFlick.right
+                anchors.leftMargin: Tokens.s4
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 1; color: Tokens.lineSoft
+            }
+
+            // ── content: category cards, laid into balanced columns (All and
+            // search) or one full-width card (a picked category), read in the
+            // Hub's card vocabulary rather than a bare list. ──
+            Flickable {
+                id: contentFlick
+                anchors {
+                    left: railDiv.right; leftMargin: Tokens.s5
+                    right: parent.right
+                    top: parent.top; bottom: parent.bottom; bottomMargin: Tokens.s3
                 }
+                contentWidth: width
+                contentHeight: Math.max(grid.height, height)
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
+
+                CardColumns {
+                    id: grid
+                    width: contentFlick.width - Tokens.s3
+                    // two balanced columns when the measure holds them, one otherwise
+                    maxColumns: 2
+                    fillTo: contentFlick.height
+
+                    Repeater {
+                        model: pg.shownCats
+
+                        delegate: Item {
+                            id: catBlock
+                            required property var modelData
+                            required property int index
+                            // a picked category takes the whole measure; All and
+                            // search spread through the balanced columns.
+                            property bool fullWidth: pg.selectedCat !== "" && !pg.searching
+                            readonly property var binds: catBlock.modelData.binds || []
+                            width: catBlock.fullWidth ? grid.width : grid.colWidth
+                            height: card.height
+
+                            SettingCard {
+                                id: card
+                                width: parent.width
+                                collapsible: false
+                                title: ("" + catBlock.modelData.name).toUpperCase()
+
+                                Repeater {
+                                    model: catBlock.binds
+
+                                    delegate: Item {
+                                        id: rowItem
+                                        required property var modelData
+                                        required property int index
+                                        readonly property string combo: rowItem.modelData.combo || ""
+                                        readonly property bool reboundRow: pg.isRebound(rowItem.combo)
+                                        readonly property bool rebindableRow: rowItem.modelData.rebindable === true
+                                        readonly property string unhon: rowItem.modelData.unhonored || ""
+                                        readonly property bool customRow: (rowItem.modelData.kind || "") === "custom"
+                                        readonly property bool clashRow: rowItem.reboundRow && pg.comboConflict(rowItem.combo)
+                                        readonly property var effKeys: rowItem.reboundRow ? pg.comboToCaps(pg.effectiveCombo(rowItem.combo)) : (rowItem.modelData.keys || [])
+                                        // a rebindable, honoured row records a new chord; a custom
+                                        // row records into its Custom-tab row instead.
+                                        readonly property bool editable: rowItem.unhon.length === 0 && pg.hubReady && (rowItem.rebindableRow || rowItem.customRow)
+                                        // a fixed dedicated key (mouse, media, hardware): not
+                                        // rebindable, still honoured, so it shows a lock not an edit.
+                                        readonly property bool dedicated: !rowItem.rebindableRow && !rowItem.customRow && rowItem.unhon.length === 0
+                                        // 45% ink on an unhonoured row's own text; the caps mute too.
+                                        readonly property color rowInk: rowItem.unhon.length ? Qt.rgba(Tokens.ink.r, Tokens.ink.g, Tokens.ink.b, 0.45) : Tokens.ink
+
+                                        width: card.width
+                                        height: 44
+
+                                        function beginEdit() {
+                                            if (!rowItem.editable)
+                                                return;
+                                            if (rowItem.customRow) {
+                                                // land on the Custom tab and record that same row
+                                                pg.tab = "custom";
+                                                var i = pg.customIndexFor(rowItem.combo);
+                                                if (i >= 0)
+                                                    Qt.callLater(function () { pg.startRecord(i); });
+                                            } else {
+                                                pg.startRecordShipped(rowItem.combo);
+                                            }
+                                        }
+
+                                        // hairline between rows, inset like SettingRow.
+                                        Rectangle {
+                                            visible: rowItem.index > 0
+                                            anchors { left: parent.left; right: parent.right; top: parent.top }
+                                            anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4
+                                            height: 1; color: Tokens.lineSoft
+                                        }
+                                        // hover wash, quiet like SettingRow's.
+                                        Rectangle {
+                                            anchors.fill: parent; anchors.margins: 1
+                                            radius: Tokens.radius
+                                            color: rowHov.hovered ? Tokens.tint5 : "transparent"
+                                            Behavior on color { ColorAnimation { duration: Tokens.snap } }
+                                        }
+                                        HoverHandler { id: rowHov }
+
+                                        // label over its hint, both one line, centred in the row.
+                                        Column {
+                                            anchors {
+                                                left: parent.left; leftMargin: Tokens.s4
+                                                right: cluster.left; rightMargin: Tokens.s3
+                                                verticalCenter: parent.verticalCenter
+                                            }
+                                            spacing: 1
+                                            Text {
+                                                width: parent.width
+                                                text: rowItem.modelData.desc || ""
+                                                color: rowItem.rowInk
+                                                font.family: Tokens.ui; font.pixelSize: Tokens.fRow
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                visible: ("" + (rowItem.modelData.hint || "")).length > 0
+                                                width: parent.width
+                                                text: rowItem.modelData.hint || ""
+                                                color: Tokens.inkMuted
+                                                font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        Row {
+                                            id: cluster
+                                            anchors.right: parent.right; anchors.rightMargin: Tokens.s4
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: Tokens.s2
+
+                                            // caps; click to record on an editable row.
+                                            Item {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                implicitWidth: capsRow.implicitWidth
+                                                implicitHeight: 22
+                                                KeyCaps {
+                                                    id: capsRow
+                                                    anchors.centerIn: parent
+                                                    tokens: rowItem.effKeys
+                                                    muted: rowItem.unhon.length > 0
+                                                    rebound: rowItem.reboundRow
+                                                    clash: rowItem.clashRow
+                                                    hot: capHov.hovered && rowItem.editable
+                                                }
+                                                HoverHandler {
+                                                    id: capHov
+                                                    enabled: rowItem.editable
+                                                    cursorShape: Qt.PointingHandCursor
+                                                }
+                                                TapHandler {
+                                                    enabled: rowItem.editable
+                                                    onTapped: rowItem.beginEdit()
+                                                }
+                                            }
+
+                                            // "not on <provider>" (unhonoured, reason on hover) or "custom".
+                                            Rectangle {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: rowItem.unhon.length > 0 || rowItem.customRow
+                                                implicitHeight: 18
+                                                implicitWidth: tagText.implicitWidth + Tokens.s3
+                                                radius: Tokens.radius
+                                                color: "transparent"
+                                                border.width: Tokens.border
+                                                border.color: Tokens.line
+                                                Text {
+                                                    id: tagText
+                                                    anchors.centerIn: parent
+                                                    text: rowItem.unhon.length ? I18n.tr("not on %1").arg(pg.providerName) : I18n.tr("custom")
+                                                    color: Tokens.inkFaint
+                                                    font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
+                                                    font.letterSpacing: Tokens.trackMark
+                                                }
+                                                HoverHandler { id: tagHov; enabled: rowItem.unhon.length > 0 }
+                                                ToolTip.visible: tagHov.hovered && rowItem.unhon.length > 0
+                                                ToolTip.text: rowItem.unhon
+                                            }
+
+                                            // reset a rebound row to its shipped chord; always shown.
+                                            IconBtn {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: rowItem.reboundRow
+                                                glyph: "\u21ba"
+                                                onAct: pg.clearRebind(rowItem.combo)
+                                                HoverHandler { id: resetHov }
+                                                ToolTip.visible: resetHov.hovered
+                                                ToolTip.text: I18n.tr("Back to %1").arg(pg.comboLabel(rowItem.combo))
+                                            }
+                                            // change the shortcut; always shown on an editable row.
+                                            IconBtn {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: rowItem.editable
+                                                glyph: "\u270e"
+                                                onAct: rowItem.beginEdit()
+                                                HoverHandler { id: editHov }
+                                                ToolTip.visible: editHov.hovered
+                                                ToolTip.text: I18n.tr("Change shortcut")
+                                            }
+                                            // a dedicated key cannot be rebound; a lock says so.
+                                            Item {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: rowItem.dedicated
+                                                implicitWidth: 26; implicitHeight: 26
+                                                LockMark { anchors.centerIn: parent; tint: Tokens.inkFaint }
+                                                HoverHandler { id: lockHov }
+                                                ToolTip.visible: lockHov.hovered
+                                                ToolTip.text: I18n.tr("Bound to a dedicated key")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // the category's row count, muted, where the caret would sit.
+                            Text {
+                                anchors.right: parent.right; anchors.rightMargin: Tokens.s4
+                                anchors.top: parent.top
+                                anchors.topMargin: (card.headerH - implicitHeight) / 2
+                                text: "" + catBlock.binds.length
+                                color: Tokens.inkFaint
+                                font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                        }
+                    }
+                }
+            }
+
+            // empty state: only once the legend has loaded (or a search misses).
+            Text {
+                anchors.centerIn: contentFlick
+                visible: pg.shownCats.length === 0 && (pg.searching || pg.categories.length > 0)
+                text: pg.searching ? I18n.tr("No shortcuts match \u201c%1\u201d").arg(pg.query.trim()) : I18n.tr("No shortcuts here.")
+                color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             }
         }
     }
@@ -1218,7 +1642,7 @@ Item {
                                 }
                                 height: rowRect.lineH
 
-                                // key combo: a Hyprland combo string, so mono.
+                                // key combo: a raw combo string, so mono.
                                 Field {
                                     id: keysF
                                     anchors.left: parent.left
@@ -1263,9 +1687,9 @@ Item {
                                     }
                                 }
                                 // record: capture the combo by pressing it. Safe
-                                // because startRecord enters the record submap
-                                // first, so the live chord reaches the field, not
-                                // the compositor.
+                                // because the page ShortcutInhibitor holds the
+                                // compositor's shortcuts while recording, so the
+                                // live chord reaches the field, not the compositor.
                                 IconBtn {
                                     id: recBtn
                                     anchors.left: keysF.right
@@ -1404,7 +1828,7 @@ Item {
         }
     }
 
-    // ── action bar: status + reset / revert / save, shared by both tabs ──
+    // ── action bar: status + reset / revert / save, shared by all tabs ──
     // full-bleed page, so the shell's global bar is hidden; this persists the
     // shared store. Page-level so a rebind recorded on the Shortcuts tab saves
     // from the same bar as a custom bind on the Custom tab.
@@ -1460,9 +1884,9 @@ Item {
             // tab-aware reset: clears rebinds on Shortcuts, custom binds on Custom.
             Btn {
                 anchors.verticalCenter: parent.verticalCenter
-                text: pg.tab === "apps" ? I18n.tr("RESET APPS") : (pg.tab === "system" ? I18n.tr("RESET REBINDS") : I18n.tr("RESTORE DEFAULTS"))
-                armed: pg.tab === "apps" ? pg.hasApps() : (pg.tab === "system" ? pg.hasRebinds() : pg.customRows.length > 0)
-                onAct: pg.tab === "apps" ? pg.clearApps() : (pg.tab === "system" ? pg.clearRebinds() : pg.clearAll())
+                text: pg.tab === "apps" ? I18n.tr("RESET APPS") : (pg.tab === "shortcuts" ? I18n.tr("RESET REBINDS") : I18n.tr("RESTORE DEFAULTS"))
+                armed: pg.tab === "apps" ? pg.hasApps() : (pg.tab === "shortcuts" ? pg.hasRebinds() : pg.customRows.length > 0)
+                onAct: pg.tab === "apps" ? pg.clearApps() : (pg.tab === "shortcuts" ? pg.clearRebinds() : pg.clearAll())
             }
             Btn {
                 anchors.verticalCenter: parent.verticalCenter
@@ -1508,8 +1932,8 @@ Item {
     }
 
     // ── chord recorder overlay (page-level: serves both tabs) ──
-    // the capture Item holds focus so the combo the record submap lets through
-    // arrives as a plain KeyEvent; chordFrom turns it into Hyprland's string.
+    // the capture Item holds focus so the chord the compositor releases arrives
+    // as a plain KeyEvent; chordFrom turns it into the store's token.
     MouseArea {
         id: recScrim
         anchors.fill: parent
@@ -1530,15 +1954,29 @@ Item {
                     pg.stopRecord(false, "");
                     return;
                 }
+                // show the modifiers as they are held, then commit on the key.
+                pg.recordForming = Combos.formingChord(event);
                 var chord = pg.chordFrom(event);
-                if (chord !== "")
-                    pg.stopRecord(true, chord);
+                if (chord === "")
+                    return;
+                if (pg.recordFamily) {
+                    // a family accepts only a number key; anything else nudges
+                    // and keeps the overlay open until a digit lands.
+                    var fam = Combos.familyFrom(chord);
+                    if (fam === "") {
+                        pg.recordNeedNumber = true;
+                        return;
+                    }
+                    pg.stopRecord(true, fam);
+                    return;
+                }
+                pg.stopRecord(true, chord);
             }
         }
 
         Rectangle {
             anchors.centerIn: parent
-            width: 340; height: 156
+            width: 360; height: pg.recordFamily ? 208 : 176
             radius: Tokens.radius
             color: Tokens.paper
             border.width: Tokens.border
@@ -1555,12 +1993,46 @@ Item {
                     color: Tokens.ink; font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
                     font.weight: Font.Medium; font.letterSpacing: Tokens.trackMark
                 }
+
+                // the chord as it forms: the held modifiers, then a pending cap.
+                Row {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: Tokens.s1
+                    KeyCaps { tokens: pg.comboToCaps(pg.recordForming) }
+                    Text {
+                        visible: pg.recordForming.length > 0
+                        height: 22; verticalAlignment: Text.AlignVCenter
+                        text: "+"; color: Tokens.inkFaint
+                        font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
+                    }
+                    Rectangle {
+                        implicitHeight: 22; implicitWidth: 28
+                        radius: Tokens.radius; color: "transparent"
+                        border.width: Tokens.border; border.color: Tokens.line
+                        Text {
+                            anchors.centerIn: parent
+                            text: "\u2026"; color: Tokens.inkFaint
+                            font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                        }
+                    }
+                }
+
                 Text {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.WordWrap
-                    text: I18n.tr("Hold your modifiers and tap the key. Esc cancels.")
+                    text: pg.recordFamily
+                        ? I18n.tr("Hold the new modifiers and press any number key. Esc cancels.")
+                        : I18n.tr("Hold your modifiers and tap the key. Esc cancels.")
                     color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                }
+                // a family record takes only a number key; nudge on anything else.
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: pg.recordFamily && pg.recordNeedNumber
+                    text: I18n.tr("Press a number key")
+                    color: Tokens.ink; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                    font.weight: Font.Medium
                 }
                 Btn {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -1572,5 +2044,18 @@ Item {
 
             MouseArea { anchors.fill: parent; z: -1 }
         }
+    }
+
+    // ── shortcut inhibitor: compositor-neutral chord capture ──
+    // While recording, this hands the compositor's own shortcuts to the focused
+    // Hub window instead of running them, so SUPER + Q lands in the recorder as
+    // Qt.Key_Q with MetaModifier rather than closing the window (verified on niri
+    // 26.04 + quickshell 0.3.1). It is the whole capture story on niri; on
+    // Hyprland the record submap backs it up. ProxyWindowBase.forObject wants the
+    // QsWindow (the Hub's FloatingWindow), not QtQuick's QQuickWindow, so this
+    // reads the QsWindow attached object rather than Window.window.
+    ShortcutInhibitor {
+        window: pg.QsWindow ? pg.QsWindow.window : null
+        enabled: pg.recording
     }
 }

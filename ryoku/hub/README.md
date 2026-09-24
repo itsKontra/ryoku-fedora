@@ -32,6 +32,11 @@ changing a page's look.
     animation, or video into managed user data and prints its descriptor;
     `ryoku-hub reload-cover prune [<managed-path>]` removes every managed
     reload-cover asset, or all but the validated managed path when given.
+  - `ryoku-hub clipboard stats|prune` reports what the clipboard history
+    occupies (items, text bytes, image bytes) as read from the shell daemon, and
+    prunes it: `prune` drops every unstarred entry with its files and prints the
+    refreshed report. The daemon owns the entries, so the Hub never measures or
+    deletes around it.
   - `ryoku-hub lock list|set|apply-greeter <slug>` manages installed qylock
     themes: `list` is the local inventory, `set` writes the in-session
     preference and applies the SDDM greeter, and `apply-greeter` is the
@@ -56,8 +61,9 @@ changing a page's look.
 ## Sections
 
 - **Displays** detect every connected monitor and arrange them on a drag canvas
-  (edges snap), with per-monitor resolution, refresh, scale, rotation, adaptive
-  sync, mirroring, and enable/disable. Apply to the live session, or save a named
+  (edges snap), with per-monitor resolution, refresh, scale, Ryoku interface
+  scale, bar and desktop-widget visibility, rotation, adaptive sync, mirroring,
+  and enable/disable. Apply to the live session, or save a named
   profile keyed to the connected displays' hardware identity so it returns
   automatically when you plug them in again. Backed by `ryoku-monitor`.
 - **Appearance** window gaps, rounding and corner softness, border thickness,

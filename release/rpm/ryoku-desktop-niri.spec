@@ -14,6 +14,7 @@ Requires:       ryoku-desktop = %{version}-%{release}
 Requires:       niri
 Requires:       xwayland-satellite
 Requires:       xdg-desktop-portal-gnome
+Requires:       gammastep
 Provides:       ryoku-desktop-compositor
 
 %description

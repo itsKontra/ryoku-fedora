@@ -40,26 +40,33 @@ var capsManifest = []wm.Capability{
 	wm.CapWindowFloat,
 	wm.CapTiledLayout,
 	wm.CapSessionExit,
+	wm.CapNightLight,
+	wm.CapTouchpadToggle,
+	wm.CapPaletteBorder,
 }
 
-// The packages ryoku-desktop-hyprland is made of: the variant package itself,
-// Hyprland, its plugins, its portal and its satellites. Kept in step with that
-// package's RPM Requires entries; this is
-// the list a switch away from Hyprland reclaims, minus ryoku-desktop, which is
-// shared with the compositor that replaces it. The variant package belongs in
-// the list: on a packaged box it owns every satellite below, so a reclaim that
-// left it out could free none of them.
+// windowRuleActions are the neutral window-rule action ids genWindowRule and
+// genLayerRule accept, in the order the Hub offers them. It is the source the
+// window-rules editor reads, so a control is never shown for a property this
+// provider's config writer would drop.
+var windowRuleActions = []string{
+	"float", "tile", "pin", "fullscreen", "maximize", "center", "immediate",
+	"pseudo", "norounding", "noborder", "opacity", "size", "move", "workspace",
+	"idleinhibit", "suppressevent", "blur", "noanim", "blurpopups", "xray",
+	"abovelock", "noshadow", "ignorealpha", "dimaround",
+}
+
+// The packages ryoku-desktop-hyprland is made of. Kept in step with that
+// package's RPM Requires; this is the list a switch away from Hyprland reclaims,
+// minus ryoku-desktop, which is shared with the compositor that replaces it.
+// hyprsunset is a ryoku-desktop dependency, not this variant's, so it stays.
+// The variant package belongs in the list: on a packaged box it owns every
+// satellite below, so a reclaim that left it out could free none of them.
 var compositorPackages = []string{
 	"ryoku-desktop-hyprland",
 	"hyprland",
-	"hypr-dynamic-cursors",
-	"ryoku-hypr-plugins",
-	"hyprglass",
-	"imgborders",
-	"ryoku-keysounds",
 	"hyprpolkitagent",
 	"xdg-desktop-portal-hyprland",
-	"hyprland-preview-share-picker",
 	"hypridle",
 	"hyprpicker",
 }
@@ -79,7 +86,9 @@ func runCaps() error {
 		ConfigFiles:    wm.ConfigFiles(wm.ProviderHyprland),
 		GeneratedFiles: wm.GeneratedConfig(wm.ProviderHyprland),
 		PortalBackend:  "hyprland",
-		Packages:       compositorPackages,
+		NightLightProcess: "hyprsunset",
+		Packages:          compositorPackages,
+		WindowRuleActions: windowRuleActions,
 	}
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")

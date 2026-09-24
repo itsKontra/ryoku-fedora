@@ -3,8 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	wm "ryoku-wm"
 )
@@ -101,6 +106,13 @@ func runAct(args []string) error {
 			"focus":     true,
 		}))
 
+	case wm.ActionWindowSummon:
+		title, err := arg(rest, 0, "window title")
+		if err != nil {
+			return err
+		}
+		return summon(title)
+
 	case wm.ActionAppFocus:
 		appID, err := arg(rest, 0, "app id")
 		if err != nil {
@@ -172,6 +184,39 @@ func runAct(args []string) error {
 
 	case wm.ActionOverviewToggle:
 		return perform(action("ToggleOverview", map[string]any{}))
+
+	case wm.ActionNightLightOn:
+		return nightlightStart("gammastep", "-m", "wayland", "-O", strconv.Itoa(nightlightTemp(rest)))
+
+	case wm.ActionNightLightOff:
+		nightlightStop("gammastep")
+		return nil
+
+	case wm.ActionInputTouchpad:
+		return touchpadAct(rest)
+
+	case wm.ActionBorderColors:
+		return setBorderPalette(rest)
+
+	case wm.ActionOutputCycle:
+		return cycleOutputs()
+
+	case wm.ActionOutputEnable:
+		conn, err := arg(rest, 0, "connector")
+		if err != nil {
+			return err
+		}
+		state, err := arg(rest, 1, "on|off")
+		if err != nil {
+			return err
+		}
+		switch state {
+		case "on":
+			return perform(outputRequest(conn, "On"))
+		case "off":
+			return perform(outputRequest(conn, "Off"))
+		}
+		return fmt.Errorf("act %s: state must be on or off, got %q", act, state)
 	}
 
 	// A known action this compositor cannot perform names the capability, so a
@@ -185,6 +230,262 @@ func runAct(args []string) error {
 func perform(req any) error {
 	_, err := request(req)
 	return err
+}
+
+// outputRequest is niri's top-level Output request, not an Action: it turns one
+// named connector on or off. The action is a unit variant, so it serialises as
+// a bare string ("On" | "Off"), the shape act_test pins.
+func outputRequest(name, action string) map[string]any {
+	return map[string]any{"Output": map[string]any{"output": name, "action": action}}
+}
+
+// touchpadAct locks or unlocks the touchpad the FN touchpad key drives. niri has
+// no runtime input IPC, so the lock is recorded in a state file and re-emitted
+// into settings.kdl by writeInput; niri watches its config, so re-running the
+// apply path here takes effect live and survives the next login.
+func touchpadAct(args []string) error {
+	mode := "toggle"
+	if len(args) > 0 && args[0] != "" {
+		mode = args[0]
+	}
+	off := touchpadDisabled()
+	switch mode {
+	case "status":
+		if off {
+			fmt.Fprintln(stdout, "off")
+		} else {
+			fmt.Fprintln(stdout, "on")
+		}
+		return nil
+	case "on", "enable":
+		off = false
+	case "off", "disable":
+		off = true
+	case "toggle":
+		off = !off
+	case "restore":
+		// The intent already lives in the config niri watches, so restore only
+		// re-emits it. Silent, since it runs unattended at login.
+	default:
+		return fmt.Errorf("act input.touchpad: mode must be on|off|toggle|status|restore, got %q", mode)
+	}
+	if off {
+		if err := os.MkdirAll(filepath.Dir(touchpadStatePath()), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(touchpadStatePath(), nil, 0o644); err != nil {
+			return err
+		}
+	} else if err := os.Remove(touchpadStatePath()); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := writeOverlayKdl("settings.kdl", genSettings(loadStore(storePath()))); err != nil {
+		return err
+	}
+	if mode != "restore" {
+		if off {
+			touchpadNotify("Touchpad", "Off")
+		} else {
+			touchpadNotify("Touchpad", "On")
+		}
+	}
+	return nil
+}
+
+// touchpadStatePath records the niri provider's intended touchpad-off. niri has
+// no runtime input IPC, so writeInput emits `off` under touchpad while this file
+// exists, which is what carries the intent across the config reload niri does on
+// its own.
+func touchpadStatePath() string {
+	dir := os.Getenv("XDG_STATE_HOME")
+	if dir == "" {
+		dir = filepath.Join(os.Getenv("HOME"), ".local", "state")
+	}
+	return filepath.Join(dir, "ryoku", "touchpad-off")
+}
+
+// touchpadDisabled reports whether that intent is recorded, so writeInput can
+// emit the off line without knowing where the file lives.
+func touchpadDisabled() bool {
+	_, err := os.Stat(touchpadStatePath())
+	return err == nil
+}
+
+// setBorderPalette records the live palette's border colours and regenerates
+// settings.kdl so niri re-reads it and recolours the frame, the niri twin of
+// Hyprland's eval push. niri has no runtime config IPC, so this writes the
+// palette file writeFrame reads and re-runs the apply path, exactly as the
+// touchpad lock does. A no-op when the store fixes the border, so a wallpaper
+// change never overrides a chosen colour.
+func setBorderPalette(args []string) error {
+	active, err := arg(args, 0, "active colour")
+	if err != nil {
+		return err
+	}
+	inactive, err := arg(args, 1, "inactive colour")
+	if err != nil {
+		return err
+	}
+	na, aok := normBorderHex(active)
+	ni, iok := normBorderHex(inactive)
+	if !aok && !iok {
+		return fmt.Errorf("act %s: no usable colour in %q/%q", wm.ActionBorderColors, active, inactive)
+	}
+	s := loadStore(storePath())
+	if !s.Appearance.BorderFollowsPalette {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(borderPalettePath()), 0o755); err != nil {
+		return err
+	}
+	pal := struct {
+		Active   string `json:"active"`
+		Inactive string `json:"inactive"`
+	}{Active: na, Inactive: ni}
+	body, err := json.Marshal(pal)
+	if err != nil {
+		return err
+	}
+	if err := atomicWrite(borderPalettePath(), body, 0o644); err != nil {
+		return err
+	}
+	return writeOverlayKdl("settings.kdl", genSettings(s))
+}
+
+// normBorderHex normalises a colour to "#rrggbb", accepting the same literal
+// forms the Hyprland act does ("#rrggbb" or "rrggbb"). ok is false for anything
+// that is not six hex digits, so a malformed colour is skipped rather than
+// written into the config.
+func normBorderHex(s string) (string, bool) {
+	h := strings.TrimPrefix(strings.TrimSpace(s), "#")
+	if len(h) != 6 {
+		return "", false
+	}
+	for _, c := range h {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return "", false
+		}
+	}
+	return "#" + strings.ToLower(h), true
+}
+
+// touchpadNotify shows the toast the FN key gives, matching the Hyprland side. A
+// var so the tests stay silent, and a swallowed error so a session with no
+// notify-send is fine.
+var touchpadNotify = func(title, body string) {
+	_ = exec.Command("notify-send", "-a", "Ryoku", title, body).Run()
+}
+
+// isInternalOutput tells the built-in panel from an external screen the same way
+// the display tooling does, so the arrangement cycle knows which is which.
+func isInternalOutput(name string) bool {
+	u := strings.ToUpper(name)
+	return strings.HasPrefix(u, "EDP") || strings.HasPrefix(u, "LVDS") || strings.HasPrefix(u, "DSI")
+}
+
+// cycleOutputs steps the arrangement one position: both on, internal only,
+// external only, then back. niri has no arrangement state to read, so the
+// position is kept in a state file and each step applies the on/off set over
+// IPC. The target set is turned on before the other is turned off, so no step
+// flashes every screen dark. With only one class of output present there is
+// nothing to arrange, so every output is left on and the position reset rather
+// than blanking the only screen.
+func cycleOutputs() error {
+	raw, err := request("Outputs")
+	if err != nil {
+		return err
+	}
+	var byName map[string]niriOutput
+	if err := decode(raw, "Outputs", &byName); err != nil {
+		return err
+	}
+	var internal, external []string
+	for name := range byName {
+		if isInternalOutput(name) {
+			internal = append(internal, name)
+		} else {
+			external = append(external, name)
+		}
+	}
+	sort.Strings(internal)
+	sort.Strings(external)
+
+	setState := func(names []string, on bool) error {
+		verb := "Off"
+		if on {
+			verb = "On"
+		}
+		for _, name := range names {
+			if err := perform(outputRequest(name, verb)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if len(internal) == 0 || len(external) == 0 {
+		for name := range byName {
+			if err := perform(outputRequest(name, "On")); err != nil {
+				return err
+			}
+		}
+		return writeCyclePosition(0)
+	}
+
+	pos := (readCyclePosition() + 1) % 3
+	switch pos {
+	case 1: // internal only
+		if err := setState(internal, true); err != nil {
+			return err
+		}
+		if err := setState(external, false); err != nil {
+			return err
+		}
+	case 2: // external only
+		if err := setState(external, true); err != nil {
+			return err
+		}
+		if err := setState(internal, false); err != nil {
+			return err
+		}
+	default: // both
+		if err := setState(internal, true); err != nil {
+			return err
+		}
+		if err := setState(external, true); err != nil {
+			return err
+		}
+	}
+	return writeCyclePosition(pos)
+}
+
+// outputCyclePath holds the persistent position of the arrangement cycle, since
+// niri has no arrangement state of its own to read back.
+func outputCyclePath() string {
+	dir := os.Getenv("XDG_STATE_HOME")
+	if dir == "" {
+		dir = filepath.Join(os.Getenv("HOME"), ".local", "state")
+	}
+	return filepath.Join(dir, "ryoku", "niri-output-cycle")
+}
+
+func readCyclePosition() int {
+	b, err := os.ReadFile(outputCyclePath())
+	if err != nil {
+		return 0
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || n < 0 || n > 2 {
+		return 0
+	}
+	return n
+}
+
+func writeCyclePosition(pos int) error {
+	if err := os.MkdirAll(filepath.Dir(outputCyclePath()), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(outputCyclePath(), []byte(strconv.Itoa(pos)), 0o644)
 }
 
 // cycleWorkspace walks niri's vertical workspace order one step at a time.
@@ -227,6 +528,68 @@ func newestWindowOf(appID string) (uint64, error) {
 	return best.ID, nil
 }
 
+// summon raises an already-open window to the current workspace and focuses it,
+// matched by exact title. niri focuses by id, so the title is resolved to a
+// window here and the newest match wins, mirroring newestWindowOf. Ported from
+// ryoku-summon: a single-instance app strands its window on the workspace it
+// first opened on, and every Quickshell window shares one app id, so the title
+// is the only handle. No match is an error, which lets the keybind fall through
+// to launching the app. MoveWindowToWorkspace pulls the window onto the focused
+// workspace and focuses it in one request, the shape window.moveToWorkspace pins.
+func summon(title string) error {
+	id, err := newestWindowByTitle(title)
+	if err != nil {
+		return err
+	}
+	ws, err := focusedWorkspaceID()
+	if err != nil {
+		return err
+	}
+	return perform(action("MoveWindowToWorkspace", map[string]any{
+		"window_id": id,
+		"reference": map[string]any{"Id": ws},
+		"focus":     true,
+	}))
+}
+
+// newestWindowByTitle resolves an exact window title to a window id, newest
+// focused match first: the title twin of newestWindowOf.
+func newestWindowByTitle(title string) (uint64, error) {
+	wins, err := readWindows()
+	if err != nil {
+		return 0, err
+	}
+	best := niriWindow{}
+	found := false
+	for _, w := range wins {
+		if w.Title != title {
+			continue
+		}
+		if !found || w.FocusTimestamp.after(best.FocusTimestamp) {
+			best, found = w, true
+		}
+	}
+	if !found {
+		return 0, fmt.Errorf("act %s: no window titled %q", wm.ActionWindowSummon, title)
+	}
+	return best.ID, nil
+}
+
+// focusedWorkspaceID reads the id of the workspace niri currently has focused,
+// so summon can pull a window onto it by stable id rather than index.
+func focusedWorkspaceID() (uint64, error) {
+	wss, err := readWorkspaces()
+	if err != nil {
+		return 0, err
+	}
+	for _, ws := range wss {
+		if ws.IsFocused {
+			return ws.ID, nil
+		}
+	}
+	return 0, fmt.Errorf("act %s: no focused workspace", wm.ActionWindowSummon)
+}
+
 // arg names the missing value, so a bad keybind reports it instead of an index.
 func arg(args []string, i int, name string) (string, error) {
 	if i >= len(args) || strings.TrimSpace(args[i]) == "" {
@@ -254,4 +617,67 @@ func decode(raw json.RawMessage, key string, dst any) error {
 		return fmt.Errorf("niri %s: missing from reply", key)
 	}
 	return json.Unmarshal(body, dst)
+}
+
+// nightlightTemp parses the colour temperature, defaulting to 4000 K and
+// clamping to the range the gamma client accepts, so a stray keybind argument
+// can never ask for a value it would reject.
+func nightlightTemp(args []string) int {
+	t := 4000
+	if len(args) > 0 {
+		if v, err := strconv.Atoi(strings.TrimSpace(args[0])); err == nil {
+			t = v
+		}
+	}
+	if t < 1000 {
+		t = 1000
+	}
+	if t > 25000 {
+		t = 25000
+	}
+	return t
+}
+
+// nightlightStart replaces any running backend with a fresh one warmed to the
+// temperature. gammastep -m wayland -O sets the temperature over
+// wlr-gamma-control and pauses until killed, so it is detached (its own session,
+// stdio to /dev/null, released) to outlive this short-lived invocation; niri
+// restores the gamma when it goes away.
+func nightlightStart(argv ...string) error {
+	nightlightStop(argv[0])
+	null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer null.Close()
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = null, null, null
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
+// nightlightStop signals every process of this uid whose comm is name, which is
+// how nightlight.off stops the backend without a pkill fork. comm truncates at
+// 15 characters; the backend name fits, so an exact compare is right.
+func nightlightStop(name string) {
+	ents, err := os.ReadDir("/proc")
+	if err != nil {
+		return
+	}
+	for _, e := range ents {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		b, err := os.ReadFile("/proc/" + e.Name() + "/comm")
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(string(b)) == name {
+			_ = syscall.Kill(pid, syscall.SIGTERM)
+		}
+	}
 }

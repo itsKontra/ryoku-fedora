@@ -120,6 +120,7 @@ type daemon struct {
 	lastFail     map[string]string // component -> last line it died with
 	voiceMu      sync.Mutex        // serializes voice (Super+`) toggles
 	voiceOn      bool              // dictation active; guarded by voiceMu
+	voiceStop    chan struct{}     // reaps the live voxtype state stream; nil when none
 	prompter     *prompter         // GNOME keyring system prompter (nil when unavailable)
 	wmc          *wm.Client        // sole path to the compositor
 	wmMu         sync.Mutex        // guards the compositor state the wm watcher keeps warm
@@ -630,6 +631,21 @@ func tailLine(path string) string {
 	return ""
 }
 
+// tailLines returns the last n lines of the file joined by newlines, or "" if it
+// cannot be read. Used to attach a dying surface's output to a crash log without
+// copying the whole file.
+func tailLines(path string, n int) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // supervise runs `qs -c <name>` and restarts it whenever it exits, backing off if
 // it dies immediately so a broken config does not spin the CPU.
 func (d *daemon) supervise(name string) {
@@ -692,6 +708,20 @@ func (d *daemon) supervise(name string) {
 		}
 		if logFile != nil {
 			logFile.Close()
+		}
+		if name == "shell" {
+			// On the shell going down, attach the reason so the next crash
+			// report from a user carries it: the exit status, the signal that
+			// killed it, and the tail of what the surface printed before it went.
+			signal := "none"
+			if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+				signal = ws.Signal().String()
+			}
+			fmt.Fprintf(os.Stderr, "shell exited: %s (signal: %s)\n",
+				cmd.ProcessState.String(), signal)
+			if tail := tailLines(logPath, 20); tail != "" {
+				fmt.Fprintf(os.Stderr, "shell stderr tail:\n%s\n", tail)
+			}
 		}
 
 		d.mu.Lock()
@@ -872,7 +902,7 @@ var surfaceCommands = map[string]string{
 	"visualizer-place":   "visualizer-place",
 	"quicksettings":      "quick-settings",
 	"wallpaper-menu":     "wallpaper",
-	"clipboard":          "quick-settings#clipboard",
+	"clipboard":          "clipboard",
 	"stash":              "stash",
 	"screenshot":         "quick-settings#capture",
 	"compress":           "stash#compress",
@@ -1205,6 +1235,11 @@ func (d *daemon) dispatch(line string) string {
 // just flashes an "off" note on the pill. Tap-to-toggle rides only the key-press
 // edge: Hyprland won't deliver a release once the modifier lifts first, which
 // would otherwise leave a hold-to-talk recording stuck on.
+//
+// Dictation can also end without a tap (Voxtype stops on silence or finishes
+// transcribing), so the ON edge starts a state watcher that closes the surface
+// when Voxtype reports idle (#244). The watcher is spawned before `record
+// start` so it cannot miss the transition into recording.
 func (d *daemon) voice() string {
 	d.voiceMu.Lock()
 	defer d.voiceMu.Unlock()
@@ -1216,8 +1251,15 @@ func (d *daemon) voice() string {
 	d.voiceOn = !d.voiceOn
 	if d.voiceOn {
 		d.ensure("shell")
+		stop := make(chan struct{})
+		d.voiceStop = stop
+		go d.watchVoice(stop)
 		voxtypeRecord("start")
 		return shellIpc("openSurface", d.activeMonitor(), "voice")
+	}
+	if d.voiceStop != nil {
+		close(d.voiceStop)
+		d.voiceStop = nil
 	}
 	voxtypeRecord("stop")
 	return shellIpc("closeSurface", d.activeMonitor(), "voice")

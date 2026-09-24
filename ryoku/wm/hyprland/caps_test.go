@@ -6,11 +6,10 @@ import (
 	"testing"
 )
 
-// The caps list is documented as "kept in step with that package's depends".
-// A satellite added to the PKGBUILD but not to this list could never be
-// reclaimed on a packaged box; the variant package itself, missing from the
-// list, owns every satellite and blocks all their removal. Both drifts fail
-// here, against the real PKGBUILD.
+// The caps list is the variant package plus that package's RPM Requires, minus
+// ryoku-desktop. A satellite the spec requires but the list omits could never
+// be reclaimed; an Arch name the spec does not require would make a Fedora
+// switch ask dnf for a package it does not ship. Both drifts fail here.
 func TestReclaimListMatchesVariantDepends(t *testing.T) {
 	raw, err := os.ReadFile("../../../release/rpm/ryoku-desktop-hyprland.spec")
 	if err != nil {
@@ -38,6 +37,14 @@ func TestReclaimListMatchesVariantDepends(t *testing.T) {
 	for p := range want {
 		if !have[p] {
 			t.Errorf("RPM spec requires %s but the reclaim list omits it", p)
+		}
+	}
+	for p := range have {
+		if p == "ryoku-desktop-hyprland" {
+			continue
+		}
+		if !want[p] {
+			t.Errorf("reclaim list names %s, which the RPM spec does not require", p)
 		}
 	}
 }

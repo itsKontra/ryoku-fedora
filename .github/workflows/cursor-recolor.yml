@@ -1,0 +1,38 @@
+name: Cursor Recolor
+
+# The Material Bibata pointer follows the wallpaper accent through one tool,
+# ryoku-cursor-material-recolor, and #211 proved how quietly it can die: it
+# read the retired hypr.json, so every palette change was a silent no-op and a
+# forced run reset the user's cursor size, while a flag token crashed the one
+# manual path. The tool reads the store's shape, the "DYNAMIC" role, and its
+# argv scan; all three are pinned by tests/cursor-recolor.sh.
+
+on:
+  pull_request:
+    paths:
+      - 'ryoku/shell/scripts/ryoku-cursor-material-recolor'
+      - 'tests/cursor-recolor.sh'
+      - '.github/workflows/cursor-recolor.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'ryoku/shell/scripts/ryoku-cursor-material-recolor'
+      - 'tests/cursor-recolor.sh'
+      - '.github/workflows/cursor-recolor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recolor:
+    name: The pointer follows the store, not the graveyard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Store shape, DYNAMIC role, flag scan
+        shell: bash
+        run: bash tests/cursor-recolor.sh

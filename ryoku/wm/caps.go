@@ -47,6 +47,23 @@ const (
 	CapWindowFloat  Capability = "windowFloat"
 	CapTiledLayout  Capability = "tiledLayout"
 	CapSessionExit  Capability = "sessionExit"
+	// CapNightLight is set when the provider can warm the screen to a colour
+	// temperature and restore it, through the nightlight.on and nightlight.off
+	// actions. The warm gamma is held by a detached backend the provider owns
+	// (hyprsunset on Hyprland, gammastep on niri); NightLightProcess below names
+	// it so a consumer can tell the light is on without knowing the compositor.
+	CapNightLight Capability = "nightLight"
+	// CapTouchpadToggle is set when the provider can lock the touchpad the FN
+	// touchpad key asks for, through the input.touchpad action. One compositor
+	// flips the device live, another records the intent in its config file; the
+	// capability says it can be done, never how.
+	CapTouchpadToggle Capability = "touchpadToggle"
+	// CapPaletteBorder is set when the provider can recolour the window border
+	// from the live palette on request, through the decoration.borderColors
+	// action. One compositor pushes the colours into a running config, another
+	// records them and regenerates the file it watches; the capability says the
+	// border can follow the wallpaper, never how.
+	CapPaletteBorder Capability = "paletteBorder"
 )
 
 // All is every capability, so a caps payload can carry an explicit boolean for
@@ -62,7 +79,8 @@ func All() []Capability {
 		CapOutputPower,
 		CapKeyboardLayoutSwitch, CapMonitorConfig, CapOutputMirror,
 		CapOutputHdr, CapWindowFloat,
-		CapTiledLayout, CapSessionExit,
+		CapTiledLayout, CapSessionExit, CapNightLight, CapTouchpadToggle,
+		CapPaletteBorder,
 	}
 }
 
@@ -103,6 +121,12 @@ type Caps struct {
 	// the preferred default. Doctor repairs portals.conf against it, so the
 	// backend name lives with the compositor rather than in a reconciler.
 	PortalBackend string `json:"portalBackend,omitempty"`
+	// NightLightProcess is the comm name (<=15 chars, so it survives /proc/<pid>/comm
+	// truncation) of the detached backend that holds the warm gamma while the
+	// night light is on. Provider-owned like PortalBackend, because only a
+	// provider knows which client it starts; the daemon scans /proc for this
+	// name and the neutral script pgreps it. Empty when CapNightLight is absent.
+	NightLightProcess string `json:"nightLightProcess,omitempty"`
 	// Packages are the pacman packages this compositor is made of: the
 	// compositor package and the satellites ryoku-desktop-<name> installs for
 	// it, most significant first. Provider-owned because only a provider knows
@@ -111,6 +135,11 @@ type Caps struct {
 	// private dependencies these orphan with are pacman's to cascade, so they
 	// are not listed here.
 	Packages []string `json:"packages,omitempty"`
+	// WindowRuleActions are the neutral window-rule action ids this provider's
+	// config writer honours, in the order the Hub should offer them. Each
+	// compositor accepts a different set, so the window-rules editor lists only
+	// what the active one can actually apply, never a control that writes nothing.
+	WindowRuleActions []string `json:"windowRuleActions,omitempty"`
 }
 
 // Has reports whether the provider can honour want. A zero Caps supports
