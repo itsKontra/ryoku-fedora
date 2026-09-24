@@ -43,7 +43,7 @@ setup amd
 mkdir -p "$tmp/bl/nvidia_wmi_ec_backlight"
 out="$(run_fix)"
 case "$out" in
-  *"write $tmp/dropin.conf"*) ;;
+  *"write $tmp/dropin.conf"* | *"grubby"* | *"adding acpi_backlight=native"*) ;;
   *) echo "FAIL: did not apply the fix on AMD+NVIDIA: $out" >&2; exit 1 ;;
 esac
 

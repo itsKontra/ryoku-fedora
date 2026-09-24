@@ -21,8 +21,10 @@ repo="$(git rev-parse --show-toplevel)"
 cd "$repo"
 
 # delivery paths: the package base config, the installer's one-time seeds, and
-# the dev deploy. an app config is "delivered" if any of them references it.
-sources=(release/packages/*/PKGBUILD installation/backend/lib/deploy.sh ryoku/shell/deploy.sh)
+sources=()
+for src in release/packages/*/PKGBUILD release/rpm/*.spec installation/fedora/provision-target.py ryoku/shell/deploy.sh; do
+	[[ -f $src ]] && sources+=("$src")
+done
 
 # delivered = the file, or any ancestor dir up to apps/, is named by a delivery
 # path. a wholesale `cp -a apps/foo/.` ships every file under foo, so a match on

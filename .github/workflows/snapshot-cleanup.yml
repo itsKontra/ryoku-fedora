@@ -12,7 +12,6 @@ on:
     paths:
       - 'ryoku/cli/internal/updater/update.go'
       - 'ryoku/cli/internal/doctor/reconcile_snapshots.go'
-      - 'installation/backend/lib/snapshots.sh'
       - 'tests/snapshot-cleanup.sh'
       - '.github/workflows/snapshot-cleanup.yml'
   push:
@@ -21,7 +20,6 @@ on:
     paths:
       - 'ryoku/cli/internal/updater/update.go'
       - 'ryoku/cli/internal/doctor/reconcile_snapshots.go'
-      - 'installation/backend/lib/snapshots.sh'
       - 'tests/snapshot-cleanup.sh'
       - '.github/workflows/snapshot-cleanup.yml'
   workflow_dispatch:
