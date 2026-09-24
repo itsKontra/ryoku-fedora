@@ -252,6 +252,12 @@ EOF
   # the same file for every user, so a session that never materialized still has it
   install -Dm644 "$_repo/ryoku/shell/environment.d/ryoku-session.conf" \
     "$pkgdir/usr/lib/environment.d/99-ryoku-session.conf"
+  # XDG user dirs are not in the login environment. This generator resolves them
+  # through xdg-user-dir so a localized Pictures or Downloads is the one the
+  # shell uses. It has to live in the generator directory; materialize cannot
+  # deliver it.
+  install -Dm755 "$_repo/ryoku/shell/systemd/user-environment-generators/60-ryoku-xdg-dirs" \
+    "$pkgdir/usr/lib/systemd/user-environment-generators/60-ryoku-xdg-dirs"
 
   # the decor art the Decor/Placard components render. shipped here so `ryoku
   # doctor` can seed it into ~/Pictures/ryodecors on a user box (beside

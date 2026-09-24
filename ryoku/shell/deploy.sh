@@ -289,22 +289,6 @@ if command -v sudo >/dev/null 2>&1; then
   sudo systemctl daemon-reload || true
   sudo systemctl enable --quiet ryoku-network-kill-guard.service ryoku-network-kill-disconnect.service ryoku-wifi-regdom.service || true
   say "installed privileged network helpers + polkit rules"
-  # Boot look: lay the splash theme, Limine art and ryoku-boot-apply, then apply
-  # them (set the splash, deploy the ESP wallpaper + globals, rebuild initramfs).
-  bootsrc="$here/../../system/boot"
-  sudo install -d /usr/share/plymouth/themes/ryoku
-  sudo cp -a "$bootsrc/plymouth/ryoku/." /usr/share/plymouth/themes/ryoku/
-  if command -v limine >/dev/null 2>&1 || [[ -d /boot/limine ]]; then
-    sudo install -Dm644 "$bootsrc/limine/limine.conf" /usr/share/ryoku/boot/limine.conf
-    sudo install -Dm644 "$bootsrc/limine/default.conf" /usr/share/ryoku/boot/default.conf
-    sudo install -Dm755 "$bootsrc/ryoku-boot-apply" /usr/bin/ryoku-boot-apply
-    sudo install -Dm644 "$bootsrc/mkinitcpio/install/ryoku-gpu-trim" \
-      /usr/lib/initcpio/install/ryoku-gpu-trim
-    sudo ryoku-boot-apply || true
-    say "installed and applied the boot splash + Limine theme"
-  else
-    say "installed boot splash (Limine theme skipped: Limine not present)"
-  fi
 fi
 
 # Record the checkout this deploy came from and the commit it laid down, so the

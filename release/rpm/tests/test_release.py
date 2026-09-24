@@ -161,6 +161,7 @@ class FedoraPayload(unittest.TestCase):
     def test_desktop_does_not_stage_removed_arch_boot_files(self):
         payload = (ROOT / 'payload/ryoku-desktop.sh').read_text()
         self.assertNotIn('system/boot/', payload)
+        self.assertIn('user-environment-generators/60-ryoku-xdg-dirs', payload)
 
     def test_specs_do_not_require_arch_only_capture_tools(self):
         desktop = (ROOT / 'ryoku-desktop.spec').read_text()

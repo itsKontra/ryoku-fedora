@@ -2,9 +2,7 @@
 # Regression tests for ryoku-hw-backlight-fix's gates.
 #   #54: the AMD-only acpi_backlight=native quirk must not fire on Intel+NVIDIA
 #        laptops, where nvidia_wmi_ec_backlight also registers with no AMD GPU.
-#   #176: it must not fire on AMD+NVIDIA boards whose panel is driven by the EC
-#        (the FA507NV family), where native instead freezes the screen -- and a
-#        kernel argument an earlier release added there must be removed.
+# NVIDIA EC denylists are not ported: this image does not deliver NVIDIA drivers.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
@@ -59,32 +57,6 @@ out="$(run_fix GA402XV)"
 case "$out" in
   *"already present"*) ;;
   *) echo "FAIL: did not no-op when amdgpu_bl* exists: $out" >&2; exit 1 ;;
-esac
-
-# 4. A denied board (FA507NV): must remove the previous kernel argument, not
-#    add it (#176).
-setup amd
-mkdir -p "$tmp/bl/nvidia_wmi_ec_backlight"
-out="$(run_fix "ASUS TUF Gaming A15 FA507NV_FA507NV")"
-case "$out" in
-  *"removing acpi_backlight=native from Fedora kernel entries"*) ;;
-  *) echo "FAIL: did not remove the kernel argument on a denied board: $out" >&2; exit 1 ;;
-esac
-case "$out" in
-  *"--remove-args=acpi_backlight=native"*) ;;
-  *) echo "FAIL: no grubby removal issued for the denied board: $out" >&2; exit 1 ;;
-esac
-
-# 5. A denied board still only removes the argument and never adds one.
-setup amd
-mkdir -p "$tmp/bl/nvidia_wmi_ec_backlight"
-out="$(run_fix "ASUS TUF Gaming A15 FA507NV_FA507NV")"
-case "$out" in
-  *"--remove-args=acpi_backlight=native"*) ;;
-  *) echo "FAIL: denied board did not remove the argument: $out" >&2; exit 1 ;;
-esac
-case "$out" in
-  *"--args=acpi_backlight=native"*) echo "FAIL: added the argument on a denied board: $out" >&2; exit 1 ;;
 esac
 
 echo "backlight-fix-gate: ok"

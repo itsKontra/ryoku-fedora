@@ -25,9 +25,9 @@ depends=(
   # compositor + Wayland session (ships /usr/share/wayland-sessions/niri.desktop)
   'niri'
   # niri has no built-in Xwayland; X11 apps reach a display through the satellite.
-  # [ryoku] ships a build past 0.8.2 (see release/packages/xwayland-satellite):
-  # 0.8.2 regressed override-redirect popups, so Steam and Wine menus close on
-  # sight until the fix in that build.
+  # Fedora 44 ships 0.8.2, which regresses override-redirect popups (upstream
+  # #468, fixed in add2795, no release yet). The distro package is the display
+  # bridge; the popup fix is not delivered and must not be claimed as ported.
   'xwayland-satellite'
   # screencast/screenshot portal: ryoku-wm-niri caps reports portalBackend "gnome",
   # and doctor's portal reconciler routes xdg-desktop-portal to this backend.

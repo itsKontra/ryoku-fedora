@@ -236,8 +236,8 @@ func cmdWmUse(args []string) {
 	pkg := "ryoku-desktop-" + name
 	// A checkout box runs deployed trees, so switching to one installs nothing;
 	// picking the session at the greeter is the whole move. A package box installs
-	// the target first, as a plain pacman transaction (no SNAP_PAC_SKIP) so
-	// snap-pac snapshots it and `ryoku rollback` can undo the switch.
+	// the target first, as a plain package transaction, so the distro's snapshot
+	// hook can record it and `ryoku rollback` can undo the switch.
 	if deployedProvider(name) {
 		// A checkout box runs deployed trees, so the switch installs no package,
 		// but the leaf scripts (ryoku-monitor and friends) the target's config
@@ -256,17 +256,17 @@ func cmdWmUse(args []string) {
 		}
 		// The variants are not exclusive, so the install leaves the outgoing
 		// compositor in place and "keep" means what it says. A box whose packages
-		// predate that still declares the shared virtual as a conflict and pacman
-		// refuses the install under --noconfirm; only then drop it first.
-		if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg); err != nil {
+		// predate that still declares the shared virtual as a conflict and the
+		// package manager refuses the install; only then drop it first.
+		if err := installPackage(pkg); err != nil {
 			out := "ryoku-desktop-" + active
 			if active == "" || active == name || !packageInstalled(out) {
 				die(i18n.T("could not install %s: %v"), pkg, err)
 			}
-			if err := sys.Sudo("pacman", "-Rdd", "--noconfirm", out); err != nil {
+			if err := removePackage(out); err != nil {
 				die(i18n.T("could not install %s, and could not remove %s first: %v"), pkg, out, err)
 			}
-			if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg); err != nil {
+			if err := installPackage(pkg); err != nil {
 				die(i18n.T("could not install %s after removing %s: %v"), pkg, out, err)
 			}
 		}
@@ -291,7 +291,7 @@ func cmdWmUse(args []string) {
 	// purpose: the switch is complete once the target is ready, so a refusal or
 	// failure here leaves a working desktop rather than a half-switched one. It
 	// runs whether the target came from a package or a checkout, because the old
-	// compositor is a pacman package set either way.
+	// compositor is a package set either way.
 	if !keepPrevious && active != "" && active != name {
 		removePreviousCompositor(active, name)
 	}
@@ -384,10 +384,10 @@ func printWmPreviousChoice(active, incoming string, keep bool) {
 }
 
 // removePreviousCompositor removes the outgoing compositor's packages after a
-// switch to incoming, in one pacman transaction over exactly the reviewed set,
-// leaving its config tree and its wm.<name>.* settings alone so a switch back
-// restores the desktop rather than a default one. It refuses rather than remove
-// anything pacman's own plan no longer agrees with, so a switch can never
+// switch to incoming, in one transaction over exactly the reviewed set, leaving
+// its config tree and its wm.<name>.* settings alone so a switch back restores
+// the desktop rather than a default one. It refuses rather than remove anything
+// the package manager's own plan no longer agrees with, so a switch can never
 // cascade past what the preview showed.
 func removePreviousCompositor(active, incoming string) {
 	rs, err := wm.Reclaim(active, incoming)
@@ -402,8 +402,7 @@ func removePreviousCompositor(active, incoming string) {
 		fmt.Printf(i18n.T("Switched, but %s was kept: %v\n"), active, err)
 		return
 	}
-	rmArgs := append([]string{"pacman", "-Rns", "--noconfirm"}, rs.Targets...)
-	if err := sys.Sudo(rmArgs...); err != nil {
+	if err := removePackages(rs.Targets); err != nil {
 		fmt.Printf(i18n.T("Switched, but %s could not be removed: %v\n"), active, err)
 		return
 	}
@@ -486,6 +485,10 @@ func rawLen(raw json.RawMessage) int {
 }
 
 func packageAvailable(pkg string) bool {
+	if sys.RPMManager() == "dnf" {
+		out, err := sys.RunOut("dnf", "-q", "repoquery", "--available", pkg)
+		return err == nil && strings.TrimSpace(out) != ""
+	}
 	_, err := sys.RunOut("pacman", "-Si", pkg)
 	return err == nil
 }
@@ -493,6 +496,32 @@ func packageAvailable(pkg string) bool {
 // packageInstalled reports whether pkg is installed here, which decides whether
 // a switch has an outgoing variant package to drop.
 func packageInstalled(pkg string) bool {
+	if sys.RPMManager() == "dnf" {
+		return sys.PkgInstalled(pkg)
+	}
 	_, err := sys.RunOut("pacman", "-Qq", pkg)
 	return err == nil
+}
+
+func installPackage(pkg string) error {
+	if sys.RPMManager() == "dnf" {
+		return sys.Sudo("dnf", "install", "-y", pkg)
+	}
+	return sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg)
+}
+
+func removePackage(pkg string) error {
+	return removePackages([]string{pkg})
+}
+
+func removePackages(pkgs []string) error {
+	if len(pkgs) == 0 {
+		return nil
+	}
+	if sys.RPMManager() == "dnf" {
+		args := append([]string{"dnf", "remove", "-y", "--noautoremove"}, pkgs...)
+		return sys.Sudo(args...)
+	}
+	args := append([]string{"pacman", "-Rns", "--noconfirm"}, pkgs...)
+	return sys.Sudo(args...)
 }

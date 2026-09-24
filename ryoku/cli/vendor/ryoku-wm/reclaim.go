@@ -43,12 +43,13 @@ type ReclaimSet struct {
 	Removable bool     `json:"removable"`
 }
 
-// pacman seams, replaced in tests so the orchestration runs without a live
-// pacman.
+// Package-manager seams, replaced in tests so the orchestration runs without a
+// live pacman or rpm. pacman wins when both are installed, so an Arch box is
+// unchanged; Fedora (rpm, no pacman) uses the rpm planner.
 var (
-	pkgInstalled     = pacmanInstalled
-	removalOnce      = pacmanRemovalOnce
-	installedSizes   = pacmanInstalledSizes
+	pkgInstalled     = hostPkgInstalled
+	removalOnce      = hostRemovalOnce
+	installedSizes   = hostInstalledSizes
 	providerPackages = capsPackages
 )
 
@@ -146,16 +147,16 @@ func VerifyRemoval(rs ReclaimSet) error {
 	}
 	set, blocked, err := removalOnce(rs.Targets)
 	if err != nil {
-		return fmt.Errorf("refusing to remove %s: pacman could not plan the removal: %w", rs.Outgoing, err)
+		return fmt.Errorf("refusing to remove %s: the package manager could not plan the removal: %w", rs.Outgoing, err)
 	}
 	if len(blocked) > 0 {
 		return fmt.Errorf("refusing to remove %s: %s is now required by another package", rs.Outgoing, strings.Join(blocked, " "))
 	}
 	if extra := difference(set, rs.Packages); len(extra) > 0 {
-		return fmt.Errorf("refusing to remove %s: pacman would also remove %s, outside the reviewed set", rs.Outgoing, strings.Join(extra, " "))
+		return fmt.Errorf("refusing to remove %s: the package manager would also remove %s, outside the reviewed set", rs.Outgoing, strings.Join(extra, " "))
 	}
 	if missing := difference(rs.Packages, set); len(missing) > 0 {
-		return fmt.Errorf("refusing to remove %s: pacman would keep %s from the reviewed set", rs.Outgoing, strings.Join(missing, " "))
+		return fmt.Errorf("refusing to remove %s: the package manager would keep %s from the reviewed set", rs.Outgoing, strings.Join(missing, " "))
 	}
 	return nil
 }
@@ -200,9 +201,118 @@ func capsPackages(name string) ([]string, error) {
 	return caps.Packages, nil
 }
 
+func hostPkgInstalled(name string) bool {
+	if hasCmd("pacman") {
+		return pacmanInstalled(name)
+	}
+	if hasCmd("rpm") {
+		return exec.Command("rpm", "-q", "--quiet", name).Run() == nil
+	}
+	return false
+}
+
+func hostRemovalOnce(targets []string) (set, blocked []string, err error) {
+	if hasCmd("pacman") {
+		return pacmanRemovalOnce(targets)
+	}
+	if hasCmd("rpm") {
+		return rpmRemovalOnce(targets)
+	}
+	return nil, nil, fmt.Errorf("no package manager")
+}
+
+func hostInstalledSizes(names []string) (int64, error) {
+	if hasCmd("pacman") {
+		return pacmanInstalledSizes(names)
+	}
+	if hasCmd("rpm") {
+		return rpmInstalledSizes(names)
+	}
+	return 0, fmt.Errorf("no package manager")
+}
+
+func hasCmd(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
 // pacmanInstalled reports whether a package is installed.
 func pacmanInstalled(name string) bool {
 	return exec.Command("pacman", "-Q", name).Run() == nil
+}
+
+// rpmRemovalOnce plans a removal of exactly the named targets. A target that an
+// installed package outside the set still requires is blocked, so the caller
+// keeps it. Unlike pacman -Rs this does not pull orphaned dependencies into the
+// transaction: Fedora's switch removes the reviewed set and nothing past it.
+func rpmRemovalOnce(targets []string) (set, blocked []string, err error) {
+	if len(targets) == 0 {
+		return nil, nil, nil
+	}
+	want := make(map[string]bool, len(targets))
+	for _, t := range targets {
+		want[t] = true
+	}
+	for _, t := range targets {
+		reqs, reqErr := rpmWhatRequires(t)
+		if reqErr != nil {
+			return nil, nil, reqErr
+		}
+		for _, name := range reqs {
+			if name != "" && name != t && !want[name] {
+				blocked = append(blocked, t)
+				break
+			}
+		}
+	}
+	if len(blocked) > 0 {
+		return nil, blocked, nil
+	}
+	return append([]string(nil), targets...), nil, nil
+}
+
+func rpmWhatRequires(name string) ([]string, error) {
+	out, err := exec.Command("rpm", "-q", "--qf", "%{NAME}\n", "--whatrequires", name).Output()
+	text := string(out)
+	if err != nil {
+		if strings.Contains(text, "no package requires") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("rpm -q --whatrequires %s: %w", name, err)
+	}
+	var names []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(line, "no package requires") {
+			continue
+		}
+		names = append(names, line)
+	}
+	return names, nil
+}
+
+func rpmInstalledSizes(names []string) (int64, error) {
+	if len(names) == 0 {
+		return 0, nil
+	}
+	args := append([]string{"-q", "--qf", "%{SIZE}\n"}, names...)
+	out, err := exec.Command("rpm", args...).Output()
+	if err != nil {
+		return 0, fmt.Errorf("rpm -q: %w", err)
+	}
+	var total int64
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		n, convErr := strconv.ParseInt(line, 10, 64)
+		if convErr != nil {
+			return 0, fmt.Errorf("rpm size %q: %w", line, convErr)
+		}
+		total += n
+	}
+	return total, nil
 }
 
 // compositorVirtual is the package every compositor variant provides and the

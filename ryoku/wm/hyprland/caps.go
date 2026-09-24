@@ -56,29 +56,19 @@ var windowRuleActions = []string{
 	"abovelock", "noshadow", "ignorealpha", "dimaround",
 }
 
-// The packages ryoku-desktop-hyprland is made of: the variant package itself,
-// Hyprland, its plugins, its portal and its satellites. Kept in step with that
-// package's RPM Requires entries; this is
-// the list a switch away from Hyprland reclaims, minus ryoku-desktop, which is
-// shared with the compositor that replaces it. The variant package belongs in
-// the list: on a packaged box it owns every satellite below, so a reclaim that
-// left it out could free none of them.
+// The packages ryoku-desktop-hyprland is made of. Kept in step with that
+// package's RPM Requires; this is the list a switch away from Hyprland reclaims,
+// minus ryoku-desktop, which is shared with the compositor that replaces it.
+// hyprsunset is a ryoku-desktop dependency, not this variant's, so it stays.
+// The variant package belongs in the list: on a packaged box it owns every
+// satellite below, so a reclaim that left it out could free none of them.
 var compositorPackages = []string{
 	"ryoku-desktop-hyprland",
 	"hyprland",
-	"hypr-dynamic-cursors",
-	"ryoku-hypr-plugins",
-	"hyprglass",
-	"imgborders",
-	"ryoku-keysounds",
 	"hyprpolkitagent",
 	"xdg-desktop-portal-hyprland",
-	"hyprland-preview-share-picker",
 	"hypridle",
 	"hyprpicker",
-	// hyprsunset holds the warm gamma while the night light is on. A Hyprland-only
-	// CTM client, so it is the Hyprland variant's to ship and reclaim.
-	"hyprsunset",
 }
 
 // The manifest is fixed, not probed: Hyprland does not gain features while
