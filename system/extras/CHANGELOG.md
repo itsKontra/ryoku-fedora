@@ -7,7 +7,7 @@
   DNF/RPM. Missing repository packages fail explicitly without AUR fallback.
 - The old AUR helper name forwards to DNF for catalogue compatibility.
 - Multilib checks Fedora i686 support without editing repository configuration.
-  GPU prerequisites install Fedora libraries and propagate failures.
+  The legacy GPU prerequisite is ignored; 32-bit GPU setup has been removed.
 - DNF removal asks for transaction confirmation because it can remove dependent
   applications; cancelled transactions are not retried.
 

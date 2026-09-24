@@ -94,21 +94,6 @@ func buildItems(f *facts, p *plan) []planItem {
 			i18n.Tf("%d step(s) already finished last time; keeps that run's backup dir and skips them (toggle off to redo everything)", len(f.prevRun.Completed)),
 			&p.resume, false})
 	}
-	if f.hasNvidia {
-		d := i18n.T("installs the proprietary driver, blacklists nouveau, rebuilds the initramfs")
-		if f.nouveauLive {
-			d = i18n.T("you are on nouveau right now; switching needs a reboot to take effect")
-		}
-		locked := false
-		switch {
-		case f.secureBoot && !f.sbctlSigned:
-			d = i18n.T("held off: Secure Boot rejects unsigned DKMS modules (black screen at boot); sign with sbctl or disable Secure Boot, then re-run")
-			locked = true
-		case f.secureBoot && f.sbctlSigned:
-			d += "; " + i18n.T("Secure Boot is on, sbctl found: make sure its hook signs DKMS modules")
-		}
-		it = append(it, planItem{"NVIDIA proprietary drivers", d, &p.nvidia, locked})
-	}
 	if dm := f.otherDM(); dm != "" {
 		d := i18n.Tf("disables %s and enables SDDM (at reboot)", dm)
 		if len(f.desktops) > 0 {
@@ -162,7 +147,7 @@ var planGroups = []struct {
 	title  string
 	labels []string
 }{
-	{"session & hardware", []string{"NVIDIA proprietary drivers", "Switch login to SDDM", "Enable SDDM login", "Ryoku greeter theme", "AZERTY keyboard (French)", "AZERTY keyboard (Belgian)", "Switch to NetworkManager"}},
+	{"session & hardware", []string{"Switch login to SDDM", "Enable SDDM login", "Ryoku greeter theme", "AZERTY keyboard (French)", "AZERTY keyboard (Belgian)", "Switch to NetworkManager"}},
 	{"migration & cleanup", []string{"Remove rival shells", "Disable conflicting daemons", "Retire the Omarchy repo", "Carry over monitor layout"}},
 	{"extras", []string{"AUR extras", "Developer toolchain", "fish as login shell"}},
 }
@@ -477,11 +462,7 @@ func (m model) viewPlan() string {
 	row(i18n.T("system"), f.distroName)
 	row("gpu", f.gpuSummary())
 	if f.secureBoot {
-		sb := i18n.T("on and enforcing; unsigned NVIDIA DKMS modules cannot load")
-		if f.sbctlSigned {
-			sb = i18n.T("on, sbctl key store found; its hook must cover DKMS modules")
-		}
-		row(i18n.T("secure boot"), sb)
+		row(i18n.T("secure boot"), i18n.T("on and enforcing"))
 	}
 	dm := f.currentDM
 	if dm == "" {
@@ -696,8 +677,8 @@ func runHeadless(dry bool, ref, payload, compositor string) int {
 		fmt.Println(i18n.Tf("resuming the interrupted previous run: %d step(s) already done", len(f.prevRun.Completed)))
 	}
 	// a machine-readable toggle dump: the keys are plan field names, not prose.
-	fmt.Printf("plan: nvidia=%v sddm=%v greeter-theme=%v networkmanager=%v remove-shells=%v aur=%v fish=%v devtools=%v omarchy-cleanup=%v monitor-pins=%v azerty-fr=%v azerty-be=%v\n",
-		p.nvidia, p.switchDM, p.greeter, p.switchNet, p.rivals, p.aur, p.fish, p.devtools, p.omarchy, p.monPins, p.azertyFR, p.azertyBE)
+	fmt.Printf("plan: sddm=%v greeter-theme=%v networkmanager=%v remove-shells=%v aur=%v fish=%v devtools=%v omarchy-cleanup=%v monitor-pins=%v azerty-fr=%v azerty-be=%v\n",
+		p.switchDM, p.greeter, p.switchNet, p.rivals, p.aur, p.fish, p.devtools, p.omarchy, p.monPins, p.azertyFR, p.azertyBE)
 	e := newEngine(f, p, dry, ref, payload)
 	ev := e.runFrom(0)
 	for msg := range ev {

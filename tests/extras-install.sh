@@ -87,7 +87,7 @@ grep -q 'corepkg' <<<"$out" || fail "core package not planned"
 grep -q 'optpkg' <<<"$out" && fail "optional package planned in whole-bundle install"
 grep -qi 'nautilus pack video-reformat' <<<"$out" || fail "nautilus pack not planned"
 grep -qi 'plugin creator-deck' <<<"$out" || fail "plugin not planned"
-grep -q 'DRYRUN: ensure the 32-bit' <<<"$out" || fail "gpu-lib32 requirement not ensured before install"
+grep -q "Skipping the catalogue's 32-bit GPU prerequisite" <<<"$out" || fail "legacy gpu-lib32 requirement was not skipped"
 
 # --- optional installs when named as a single item ----------------------------
 out="$(RYOSTORE_DRYRUN=1 bash "$act" install item demo optpkg 2>&1)"

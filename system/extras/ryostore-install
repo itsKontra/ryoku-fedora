@@ -256,11 +256,7 @@ ensure_requires() {
         fi
         ;;
       gpu-lib32)
-        if [[ -n $DRYRUN ]]; then
-          echo "DRYRUN: install the Fedora i686 GPU driver stack for the detected hardware"
-        else
-          ryoku-gpu-lib32 || die "could not install the Fedora 32-bit GPU drivers; check the enabled driver repositories"
-        fi
+        echo "==> Skipping the catalogue's 32-bit GPU prerequisite on Fedora"
         ;;
       *) die "unsupported bundle requirement '$req' on Fedora" ;;
     esac

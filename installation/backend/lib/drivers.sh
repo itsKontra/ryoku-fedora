@@ -15,7 +15,7 @@ ryoku_drivers() {
 	if declare -f ryoku_offline_active >/dev/null && ryoku_offline_active; then
 		pmconf=$RYOKU_OFFLINE_CHROOT_CONF
 	fi
-	for vendor in amd intel nvidia vulkan; do
+	for vendor in amd intel vulkan; do
 		[[ -f "$dir/$vendor.sh" ]] || {
 			log 'skip: %s.sh not present' "$vendor"
 			continue

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- NVIDIA reconciliation leaves the host Fedora driver and boot configuration unchanged, including pending NVIDIA rebuilds.
 - Use RyokuCOPR consistently for Fedora package queries and updates. Fedora
   source tracking adopts only ryoku-fedora, and doctor installs Ryotunes through
   DNF and enables its socket. Restore recovery startup after the path change.

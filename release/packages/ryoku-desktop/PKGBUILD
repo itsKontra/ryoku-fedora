@@ -630,6 +630,8 @@ EOF
   # password prompt; world domain 00 disables most 5 GHz channels.
   install -Dm644 "$_repo/system/hardware/network/48-ryoku-wifi-regdom.rules" \
     "$pkgdir/usr/share/polkit-1/rules.d/48-ryoku-wifi-regdom.rules"
+  install -Dm644 "$_repo/system/hardware/network/ryoku-wifi-regdom.service" \
+    "$pkgdir/usr/lib/systemd/system/ryoku-wifi-regdom.service"
 
   # Game Mode wifi power-save: a polkit rule authorizes the privileged helper
   # (ryoku-wifi-powersave, installed to /usr/bin by the hardware glob above)

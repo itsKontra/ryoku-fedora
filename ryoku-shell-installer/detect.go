@@ -29,13 +29,10 @@ type facts struct {
 	online     bool
 	btrfsRoot  bool
 
-	secureBoot  bool // SecureBoot=1 and SetupMode=0 in efivars
-	sbctlSigned bool // sbctl on PATH with a key store, signing hook likely works
+	secureBoot bool // SecureBoot=1 and SetupMode=0 in efivars
 
-	gpus        []string
-	hasNvidia   bool
-	nouveauLive bool
-	ucodePkg    string
+	gpus     []string
+	ucodePkg string
 
 	currentDM string   // enabled display-manager unit ("" = none)
 	otherNet  []string // enabled network stacks other than NetworkManager
@@ -405,21 +402,6 @@ func (f *facts) detectGPUs() {
 			}
 		}
 	}
-	if seen["nvidia"] || seen["nouveau"] {
-		f.hasNvidia = true
-	}
-	// lspci catches NVIDIA cards with no driver bound at all.
-	if !f.hasNvidia && has("lspci") {
-		if strings.Contains(strings.ToLower(out("lspci")), "nvidia") {
-			f.hasNvidia = true
-		}
-	}
-	f.nouveauLive = seen["nouveau"]
-	if b, err := os.ReadFile("/proc/modules"); err == nil {
-		if strings.Contains(string(b), "nouveau ") {
-			f.nouveauLive = true
-		}
-	}
 }
 
 // EFI_GLOBAL_VARIABLE, fixed by the UEFI spec.
@@ -444,11 +426,6 @@ func (f *facts) detectSecureBoot() {
 	}
 	setup, _ := os.ReadFile("/sys/firmware/efi/efivars/SetupMode-" + efiGlobalGUID)
 	f.secureBoot = secureBootEnforcing(sb, setup)
-	if f.secureBoot && has("sbctl") {
-		if fi, err := os.Stat("/var/lib/sbctl"); err == nil && fi.IsDir() {
-			f.sbctlSigned = true
-		}
-	}
 }
 
 // systemdBooted is sd_booted(3)'s canonical test: the directory only exists

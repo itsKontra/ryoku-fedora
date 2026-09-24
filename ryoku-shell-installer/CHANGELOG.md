@@ -2,7 +2,12 @@
 
 ## Unreleased
 
+### Removed
+- The proprietary NVIDIA driver toggle and signing-key/Secure Boot instructions.
+  Fedora keeps its existing NVIDIA graphics driver.
+
 ### Fixed
+- Fedora installations now run the native DNF hardware driver helpers after installing desktop packages, including source installs.
 - Configure and verify the Fedora desktop repository as RyokuCOPR.
 
 ### Changed

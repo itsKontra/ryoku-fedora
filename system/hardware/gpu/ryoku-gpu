@@ -41,6 +41,9 @@ NIRI_CONF_DEFAULT="${RYOKU_GPU_NIRI_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/niri
 # udev rule destination and its source (rule shipped next to this script).
 UDEV_RULE="${RYOKU_GPU_UDEV_RULE:-/etc/udev/rules.d/90-ryoku-gpu.rules}"
 RULE_SRC="${RYOKU_GPU_RULE_SRC:-$SCRIPT_DIR/90-ryoku-gpu.rules}"
+if [[ -z ${RYOKU_GPU_RULE_SRC:-} && ! -f $RULE_SRC ]]; then
+  RULE_SRC=/usr/lib/udev/rules.d/90-ryoku-gpu.rules
+fi
 
 # ── AQ_DRM_DEVICES value assembly ─────────────────────────────────────────────
 

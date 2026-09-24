@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Fedora desktop RPMs include hardware runtime dependencies and activate the Wi-Fi regulatory-domain and Bluetooth services.
 - Write the Fedora repository as RyokuCOPR and retire the old ryoku.repo file.
 
 ### Changed

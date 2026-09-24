@@ -186,6 +186,9 @@ func keplerGpuPresent() bool {
 }
 
 func reconcileKeplerNvidia(checkOnly bool) recResult {
+	if sys.RPMManager() != "" {
+		return okRes(i18n.T("keeping the host NVIDIA driver"))
+	}
 	if !keplerGpuPresent() || !nvidia580Installed() {
 		return okRes(i18n.T("no incompatible 580xx driver on Kepler hardware"))
 	}
@@ -265,6 +268,9 @@ func removeRootFiles(paths ...string) error {
 }
 
 func reconcileNvidiaModeset(checkOnly bool) recResult {
+	if sys.RPMManager() != "" {
+		return okRes(i18n.T("keeping the host NVIDIA driver and boot configuration"))
+	}
 	pending := filepath.Join(sys.StateDir(), "nvidia-initramfs-pending")
 	if sys.Exists(pending) {
 		if checkOnly {
@@ -406,6 +412,9 @@ func nvidiaGuardHookOK(got string) bool {
 }
 
 func reconcileNvidiaGuardHook(checkOnly bool) recResult {
+	if !sys.Has("ryoku-nvidia-guard") {
+		return okRes(i18n.T("NVIDIA driver repair is not managed by Ryoku"))
+	}
 	if !nvidiaDriverActive() {
 		return okRes(i18n.T("no proprietary NVIDIA driver in use"))
 	}

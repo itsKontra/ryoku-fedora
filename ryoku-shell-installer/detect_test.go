@@ -50,20 +50,6 @@ func TestSecureBootEnforcing(t *testing.T) {
 	}
 }
 
-func TestDefaultPlanSecureBoot(t *testing.T) {
-	f := &facts{hasNvidia: true, secureBoot: true}
-	if defaultPlan(f).nvidia {
-		t.Fatal("secure boot must force the nvidia default off")
-	}
-	f.sbctlSigned = true
-	if !defaultPlan(f).nvidia {
-		t.Fatal("an sbctl-managed box keeps the nvidia default")
-	}
-	if !defaultPlan(&facts{hasNvidia: true}).nvidia {
-		t.Fatal("no secure boot, nvidia stays default on")
-	}
-}
-
 func TestMirrorlistHasOmarchy(t *testing.T) {
 	if !mirrorlistHasOmarchy("# comment\nServer = https://stable-mirror.omarchy.org/$repo/os/$arch\n") {
 		t.Fatal("missed the omarchy mirror")

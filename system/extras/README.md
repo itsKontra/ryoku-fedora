@@ -39,9 +39,9 @@ capabilities to concrete `name.arch` owners. DNF repository queries check both
 success and nonempty results, since an empty match can still exit successfully.
 See the [DNF repoquery reference](https://dnf5.readthedocs.io/en/stable/commands/repoquery.8.html).
 
-`"requires": ["multilib"]` checks i686 support. `"requires": ["gpu-lib32"]`
-runs `ryoku-gpu-lib32`, which installs Fedora i686 graphics libraries and matches
-NVIDIA libraries to the installed RPM Fusion driver branch. Failed prerequisites
+`"requires": ["multilib"]` checks i686 support for applications.
+The legacy `"requires": ["gpu-lib32"]` prerequisite is ignored: Ryoku no longer
+ships or automatically installs 32-bit GPU drivers. Other failed prerequisites
 abort installation. CachyOS kernel bundles are unsupported on Fedora and are
 rejected before prerequisites run; the CachyOS repository helper was removed.
 

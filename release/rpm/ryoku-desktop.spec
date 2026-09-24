@@ -47,6 +47,15 @@ Requires:       qt6-qtimageformats
 Requires:       qt6-qtmultimedia
 Requires:       kf6-syntax-highlighting
 Requires:       pipewire
+Requires:       pipewire-pulseaudio
+Requires:       NetworkManager
+Requires:       NetworkManager-wifi
+Requires:       pciutils
+Requires:       usbutils
+Requires:       kmod
+Requires:       dracut
+Requires:       grubby
+Requires:       wireless-regdb
 Requires:       wireplumber
 Requires:       brightnessctl
 Requires:       playerctl
@@ -116,6 +125,9 @@ cp -a stage/. %{buildroot}/
 find %{buildroot} -type f -o -type l | sed 's|^%{buildroot}||' > rpm-files
 
 %post
-systemctl --global enable ryoku-bootstrap.service >/dev/null 2>&1 || :
+systemctl --global enable ryoku-bootstrap.service ryoku-bluetooth-reset.service >/dev/null 2>&1 || :
+systemctl daemon-reload >/dev/null 2>&1 || :
+systemctl enable ryoku-wifi-regdom.service >/dev/null 2>&1 || :
+/usr/bin/ryoku-bluetooth-tune >/dev/null 2>&1 || :
 
 %files -f rpm-files

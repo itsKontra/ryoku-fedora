@@ -7,15 +7,10 @@
 # Nothing in Ryoku set a country, so this helper is the one place that does, and
 # it persists the choice the two ways the stack reads it:
 #
-#   /etc/conf.d/wireless-regdom  the wireless-regdb backup file its shipped udev
-#     rule (85-regulatory.rules -> set-wireless-regdom) sources when cfg80211
-#     loads, re-applying the domain on every boot. It is a pacman *backup* file,
-#     so editing it in place is upgrade-safe; set-wireless-regdom sources it, so
-#     exactly one active WIRELESS_REGDOM line must win.
-#   /etc/iwd/main.conf           iwd's own regulatory hint ([General] Country),
-#     owned by no package. [Rank] BandModifier5GHz biases iwd's RSSI-sensitive
-#     ranking toward 5 GHz, which iwd.config(5) warns it otherwise passes over
-#     for a nearer 2.4 GHz AP.
+#   /etc/modprobe.d/ryoku-wireless-regdom.conf supplies cfg80211's country hint.
+#   ryoku-wifi-regdom.service reapplies it at boot, including when cfg80211 was
+#   already loaded by the initramfs. iwd configuration is updated only if iwd
+#   is installed; Fedora normally uses wpa_supplicant.
 #
 # Privileged: it rewrites system config and calls `iw reg set`.
 # 48-ryoku-wifi-regdom.rules grants exactly this binary to the wheel group
@@ -27,70 +22,37 @@
 #   set <CC>   persist a two-letter country and apply it now
 #   apply      idempotent install/upgrade/boot pass; never invents a country
 #   status     one support line: effective domain + 5 GHz channels usable/blocked
-set -u
+set -euo pipefail
 
-CONF="${RYOKU_REGDOM_CONF:-/etc/conf.d/wireless-regdom}"
+CONF="${RYOKU_REGDOM_CONF:-/etc/modprobe.d/ryoku-wireless-regdom.conf}"
 IWD_CONF="${RYOKU_IWD_CONF:-/etc/iwd/main.conf}"
 
 # Ryoku's default 5 GHz rank nudge for iwd, kept as one constant so `apply` only
 # seeds it when the key is absent and never overwrites a hand-tuned value.
 IWD_BAND_MODIFIER=1.3
 
-# the country persisted in the conf.d backup file, empty when none is active.
 conf_country() {
   [[ -r $CONF ]] || return 0
-  local line val
-  line=$(grep -m1 -E '^[[:space:]]*WIRELESS_REGDOM=' "$CONF" 2>/dev/null) || return 0
-  val=${line#*=}
-  val=${val%%[[:space:]#]*}
-  val=${val//\"/}
-  printf '%s' "${val^^}"
+  sed -nE 's/^[[:space:]]*options[[:space:]]+cfg80211[[:space:]]+ieee80211_regdom=([A-Z]{2})[[:space:]]*$/\1/p' "$CONF" | head -n1
 }
 
 # the live kernel domain from `iw reg get`, empty when iw is absent.
 driver_country() {
   command -v iw >/dev/null 2>&1 || return 0
   iw reg get 2>/dev/null \
-    | awk '/^country [A-Z0-9][A-Z0-9]:/ { c = $2; sub(/:.*/, "", c); print c; exit }'
+    | awk '/^country [A-Z0-9][A-Z0-9]:/ { c = $2; sub(/:.*/, "", c); print c; exit }' || true
 }
 
-# rewrite CONF so $1 is the single active WIRELESS_REGDOM line: uncomment its
-# shipped line when present, else append one, and comment out any other active
-# line. Only rewrites when the content actually changes, so a repeat is a no-op.
 conf_write() {
-  local cc=$1 tmp
-  tmp=$(mktemp) || return 1
-  if [[ -f $CONF ]]; then
-    awk -v cc="$cc" '
-      function emit() { if (!written) { print "WIRELESS_REGDOM=\"" cc "\""; written = 1 } }
-      /^[[:space:]]*WIRELESS_REGDOM=/ {
-        v = $0
-        sub(/^[[:space:]]*WIRELESS_REGDOM=/, "", v)
-        gsub(/"/, "", v)
-        sub(/[[:space:]#].*$/, "", v)
-        if (toupper(v) == cc) emit(); else print "#" $0
-        next
-      }
-      /^[[:space:]]*#[[:space:]]*WIRELESS_REGDOM=/ {
-        v = $0
-        sub(/^[[:space:]]*#[[:space:]]*WIRELESS_REGDOM=/, "", v)
-        gsub(/"/, "", v)
-        sub(/[[:space:]#].*$/, "", v)
-        if (toupper(v) == cc) { emit(); next }
-        print; next
-      }
-      { print }
-      END { emit() }
-    ' "$CONF" >"$tmp"
-  else
-    printf 'WIRELESS_REGDOM="%s"\n' "$cc" >"$tmp"
-  fi
-  if [[ ! -f $CONF ]] || ! cmp -s "$tmp" "$CONF"; then
+  local content="options cfg80211 ieee80211_regdom=$1"
+  if [[ ! -r $CONF ]] || [[ $(cat "$CONF") != "$content" ]]; then
     mkdir -p "$(dirname "$CONF")"
-    cat "$tmp" >"$CONF"
+    printf '%s\n' "$content" >"$CONF"
+    if command -v restorecon >/dev/null 2>&1; then restorecon "$CONF"; fi
   fi
-  rm -f "$tmp"
 }
+
+iwd_installed() { rpm -q iwd >/dev/null 2>&1; }
 
 # set key=value under [section] of an INI file, creating the file and section as
 # needed and preserving every other key and section. mode=replace always sets
@@ -133,6 +95,7 @@ ini_set() {
     }
   ' "$file" >"$tmp"
   cmp -s "$tmp" "$file" || cat "$tmp" >"$file"
+  if command -v restorecon >/dev/null 2>&1; then restorecon "$file"; fi
   rm -f "$tmp"
 }
 
@@ -159,7 +122,7 @@ regdom_set() {
   fi
   cc=${cc^^}
   conf_write "$cc"
-  ini_set "$IWD_CONF" General Country "$cc" replace
+  if iwd_installed; then ini_set "$IWD_CONF" General Country "$cc" replace; fi
   if command -v iw >/dev/null 2>&1; then
     iw reg set "$cc" 2>/dev/null || true
   fi
@@ -176,7 +139,7 @@ regdom_set() {
 
 regdom_apply() {
   # 5 GHz rank nudge for iwd, seeded only when absent so a hand-tuned value wins.
-  ini_set "$IWD_CONF" Rank BandModifier5GHz "$IWD_BAND_MODIFIER" absent
+  if iwd_installed; then ini_set "$IWD_CONF" Rank BandModifier5GHz "$IWD_BAND_MODIFIER" absent; fi
   # re-assert the persisted country when the live domain has drifted from it (a
   # boot before the udev rule ran, a driver that reset to 00). Never invent one:
   # with nothing configured there is nothing to apply, and no-wireless boxes exit 0.
@@ -204,7 +167,7 @@ regdom_status() {
         if ($0 ~ /disabled/ || $0 ~ /no IR/) blocked++; else usable++
       }
     }
-    END { printf "%d %d", usable + 0, blocked + 0 }')
+    END { printf "%d %d\n", usable + 0, blocked + 0 }')
   printf 'regdom %s (%s); 5 GHz channels: %s usable, %s blocked\n' "$cc" "$src" "$usable" "$blocked"
 }
 

@@ -29,6 +29,7 @@ EOF
   chmod 0644 "$tmp"
   mv -f -- "$tmp" "$conf"
   tmp=
+  if command -v restorecon >/dev/null 2>&1; then restorecon "$conf"; fi
 }
 
 valid_server() {

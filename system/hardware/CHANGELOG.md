@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Changed
+- Vendor driver installers now use Fedora DNF packages and exclude i686.
+  NVIDIA drivers and boot configuration remain owned by the host Fedora install;
+  Ryoku does not require signing-key enrollment.
+- The backlight workaround uses grubby. Wi-Fi reports Fedora's actual backend,
+  checks the selected supplicant is installed, and persists country settings
+  through cfg80211 plus a boot service. New network files get SELinux labels.
+- Hardware runtime dependencies and service activation are included in the
+  Fedora desktop RPM. DDC seat access no longer assumes an i2c group, and the
+  GPU helper can locate the packaged udev rule.
+
+### Removed
+- NVIDIA driver installation and akmods repair helpers, their installer option,
+  signing/enrollment guidance, and obsolete tests/workflow.
+- The 32-bit GPU helper and its obsolete test. Old bundle prerequisites are
+  ignored without installing GPU libraries.
+
 ### Added
 - `display/ryoku-monitor`: **a hand-entered resolution is forced, not ignored.**
   When a layout carries a `WxH@rate` mode the panel does not advertise (the Hub's
@@ -11,8 +28,6 @@
   `tests/monitor-custom-mode.sh`.
 
 ### Fixed
-- `ryoku-gpu-lib32` now installs Fedora i686 graphics packages through DNF,
-  matching RPM Fusion NVIDIA libraries to the installed driver branch.
 - `display/ryoku-monitor`: **an active monitor is no longer treated as disabled
   on Hyprland builds that mislabel it.** hyprland-git reports `"disabled": true`
   for a plainly active output (focused, DPMS on, a real mode, an active

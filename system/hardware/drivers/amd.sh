@@ -1,69 +1,11 @@
 #!/usr/bin/env bash
-#
-# amd.sh: AMD graphics drivers if an AMD GPU is present.
-#
-# pure open Mesa stack: mesa (OpenGL + amdgpu userspace), vulkan-radeon
-# (RADV). no proprietary blob.
-#
-# idempotent, gated on the GPU, dry-run via RYOKU_DRYRUN.
-
 set -euo pipefail
 
-RYOKU_DRYRUN="${RYOKU_DRYRUN:-0}"
-for arg in "$@"; do
-  case "$arg" in
-    --dry-run) RYOKU_DRYRUN=1 ;;
-    -h | --help)
-      echo "Usage: amd.sh [--dry-run]"
-      echo "Install AMD Mesa/Vulkan drivers if an AMD GPU is present."
-      exit 0
-      ;;
-    *)
-      echo "amd.sh: unknown argument: $arg" >&2
-      exit 1
-      ;;
-  esac
-done
+source "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 
-run() {
-  if [[ $RYOKU_DRYRUN == 1 ]]; then
-    printf 'DRYRUN: %s\n' "$*"
-    return 0
-  fi
-  "$@"
-}
-
-PM=(pacman)
-(( EUID == 0 )) || PM=(sudo -n pacman)
-# offline install: RYOKU_PACMAN_CONF points at a config registering only the ISO's
-# baked repo. Resolving against the target's own pacman.conf cannot work there --
-# its other repos have no synced db and pacman then refuses the transaction.
-if [[ -f ${RYOKU_PACMAN_CONF:-} ]]; then PM+=(--config "$RYOKU_PACMAN_CONF"); fi
-
-pkg_installed() { pacman -Qq "$1" >/dev/null 2>&1; }
-
-install_pkgs() {
-  local missing=() p
-  for p in "$@"; do pkg_installed "$p" || missing+=("$p"); done
-  if (( ${#missing[@]} == 0 )); then
-    echo "amd.sh: already installed: $*"
-    return 0
-  fi
-  echo "amd.sh: installing ${missing[*]}"
-  run "${PM[@]}" -S --needed --noconfirm "${missing[@]}"
-}
-
-has_amd_gpu() {
-  if command -v lspci >/dev/null 2>&1 \
-    && lspci 2>/dev/null | grep -iE 'vga|3d|display' | grep -qiE 'amd|ati|radeon|advanced micro devices'; then
-    return 0
-  fi
-  grep -Eqs '^DRIVER=(amdgpu|radeon)$' /sys/class/drm/card*/device/uevent 2>/dev/null
-}
-
-if ! has_amd_gpu; then
+if ! has_gpu_vendor 0x1002; then
   echo "amd.sh: no AMD GPU detected, nothing to do."
   exit 0
 fi
 
-install_pkgs mesa vulkan-radeon
+install_pkgs mesa-dri-drivers mesa-libGL mesa-vulkan-drivers amd-gpu-firmware
