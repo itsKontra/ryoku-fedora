@@ -11,7 +11,7 @@ glibc-all-langpacks
 systemd
 systemd-udev
 systemd-resolved
-systemd-networkd
+# systemd-networkd
 util-linux
 shadow-utils
 sudo
@@ -67,6 +67,7 @@ mesa-vulkan-drivers
 vulkan-loader
 xorg-x11-server-Xwayland
 libva-utils
+libva-intel-media-driver
 linux-firmware
 amd-ucode-firmware
 microcode_ctl
@@ -82,6 +83,34 @@ bat
 lua
 python3
 golang
+# Native equivalents of the Arch base-devel and developer toolchains
+autoconf
+automake
+binutils
+bison
+file
+findutils
+flex
+gawk
+gcc
+gcc-c++
+gettext
+groff
+libtool
+m4
+make
+patch
+pkgconf-pkg-config
+sed
+texinfo
+which
+rust
+cargo
+# These packages supply the unversioned node and npm commands as well.
+nodejs24-bin
+nodejs24-npm-bin
+python3-pip
+pipx
 alacritty
 fish
 fzf
@@ -120,6 +149,8 @@ zsh-syntax-highlighting
 firewalld
 NetworkManager
 NetworkManager-wifi
+iw
+nftables
 bluez
 pipewire
 wireplumber
@@ -134,7 +165,7 @@ power-profiles-daemon
 upower
 rtkit
 polkit
-polkit-kde
+# polkit-kde
 
 [multimedia]
 # Published Ryoku components require Fedora FFmpeg
@@ -156,6 +187,7 @@ hyprland
 hyprpolkitagent
 hypridle
 hyprpicker
+hyprsunset
 quickshell
 nautilus
 nautilus-python
@@ -181,6 +213,7 @@ xdg-desktop-portal-gtk
 xdg-desktop-portal-hyprland
 qt6-qtwayland
 qt5-qtwayland
+qt6-qtdeclarative
 qt6-qt5compat
 qt6-qtsvg
 qt6-qtmultimedia
@@ -199,6 +232,7 @@ source-foundry-hack-fonts
 gamemode
 gamescope
 mangohud
+steam-devices
 edk2-ovmf
 qemu-system-x86
 virglrenderer
