@@ -257,6 +257,11 @@ if [[ -f "$REPO_ROOT/ryoku/shell/scripts/ryoku-install-extra" ]]; then
   mkdir -p "$ISO_STAGE/ryoku/shell/scripts"
   cp -a "$REPO_ROOT/ryoku/shell/scripts/ryoku-install-extra" "$ISO_STAGE/ryoku/shell/scripts/"
 fi
+if [[ -d "$REPO_ROOT/system" ]]; then
+  mkdir -p "$ISO_STAGE/system"
+  cp -a "$REPO_ROOT/system"/* "$ISO_STAGE/system/"
+fi
+
 
 # Payload stamp
 cat > "$ISO_STAGE/.ryoku-media" <<EOF

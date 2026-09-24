@@ -270,12 +270,232 @@ def resolve_repo_dir(repo_dir=None):
         if candidate.is_dir():
             return candidate
     script_parent = Path(__file__).resolve().parents[2]
-    if (script_parent / "ryoku/assets").is_dir():
+    if (script_parent / "ryoku/assets").is_dir() or (script_parent / "system").is_dir():
         return script_parent
     for mount in (Path("/run/install/repo"), Path("/run/install/source"), Path("/mnt/install/source")):
-        if (mount / "ryoku/assets").is_dir():
+        if (mount / "ryoku/assets").is_dir() or (mount / "system").is_dir():
             return mount
     return script_parent
+
+
+def _find_system_subdir(repo_dir, subpath):
+    repo = resolve_repo_dir(repo_dir)
+    candidate = repo / subpath
+    if candidate.is_dir() or candidate.is_file():
+        return candidate
+    fallback = Path(__file__).resolve().parents[2] / subpath
+    if fallback.is_dir() or fallback.is_file():
+        return fallback
+    return None
+
+
+def install_system_extras(root, repo_dir=None):
+    extras_dir = _find_system_subdir(repo_dir, "system/extras")
+    if not extras_dir or not extras_dir.is_dir():
+        return
+
+    bin_dir = root / "usr/bin"
+    bin_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    for item in sorted(extras_dir.iterdir()):
+        if item.is_file() and not item.name.endswith(".md"):
+            if item.name == "ryostore-install" or item.name.startswith("ryoku-"):
+                dest = bin_dir / item.name
+                shutil.copyfile(item, dest)
+                dest.chmod(0o755)
+
+
+def install_policy_rules(root, repo_dir=None):
+    polkit_dir = root / "usr/share/polkit-1/rules.d"
+    polkit_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    rule_sources = []
+    policy_dir = _find_system_subdir(repo_dir, "system/policy")
+    if policy_dir and policy_dir.is_dir():
+        rule_sources.extend(policy_dir.glob("*.rules"))
+
+    containers_dir = _find_system_subdir(repo_dir, "system/containers")
+    if containers_dir and containers_dir.is_dir():
+        rule_sources.extend(containers_dir.glob("*.rules"))
+
+    hardware_dir = _find_system_subdir(repo_dir, "system/hardware")
+    if hardware_dir and hardware_dir.is_dir():
+        for rule in hardware_dir.rglob("*.rules"):
+            try:
+                content = rule.read_text(encoding="utf-8")
+                if "polkit.addRule" in content:
+                    rule_sources.append(rule)
+            except OSError:
+                pass
+
+    for rule in rule_sources:
+        dest = polkit_dir / rule.name
+        shutil.copyfile(rule, dest)
+        dest.chmod(0o644)
+
+
+def install_hardware_support(root, repo_dir=None, runner=None):
+    hardware_dir = _find_system_subdir(repo_dir, "system/hardware")
+    containers_dir = _find_system_subdir(repo_dir, "system/containers")
+
+    bin_dir = root / "usr/bin"
+    bin_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    # 1. Helpers on PATH (/usr/bin)
+    if hardware_dir and hardware_dir.is_dir():
+        for item in sorted(hardware_dir.rglob("ryoku-*")):
+            if item.is_file() and not item.name.endswith(".service") and not item.name.endswith(".conf"):
+                dest = bin_dir / item.name
+                shutil.copyfile(item, dest)
+                dest.chmod(0o755)
+
+    if containers_dir and containers_dir.is_dir():
+        for item in sorted(containers_dir.glob("ryoku-*")):
+            if item.is_file() and not item.name.endswith(".rules"):
+                dest = bin_dir / item.name
+                shutil.copyfile(item, dest)
+                dest.chmod(0o755)
+
+    # 2. Udev rules (/usr/lib/udev/rules.d)
+    if hardware_dir and hardware_dir.is_dir():
+        udev_dir = root / "usr/lib/udev/rules.d"
+        udev_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+        for rule in sorted(hardware_dir.rglob("*.rules")):
+            try:
+                content = rule.read_text(encoding="utf-8")
+                if "polkit.addRule" not in content:
+                    dest = udev_dir / rule.name
+                    shutil.copyfile(rule, dest)
+                    dest.chmod(0o644)
+            except OSError:
+                pass
+
+        # 3. Kernel module loading (/etc/modules-load.d)
+        modules_load_dir = root / "etc/modules-load.d"
+        modules_load_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+        for conf_rel in ("ddc/ryoku-i2c.conf", "input/99-ryoku-uinput.conf"):
+            src = hardware_dir / conf_rel
+            if src.is_file():
+                dest = modules_load_dir / src.name
+                shutil.copyfile(src, dest)
+                dest.chmod(0o644)
+
+        # 4. Modprobe configuration (/usr/lib/modprobe.d)
+        modprobe_dir = root / "usr/lib/modprobe.d"
+        modprobe_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+        for conf_rel in (
+            "audio/99-ryoku-audio-powersave.conf",
+            "input/99-ryoku-controller.conf",
+            "bluetooth/99-ryoku-bt-autosuspend.conf",
+        ):
+            src = hardware_dir / conf_rel
+            if src.is_file():
+                dest = modprobe_dir / src.name
+                shutil.copyfile(src, dest)
+                dest.chmod(0o644)
+
+        # 5. Logind policy (/etc/systemd/logind.conf.d/10-ryoku-lid.conf)
+        lid_conf = hardware_dir / "power/logind-ryoku-lid.conf"
+        if lid_conf.is_file():
+            logind_dir = root / "etc/systemd/logind.conf.d"
+            logind_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+            dest = logind_dir / "10-ryoku-lid.conf"
+            shutil.copyfile(lid_conf, dest)
+            dest.chmod(0o644)
+
+        # 6. Systemd services
+        system_units = root / "usr/lib/systemd/system"
+        system_units.mkdir(mode=0o755, parents=True, exist_ok=True)
+        user_units = root / "usr/lib/systemd/user"
+        user_units.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+        for s_unit in (
+            "network/ryoku-wifi-regdom.service",
+            "network/ryoku-network-kill-guard.service",
+            "network/ryoku-network-kill-disconnect.service",
+        ):
+            src = hardware_dir / s_unit
+            if src.is_file():
+                dest = system_units / src.name
+                shutil.copyfile(src, dest)
+                dest.chmod(0o644)
+
+        bt_reset = hardware_dir / "bluetooth/ryoku-bluetooth-reset.service"
+        if bt_reset.is_file():
+            dest = user_units / bt_reset.name
+            shutil.copyfile(bt_reset, dest)
+            dest.chmod(0o644)
+
+        # Enable ryoku-wifi-regdom.service
+        multi_wants = root / "etc/systemd/system/multi-user.target.wants"
+        multi_wants.mkdir(parents=True, exist_ok=True)
+        regdom_link = multi_wants / "ryoku-wifi-regdom.service"
+        if not regdom_link.exists() and not regdom_link.is_symlink():
+            regdom_link.symlink_to("/usr/lib/systemd/system/ryoku-wifi-regdom.service")
+        if shutil.which("systemctl"):
+            subprocess.run(
+                ["systemctl", f"--root={root}", "enable", "ryoku-wifi-regdom.service"],
+                check=False,
+                stderr=subprocess.DEVNULL,
+            )
+
+        # Enable user session ryoku-bluetooth-reset.service globally
+        user_wants = root / "etc/systemd/user/default.target.wants"
+        user_wants.mkdir(parents=True, exist_ok=True)
+        bt_user_link = user_wants / "ryoku-bluetooth-reset.service"
+        if not bt_user_link.exists() and not bt_user_link.is_symlink():
+            bt_user_link.symlink_to("/usr/lib/systemd/user/ryoku-bluetooth-reset.service")
+        if shutil.which("systemctl"):
+            subprocess.run(
+                ["systemctl", f"--root={root}", "--global", "enable", "ryoku-bluetooth-reset.service"],
+                check=False,
+                stderr=subprocess.DEVNULL,
+            )
+
+        # 7. Apply BlueZ tuning if bluez configuration is present
+        bt_conf = root / "etc/bluetooth/main.conf"
+        tune_script = root / "usr/bin/ryoku-bluetooth-tune"
+        if bt_conf.is_file() and tune_script.is_file():
+            env = dict(os.environ, RYOKU_BT_MAIN_CONF=str(bt_conf))
+            try:
+                subprocess.run(
+                    ["bash", str(tune_script)],
+                    env=env,
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except OSError:
+                pass
+
+
+def run_hardware_drivers(root, repo_dir=None, runner=None):
+    drivers_dir = _find_system_subdir(repo_dir, "system/hardware/drivers")
+    if not drivers_dir or not drivers_dir.is_dir():
+        return
+
+    dest_drivers = root / "usr/share/ryoku/hardware/drivers"
+    dest_drivers.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+    for item in sorted(drivers_dir.glob("*.sh")):
+        dest = dest_drivers / item.name
+        shutil.copyfile(item, dest)
+        dest.chmod(0o755)
+
+    scripts = ["amd.sh", "intel.sh", "vulkan.sh"]
+    has_bash = (root / "bin/bash").is_file() or (root / "usr/bin/bash").is_file()
+    if has_bash and shutil.which("chroot"):
+        for script_name in scripts:
+            target_script = f"/usr/share/ryoku/hardware/drivers/{script_name}"
+            cmd = ["chroot", str(root), "/bin/bash", target_script]
+            try:
+                if runner:
+                    runner(cmd)
+                else:
+                    subprocess.run(cmd, check=False, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+
 
 
 def seed_desktop_extras(root, repo_dir=None):
@@ -678,14 +898,21 @@ def relabel_selinux(root, runner=None, home=RYOKU_HOME):
     targets = [
         str(root / "etc"),
         str(root / "var"),
+        str(root / "usr/bin"),
+        str(root / "usr/share/polkit-1"),
+        str(root / "usr/lib/udev"),
+        str(root / "usr/lib/modprobe.d"),
+        str(root / "usr/lib/systemd"),
         str(root / home.lstrip("/")),
     ]
+    targets = [t for t in targets if Path(t).exists()]
     if runner:
         runner(["setfiles", "-r", str(root), str(contexts), *targets])
     elif shutil.which("setfiles"):
         subprocess.run(["setfiles", "-r", str(root), str(contexts), *targets], check=True)
     elif shutil.which("chroot") and (root / "usr/sbin/restorecon").is_file():
-        subprocess.run(["chroot", str(root), "restorecon", "-Rv", "/etc", "/var", home], check=True)
+        subprocess.run(["chroot", str(root), "restorecon", "-Rv", "/etc", "/var", "/usr/bin",
+                        "/usr/share/polkit-1", "/usr/lib/udev", "/usr/lib/modprobe.d", "/usr/lib/systemd", home], check=True)
 
 
 def anaconda_accounts(root):
@@ -763,11 +990,15 @@ def provision(root, repo_dir=None, runner=None, allow_running=False, anaconda=Fa
     configure_session_and_greeter(root)
     enable_base_services(root)
     initialize_boot_guard(root)
+    install_system_extras(root, repo_dir=repo_dir)
+    install_policy_rules(root, repo_dir=repo_dir)
+    install_hardware_support(root, repo_dir=repo_dir, runner=runner)
     seed_desktop_extras(root, repo_dir=repo_dir)
     for user, home in accounts:
         seed_assets_and_integration(root, repo_dir=repo_dir, home=home)
         seed_lockscreen(root, repo_dir=repo_dir, home=home)
         materialize_config(root, runner=runner, user=user, home=home)
+    run_hardware_drivers(root, repo_dir=repo_dir, runner=runner)
     if not anaconda:
         if allow_running:
             arm_firstboot(root, runner=runner, allow_running=True)

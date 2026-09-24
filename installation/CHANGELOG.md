@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Fixed
+- Install system policy rules, package extras, hardware helpers, udev rules,
+  kernel module/modprobe configurations, logind clamshell policy, and services
+  during Anaconda offline provisioning, and stage the system hierarchy on the ISO.
 - Fill Fedora package-list gaps against the Arch package sets: native build and
   language tools, Wi-Fi and firewall utilities, Intel video acceleration, Qt QML,
   night light, and controller access rules. Exclude Arch boot tooling, CachyOS,

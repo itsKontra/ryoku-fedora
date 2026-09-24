@@ -170,6 +170,9 @@ class TestComposePipelineScript(unittest.TestCase):
             self.assertTrue((stage_dir / "ryoku/assets/brand").is_dir())
             self.assertTrue((stage_dir / "ryoku/assets/ryodecors").is_dir())
             self.assertTrue((stage_dir / "ryoku/apps/npm/npmrc").is_file())
+            self.assertTrue((stage_dir / "system/extras").is_dir())
+            self.assertTrue((stage_dir / "system/hardware").is_dir())
+            self.assertTrue((stage_dir / "system/policy").is_dir())
             self.assertTrue((stage_dir / ".ryoku-media").is_file())
 
             # Verify output files
