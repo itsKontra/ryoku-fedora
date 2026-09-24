@@ -6,7 +6,7 @@ on:
       - 'ryoku/lockscreen/sddm/setup'
       - 'ryoku/cli/internal/doctor/doctor.go'
       - 'system/packages/base.packages'
-      - 'release/packages/ryoku-desktop/PKGBUILD'
+      - 'release/rpm/ryoku-desktop.spec'
       - 'tests/sddm-wayland.sh'
       - '.github/workflows/sddm-wayland.yml'
   push:
@@ -16,7 +16,7 @@ on:
       - 'ryoku/lockscreen/sddm/setup'
       - 'ryoku/cli/internal/doctor/doctor.go'
       - 'system/packages/base.packages'
-      - 'release/packages/ryoku-desktop/PKGBUILD'
+      - 'release/rpm/ryoku-desktop.spec'
       - 'tests/sddm-wayland.sh'
       - '.github/workflows/sddm-wayland.yml'
   workflow_dispatch:

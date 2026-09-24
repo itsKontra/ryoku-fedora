@@ -29,7 +29,7 @@ type Manifest struct {
 	Dev         []string            `json:"dev"`                  // system/packages/dev.packages
 	Hardware    map[string][]string `json:"hardware,omitempty"`   // hardware.packages, per profile section
 	AUR         []string            `json:"aur"`                  // system/packages/aur.packages
-	FirstParty  []string            `json:"firstParty"`           // release/packages/*, pinned to Version
+	FirstParty  []string            `json:"firstParty"`           // release/rpm/*.spec, pinned to Version
 	Compositor  map[string][]string `json:"compositor,omitempty"` // provider -> its packages, from its caps
 	Provisioned []string            `json:"provisioned"`          // apps doctor delivers once and never re-adds
 }

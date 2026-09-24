@@ -12,9 +12,8 @@
 # its native backlight is hidden (nvidia_wmi_ec_backlight registered, no
 # amdgpu_bl*). Intel+NVIDIA also registers nvidia_wmi_ec_backlight but has no AMD
 # GPU, so the AMD check stops the wrong fix firing there (#54). No-ops otherwise,
-# safe. The param goes in a /etc/limine-entry-tool.d drop-in (Ryoku's cmdline is
-# limine-entry-tool managed, read from /etc/default/limine + that dir), never
-# appended to default.conf directly. Needs a reboot to take effect.
+# safe. Fedora's grubby updates the installed kernel entries. A reboot is needed
+# before the kernel exposes the native backlight.
 #
 # idempotent, gated on detection, dry-run via RYOKU_DRYRUN (or --dry-run).
 set -euo pipefail
@@ -36,7 +35,6 @@ for arg in "$@"; do
 done
 
 backlight_path="${RYOKU_BACKLIGHT_PATH:-/sys/class/backlight}"
-dropin="${RYOKU_DROPIN:-/etc/limine-entry-tool.d/ryoku-backlight.conf}"
 param="acpi_backlight=native"
 drm_path="${RYOKU_DRM_PATH:-/sys/class/drm}"
 
@@ -59,16 +57,6 @@ run() {
   "$@"
 }
 
-write_root() {
-  local path=$1
-  if [[ $RYOKU_DRYRUN == 1 ]]; then
-    printf 'DRYRUN: write %s\n' "$path"
-    cat >/dev/null
-    return 0
-  fi
-  if (( EUID == 0 )); then cat >"$path"; else sudo -n tee "$path" >/dev/null; fi
-}
-
 # gate 0: the quirk is AMD-specific. nvidia_wmi_ec_backlight also registers on
 # Intel+NVIDIA laptops, so require a real AMD GPU before anything else (#54).
 if ! amd_gpu_present; then
@@ -86,30 +74,12 @@ if compgen -G "$backlight_path/amdgpu_bl*" >/dev/null; then
   exit 0
 fi
 
-# idempotent: leave an existing drop-in that already carries the param alone.
-if [[ -f $dropin ]] && grep -qF "$param" "$dropin"; then
-  echo "ryoku-hw-backlight-fix: $param already set in $dropin"
-  exit 0
-fi
+command -v grubby >/dev/null 2>&1 || {
+  echo "ryoku-hw-backlight-fix: grubby is required to update Fedora kernel arguments" >&2
+  exit 1
+}
 
-echo "ryoku-hw-backlight-fix: panel stuck on nvidia_wmi_ec_backlight; adding $param via $dropin (reboot required)"
-run mkdir -p "${dropin%/*}"
-write_root "$dropin" <<EOF
-# Ryoku: ASUS AMD+NVIDIA panel wired to the AMD iGPU registers only
-# nvidia_wmi_ec_backlight; acpi_backlight=native reveals amdgpu_bl0 so
-# brightness works. Managed by ryoku-hw-backlight-fix.
-KERNEL_CMDLINE[default]+=" $param"
-EOF
-
-# Bake the new cmdline into the boot entries. offline/chroot-safe: run only a
-# generator that exists, else the drop-in applies on the next kernel/limine
-# update. limine-mkinitcpio rebuilds the UKI (which embeds the cmdline); mirrors
-# bootloader.sh's limine-mkinitcpio -> limine-update path.
-if command -v limine-mkinitcpio >/dev/null 2>&1; then
-  run limine-mkinitcpio
-  command -v limine-update >/dev/null 2>&1 && run limine-update
-elif command -v limine-update >/dev/null 2>&1; then
-  run limine-update
-else
-  echo "ryoku-hw-backlight-fix: no limine generator here; drop-in applies on the next kernel/limine update"
-fi
+priv=()
+(( EUID == 0 )) || priv=(sudo -n)
+echo "ryoku-hw-backlight-fix: adding $param to Fedora kernel entries (reboot required)"
+run "${priv[@]}" grubby --update-kernel=ALL --args="$param"

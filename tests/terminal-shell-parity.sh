@@ -44,21 +44,7 @@ for rule in \
   "ZSH_HIGHLIGHT_STYLES[globbing]='fg=#93D4E0'"; do
   grep -Fq "$rule" "$zsh_cfg" || fail "Zsh palette missing $rule"
 done
-grep -Fxq 'pkgver=0.4.0_devel3' "$repo/release/packages/blesh/PKGBUILD" ||
-  fail "ble.sh 0.4 or newer is required for Starship prompt integration"
 (( ble_line < starship_line )) || fail "Bash must initialize Starship after ble.sh"
-grep -Fq "\"ryoku-oh-my-zsh=\$pkgver\"" "$repo/release/packages/ryoku-desktop/PKGBUILD" &&
-  test -f "$repo/release/packages/ryoku-oh-my-zsh/PKGBUILD" ||
-  fail "Oh My Zsh must be a signed ryoku-desktop dependency"
-# shellcheck disable=SC2016  # matching the literal $pkgver text inside the PKGBUILD
-grep -Fq 'provides=("oh-my-zsh=$pkgver" "oh-my-zsh-git=$pkgver")' \
-  "$repo/release/packages/ryoku-oh-my-zsh/PKGBUILD" ||
-  fail "Ryoku Oh My Zsh must version-provide both replacement package names"
-for field in conflicts replaces; do
-  grep -Fq "$field=('oh-my-zsh' 'oh-my-zsh-git')" \
-    "$repo/release/packages/ryoku-oh-my-zsh/PKGBUILD" ||
-    fail "Ryoku Oh My Zsh must $field both upstream package names"
-done
 need fish
 need bash
 need zsh

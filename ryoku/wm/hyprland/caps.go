@@ -44,7 +44,7 @@ var capsManifest = []wm.Capability{
 
 // The packages ryoku-desktop-hyprland is made of: the variant package itself,
 // Hyprland, its plugins, its portal and its satellites. Kept in step with that
-// package's depends (release/packages/ryoku-desktop-hyprland/PKGBUILD); this is
+// package's RPM Requires entries; this is
 // the list a switch away from Hyprland reclaims, minus ryoku-desktop, which is
 // shared with the compositor that replaces it. The variant package belongs in
 // the list: on a packaged box it owns every satellite below, so a reclaim that

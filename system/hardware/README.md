@@ -22,11 +22,6 @@ in the machine, and do not waste power doing it.
     panel hangs off the dGPU, so the dGPU can never runtime-suspend and no
     `AQ_DRM_DEVICES` value can change that. `ryoku doctor` reports the idle cost
     when it sees the condition. See `docs/power.md`.
-  - `ryoku-gpu-lib32` Installs the 32-bit (lib32) GPU drivers matching the
-    detected hardware, so 32-bit and Proton/DXVK games render on the GPU rather
-    than in software. Needs `[multilib]`; the Gaming bundle enables it, then runs
-    this. Reuses `ryoku-gpu-detect` to pick the right per-vendor Vulkan ICD on a
-    `lib32-mesa` + `lib32-vulkan-icd-loader` baseline.
   - `90-ryoku-gpu.rules` A udev rule that gives every GPU a stable, predictable
     name under `/dev/dri` so the pin keeps working across reboots.
 - `display/` Backlight and output policy. The scaling tool itself moved to the
@@ -99,13 +94,16 @@ in the machine, and do not waste power doing it.
   - `ryoku-wifi-regdom` Pins the Wi-Fi regulatory domain (the country) so 5 GHz is
     usable: on world domain `00` the kernel disables or no-IRs most 5 GHz channels,
     so a dual-band SSID is only seen on 2.4 GHz. `set <CC>` persists the country in
-    the wireless-regdb conf (re-applied at boot by its udev rule) and iwd's
-    `Country` hint and applies it now; `apply` is the idempotent install/upgrade/
-    boot pass that also seeds iwd's 5 GHz rank nudge; `get`/`status` report. Runs
-    as root through pkexec.
+    `/etc/modprobe.d/ryoku-wireless-regdom.conf` and applies it now.
+    `ryoku-wifi-regdom.service` reapplies it before NetworkManager starts,
+    including when cfg80211 was loaded from the initramfs. An installed iwd also
+    receives the country hint; `get`/`status` report without changing anything.
+  - `ryoku-wifi-backend` reads NetworkManager's merged configuration and defaults
+    to Fedora's wpa_supplicant backend. Switching requires the selected backend
+    package to be installed before any configuration or service is changed.
   - `48-ryoku-wifi-regdom.rules` A polkit rule that lets the active wheel user run
     exactly that helper without a password, so pinning the country stays one click.
-- `drivers/` One install script per vendor: `nvidia.sh`, `intel.sh`, `amd.sh`,
+- `drivers/` One install script per vendor: `intel.sh`, `amd.sh`,
   and `vulkan.sh`. Each one checks whether its hardware is present and installs
   only what that hardware needs.
 
@@ -148,30 +146,46 @@ point, and lowers the source to it when it is running hotter. Nothing is
 hardcoded per model: a mic that is already at or below unity is untouched, so a
 well-behaved codec is a no-op.
 
-## Per-vendor drivers
+## Fedora driver installation
 
-- NVIDIA: the open kernel modules on recent cards (Turing and newer), the
-  proprietary ones on older cards, plus the userspace and video-acceleration
-  bits.
-- Intel: the modern media driver, the video runtime, and the Vulkan driver.
-- AMD: the open Mesa stack and its Vulkan driver. No extra blob is needed.
-- Vulkan: the vendor-neutral loader that every Vulkan app talks to.
+The helpers use DNF and exclude i686 packages. No 32-bit GPU helper is shipped.
+`common.sh` supplies shared argument handling, PCI detection, and package
+transactions; run vendor scripts from this directory so it remains available.
 
-The driver scripts are safe to run more than once (already-installed packages
-are skipped), and they do nothing when their hardware is not present. Set
-`RYOKU_DRYRUN=1` to print what would be installed without changing anything.
+- AMD: Mesa OpenGL/Vulkan and `amd-gpu-firmware`.
+- Intel: Mesa OpenGL/Vulkan, `intel-gpu-firmware`, `alsa-sof-firmware`, and
+  `libva-intel-media-driver` unless RPM Fusion's full media driver is installed.
+- Vulkan: `vulkan-loader` for any detected graphics device.
+NVIDIA drivers remain managed by the host Fedora installation. Ryoku does not
+install or rebuild NVIDIA akmods, enroll module-signing keys, or change Secure
+Boot. The installer has no proprietary-driver toggle, and Fedora doctor leaves
+NVIDIA boot configuration alone. Existing GPU detection, display routing and
+MUX controls remain available.
 
-## How the installer uses this
+The Fedora shell installer runs these helpers after installing the desktop,
+including in source mode. Vendor scripts skip absent hardware. DNF handles
+already-installed packages. `RYOKU_DRYRUN=1` or `--dry-run` prints planned changes.
+The installer reports driver failures and continues.
 
-The install backend runs the driver scripts for the detected hardware, installs
-the GPU udev rule, and writes the first GPU pin and monitor scale so the very
-first login already renders on the right GPU at the right size.
+The ASUS AMD/NVIDIA backlight workaround uses
+[Fedora's grubby kernel-argument interface](https://fedoraproject.org/wiki/GRUB_2)
+to set `acpi_backlight=native`, and stays gated on an AMD GPU with only the EC
+backlight exposed. It takes effect after reboot.
 
-## Tools assumed present
+## Runtime dependencies and delivery
 
-`lspci` (GPU model names and the NVIDIA generation check) and `udevadm` (loading
-the GPU rule) are expected on the target. `nvidia-smi` is optional and only fills
-in the NVIDIA VRAM figure. `hyprctl` and `jq` are needed for live display
-changes. `pacman` does the installing. `pactl` (PipeWire-Pulse) reads and sets
-the microphone base volume for `ryoku-mic`. `iw` toggles WiFi power-save for
-`ryoku-wifi-powersave` and sets the regulatory domain for `ryoku-wifi-regdom`.
+The desktop RPM requires NetworkManager Wi-Fi support, PipeWire's PulseAudio
+service, `pciutils`, `usbutils`, `kmod`, `dracut`, `grubby`, and
+`wireless-regdb` alongside the existing audio, power, DDC, and networking tools.
+It ships the hardware helpers, udev rules, module settings and service units,
+enables the regulatory-domain service and Bluetooth session reset, and applies
+BlueZ tuning. Source deployment installs the privileged Wi-Fi helpers and their
+polkit rules as well as the regulatory-domain service.
+
+Audio, power, GPU detection/MUX, input and most display helpers use Linux sysfs,
+udev, systemd, PipeWire or desktop APIs. The DDC udev rule grants seat access
+without assuming an `i2c` group exists. Network configuration writes restore
+SELinux labels where files are created or replaced.
+
+This is a source review of Fedora compatibility. Hardware boot, suspend/resume,
+Secure Boot and SELinux behavior still need validation on a Fedora machine.

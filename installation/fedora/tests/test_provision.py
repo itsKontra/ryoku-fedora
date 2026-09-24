@@ -369,6 +369,13 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertTrue((self.root / "etc/sddm.conf.d/99-ryoku.conf").exists())
         self.assertTrue((self.root / "etc/sudoers.d/10-ryoku-wheel").exists())
         self.assertTrue((self.root / "etc/systemd/system/display-manager.service").is_symlink())
+        self.assertTrue((self.root / "usr/bin/ryostore-install").is_file())
+        self.assertTrue((self.root / "usr/share/polkit-1/rules.d/52-ryoku-timedate.rules").is_file())
+        self.assertTrue((self.root / "usr/lib/udev/rules.d/90-ryoku-gpu.rules").is_file())
+        self.assertTrue((self.root / "etc/modules-load.d/ryoku-i2c.conf").is_file())
+        self.assertTrue((self.root / "usr/lib/modprobe.d/99-ryoku-controller.conf").is_file())
+        self.assertTrue((self.root / "etc/systemd/logind.conf.d/10-ryoku-lid.conf").is_file())
+
 
     def test_normalize_dnf_repositories_populates_copr_gpgkeys(self):
         copr_file = "etc/yum.repos.d/RyotunesCOPR.repo"
@@ -398,6 +405,91 @@ class ProvisionTargetTest(unittest.TestCase):
             provision_target.seed_assets_and_integration(self.root, repo_dir=repo_path, home="/home/ryoku")
             self.assertTrue((user_home / "Pictures/Wallpapers/fallback.png").is_file())
 
+    def test_install_system_extras(self):
+        provision_target.install_system_extras(self.root)
+        bin_dir = self.root / "usr/bin"
+        for name in (
+            "ryostore-install",
+            "ryoku-pkg-add",
+            "ryoku-pkg-remove",
+            "ryoku-pkg-aur-add",
+            "ryoku-pkg-multilib",
+            "ryoku-cmd-present",
+        ):
+            target_bin = bin_dir / name
+            self.assertTrue(target_bin.is_file(), f"Missing extras binary: {name}")
+            self.assertEqual(target_bin.stat().st_mode & 0o777, 0o755)
+
+    def test_install_policy_rules(self):
+        provision_target.install_policy_rules(self.root)
+        polkit_dir = self.root / "usr/share/polkit-1/rules.d"
+        for rule in (
+            "52-ryoku-timedate.rules",
+            "46-ryoku-docker.rules",
+            "47-ryoku-power.rules",
+            "48-ryoku-wifi-regdom.rules",
+            "49-ryoku-wifi-powersave.rules",
+            "50-ryoku-dns.rules",
+            "51-ryoku-wifi-backend.rules",
+            "53-ryoku-game-tune.rules",
+            "54-ryoku-bluetooth-a2dp.rules",
+            "55-ryoku-network-kill.rules",
+        ):
+            target_rule = polkit_dir / rule
+            self.assertTrue(target_rule.is_file(), f"Missing polkit rule: {rule}")
+            self.assertEqual(target_rule.stat().st_mode & 0o777, 0o644)
+
+    def test_install_hardware_support(self):
+        self.write("etc/bluetooth/main.conf", "[General]\n#AutoEnable=true\n")
+        provision_target.install_hardware_support(self.root)
+
+        # Helpers
+        bin_dir = self.root / "usr/bin"
+        for name in ("ryoku-gpu", "ryoku-power", "ryoku-wifi-regdom", "ryoku-docker"):
+            target_bin = bin_dir / name
+            self.assertTrue(target_bin.is_file(), f"Missing helper: {name}")
+            self.assertEqual(target_bin.stat().st_mode & 0o777, 0o755)
+
+        # Udev
+        udev_dir = self.root / "usr/lib/udev/rules.d"
+        for rule in ("90-ryoku-gpu.rules", "90-ryoku-backlight.rules", "60-ryoku-i2c.rules", "70-ryoku-maono.rules"):
+            target_rule = udev_dir / rule
+            self.assertTrue(target_rule.is_file(), f"Missing udev rule: {rule}")
+            self.assertEqual(target_rule.stat().st_mode & 0o777, 0o644)
+
+        # Module loading
+        self.assertTrue((self.root / "etc/modules-load.d/ryoku-i2c.conf").is_file())
+        self.assertTrue((self.root / "etc/modules-load.d/99-ryoku-uinput.conf").is_file())
+
+        # Modprobe
+        self.assertTrue((self.root / "usr/lib/modprobe.d/99-ryoku-audio-powersave.conf").is_file())
+        self.assertTrue((self.root / "usr/lib/modprobe.d/99-ryoku-controller.conf").is_file())
+        self.assertTrue((self.root / "usr/lib/modprobe.d/99-ryoku-bt-autosuspend.conf").is_file())
+
+        # Logind
+        lid_conf = self.root / "etc/systemd/logind.conf.d/10-ryoku-lid.conf"
+        self.assertTrue(lid_conf.is_file())
+        self.assertEqual(lid_conf.stat().st_mode & 0o777, 0o644)
+
+        # Services
+        self.assertTrue((self.root / "usr/lib/systemd/system/ryoku-wifi-regdom.service").is_file())
+        self.assertTrue((self.root / "usr/lib/systemd/user/ryoku-bluetooth-reset.service").is_file())
+        self.assertTrue((self.root / "etc/systemd/system/multi-user.target.wants/ryoku-wifi-regdom.service").is_symlink())
+        self.assertTrue((self.root / "etc/systemd/user/default.target.wants/ryoku-bluetooth-reset.service").is_symlink())
+
+        # BlueZ tuning applied
+        bt_content = (self.root / "etc/bluetooth/main.conf").read_text()
+        self.assertIn("AutoEnable = true", bt_content)
+
+    def test_run_hardware_drivers_stages_vendor_scripts(self):
+        provision_target.run_hardware_drivers(self.root)
+        drivers_dir = self.root / "usr/share/ryoku/hardware/drivers"
+        for script in ("amd.sh", "intel.sh", "vulkan.sh", "common.sh"):
+            target_script = drivers_dir / script
+            self.assertTrue(target_script.is_file(), f"Missing driver script: {script}")
+            self.assertEqual(target_script.stat().st_mode & 0o777, 0o755)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Fixed
+- Install system policy rules, package extras, hardware helpers, udev rules,
+  kernel module/modprobe configurations, logind clamshell policy, and services
+  during Anaconda offline provisioning, and stage the system hierarchy on the ISO.
+- Fill Fedora package-list gaps against the Arch package sets: native build and
+  language tools, Wi-Fi and firewall utilities, Intel video acceleration, Qt QML,
+  night light, and controller access rules. Exclude Arch boot tooling, CachyOS,
+  32-bit graphics and out-of-tree GPU/controller modules.
 - Set target-home ownership before user configuration and stop provisioning on
   materialization, desktop apply or required extras failures. Load the extras
   helper explicitly and check each required asset.

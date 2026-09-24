@@ -157,6 +157,12 @@ name = result.name
                              ['one.x86_64.rpm', 'two.x86_64.rpm'])
 
 
+class FedoraPayload(unittest.TestCase):
+    def test_desktop_does_not_stage_removed_arch_boot_files(self):
+        payload = (ROOT / 'payload/ryoku-desktop.sh').read_text()
+        self.assertNotIn('system/boot/', payload)
+
+
 class Publication(unittest.TestCase):
     def candidate(self):
         return dict(copr=dict(owner='itskontra', project='ryoku', chroot='fedora-44-x86_64'),

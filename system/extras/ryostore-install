@@ -2,7 +2,7 @@
 
 # Extras actuator: installs, removes, and reports state for bundles in the
 # ryostore catalogue. The Hub's Extras section drives it; a bundle is a
-# list of items, each a `package` (auto-routed to official repos or AUR), a
+# list of items, each a `package` (installed from enabled DNF repositories), a
 # `script` (small installer from ryostore/installers), or a `plugin`
 # (shell plugin fetched to ~/.local/share/ryoku/plugins; place via Settings,
 # Plugins).
@@ -73,31 +73,36 @@ report_dir() {
 
 # --- detection (one implementation, used by status and the install path) ------
 
-# One-shot snapshot of installed package names: status classifies dozens of
-# components, and a `pacman -Qq` per component spawns pacman hundreds of times
-# (seconds of latency). load_pkgset reads the whole set once; pkg_installed then
-# checks membership. Empty until loaded, so the install/remove paths keep their
-# live per-package query (correct after a fresh install).
+# Status takes one RPM snapshot; transactions query live state after changes.
 declare -A PKGSET
 PKGSET_LOADED=0
 load_pkgset() {
-  local n
-  while IFS= read -r n; do [[ -n $n ]] && PKGSET[$n]=1; done < <(pacman -Qq 2>/dev/null)
+  local n installed
+  installed=$(rpm -qa --queryformat '%{NAME}\n%{NAME}.%{ARCH}\n[%{PROVIDENAME}\n]') \
+    || die "could not query installed RPM packages"
+  while IFS= read -r n; do [[ -n $n ]] && PKGSET[$n]=1; done <<<"$installed"
   PKGSET_LOADED=1
 }
 pkg_installed() {
   if (( PKGSET_LOADED )); then [[ -n ${PKGSET[$1]:-} ]]; return; fi
-  pacman -Qq "$1" >/dev/null 2>&1
+  pkg_owners "$1" >/dev/null
 }
-pkg_official() { pacman -Si "$1" >/dev/null 2>&1; }
+pkg_available() {
+  local matches
+  matches=$(dnf -q repoquery --available --queryformat '%{name}' "$1") || return 1
+  [[ -n $matches ]]
+}
 cmd_present() { command -v "$1" >/dev/null 2>&1; }
 
-# The installed package(s) satisfying an item name, one per line, empty when
-# nothing does. `pacman -Q` resolves provides (a `whisper.cpp` item finds an
-# installed `whisper.cpp-cuda`), but `pacman -R` only takes real installed
-# names, so removals must target the owner, never the item name, or the whole
-# transaction aborts on "target not found".
-pkg_owners() { pacman -Qq "$1" 2>/dev/null; }
+# Remove concrete name.arch owners, including when an item names a capability.
+# RPM prints diagnostics on stdout for missing names; only emit successful queries.
+pkg_owners() {
+  local owners
+  owners=$(rpm -q --queryformat '%{NAME}.%{ARCH}\n' -- "$1" 2>/dev/null) \
+    || owners=$(rpm -q --queryformat '%{NAME}.%{ARCH}\n' --whatprovides "$1" 2>/dev/null) \
+    || return 1
+  printf '%s\n' "$owners"
+}
 
 # Where an installed plugin's source lives (read by the runtime + Settings).
 # The catalogue ships the source; install copies it here.
@@ -234,43 +239,26 @@ run_plugin_remove() {
   ryostore internal remove-guest plugins "$name" >/dev/null 2>&1
 }
 
-# Run a bundle's declared prerequisites before any package is routed, so a
-# package that only lives in an extra repo (Steam in multilib) classifies
-# and installs correctly.
+# Prerequisites must succeed before installing the bundle's packages.
 ensure_requires() {
   local file=$1 req
+  if jq -e '.requires // [] | index("cachyos") != null' "$file" >/dev/null; then
+    die "the CachyOS kernel bundle is not supported on Fedora"
+  fi
   while read -r req; do
     [[ -n $req ]] || continue
     case "$req" in
       multilib)
         if [[ -n $DRYRUN ]]; then
-          echo "DRYRUN: ensure the multilib repo is enabled"
+          echo "DRYRUN: check Fedora i686 package support"
         else
-          echo "==> Ensuring the multilib repo is enabled"
-          ryoku-pkg-multilib || die "could not enable the multilib repo; its lib32 packages would mis-route to AUR source builds"
-        fi
-        ;;
-      cachyos)
-        if [[ -n $DRYRUN ]]; then
-          echo "DRYRUN: ensure the CachyOS repository is enabled"
-        else
-          echo "==> Ensuring the CachyOS repository is enabled"
-          ryoku-pkg-cachyos || die "could not enable the CachyOS repository"
+          ryoku-pkg-multilib || die "32-bit packages are not supported on this system"
         fi
         ;;
       gpu-lib32)
-        if [[ -n $DRYRUN ]]; then
-          echo "DRYRUN: ensure the 32-bit (lib32) GPU driver stack for the detected hardware"
-        else
-          echo "==> Ensuring the 32-bit GPU driver stack for the detected hardware"
-          if command -v ryoku-gpu-lib32 >/dev/null 2>&1; then
-            ryoku-gpu-lib32 || true
-          else
-            echo "   ryoku-gpu-lib32 not found; run 'ryoku update' to get 32-bit GPU driver support"
-          fi
-        fi
+        echo "==> Skipping the catalogue's 32-bit GPU prerequisite on Fedora"
         ;;
-      *) die "this bundle needs a newer Ryoku (unknown requirement '$req'); run 'ryoku update' first" ;;
+      *) die "unsupported bundle requirement '$req' on Fedora" ;;
     esac
   done < <(jq -r '.requires[]? // empty' "$file")
 }
@@ -280,7 +268,7 @@ install_set() {
   file=$(bundle_file "$id")
   ensure_requires "$file"
 
-  local -a repo=() aur=() scripts=() plugins=() nautilus_packs=()
+  local -a repo=() scripts=() plugins=() nautilus_packs=()
   declare -A SCRIPT_DETECT=() SCRIPT_INT=()
 
   while IFS=$'\t' read -r type name detect tier interactive summary; do
@@ -291,10 +279,10 @@ install_set() {
       package)
         if pkg_installed "$name"; then
           set_state "$name" present
-        elif pkg_official "$name"; then
+        elif [[ -n $DRYRUN ]] || pkg_available "$name"; then
           repo+=("$name")
         else
-          aur+=("$name")
+          set_state "$name" failed "package unavailable from enabled Fedora repositories; check the package name and repository configuration"
         fi
         ;;
       script)
@@ -327,30 +315,17 @@ install_set() {
   done < <(bundle_items "$file" "$only")
 
   local n
-  for n in "${repo[@]}" "${aur[@]}" "${scripts[@]}" "${plugins[@]}" "${nautilus_packs[@]}"; do set_state "$n" installing; done
+  for n in "${repo[@]}" "${scripts[@]}" "${plugins[@]}" "${nautilus_packs[@]}"; do set_state "$n" installing; done
   flush_report "$id" running
 
   if ((${#repo[@]})); then
-    echo "==> Installing from the official repos: ${repo[*]}"
+    echo "==> Installing from enabled DNF repositories: ${repo[*]}"
     run_pkg ryoku-pkg-add "${repo[@]}" || true
     for n in "${repo[@]}"; do
       if [[ -n $DRYRUN ]] || pkg_installed "$n"; then
         set_state "$n" installed
       else
-        set_state "$n" failed "pacman did not install it"
-      fi
-    done
-    flush_report "$id" running
-  fi
-
-  if ((${#aur[@]})); then
-    echo "==> Installing from the AUR: ${aur[*]}"
-    run_pkg ryoku-pkg-aur-add "${aur[@]}" || true
-    for n in "${aur[@]}"; do
-      if [[ -n $DRYRUN ]] || pkg_installed "$n"; then
-        set_state "$n" installed
-      else
-        set_state "$n" failed "the AUR build did not complete"
+        set_state "$n" failed "DNF did not install it"
       fi
     done
     flush_report "$id" running
@@ -459,24 +434,12 @@ remove_set() {
 
   if ((${#pkgs[@]})); then
     echo "==> Removing: ${pkgs[*]}"
-    if ! run_pkg ryoku-pkg-remove "${pkgs[@]}"; then
-      # pacman aborts the whole batch when one target can't go (something else
-      # still requires it). Retry the stragglers one by one, twice, so a lone
-      # blocker costs itself, not the whole bundle; the second pass picks up a
-      # target that was only blocked by one removed in the first.
-      for _ in 1 2; do
-        for n in "${pkgs[@]}"; do
-          if pkg_installed "$n"; then
-            run_pkg ryoku-pkg-remove "$n" || true
-          fi
-        done
-      done
-    fi
+    run_pkg ryoku-pkg-remove "${pkgs[@]}" || true
     for n in "${pkg_items[@]}"; do
       if [[ -n $DRYRUN ]] || ! pkg_installed "$n"; then
         set_state "$n" removed
       else
-        set_state "$n" failed "pacman kept it (still required by another package?)"
+        set_state "$n" failed "DNF did not remove it (transaction cancelled or failed)"
       fi
     done
   fi

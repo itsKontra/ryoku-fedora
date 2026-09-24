@@ -97,6 +97,11 @@ class TestKickstartSpecification(unittest.TestCase):
         self.assertIn("provision-target.py", self.content)
         self.assertIn("/mnt/sysroot", self.content)
 
+    def test_pre_install_validates_administrator(self):
+        """Pre-install script: Validates administrator account before payload installation starts."""
+        self.assertIn("%pre-install --erroronfail", self.content)
+        self.assertIn("validate-admin.py", self.content)
+
     def test_secure_boot_payload_and_bootloader(self):
         """Verify UEFI Secure Boot bootloader components and MOK tools in packages list."""
         packages = PACKAGES_LIST_PATH.read_text().splitlines()
@@ -165,11 +170,16 @@ class TestComposePipelineScript(unittest.TestCase):
             self.assertTrue((stage_dir / "ryoku.ks").is_file())
             self.assertTrue((stage_dir / "ks.cfg").is_file())
             self.assertTrue((stage_dir / "installation/fedora/provision-target.py").is_file())
+            self.assertTrue((stage_dir / "installation/fedora/validate-admin.py").is_file())
+            self.assertTrue((stage_dir / "installation/fedora/conf.d/05-ryoku.conf").is_file())
             self.assertTrue((stage_dir / "installation/fedora/prepare-firstboot.py").is_file())
             self.assertTrue((stage_dir / "ryoku/assets/wallpapers").is_dir())
             self.assertTrue((stage_dir / "ryoku/assets/brand").is_dir())
             self.assertTrue((stage_dir / "ryoku/assets/ryodecors").is_dir())
             self.assertTrue((stage_dir / "ryoku/apps/npm/npmrc").is_file())
+            self.assertTrue((stage_dir / "system/extras").is_dir())
+            self.assertTrue((stage_dir / "system/hardware").is_dir())
+            self.assertTrue((stage_dir / "system/policy").is_dir())
             self.assertTrue((stage_dir / ".ryoku-media").is_file())
 
             # Verify output files

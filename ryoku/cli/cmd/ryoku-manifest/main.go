@@ -74,8 +74,8 @@ func readInputs(repo, release, version, commit, channel string) (ryokumanifest.I
 	if in.AUR, err = read("system/packages/aur.packages"); err != nil {
 		return in, fmt.Errorf("aur.packages: %w", err)
 	}
-	if in.FirstParty, err = readDirBodies(filepath.Join(repo, "release/packages"), "PKGBUILD"); err != nil {
-		return in, fmt.Errorf("release/packages: %w", err)
+	if in.FirstParty, err = readSpecBodies(filepath.Join(repo, "release/rpm")); err != nil {
+		return in, fmt.Errorf("release/rpm: %w", err)
 	}
 	// Each compositor provider declares its own packages in its caps.go, so the
 	// manifest carries the same list the switch and reclaim already trust.
@@ -83,6 +83,25 @@ func readInputs(repo, release, version, commit, channel string) (ryokumanifest.I
 		return in, fmt.Errorf("ryoku/wm: %w", err)
 	}
 	return in, nil
+}
+
+func readSpecBodies(dir string) (map[string]string, error) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, e := range ents {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".spec" {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			return nil, err
+		}
+		out[e.Name()] = string(b)
+	}
+	return out, nil
 }
 
 // readDirBodies reads <dir>/<entry>/<name> for every subdirectory, skipping

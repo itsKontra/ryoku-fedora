@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Changed
+- Package installs, removals, detection, and provider resolution now use Fedora
+  DNF/RPM. Missing repository packages fail explicitly without AUR fallback.
+- The old AUR helper name forwards to DNF for catalogue compatibility.
+- Multilib checks Fedora i686 support without editing repository configuration.
+  The legacy GPU prerequisite is ignored; 32-bit GPU setup has been removed.
+- DNF removal asks for transaction confirmation because it can remove dependent
+  applications; cancelled transactions are not retried.
+
+### Removed
+- The CachyOS repository script. CachyOS bundle requirements fail on Fedora.
+
 ### Added
 - **`install bundle <id> --only name1,name2,...` installs a chosen subset.** The
   store's bundle preview passes the user's manual selection; without `--only`

@@ -22,18 +22,28 @@ sysroot from Anaconda's `%post --nochroot --erroronfail`:
    - Wires `pam_gnome_keyring.so` into `/etc/pam.d/sddm` for unlock-on-login.
    - Enables `sddm.service` and sets `graphical.target` as default.
 3. **Base System Services**: Enables `NetworkManager.service`, `firewalld.service`,
-   and `bluetooth.service` offline.
-4. **Lockscreen**: Seeds the qylock in-session lockscreen bundle and `clockwork/orbital`
+   `bluetooth.service`, and `ryoku-wifi-regdom.service` offline, plus `ryoku-bluetooth-reset.service` globally for user sessions.
+4. **System Policy and Extras**:
+   - Copies authorization policy rules (`system/policy/`, `system/containers/`, and hardware polkit rules) to `/usr/share/polkit-1/rules.d/` (`0644`).
+   - Installs Ryostore bundle and DNF package management helpers (`system/extras/`) to `/usr/bin/` (`0755`).
+5. **Hardware Support**:
+   - Installs hardware helpers (`system/hardware/*/ryoku-*`, `system/containers/ryoku-*`) to `/usr/bin/` (`0755`).
+   - Installs udev rules to `/usr/lib/udev/rules.d/` (`0644`).
+   - Configures kernel module loading (`/etc/modules-load.d/`) and modprobe options (`/usr/lib/modprobe.d/`).
+   - Configures logind clamshell policy (`/etc/systemd/logind.conf.d/10-ryoku-lid.conf`).
+   - Applies BlueZ tuning to `/etc/bluetooth/main.conf` if present.
+   - Stages and executes hardware vendor driver scripts (`intel.sh`, `amd.sh`, `vulkan.sh`).
+6. **Lockscreen**: Seeds the qylock in-session lockscreen bundle and `clockwork/orbital`
    theme into each login account’s home, wiring the themes link and setting theme preference.
-5. **Assets and Integration**: Seeds desktop entries, vendor MIME defaults
+7. **Assets and Integration**: Seeds desktop entries, vendor MIME defaults
    (`ryoku-mimeapps.list` and `mimeapps.list`), wallpapers into `~/Pictures/Wallpapers`,
    decor art into `~/Pictures/ryodecors`, brand assets into `~/.local/share/ryoku/assets/brand`,
    and `.npmrc` from `/usr/share/ryoku`.
-6. **Configuration Materialization**: Runs `ryoku materialize` for each login
+8. **Configuration Materialization**: Runs `ryoku materialize` for each login
    account with its own `HOME`, and assigns the generated files to that account.
-7. **Installer Settings**: Preserves Anaconda's keyboard, locale and timezone;
+9. **Installer Settings**: Preserves Anaconda's keyboard, locale and timezone;
    does not arm console setup or clear settings on the installed target.
-8. **SELinux Relabeling**: Relabels `/etc`, `/var` and the login home directories.
+10. **SELinux Relabeling**: Relabels `/etc`, `/var`, `/usr/bin`, `/usr/share/polkit-1`, `/usr/lib/udev`, `/usr/lib/modprobe.d`, `/usr/lib/systemd`, and the login home directories.
 
 ```sh
 python3 /path/on/media/installation/fedora/provision-target.py /mnt/sysroot --anaconda
@@ -165,7 +175,7 @@ No password is shipped in the recipe.
 `build-iso.sh` orchestrates the compose pipeline:
 1. **Preflight and Verification**: Checks dependencies, verifies pinned GPG keys, and validates the Kickstart recipe.
 2. **Repository Staging**: Generates `comps.xml` from `packages.list` and refreshes metadata with `createrepo_c --update --groupfile`, computes `manifest.json`, and verifies the offline dependency closure.
-3. **Payload Staging**: Stages Kickstart, local RPMs, offline provisioner, and stamped media metadata into `iso_root`.
+3. **Payload Staging**: Stages Kickstart, local RPMs, offline provisioner, system hierarchy (policy, extras, hardware, containers), and stamped media metadata into `iso_root`.
 4. **Hybrid ISO Composition**: Requires `mkksiso` to remaster `--boot-iso` or a Lorax-generated `images/boot.iso`, preserving boot metadata and updating the embedded EFI image. Requires root with loop-device and mount access; plain data-ISO fallbacks are rejected. Source and output boot metadata are recorded and checked with `xorriso`.
 5. **Checksums and Provenance**: Computes the final `.sha256` checksum file and generates structured `provenance.json` recording build environment, tool versions, and git commit details.
 
@@ -370,6 +380,23 @@ available in the configured Fedora 44 repositories. The Mesa DRI/Vulkan stack
 remains selected; Fedora’s `mesa-libgallium` supplies the VA-API driver files.
 Fedora's FFmpeg packages match the current published Ryoku
 RPM requirements; forcing full RPM Fusion FFmpeg conflicts with those RPMs.
+
+The Arch lists under `system/packages/` also inform this manifest. Fedora names
+cover the compiler/build tools, Rust and Cargo, Node.js 24 and npm, Python pip
+and pipx, Intel VA-API, and controller access rules (`steam-devices`). The Node
+`-bin` packages ensure the unversioned commands are installed. `ryoku-extras`
+already supplies Matugen, Bibata, Space Grotesk, Material Symbols and JetBrains
+Mono Nerd Font; QEMU's desktop backends are dependencies of `qemu-system-x86`.
+Arch boot hooks, pacman/AUR tooling, CachyOS packages, 32-bit graphics and
+out-of-tree NVIDIA/xpadneo modules are excluded from this comparison.
+
+Some Arch applications and assets still have no selected RPM source: mise,
+ble.sh, zsh-history-substring-search, SongRec, GPU Screen Recorder,
+waifu2x-ncnn-vulkan, LocalSend, Voxtype, Zen, pam-fprint-grosshack, Broadcom's
+extra Bluetooth firmware, the additional cursor themes, Fraunces, Maple Mono,
+and the Nerd Font variants of Fira Code and Hack. These remain package-porting
+gaps rather than mandatory entries that would make compose fail. Fedora's
+existing GTK theme and FFmpeg/GStreamer choices remain in use.
 
 Provisioning sets ownership of the seeded home before running materialization
 and desktop configuration as the target user. Either command failing aborts

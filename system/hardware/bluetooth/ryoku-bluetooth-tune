@@ -4,12 +4,11 @@
 # place.
 #
 # bluez owns /etc/bluetooth/main.conf, so Ryoku cannot ship its own copy (that
-# is a pacman file conflict), and BlueZ has no main.conf.d drop-in. Instead this
+# is a package file conflict), and BlueZ has no main.conf.d drop-in. Instead this
 # idempotently sets the handful of keys the desktop needs on top of whatever
 # bluez ships, uncommenting the stock line in place or appending under the right
 # section. Adapted from omarchy's in-place sed of AutoEnable. Run as root from
-# the ryoku-desktop .install (install + upgrade), so new and existing boxes both
-# get it.
+# the desktop install/upgrade path, so new and existing boxes both get it.
 #
 #   [General] Experimental=true        battery levels + newer profiles; the shell
 #                                      Bluetooth panel reads device battery from

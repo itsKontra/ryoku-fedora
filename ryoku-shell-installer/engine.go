@@ -84,11 +84,10 @@ var devPkgs = []string{"go", "nodejs", "npm", "python", "python-pip", "python-pi
 var sparsePaths = []string{
 	"ryoku/lockscreen", "ryoku/assets", "ryoku/apps",
 	"system/hardware/drivers", "system/hardware/input",
-	"system/packages", "release/packages/ryoku-keyring", "release/rpm",
+	"system/packages", "release/rpm",
 }
 
 type plan struct {
-	nvidia     bool   // proprietary NVIDIA driver setup
 	switchDM   bool   // disable current DM, enable SDDM
 	switchNet  bool   // disable other network stacks, enable NetworkManager
 	rivals     bool   // remove rival shell packages
@@ -107,10 +106,6 @@ type plan struct {
 
 func defaultPlan(f *facts) *plan {
 	return &plan{
-		// secure boot rejects unsigned dkms modules and the nvidia script also
-		// blacklists nouveau: proceeding would boot into a black screen. only
-		// an sbctl-managed box gets to keep the default.
-		nvidia:    f.hasNvidia && !f.nouveauLive && !(f.secureBoot && !f.sbctlSigned),
 		switchDM:  true,
 		switchNet: true,
 		rivals:    true,
@@ -268,8 +263,8 @@ func newEngine(f *facts, p *plan, dry bool, ref, payloadOverride string) *engine
 			continue
 		}
 		if (src || e.d().id != "arch") && pacmanOnly[s.id] {
-			if s.id == "repo" && f.distro != nil && f.distro.id == "fedora" {
-				// Fedora runs stepRepo to configure COPR repositories (quickshell, matugen, awww, cursors)
+			if (s.id == "repo" || s.id == "drivers") && e.d().id == "fedora" {
+				// Fedora has native repository and hardware installation paths.
 			} else {
 				continue
 			}
@@ -633,7 +628,7 @@ func stepPayload(e *engine) error {
 	paths := append(append([]string{}, sparsePaths...), "release/rpm")
 	if e.fromSource() {
 		paths = []string{
-			"ryoku", "system", "bin", "ryoku-shell-installer", "release/packages/ryoku-keyring", "release/rpm",
+			"ryoku", "system", "bin", "ryoku-shell-installer", "release/rpm",
 		}
 	}
 	if err := e.cmd(e.payload, nil, "git", append([]string{"sparse-checkout", "set"}, paths...)...); err != nil {
@@ -1083,60 +1078,10 @@ func filterByUnmet(pkgs []string, unmetOut string) []string {
 func stepDrivers(e *engine) error {
 	drv := filepath.Join(e.payload, "system/hardware/drivers")
 	scripts := []string{"amd.sh", "intel.sh", "vulkan.sh"}
-	if e.p.nvidia {
-		scripts = append(scripts, "nvidia.sh")
-	} else if e.f.hasNvidia {
-		if e.f.secureBoot && !e.f.sbctlSigned {
-			e.say(i18n.T("skipping the NVIDIA driver setup (Secure Boot is on and would reject the unsigned modules)"))
-		} else {
-			e.say(i18n.T("skipping the NVIDIA driver setup (kept nouveau; re-run with the toggle on to switch)"))
-		}
-	}
-	// the vendor scripts each do a bare `pacman -S`, so -- exactly like
-	// stepPackages -- they must transact against a current db. this step is
-	// re-entered on a resume with the sysupgrade/packages steps already
-	// skipped, and a repo publish can land between those steps and this one,
-	// pruning the files a stale db still points at (pacman's "failed
-	// retrieving file" abort that reads as a driver that would not install).
-	if e.d().id == "arch" {
-		if err := e.sudoSh(`rm -f /var/cache/pacman/pkg/*.part`); err != nil {
-			e.say(i18n.T("warning: could not clear partial downloads (continuing)"))
-		}
-		if err := e.sudo("pacman", "-Syu", "--noconfirm"); err != nil {
-			e.say(i18n.T("warning: could not refresh the package db before the driver install; a stale mirror may still fail a download (continuing)"))
-		}
-	} else if len(e.d().updateCmd) > 0 {
-		if err := e.sudo(e.d().updateCmd...); err != nil {
-			e.say(i18n.T("warning: could not refresh the package db before the driver install; a stale mirror may still fail a download (continuing)"))
-		}
-	}
-	// a single vendor script failing must NOT sink the whole desktop install,
-	// matching installation/backend/lib/drivers.sh: the box still boots on the
-	// iGPU or software renderer, and stepDoctor plus first boot heal the driver.
+	// Optional driver failures are reported without aborting desktop setup.
 	for _, s := range scripts {
 		if err := e.cmd("", nil, "bash", filepath.Join(drv, s)); err != nil {
-			e.sayf(i18n.T("warning: %s did not finish; leaving the GPU driver for `ryoku doctor` after first boot (continuing)"), s)
-		}
-	}
-	if e.p.nvidia && e.f.hasNvidia {
-		// the scripts leave the initramfs to the caller. probe for whichever
-		// generator the box uses; a missed rebuild is a warning, not an abort,
-		// the next kernel update rebuilds anyway.
-		var err error
-		switch {
-		case has("limine-mkinitcpio"):
-			err = e.sudo("limine-mkinitcpio")
-		case has("mkinitcpio"):
-			err = e.sudo("mkinitcpio", "-P")
-		case has("dracut-rebuild"):
-			err = e.sudo("dracut-rebuild")
-		case has("dracut"):
-			err = e.sudo("dracut", "--regenerate-all", "--force")
-		default:
-			e.say(i18n.T("warning: no known initramfs generator found, skipping the rebuild"))
-		}
-		if err != nil {
-			e.say(i18n.T("warning: initramfs rebuild failed; run it by hand before rebooting (see log)"))
+			e.sayf(i18n.T("warning: %s did not finish; check its output and retry the driver setup before rebooting"), s)
 		}
 	}
 	return nil
@@ -1599,10 +1544,6 @@ func stepVerify(e *engine) error {
 		if theme := effectiveSDDMTheme(); theme != "" && theme != "ryoku" {
 			e.say(gWarn + " " + i18n.Tf("an SDDM drop-in still selects greeter theme %s; check /etc/sddm.conf.d", theme))
 		}
-	}
-	if e.f.hasNvidia && e.f.secureBoot && !e.p.nvidia {
-		e.say(gWarn + " " + i18n.T("Secure Boot is on, so the proprietary NVIDIA driver was skipped: unsigned DKMS modules are rejected at boot."))
-		e.say(i18n.T("To switch later, disable Secure Boot in firmware or sign the kernel and modules (sbctl), then re-run this installer."))
 	}
 	// matugen palette generator: verified on all distros (packaged on Arch,
 	// installed via zero-compile prebuilt release on Fedora and source builds).

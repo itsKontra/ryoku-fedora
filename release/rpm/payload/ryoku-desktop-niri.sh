@@ -1,0 +1,72 @@
+# Maintainer: Ryoku <releases@ryoku.dev>
+#
+# ryoku-desktop-niri: the niri compositor variant of the Ryoku desktop.
+# Carries niri, the xwayland-satellite X11 bridge, the GNOME portal backend niri's
+# caps report, the niri config tree, and the ryoku-wm-niri provider binary
+# (ryoku/wm/niri). It provides the ryoku-desktop-compositor virtual, so an
+# installed ryoku-desktop is satisfied by it, and may be installed beside
+# ryoku-desktop-hyprland: a switch is then a config change, not a package swap.
+#
+# There is no plugin subsystem here: niri has no plugins, and its caps say so.
+#
+# built from in-repo sources, no tarball fetch. makepkg runs from a full
+# checkout, so the repo root is three levels up.
+pkgname=ryoku-desktop-niri
+pkgver=${RYOKU_PKGVER:-0.1.0}
+pkgrel=1
+pkgdesc="Ryoku desktop: the niri compositor, its portal and X11 satellite, and the ryoku-wm-niri provider"
+# package() builds the Go provider, so the payload is arch-specific.
+arch=('x86_64')
+url="https://ryoku.dev"
+license=('GPL-3.0-or-later')
+makedepends=('go')
+depends=(
+  "ryoku-desktop=$pkgver"
+  # compositor + Wayland session (ships /usr/share/wayland-sessions/niri.desktop)
+  'niri'
+  # niri has no built-in Xwayland; X11 apps reach a display through the satellite.
+  'xwayland-satellite'
+  # screencast/screenshot portal: ryoku-wm-niri caps reports portalBackend "gnome",
+  # and doctor's portal reconciler routes xdg-desktop-portal to this backend.
+  'xdg-desktop-portal-gnome'
+)
+provides=('ryoku-desktop-compositor')
+# deliberately not exclusive: both variants may be installed, so a switch is a
+# config change with no download and a switch back is instant.
+source=()
+
+_repo="$startdir/../../.."
+
+package() {
+  local cfg="$pkgdir/usr/share/ryoku/config"
+
+  # niri config tree: config.kdl (the only file niri reads) plus the five seeds it
+  # includes by name (keyboard, gpu, monitors, monitors_user, user). A missing
+  # include is a hard niri config error, so the whole tree ships as one unit. The
+  # generated settings.kdl/rebinds.kdl are written by `ryoku-wm-niri apply`, not
+  # packaged (see caps.GeneratedFiles). No scripts/ or share picker: niri's leaf
+  # keybinds are compositor actions or `spawn ryoku-shell`, and the share picker
+  # is a hyprland-only portal helper.
+  install -d "$cfg/niri"
+  cp -a "$_repo/ryoku/niri/." "$cfg/niri/"
+
+  # xdg-desktop-portal: niri has no backend of its own, so screen sharing rides
+  # the GNOME backend (caps.PortalBackend) but the GNOME FileChooser hangs off a
+  # GNOME session. This routing pins FileChooser to gtk so file pickers open;
+  # doctor's portal reconciler reads it by the running desktop's name.
+  install -Dm644 "$_repo/ryoku/niri/niri-portals.conf" \
+    "$cfg/xdg-desktop-portal/niri-portals.conf"
+
+  # cp -a kept source modes; the tree is all data, so world-readable is right.
+  chmod -R u=rwX,go=rX "$pkgdir/usr/share/ryoku"
+
+  # ryoku-wm-niri: the niri half of the window-manager seam. Built from the
+  # ryoku/wm module (its root is one dir up from the niri package).
+  ( cd "$_repo/ryoku/wm/niri" && go build -o ryoku-wm-niri . )
+  install -Dm755 "$_repo/ryoku/wm/niri/ryoku-wm-niri" \
+    "$pkgdir/usr/bin/ryoku-wm-niri"
+  # order the config bootstrap ahead of niri.service, so the session's first login
+  # reads a laid-down ~/.config/niri instead of the compositor's own defaults.
+  install -Dm644 "$_repo/ryoku/shell/systemd/user/niri.service.d/ryoku-bootstrap.conf" \
+    "$pkgdir/usr/lib/systemd/user/niri.service.d/ryoku-bootstrap.conf"
+}

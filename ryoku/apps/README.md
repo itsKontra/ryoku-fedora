@@ -89,7 +89,7 @@ any app may call it.
 
 ## Adding one
 
-`package()` in `release/packages/ryoku-desktop/PKGBUILD` walks `ryoku/apps/*/`,
+The `ryoku-desktop` RPM payload recipe walks `ryoku/apps/*/`,
 so dropping a directory in ships it and there is nothing to register. The
 directory name is the identity: it becomes the config name, the icon name, and
 the binary name.

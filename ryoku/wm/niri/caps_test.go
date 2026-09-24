@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -13,21 +12,17 @@ import (
 // list, owns every satellite and blocks all their removal. Both drifts fail
 // here, against the real PKGBUILD.
 func TestReclaimListMatchesVariantDepends(t *testing.T) {
-	raw, err := os.ReadFile("../../../release/packages/ryoku-desktop-niri/PKGBUILD")
+	raw, err := os.ReadFile("../../../release/rpm/ryoku-desktop-niri.spec")
 	if err != nil {
-		t.Skip("no PKGBUILD beside the test")
+		t.Skip("no RPM spec beside the test")
 	}
-	m := regexp.MustCompile(`(?ms)^depends=\((.*?)\)`).FindSubmatch(raw)
-	if m == nil {
-		t.Fatal("no depends array in the PKGBUILD")
-	}
+	depends := strings.Split(string(raw), "\n")
 	want := map[string]bool{}
-	body := regexp.MustCompile(`(?m)^\s*#.*$`).ReplaceAll(m[1], nil)
-	for _, line := range strings.Fields(string(body)) {
-		pkg := strings.Trim(line, "'\"")
-		if i := strings.Index(pkg, "="); i >= 0 {
-			pkg = pkg[:i] // a version bound: "niri=26.04" names niri
+	for _, line := range depends {
+		if !strings.HasPrefix(line, "Requires:") {
+			continue
 		}
+		pkg := strings.Fields(strings.TrimPrefix(line, "Requires:"))[0]
 		if pkg == "" || pkg == "ryoku-desktop" {
 			continue // the umbrella is shared with the incoming compositor
 		}
@@ -42,7 +37,7 @@ func TestReclaimListMatchesVariantDepends(t *testing.T) {
 	}
 	for p := range want {
 		if !have[p] {
-			t.Errorf("PKGBUILD depends on %s but the reclaim list omits it", p)
+			t.Errorf("RPM spec requires %s but the reclaim list omits it", p)
 		}
 	}
 }

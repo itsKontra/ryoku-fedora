@@ -6,12 +6,16 @@ libdir=${3:-/usr/lib64}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 export GOFLAGS="-mod=vendor -trimpath" CGO_ENABLED=0 GOTOOLCHAIN=local
 export RYOKU_PKGVER=${RYOKU_PKGVER:?version required}
-startdir="$root/release/packages/$name"
+startdir="$root/release/rpm/payload"
 srcdir="$root/.rpm-build/$name"
 pkgdir="$stage"
 mkdir -p "$srcdir" "$pkgdir"
-# Reuse the authoritative payload; no makepkg hooks or host installation runs.
-source "$startdir/PKGBUILD"
+# The payload recipe is Fedora release input. It stages files only: no host
+# installation hooks run while building an RPM.
+recipe="$startdir/$name.sh"
+[[ -f $recipe ]] || { echo "unknown RPM payload: $name" >&2; exit 2; }
+# shellcheck source=/dev/null
+source "$recipe"
 if declare -F build >/dev/null; then build; fi
 package
 if [[ -d $stage/usr/lib/qt6 ]]; then
@@ -19,9 +23,6 @@ if [[ -d $stage/usr/lib/qt6 ]]; then
   mv "$stage/usr/lib/qt6" "$stage$libdir/qt6"
 fi
 if [[ $name == ryoku-desktop ]]; then
-  # Fedora owns its boot chain; the desktop must not install Arch boot hooks.
-  rm -rf "$stage/usr/lib/initcpio" "$stage/etc/boot" "$stage/usr/share/ryoku/boot"
-  rm -f "$stage/usr/bin/ryoku-boot-apply" "$stage/usr/bin/ryoku-windows-entry"
   cp "$root/.rpm-release" "$stage/etc/ryoku-release"
   rm -f "$stage/usr/share/applications/mimeapps.list"
 fi

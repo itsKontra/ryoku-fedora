@@ -10,14 +10,28 @@
 # RYOKU_SHELL_REF picks the git ref to fetch the installer and payload from.
 set -euo pipefail
 
+work=""
+cleanup() {
+  if [[ -n "$work" && -d "$work" ]]; then
+    rm -rf "$work"
+  fi
+}
+trap cleanup EXIT
+
 main() {
-  local ref="${RYOKU_SHELL_REF:-main}"
+  local current_branch=""
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  fi
+  local ref="${RYOKU_SHELL_REF:-${current_branch:-main}}"
   local repo="${RYOKU_SHELL_REPO:-https://github.com/itsKontra/ryoku-fedora.git}"
+  local ref_specified=0
+  [[ -n "${RYOKU_SHELL_REF:-}" ]] && ref_specified=1
   local args=("$@") i
   for ((i=0; i<${#args[@]}; i++)); do
     case "${args[i]}" in
-      --ref) i=$((i+1)); ref="${args[i]:?--ref needs a value}" ;;
-      --ref=*) ref="${args[i]#--ref=}" ;;
+      --ref) i=$((i+1)); ref="${args[i]:?--ref needs a value}"; ref_specified=1 ;;
+      --ref=*) ref="${args[i]#--ref=}"; ref_specified=1 ;;
       --repo) i=$((i+1)); repo="${args[i]:?--repo needs a value}" ;;
       --repo=*) repo="${args[i]#--repo=}" ;;
     esac
@@ -74,24 +88,32 @@ main() {
     say "Fedora detected: released packages are the default; --install-mode=source builds a checkout"
   fi
 
-  local work
-  work="$(mktemp -d)"
-  trap 'rm -rf "$work"' EXIT
+  local here=""
+  if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+    here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  fi
 
-  say "fetching the Ryoku shell installer (${ref})"
-  curl -fsSL --retry 3 -o "$work/ryoku-shell-install" "$raw/ryoku-shell-install"
-  curl -fsSL --retry 3 -o "$work/ryoku-shell-install.sha256" "$raw/ryoku-shell-install.sha256"
-  (cd "$work" && sha256sum --check --quiet ryoku-shell-install.sha256) \
-    || die "checksum mismatch on the downloaded installer; try again"
-  chmod +x "$work/ryoku-shell-install"
+  local installer_bin=""
+  if [[ -n "$here" && -x "$here/ryoku-shell-install" && $ref_specified -eq 0 ]]; then
+    installer_bin="$here/ryoku-shell-install"
+  else
+    work="$(mktemp -d)"
+    say "fetching the Ryoku shell installer (${ref})"
+    curl -fsSL --retry 3 -o "$work/ryoku-shell-install" "$raw/ryoku-shell-install"
+    curl -fsSL --retry 3 -o "$work/ryoku-shell-install.sha256" "$raw/ryoku-shell-install.sha256"
+    (cd "$work" && sha256sum --check --quiet ryoku-shell-install.sha256) \
+      || die "checksum mismatch on the downloaded installer; try again"
+    chmod +x "$work/ryoku-shell-install"
+    installer_bin="$work/ryoku-shell-install"
+  fi
 
   say "starting the installer"
   local rc=0
   # piped stdin (curl | bash) is useless to a TUI; hand it the real terminal.
   if [[ ! -t 0 && -r /dev/tty ]]; then
-    RYOKU_SHELL_REPO="$repo" RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" < /dev/tty || rc=$?
+    RYOKU_SHELL_REPO="$repo" RYOKU_SHELL_REF="$ref" "$installer_bin" "$@" < /dev/tty || rc=$?
   else
-    RYOKU_SHELL_REPO="$repo" RYOKU_SHELL_REF="$ref" "$work/ryoku-shell-install" "$@" || rc=$?
+    RYOKU_SHELL_REPO="$repo" RYOKU_SHELL_REF="$ref" "$installer_bin" "$@" || rc=$?
   fi
   return "$rc"
 }

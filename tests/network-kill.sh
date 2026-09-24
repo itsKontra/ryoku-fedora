@@ -11,24 +11,17 @@ polkit="$ROOT/system/hardware/network/55-ryoku-network-kill.rules"
 guard="$ROOT/system/hardware/network/ryoku-network-kill-guard.service"
 disconnect="$ROOT/system/hardware/network/ryoku-network-kill-disconnect.service"
 page="$ROOT/ryoku/hub/quickshell/pages/ConnectionsPage.qml"
-pkgbuild="$ROOT/release/packages/ryoku-desktop/PKGBUILD"
-install_hook="$ROOT/release/packages/ryoku-desktop/ryoku-desktop.install"
+spec="$ROOT/release/rpm/ryoku-desktop.spec"
+payload="$ROOT/release/rpm/payload/ryoku-desktop.sh"
 base_packages="$ROOT/system/packages/base.packages"
 
 grep -qxF nftables "$base_packages"
-grep -qF "  'nftables'" "$pkgbuild"
-grep -qF '55-ryoku-network-kill.rules' "$pkgbuild"
-grep -qF 'ryoku-network-kill-guard.service' "$pkgbuild"
+grep -Fqx 'Requires:       nftables' "$spec"
+grep -qF '55-ryoku-network-kill.rules' "$payload"
+grep -qF 'ryoku-network-kill-guard.service' "$payload"
 grep -qF 'RequiredBy=NetworkManager.service' "$guard"
 grep -qF 'WantedBy=multi-user.target NetworkManager.service' "$disconnect"
-grep -qF 'ryoku-network-kill-disconnect.service' "$pkgbuild"
-post_install="$(sed -n '/^post_install()/,/^}/p' "$install_hook")"
-post_upgrade="$(sed -n '/^post_upgrade()/,/^}/p' "$install_hook")"
-if grep -qF '_network_kill_units' <<<"$post_install"; then
-  echo "package install must leave kill-switch units disabled" >&2
-  exit 1
-fi
-grep -qF '_network_kill_units' <<<"$post_upgrade"
+grep -qF 'ryoku-network-kill-disconnect.service' "$payload"
 
 grep -qF '["pkexec", "/usr/bin/ryoku-network-kill", "status"]' "$page"
 grep -qF 'killSetProc.target = killActive ? "off" : "on";' "$page"

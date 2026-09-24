@@ -12,7 +12,6 @@ on:
   pull_request:
     paths:
       - 'release/rpm/**'
-      - 'release/packages/**'
       - 'system/**'
       - 'bin/**'
       - 'CODENAME'

@@ -1,0 +1,60 @@
+# Maintainer: Ryoku <releases@ryoku.dev>
+#
+# Ryoku shell IPC daemon (Go). supervises the Quickshell desktop components,
+# drives wallpaper + palette, serves the ryoku-shell control socket.
+#
+# built from the in-repo source at ryoku/shell/ipc, no tarball fetched. publish
+# CI runs makepkg inside this dir against a full checkout, so the repo root is
+# three levels up. binary lands in $srcdir = source tree stays untouched.
+pkgname=ryoku-shell
+pkgver=${RYOKU_PKGVER:-0.1.0}
+pkgrel=1
+pkgdesc="Ryoku shell IPC daemon: supervises the Quickshell desktop"
+arch=('x86_64')
+url="https://ryoku.dev"
+license=('GPL-3.0-or-later')
+# uv provisions the ryostage engine's Python 3.13 venv (ryostage install); the
+# system python rolls ahead of onnxruntime's wheels, so the engine can't use it.
+depends=('quickshell' 'ffmpeg' 'wayland' 'jq' 'uv')
+makedepends=('go' 'wayland' 'wayland-protocols' 'ffmpeg')
+source=()
+
+_repo="$startdir/../../.."
+
+build() {
+  cd "$_repo/ryoku/shell/ipc"
+  # -mod=vendor keeps the build hermetic. godbus is vendored, so the signed-repo
+  # CI builds offline regardless of whatever GOFLAGS makepkg picked up.
+  CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryoku-shell" .
+  # ryoku-livewall: the C video-wallpaper daemon the shell drives. It software-
+  # decodes a downscaled clip into wl_shm on a wlr background surface (no GL, so
+  # ~40 MB RSS on any GPU vs mpv/mpvpaper's 300-700 MB). build.sh generates the
+  # wayland protocol glue and compiles it.
+  "$_repo/ryoku/shell/livewall/build.sh" "$srcdir/ryoku-livewall"
+}
+
+package() {
+  install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-install-extra" "$pkgdir/usr/bin/ryoku-install-extra"
+  install -Dm755 "$srcdir/ryoku-shell" "$pkgdir/usr/bin/ryoku-shell"
+  install -Dm755 "$srcdir/ryoku-livewall" "$pkgdir/usr/bin/ryoku-livewall"
+  install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-reload-cover" \
+    "$pkgdir/usr/bin/ryoku-reload-cover"
+  install -Dm755 "$_repo/ryoku/shell/scripts/ryostage" \
+    "$pkgdir/usr/bin/ryostage"
+  install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-eq" \
+    "$pkgdir/usr/bin/ryoku-eq"
+  # Keep-Awake's durable idle inhibitor. It is systemd-inhibit, not compositor
+  # config, and the shell calls it by bare name on every compositor, so it ships
+  # here rather than with one compositor's payload: a niri box has no leaf
+  # scripts at all, and Keep-Awake must still hold the screen awake there.
+  install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-cmd-caffeine" \
+    "$pkgdir/usr/bin/ryoku-cmd-caffeine"
+  # the Stash sidebar's helpers: shell scripts, so they ship with the shell and
+  # resolve on PATH with no compositor config tree.
+  local s
+  for s in "$_repo"/ryoku/shell/scripts/stash-*.sh; do
+    install -Dm755 "$s" "$pkgdir/usr/bin/${s##*/}"
+  done
+  install -d "$pkgdir/usr/share/ryoku/reload-cover"
+  cp -a "$_repo/ryoku/shell/quickshell/reload-cover/." "$pkgdir/usr/share/ryoku/reload-cover/"
+}

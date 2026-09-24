@@ -1,0 +1,38 @@
+# Maintainer: Ryoku <releases@ryoku.dev>
+#
+# Ryoku control CLI (Go). single front door to update, rollback, snapshot, and
+# the config materialize step. orchestrates pacman, yay, snapper -- never
+# reimplements them.
+# built from in-repo source at ryoku/cli. the keyring subcommand talks to
+# gnome-keyring over D-Bus via godbus, which is vendored, so the signed-repo CI
+# builds offline regardless of whatever GOFLAGS makepkg picked up.
+pkgname=ryoku
+pkgver=${RYOKU_PKGVER:-0.1.0}
+pkgrel=1
+pkgdesc="Ryoku control CLI: updates, rollback, snapshots, materialize"
+arch=('x86_64')
+url="https://ryoku.dev"
+license=('GPL-3.0-or-later')
+depends=('pacman' 'pacman-contrib' 'snapper')
+optdepends=('yay: AUR package updates during ryoku update'
+            'lua: luac config-syntax pre-check for the Hyprland reconciler in ryoku doctor')
+makedepends=('go')
+source=()
+
+_repo="$startdir/../../.."
+
+build() {
+  cd "$_repo/ryoku/cli"
+  CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryoku" .
+}
+
+package() {
+  install -Dm755 "$srcdir/ryoku" "$pkgdir/usr/bin/ryoku"
+  # the boot guard: a system unit `ryoku boot-guard` runs from early in every
+  # boot (enabled by the doctor on every update, so existing boxes get it),
+  # and the tmpfiles entries for its marker and the sessions' boot-ok files.
+  install -Dm644 "$_repo/ryoku/cli/systemd/ryoku-boot-guard.service" \
+    "$pkgdir/usr/lib/systemd/system/ryoku-boot-guard.service"
+  install -Dm644 "$_repo/ryoku/cli/systemd/ryoku.tmpfiles.conf" \
+    "$pkgdir/usr/lib/tmpfiles.d/ryoku.conf"
+}

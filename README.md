@@ -189,32 +189,14 @@ Broadcom Wi-Fi, read-only NVRAM, slow USB media) is in
 
 ## Install
 
-A fresh machine boots the signed **ISO** (for Arch); an existing Fedora or Arch
-box installs in place with the **shell installer**.
+A fresh machine boots the Fedora installation **ISO**; an existing Fedora box
+installs in place with the **shell installer**.
 
 ### Fresh install (the ISO)
 
-Signed ISO builds are published at **[ryoku.dev](https://ryoku.dev)**. Download
-the latest image, its signature, and the checksums, write it to a USB stick, and
-boot it. The guided installer partitions the disk (Btrfs with subvolumes),
-installs the package set and the Ryoku desktop from the signed repository, sets
-up the Limine boot chain, and configures snapshots.
-
-Releases are signed with:
-
-- **Key:** `Ryoku Releases <releases@ryoku.dev>`
-- **Fingerprint:** `EB6D 3C0F 55A7 B3CA BA6B  2838 847B 274F 025D D6E3`
-- **Public key in repo:** [`keys/ryoku-release-key.pub.asc`](keys/ryoku-release-key.pub.asc)
-
-Verify the imported key's fingerprint matches before trusting it:
-
-```bash
-gpg --import keys/ryoku-release-key.pub.asc
-gpg --verify ryoku-*.iso.sig ryoku-*.iso
-```
-
-Prefer to build it yourself? The archiso profile and build script live in
-[`installation/iso`](installation/iso).
+The image uses Fedora's installer and provisions the Ryoku desktop from an
+offline RPM closure. Build one by following the
+[Fedora installation ISO guide](installation/fedora/README.md).
 
 ### Fedora install (shell installer)
 
@@ -235,8 +217,7 @@ curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-s
 ```
 
 Details in [`ryoku-shell-installer/`](ryoku-shell-installer/README.md),
-Fedora RPM delivery in [`release/rpm/`](release/rpm/README.md),
-and port tracking in [`FEDORA_PORT_CHECKLIST.md`](FEDORA_PORT_CHECKLIST.md).
+and Fedora RPM delivery in [`release/rpm/`](release/rpm/README.md).
 
 ### Already on Arch (no ISO)
 
@@ -339,7 +320,7 @@ redeploy the configs without the package step. Details in
 | `ryoku/` | The desktop: the window-manager seam and per-compositor configs (Hyprland in Lua, niri in KDL), the Quickshell shell, the lockscreen, app configs, brand assets. |
 | `system/` | The machine definition: boot chain, hardware policy, package sets. |
 | `installation/` | How a machine is built: the TUI, the backend installer, the ISO profile. |
-| `release/` | Packaging: the desktop PKGBUILDs, the `[ryoku]` repo builder, signing keyring, and Fedora RPM delivery under [`release/rpm/`](release/rpm/README.md). |
+| `release/` | Fedora RPM packaging and publication under [`release/rpm/`](release/rpm/README.md). |
 | `docs/` | The guides. Start with [`docs/ryoku.md`](docs/ryoku.md) and [`docs/structure.md`](docs/structure.md). |
 
 ## Channels

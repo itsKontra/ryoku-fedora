@@ -70,11 +70,11 @@ Package locations inside repository metadata point to the frozen release,
 relative to the shared repository layout. A client using cached metadata can
 therefore finish its downloads even if the channel advances during its transaction.
 
-`stage-package.sh` runs the existing Arch recipes' build/package functions in a
-staging directory. It does not run package hooks. This keeps the CLI, providers,
-QML modules, app helpers, translations and user units on the same payload map.
-Fedora uses `/usr/lib64/qt6/qml`; Arch boot hooks are excluded. `ryostore` and
-`ryovm` belong to the desktop payload, as on Arch. The empty `ryotunes` spec was
+`stage-package.sh` runs the Fedora payload recipes in `payload/` in a staging
+directory. It does not run installation hooks. This keeps the CLI, providers,
+QML modules, app helpers, translations and user units on one payload map.
+Fedora uses `/usr/lib64/qt6/qml` and owns its boot chain. `ryostore` and
+`ryovm` belong to the desktop payload. The empty `ryotunes` spec was
 removed: that external application has no source in this checkout and is not
 part of this RPM release. Install it separately from its upstream distribution.
 

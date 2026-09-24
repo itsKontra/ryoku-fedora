@@ -283,6 +283,11 @@ if command -v sudo >/dev/null 2>&1; then
   }
   _priv_install "$netdir/ryoku-dns" /usr/bin/ryoku-dns 755
   _priv_install "$netdir/50-ryoku-dns.rules" /usr/share/polkit-1/rules.d/50-ryoku-dns.rules 644
+  _priv_install "$netdir/ryoku-wifi-regdom" /usr/bin/ryoku-wifi-regdom 755
+  _priv_install "$netdir/48-ryoku-wifi-regdom.rules" /usr/share/polkit-1/rules.d/48-ryoku-wifi-regdom.rules 644
+  _priv_install "$netdir/ryoku-wifi-regdom.service" /usr/lib/systemd/system/ryoku-wifi-regdom.service 644
+  _priv_install "$netdir/ryoku-wifi-backend" /usr/bin/ryoku-wifi-backend 755
+  _priv_install "$netdir/51-ryoku-wifi-backend.rules" /usr/share/polkit-1/rules.d/51-ryoku-wifi-backend.rules 644
   _priv_install "$netdir/ryoku-wifi-powersave" /usr/bin/ryoku-wifi-powersave 755
   _priv_install "$netdir/49-ryoku-wifi-powersave.rules" /usr/share/polkit-1/rules.d/49-ryoku-wifi-powersave.rules 644
   _priv_install "$netdir/ryoku-network-kill" /usr/bin/ryoku-network-kill 755
@@ -290,7 +295,7 @@ if command -v sudo >/dev/null 2>&1; then
   _priv_install "$netdir/ryoku-network-kill-guard.service" /usr/lib/systemd/system/ryoku-network-kill-guard.service 644
   _priv_install "$netdir/ryoku-network-kill-disconnect.service" /usr/lib/systemd/system/ryoku-network-kill-disconnect.service 644
   sudo systemctl daemon-reload || true
-  sudo systemctl enable --quiet ryoku-network-kill-guard.service ryoku-network-kill-disconnect.service || true
+  sudo systemctl enable --quiet ryoku-network-kill-guard.service ryoku-network-kill-disconnect.service ryoku-wifi-regdom.service || true
   say "installed privileged network helpers + polkit rules"
   # Boot look: lay the splash theme, Limine art and ryoku-boot-apply, then apply
   # them (set the splash, deploy the ESP wallpaper + globals, rebuild initramfs).

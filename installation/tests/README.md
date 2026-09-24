@@ -1,48 +1,12 @@
 # installation/tests/
 
-Install tests that prove a real Ryoku install succeeds before a user hits a
-broken one. Run by the Install test workflow (after a Build ISO, weekly, and on
-demand); see `docs/updates.md` for the delivery contract they guard.
+Install tests for the Fedora Ryoku installation and ISO compose pipeline.
 
-- `container-install.sh [arch|cachyos]` builds the Ryoku packages from the
-  checkout, installs `ryoku-desktop`, runs `ryoku materialize` as a throwaway
-  user, and asserts the materialized `~/.config` is complete. Fast and hermetic
-  (a container, no VM). Catches a config that reaches no install and a package
-  whose dependencies do not resolve.
-
-- `install-vm.py --iso <iso>` boots the ISO in QEMU, runs the installer
-  unattended against a virtual disk (driving the live root shell over the serial
-  console), waits for `@@RYOKU_DONE`, then mounts the installed root and asserts
-  the tree (the package, the materialized config, the bootloader, the greeter).
-  `--boot-only` just reaches the live shell; `--dry` runs the installer in
-  `RYOKU_DRYRUN` mode. Uses KVM when `/dev/kvm` is present, else TCG. Needs
-  `qemu`, `edk2-ovmf`, and `python-pexpect`.
-
-- `iso-stage-check.sh` stages the ISO profile twice (`iso/build.sh --stage-only`
-  into two throwaway dirs) and diffs the trees, proving the prebuilt binaries and
-  the baked payload are byte-reproducible for a fixed commit (see
-  `iso/README.md`, "Reproducibility"). It strips the `.payload` provenance stamp
-  before diffing, and skips cleanly (exit 0) when `go`/`cmake`/`ninja` are absent
-  so CI without the build toolchain stays green.
-
-- `iso-preflight.sh` is the gate a Build ISO run clears BEFORE mkarchiso starts
-  (its own job in `build-iso-reusable.yml`, and the same command on a dev box
-  before dispatching a build). Root-free and hermetic, ~10s: shell syntax +
-  ShellCheck over the installer, package-list checks, the offline-install
-  regressions (baked-repo resolution, pacman-hook masking, driver-package
-  coverage), the boot-menu fixtures, the installer contract suite, the TUI build
-  and unit tests, and the update-delivery check. It exists because these classes
-  have shipped: an ISO takes an hour or two and then reaches users.
-
-- `install-dualboot-vm.py --iso <iso>` is the real-Windows dual-boot regression
-  gate. It builds a CACHED golden Windows 11 image (a genuine ESP+MSR+C:+WinRE
-  layout with C: pre-shrunk 300 GiB, unallocated in the MIDDLE of the disk),
-  overlays it, runs the `alongside` install from `<iso>`, then asserts via
-  `qemu-nbd` that every pre-existing partition is byte-identical (start/end/
-  PARTUUID/typeGUID + edge sha256), the Windows ESP/NTFS filesystems are intact,
-  and BOTH boot legs work (Ryoku via serial, Windows chainload via OVMF +
-  screendump OCR). Answers "does our installer damage a real Windows disk?" with
-  evidence. Golden + Windows ISO are cached under `cache/` (gitignored);
-  overlays are per-run and deleted. `--golden-only` builds just the cache;
-  `--skip-golden` reuses it. Needs `qemu`, `edk2-ovmf`, `python-pexpect`,
-  `tesseract`, `ntfs-3g`, and root (nbd + mounts).
+- `fedora-channels.sh`: verifies repository channel configurations and URLs.
+- `fedora-firstboot.sh`: tests the console first-boot setup inside a disposable container.
+- `fedora-iso.sh`: validates Kickstart syntax, payload staging, and compose gates.
+- `fedora-iso-vm.sh` / `fedora-iso-vm.py`: drives QEMU VM testing of the composed Fedora ISO.
+- `fedora-provision.sh`: tests the offline target provisioner (`provision-target.py`).
+- `fedora-repo.sh`: verifies pinned GPG keys, repository creation, and dependency closures.
+- `fedora-rpm.sh`: verifies package builds, signatures, and installation across compositors.
+- `fedora-signatures.sh`: asserts RPM and repository GPG signatures against trusted keys.
