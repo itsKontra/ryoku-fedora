@@ -11,6 +11,8 @@
   `tests/monitor-custom-mode.sh`.
 
 ### Fixed
+- `ryoku-gpu-lib32` now installs Fedora i686 graphics packages through DNF,
+  matching RPM Fusion NVIDIA libraries to the installed driver branch.
 - `display/ryoku-monitor`: **an active monitor is no longer treated as disabled
   on Hyprland builds that mislabel it.** hyprland-git reports `"disabled": true`
   for a plainly active output (focused, DPMS on, a real mode, an active

@@ -56,6 +56,9 @@ Requires:       grim
 Requires:       slurp
 Requires:       cava
 Requires:       jq
+Requires:       dnf
+Requires:       rpm
+Requires:       sudo
 Requires:       ImageMagick
 Requires:       curl
 Requires:       python3

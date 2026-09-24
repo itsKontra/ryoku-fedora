@@ -24,9 +24,9 @@ in the machine, and do not waste power doing it.
     when it sees the condition. See `docs/power.md`.
   - `ryoku-gpu-lib32` Installs the 32-bit (lib32) GPU drivers matching the
     detected hardware, so 32-bit and Proton/DXVK games render on the GPU rather
-    than in software. Needs `[multilib]`; the Gaming bundle enables it, then runs
-    this. Reuses `ryoku-gpu-detect` to pick the right per-vendor Vulkan ICD on a
-    `lib32-mesa` + `lib32-vulkan-icd-loader` baseline.
+    than in software. Uses Fedora's i686 Mesa/Vulkan packages and, on NVIDIA,
+    the i686 libraries matching the installed RPM Fusion driver branch.
+    Reuses `ryoku-gpu-detect`; the required repositories must already be enabled.
   - `90-ryoku-gpu.rules` A udev rule that gives every GPU a stable, predictable
     name under `/dev/dri` so the pin keeps working across reboots.
 - `display/` Backlight and output policy. The scaling tool itself moved to the

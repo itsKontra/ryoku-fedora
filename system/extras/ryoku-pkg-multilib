@@ -1,30 +1,14 @@
 #!/usr/bin/env bash
-
-# enable [multilib] in pacman.conf, idempotent. some bundles (Gaming) need
-# 32-bit pkgs (Steam, the lib32 overlay libs) which only live in multilib,
-# so any bundle with `"requires": ["multilib"]` shells out here before its
-# packages route. needs a TTY for sudo.
-
 set -euo pipefail
 
-conf=/etc/pacman.conf
-
-# serialize the pacman.conf mutation below (same lock as ryoku-pkg-cachyos):
-# concurrent edits could double-uncomment or interleave; the second holder
-# waits, then exits on the idempotence check.
-exec 9>"${XDG_RUNTIME_DIR:-/tmp}/ryoku-pkg-conf.lock"
-flock 9
-
-if grep -qE '^\[multilib\]' "$conf"; then
-  echo "multilib: already enabled"
-  exit 0
-fi
-
-# uncomment the stock commented multilib block (header + Include) shipped
-# in pacman.conf, then -Sy that db.
-sudo sed -i '/^#\[multilib\]/,/^#Include/ s/^#//' "$conf"
-grep -qE '^\[multilib\]' "$conf" || {
-  echo "ryoku-pkg-multilib: could not enable multilib in $conf" >&2
+[[ $(uname -m) == x86_64 ]] || {
+  echo "ryoku-pkg-multilib: Fedora i686 packages require an x86_64 system" >&2
   exit 1
 }
-sudo pacman -Sy
+command -v dnf >/dev/null 2>&1 || {
+  echo "ryoku-pkg-multilib: Fedora's dnf is required" >&2
+  exit 1
+}
+
+# Fedora carries i686 packages in its normal repositories, with no extra stanza.
+echo "multilib: Fedora supports i686 packages through the enabled DNF repositories"

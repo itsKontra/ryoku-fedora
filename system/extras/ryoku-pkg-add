@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-
-# Official-repo install via pacman. The extras actuator sends repo packages
-# here and AUR ones to ryoku-pkg-aur-add, so a bundle author just writes a
-# package name. Needs a TTY for the sudo prompt, which is why the Hub runs
-# installs in a floating terminal.
-
 set -euo pipefail
 
 (($#)) || {
@@ -12,16 +6,11 @@ set -euo pipefail
   exit 2
 }
 
-# -Syu, not -S: installing new packages against a stale db is a partial upgrade,
-# which breaks on soname bumps (e.g. a new x265 vs the installed ffmpeg). A full
-# sync+upgrade keeps the transaction consistent.
-if command -v pacman >/dev/null 2>&1; then
-  exec sudo pacman -Syu --needed --noconfirm "$@"
-elif command -v dnf >/dev/null 2>&1; then
-  exec sudo dnf -y install "$@"
-elif command -v apt-get >/dev/null 2>&1; then
-  exec sudo apt-get -y install "$@"
-else
-  echo "ryoku-pkg-add: no supported package manager found" >&2
+command -v dnf >/dev/null 2>&1 || {
+  echo "ryoku-pkg-add: Fedora's dnf is required" >&2
   exit 1
-fi
+}
+
+priv=()
+(( EUID == 0 )) || priv=(sudo)
+exec "${priv[@]}" dnf -y install -- "$@"

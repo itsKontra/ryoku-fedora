@@ -1,48 +1,50 @@
 # system/extras/
 
-The extras subsystem: the helpers that install, remove, and report the optional
-**bundles** the Ryoku Hub's Extras section offers. They ship to `/usr/bin` with
-`ryoku-desktop` and are driven by the Hub; nothing here runs at boot.
+Fedora helpers for installing, removing, and reporting optional bundles from
+Ryostore. They ship to `/usr/bin` with `ryoku-desktop`; nothing runs at boot.
+Ryostore owns the catalogue, its cache, and script/plugin downloads.
 
-A bundle is a curated set of tools (packages, small installer scripts, and shell
-plugins) defined in the `ryostore` catalogue
-(`https://github.com/ryoku-dev/ryostore`, under `bundles/`). `ryoku-hub`
-fetches and caches that catalogue; the helpers here do the work.
+## Helpers
 
-## The helpers
+- `ryostore-install` installs, removes, and reports bundle items. It reads
+  definitions through `ryostore internal bundle` and publishes per-item state to
+  `$XDG_RUNTIME_DIR/ryostore/<id>.json` (falling back to `/tmp`).
+  `RYOSTORE_DRYRUN=1` prints actions without running installers, querying remote
+  package metadata, or changing packages. Catalogue fetching and report writes
+  still occur.
+- `ryoku-pkg-add` installs packages through `dnf -y install`.
+- `ryoku-pkg-remove` removes packages and unneeded dependencies through DNF.
+  DNF can also remove dependent applications, so its transaction confirmation
+  remains enabled in the store's terminal. Cancelling does not trigger retries.
+- `ryoku-pkg-aur-add` is a compatibility entry point for older catalogue
+  scripts. It forwards to `ryoku-pkg-add`; Fedora has no AUR build path.
+- `ryoku-pkg-multilib` checks for an x86_64 host and DNF. Fedora carries i686
+  packages in its normal repositories, so no separate multilib repository
+  needs enabling. Package availability is checked when installing.
+- `ryoku-cmd-present` checks whether a command is on `PATH`.
 
-- `ryostore-install` the actuator. Reads a bundle definition from the
-  catalogue cache (`ryoku-hub extras cache`), then installs, removes, or reports
-  its items. Routes each `package` item to the official repos or the AUR, runs
-  each `script` item's installer from the catalogue, and leaves `plugin` items to
-  the shell's plugin path. It publishes a per-bundle JSON report under
-  `$XDG_RUNTIME_DIR/ryostore/<id>.json` that the Hub watches for live state.
-  `status` reports presence without changing anything; `install`/`remove` mutate
-  and so run from the Hub's floating terminal, where `sudo` and the AUR helper
-  have a TTY. `RYOSTORE_DRYRUN=1` prints the plan and changes nothing.
-- `ryoku-pkg-add` install official-repo packages (`pacman -S`).
-- `ryoku-pkg-aur-add` install AUR packages with the system AUR helper (yay/paru).
-- `ryoku-pkg-remove` remove packages and their now-orphaned dependencies.
-- `ryoku-pkg-multilib` enable the `[multilib]` repo, for bundles that declare
-  `"requires": ["multilib"]` (Gaming needs it for Steam and the lib32 libraries).
-- `ryoku-pkg-cachyos` add the `[cachyos-v3]` repo (CachyOS key, x86-64-v3 only)
-  so `linux-cachyos` installs through pacman, for bundles that declare
-  `"requires": ["cachyos"]` (CachyOS Kernel). Additive and idempotent: it never
-  touches `[core]`/`[extra]` or the stock kernel, and leaves out the baseline
-  `[cachyos]` repo and its forked pacman.
-- `ryoku-cmd-present` the one presence test (`command -v`) shared by the actuator
-  and the catalogue's installer scripts.
+## Packages and prerequisites
 
-## Detection and routing
+Package items must name Fedora RPM packages or RPM capabilities available from
+an enabled repository. Architecture-specific items use `name.i686` or
+`name.x86_64`. Arch package names are not automatically translated. Packages
+missing from enabled repositories are reported as failed while the remaining
+items continue; they never fall back to source builds or automatically enable
+third-party repositories. Configure any required RPM Fusion or COPR repository
+before installing a bundle.
 
-Detection is decided one way: a `package` item is present when `pacman -Qq`
-finds it; a `script` item is present when its `detect` command is on `PATH`.
-Routing is decided at install time: a package that resolves with `pacman -Si` is
-an official-repo package, otherwise it is built from the AUR. A bundle author
-only ever writes the package name.
+Status takes one local RPM snapshot, including names, architectures, and
+provided capabilities. Install/remove query live RPM state, and removal resolves
+capabilities to concrete `name.arch` owners. DNF repository queries check both
+success and nonempty results, since an empty match can still exit successfully.
+See the [DNF repoquery reference](https://dnf5.readthedocs.io/en/stable/commands/repoquery.8.html).
 
-## Boundaries
+`"requires": ["multilib"]` checks i686 support. `"requires": ["gpu-lib32"]`
+runs `ryoku-gpu-lib32`, which installs Fedora i686 graphics libraries and matches
+NVIDIA libraries to the installed RPM Fusion driver branch. Failed prerequisites
+abort installation. CachyOS kernel bundles are unsupported on Fedora and are
+rejected before prerequisites run; the CachyOS repository helper was removed.
 
-`ryoku-hub` owns all network and disk for the catalogue (fetch, cache, installer
-resolution); these scripts never fetch. Package transactions go through pacman
-and the AUR helper; this subsystem does not reimplement them.
+Script items run the installer supplied by the catalogue, which must itself
+support Fedora. Plugin and file-manager script items use Ryostore's existing
+install/remove paths.

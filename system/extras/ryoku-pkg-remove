@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-
-# -Rs: drop the package plus deps nothing else needs. pacman won't remove a
-# package another installed one still requires, so uninstalling an extras
-# bundle won't break the rest of the system.
-
 set -euo pipefail
 
 (($#)) || {
@@ -11,13 +6,12 @@ set -euo pipefail
   exit 2
 }
 
-if command -v pacman >/dev/null 2>&1; then
-  exec sudo pacman -Rs --noconfirm "$@"
-elif command -v dnf >/dev/null 2>&1; then
-  exec sudo dnf -y remove "$@"
-elif command -v apt-get >/dev/null 2>&1; then
-  exec sudo apt-get -y remove "$@"
-else
-  echo "ryoku-pkg-remove: no supported package manager found" >&2
+command -v dnf >/dev/null 2>&1 || {
+  echo "ryoku-pkg-remove: Fedora's dnf is required" >&2
   exit 1
-fi
+}
+
+# DNF can also remove dependents; let the user review the complete transaction.
+priv=()
+(( EUID == 0 )) || priv=(sudo)
+exec "${priv[@]}" dnf --setopt=clean_requirements_on_remove=True remove -- "$@"
