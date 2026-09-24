@@ -51,6 +51,39 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Wait for signed Ryoku RPM publication
+        timeout-minutes: 45
+        run: |
+          set -euo pipefail
+          repo_url='https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64/'
+          expected_version="0.$(git rev-list --count HEAD)"
+          mapfile -t packages < <(
+            awk '/^Name:[[:space:]]+/ { print $2 }' release/rpm/*.spec | sort -u
+          )
+
+          while true; do
+            missing=()
+            for package in "${packages[@]}"; do
+              version=$(
+                dnf5 --disablerepo='*' \
+                  --repofrompath="RyokuCOPR,$repo_url" \
+                  repoquery --latest-limit=1 --qf '%{version}' "$package" \
+                  2>/dev/null || true
+              )
+              [[ "$version" == "$expected_version" ]] || missing+=("$package")
+            done
+
+            if ((${#missing[@]} == 0)); then
+              echo "Signed Ryoku RPMs for version $expected_version are"
+              echo "available."
+              break
+            fi
+
+            echo "Waiting for signed Ryoku RPMs at version $expected_version:"
+            echo "${missing[*]}"
+            sleep 60
+          done
+
       - name: Determine ISO version and name
         run: |
           set -euo pipefail

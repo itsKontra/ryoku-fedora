@@ -8,6 +8,9 @@
   Fedora Anaconda/Kickstart is now the only ISO implementation in the tree.
 
 ### Fixed
+- Wait for the signed COPR package set built from the release commit before
+  composing the GitHub release ISO. This prevents an ISO build from racing the
+  package publisher and failing because a newly added Ryoku RPM is unavailable.
 - Install system policy rules, package extras, hardware helpers, udev rules,
   kernel module/modprobe configurations, logind clamshell policy, and services
   during Anaconda offline provisioning, and stage the system hierarchy on the ISO.
