@@ -1,0 +1,11 @@
+# Developer toolchains, installed by pacstrap with the base set so every Ryoku
+# machine has the language runtimes out of the box. One package per line;
+# '#' and blank lines are ignored.
+
+go
+nodejs
+npm
+python
+python-pip
+python-pipx
+mise
