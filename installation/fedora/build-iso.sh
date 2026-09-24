@@ -282,7 +282,7 @@ EOF
 KS_SHA256=$(sha256sum "$KS_FILE" | awk '{print $1}')
 
 # Build Anaconda updates image if configuration overrides exist
-UPDATES_IMG="$WORK_DIR/updates.img"
+UPDATES_IMG="$(cd "$WORK_DIR" && pwd -P)/updates.img"
 if [[ -d "$SCRIPT_DIR/conf.d" ]] && command -v cpio >/dev/null 2>&1; then
   log "Building Anaconda updates image at $UPDATES_IMG..."
   UPDATES_BUILD="$WORK_DIR/updates_root"

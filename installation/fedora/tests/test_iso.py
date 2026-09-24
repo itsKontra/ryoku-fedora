@@ -198,6 +198,34 @@ class TestComposePipelineScript(unittest.TestCase):
             self.assertEqual(prov["kickstart"]["path"], str(KICKSTART_PATH))
             self.assertGreater(len(prov["kickstart"]["sha256"]), 10)
 
+    def test_build_iso_writes_updates_image_from_relative_work_dir(self):
+        """The updates image remains reachable after the build enters its staging tree."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_dir = root / "run"
+            tools = root / "bin"
+            repo_dir = root / "repo"
+            run_dir.mkdir()
+            tools.mkdir()
+            repo_dir.mkdir()
+            cpio = tools / "cpio"
+            cpio.write_text("#!/bin/sh\ncat >/dev/null\nprintf cpio\n", encoding="utf-8")
+            cpio.chmod(0o755)
+
+            res = subprocess.run([
+                str(BUILD_ISO_PATH),
+                "--ks", str(KICKSTART_PATH),
+                "--repo-dir", str(repo_dir),
+                "--work-dir", "work",
+                "--out-dir", str(root / "out"),
+                "--skip-key-verify",
+                "--skip-closure-verify",
+                "--stage-only",
+            ], cwd=run_dir, env={**os.environ, "PATH": str(tools) + os.pathsep + os.environ["PATH"]},
+               capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, f"build-iso.sh failed:\n{res.stderr}\n{res.stdout}")
+            self.assertTrue((run_dir / "work/updates.img").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()
