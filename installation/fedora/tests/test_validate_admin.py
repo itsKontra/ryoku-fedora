@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 VALIDATE_ADMIN_PATH = REPO_ROOT / "installation" / "fedora" / "validate-admin.py"
@@ -96,16 +96,16 @@ class TestValidateAdmin(unittest.TestCase):
                 self.password = password
                 self.lock = lock
 
-        with patch("pyanaconda.modules.common.constants.services.USERS") as mock_users_service, \
-             patch("pyanaconda.modules.common.structures.user.UserData") as mock_user_data:
-            mock_proxy = mock_users_service.get_proxy.return_value
-            mock_proxy.Users = ["raw_user_struct"]
-            mock_user_data.from_structure_list.return_value = [
-                MockUser("alice", ["wheel"], "hashed_pass", False)
-            ]
-            ok, msg = validate_admin.check_dbus()
-            self.assertTrue(ok)
-            self.assertIn("alice", msg)
+        mock_users_service = MagicMock()
+        mock_proxy = mock_users_service.get_proxy.return_value
+        mock_proxy.Users = ["raw_user_struct"]
+        mock_user_data = MagicMock()
+        mock_user_data.from_structure_list.return_value = [
+            MockUser("alice", ["wheel"], "hashed_pass", False)
+        ]
+        ok, msg = validate_admin.check_dbus(mock_users_service, mock_user_data)
+        self.assertTrue(ok)
+        self.assertIn("alice", msg)
 
     def test_dbus_check_rejects_empty_password(self):
         class MockUser:
@@ -115,16 +115,16 @@ class TestValidateAdmin(unittest.TestCase):
                 self.password = password
                 self.lock = lock
 
-        with patch("pyanaconda.modules.common.constants.services.USERS") as mock_users_service, \
-             patch("pyanaconda.modules.common.structures.user.UserData") as mock_user_data:
-            mock_proxy = mock_users_service.get_proxy.return_value
-            mock_proxy.Users = ["raw_user_struct"]
-            mock_user_data.from_structure_list.return_value = [
-                MockUser("matthias", ["wheel"], "", False)
-            ]
-            ok, msg = validate_admin.check_dbus()
-            self.assertFalse(ok)
-            self.assertIn("no password set", msg)
+        mock_users_service = MagicMock()
+        mock_proxy = mock_users_service.get_proxy.return_value
+        mock_proxy.Users = ["raw_user_struct"]
+        mock_user_data = MagicMock()
+        mock_user_data.from_structure_list.return_value = [
+            MockUser("matthias", ["wheel"], "", False)
+        ]
+        ok, msg = validate_admin.check_dbus(mock_users_service, mock_user_data)
+        self.assertFalse(ok)
+        self.assertIn("no password set", msg)
 
     def test_cli_execution_exits_0_on_valid_admin(self):
         syslog = self.temp_path / "syslog"

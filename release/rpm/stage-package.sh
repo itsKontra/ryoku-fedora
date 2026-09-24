@@ -14,6 +14,7 @@ mkdir -p "$srcdir" "$pkgdir"
 # installation hooks run while building an RPM.
 recipe="$startdir/$name.sh"
 [[ -f $recipe ]] || { echo "unknown RPM payload: $name" >&2; exit 2; }
+# shellcheck source=/dev/null
 source "$recipe"
 if declare -F build >/dev/null; then build; fi
 package

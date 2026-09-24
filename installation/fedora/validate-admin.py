@@ -18,18 +18,25 @@ import sys
 from pathlib import Path
 
 
-def check_dbus():
+def check_dbus(users_service=None, user_data=None):
     """Query Anaconda DBus Users module if available."""
-    try:
-        from pyanaconda.modules.common.constants.services import USERS
-        from pyanaconda.modules.common.structures.user import UserData
+    if users_service is None or user_data is None:
+        try:
+            from pyanaconda.modules.common.constants.services import USERS
+            from pyanaconda.modules.common.structures.user import UserData
+        except Exception as exc:
+            return None, f"DBus check unavailable: {exc}"
 
-        users_proxy = USERS.get_proxy()
+        users_service = USERS
+        user_data = UserData
+
+    try:
+        users_proxy = users_service.get_proxy()
         raw_users = getattr(users_proxy, "Users", None)
         if raw_users is None:
             return None, "Anaconda Users DBus property not accessible"
 
-        user_list = UserData.from_structure_list(raw_users)
+        user_list = user_data.from_structure_list(raw_users)
         if not user_list:
             return False, "No user accounts have been created in Anaconda User Creation."
 
