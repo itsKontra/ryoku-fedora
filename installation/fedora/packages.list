@@ -237,3 +237,6 @@ edk2-ovmf
 qemu-system-x86
 virglrenderer
 moby-engine
+quickemu
+spice-gtk-tools
+xorriso

@@ -138,13 +138,17 @@ cmd_caps() {
 }
 
 # ---- setup -----------------------------------------------------------------
-# quickemu is AUR-only; spice-gtk (spicy) is in the official repos. Route both
-# through the Ryoku package helpers so the install matches every other one.
+# quickemu is AUR-only on Arch; on Fedora it lives in the official repos.
+# spice-gtk-tools (spicy) and xorriso provide the console viewer and ISO builder.
 cmd_setup() {
-	if have ryoku-pkg-add; then
-		ryoku-pkg-add --needed spice-gtk libisoburn
-	elif have dnf; then
-		sudo dnf install -y spice-gtk libisoburn quickemu
+	if have dnf; then
+		if have ryoku-pkg-add; then
+			ryoku-pkg-add quickemu spice-gtk-tools xorriso
+		else
+			sudo dnf install -y quickemu spice-gtk-tools xorriso
+		fi
+	elif have ryoku-pkg-add; then
+		ryoku-pkg-add spice-gtk libisoburn
 	elif have apt-get; then
 		sudo apt-get install -y spice-client-gtk libisoburn quickemu
 	else
@@ -729,7 +733,7 @@ cmd_instant() {
 	# both are cheap; a user who wants nothing else still gets clipboard.
 	[ -n "$os" ] || { emit '{"phase":"error","message":"instant needs an OS (e.g. debian)"}'; exit 1; }
 	local hint="sudo pacman -S libisoburn"
-	have dnf && hint="sudo dnf install libisoburn"
+	have dnf && hint="sudo dnf install xorriso"
 	have apt-get && hint="sudo apt-get install libisoburn"
 	have_iso_builder || { emit "{\"phase\":\"error\",\"message\":\"no ISO builder — install xorriso: $hint\"}"; exit 1; }
 	have qemu-img || { emit '{"phase":"error","message":"qemu-img is missing"}'; exit 1; }

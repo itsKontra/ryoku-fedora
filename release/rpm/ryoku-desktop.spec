@@ -109,6 +109,9 @@ Requires:       upower
 Requires:       power-profiles-daemon
 Requires:       ddcutil
 Requires:       uv
+Recommends:     quickemu
+Recommends:     spice-gtk-tools
+Recommends:     xorriso
 
 %description
 ryoku-desktop, built from the shared Ryoku source and package payload recipe.
