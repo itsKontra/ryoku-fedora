@@ -1,8 +1,7 @@
 package main
 
-// visual language borrowed from installation/tui: same palette, glyph
-// fallbacks, and brand gradient, so the shell installer reads as the same
-// product as the ISO installer.
+// The shell installer uses Ryoku's palette, glyph fallbacks, and brand gradient
+// so it reads as part of the same product as the desktop.
 
 import (
 	"fmt"

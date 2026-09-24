@@ -13,8 +13,8 @@ import Quickshell.Io
 //
 // The language is a global shell setting (shell.json "language"), set from the
 // Hub's Global page and watched here, so changing it retranslates every open
-// surface live -- no relogin. The same catalog serves the Go installers and the
-// installer's shell (ryoku/i18n/i18n.go, installation/backend/lib/i18n.sh), so
+// surface live -- no relogin. The same catalog serves the Go tools and the
+// standalone installer (ryoku/i18n/i18n.go), so
 // there is one set of strings for the whole system, at /usr/share/ryoku/i18n
 // (a dev checkout points RYOKU_I18N_DIR at ryoku/i18n/catalog). Brand kana
 // (力, 描画, seals) are never wrapped, so they stay put.

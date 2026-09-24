@@ -84,7 +84,7 @@ func RepoIndexDoc(root string) (string, error) {
 		{"User CLI", "ryoku/cli/"},
 		{"Rashin (this system)", "ryoku/rashin/"},
 		{"Dev deploy loop", "ryoku/shell/deploy.sh"},
-		{"Installer backend", "installation/backend/"},
+		{"Fedora installer", "installation/fedora/"},
 		{"RPM packaging", "release/rpm/"},
 	} {
 		if _, err := os.Stat(filepath.Join(root, e[1])); err == nil {

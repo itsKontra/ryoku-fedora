@@ -11,9 +11,8 @@ import (
 	i18n "ryoku-i18n"
 )
 
-// Ryoku's pacman progress bar. The installer sets this in the target's
-// pacman.conf (installation/backend/lib/mirrors.sh); this reconciler delivers it
-// to a box installed before it shipped. Purely cosmetic: pacman draws the
+// Ryoku's pacman progress bar. This reconciler delivers it to a box installed
+// before it shipped. Purely cosmetic: pacman draws the
 // transfer bar as Pac-Man eating pellets instead of a row of hashes.
 const pacmanCandyDirective = "ILoveCandy"
 

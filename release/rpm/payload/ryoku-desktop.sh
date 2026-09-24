@@ -89,9 +89,8 @@ depends=(
   # blocks in the Super+S chat; the import is load-bearing, so it ships here.
   'syntax-highlighting'
   # The user-facing applications are deliberately NOT depends (see optdepends):
-  # pacman re-satisfies a dependency list on every upgrade, so a hard depend
-  # reinstalled apps people deleted. The ISO pacstraps them from
-  # system/packages/base.packages and `ryoku doctor` delivers them once
+  # A package manager re-satisfies a dependency list on every upgrade, so a hard
+  # depend reinstalls apps people deleted. `ryoku doctor` delivers them once
   # (reconcile_shipped_apps.go). Tools the shell calls by name stay below.
   'zsh'
   'zsh-autosuggestions'
@@ -171,11 +170,9 @@ depends=(
   'noto-fonts-emoji'
   'ttf-material-symbols-variable'
   # ── feature tools promoted from optdepends to hard depends ────────────────
-  # An optdepend never installs on `pacman -Syu`, so on a packaged box
-  # (`ryoku update`) or a shell-installer box these advertised, always-on
-  # features were silently dead, while the ISO had them (it pacstraps
-  # system/packages/base.packages). Hard depends make the ISO, `ryoku update`,
-  # and the shell installer converge on one desktop: the single source of truth.
+  # A weak dependency does not reliably reach every update path. Hard depends
+  # make the Fedora ISO, `ryoku update`, and the shell installer converge on one
+  # desktop.
   'tesseract'            # OCR text grab (pill Super+D)
   'tesseract-data-eng'   # English OCR language data
   'zbar'                 # QR-code scanning (pill Super+D)
@@ -202,9 +199,9 @@ depends=(
   'dkms'
 )
 optdepends=(
-  # The applications Ryoku ships. Optional here on purpose: the ISO pacstraps
-  # them and `ryoku doctor` delivers them once to an existing box, so pacman
-  # never has a missing dependency to "repair" and a deleted app stays deleted.
+  # Applications remain optional here on purpose: `ryoku doctor` delivers them
+  # once, so DNF never has a missing dependency to repair and a deleted app stays
+  # deleted.
   'kitty: the default terminal'
   'fish: optional interactive shell'
   'blesh: Bash line editor'
@@ -528,9 +525,8 @@ EOF
     "$pkgdir/usr/bin/ryoku-plugins-place"
 
   # The translation catalog, at the one path every runtime reads: the QML
-  # singleton (ryoku/ui/Singletons/I18n.qml), the Go runtime the ryoku CLI and
-  # the installers link (ryoku/i18n/i18n.go) and the installer's shell
-  # (installation/backend/lib/i18n.sh). langs.json rides along because it is
+  # singleton (ryoku/ui/Singletons/I18n.qml) and the Go runtime linked by the
+  # CLI and standalone installer (ryoku/i18n/i18n.go). langs.json rides along because it is
   # the list the Hub's language picker draws from.
   install -d "$pkgdir/usr/share/ryoku/i18n"
   install -m0644 "$_repo"/ryoku/i18n/catalog/*.json "$pkgdir/usr/share/ryoku/i18n/"

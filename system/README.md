@@ -5,10 +5,9 @@ How an installed Ryoku machine is put together, separate from the desktop in
 
 ## What's here
 
-- `packages/` The package lists the installer uses: `base.packages` (core system,
-  Hyprland, SDDM, audio, fonts, CLI tools), `hardware.packages` (GPU drivers and
-  microcode per vendor), `aur.packages` (built after install), and `dev.packages`
-  (optional toolchains).
+- `packages/` Package manifests used by the shell installer and delivery audits:
+  `base.packages` for the desktop system, hardware and development lists, and
+  distro translation metadata.
 - `boot/` The boot chain: Limine with Ryoku branding, the Plymouth splash, and the
   mkinitcpio hooks.
 - `hardware/` Hardware setup. `gpu/` picks the most capable GPU and pins it for
@@ -21,7 +20,6 @@ How an installed Ryoku machine is put together, separate from the desktop in
 
 ## Networking and services
 
-Networking is NetworkManager with the iwd backend. The only services Ryoku turns
-on are SDDM and NetworkManager. Both come from `packages/` and are enabled by the
-installer in `installation/backend`, so there is no separate config to keep here
-yet.
+Networking is NetworkManager. SDDM and NetworkManager are installed through the
+Fedora RPM/installer path; service policy lives with the Fedora provisioner and
+RPM payloads rather than in a second installer backend.

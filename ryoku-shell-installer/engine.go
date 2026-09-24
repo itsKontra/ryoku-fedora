@@ -1,10 +1,9 @@
 package main
 
 // engine.go runs the install: ordered steps, each an idempotent shell-out
-// sequence streamed line by line to the UI and the log file. The recipe is
-// installation/backend/lib/deploy.sh translated from chroot to live system,
-// plus the migration work (backup, rival shells, DM/network switch) that an
-// existing machine needs and a blank ISO target never did.
+// sequence streamed line by line to the UI and the log file. It also handles
+// the migration work an existing machine needs: backup, rival-shell cleanup,
+// and display-manager and network changes.
 
 import (
 	"bufio"
@@ -37,13 +36,12 @@ SigLevel = Required
 Server = https://repo.ryoku.dev/stable/$arch
 `
 
-// ryokuPkgs mirrors the ISO's deploy.sh: the keyring plus the ryoku-desktop
-// umbrella. The umbrella version-pins and pulls every monorepo component and
+// ryokuPkgs is the keyring plus the ryoku-desktop umbrella. The umbrella
+// version-pins and pulls every monorepo component and
 // the desktop's runtime tools (recorder, night light, dictation, OCR/QR, LED,
 // external-monitor brightness, ...) as hard depends, so installing just these
-// two -- exactly what the ISO installs -- is the single source of truth for the
-// Ryoku desktop set. Everything else (session, base OS, fonts) comes from
-// base.packages via readBasePackages: the same manifest the ISO pacstraps.
+// two is the single source of truth for the Ryoku desktop set. Everything else
+// (session, base OS, fonts) comes from base.packages via readBasePackages.
 var ryokuPkgs = []string{"ryoku-keyring", "ryoku-desktop"}
 
 // ryokuOverwriteGlob names the ryoku-desktop-owned paths that a prior partial
@@ -868,10 +866,9 @@ func stepRepo(e *engine) error {
 	return e.sudo("pacman", "-Sy")
 }
 
-// readBasePackages parses system/packages/base.packages from the payload (the
-// same manifest the ISO pacstraps): one package per line, '#' comments and
-// blank lines dropped, boot-chain entries skipped. This is the single source of
-// truth for the machine package set, shared verbatim with the ISO.
+// readBasePackages parses system/packages/base.packages from the payload: one
+// package per line, '#' comments and blank lines dropped, boot-chain entries
+// skipped. It is the source manifest translated for the detected distribution.
 func (e *engine) readBasePackages() ([]string, error) {
 	path := filepath.Join(e.payload, "system/packages/base.packages")
 	data, err := os.ReadFile(path)

@@ -1,6 +1,5 @@
-# Ryoku base package set. One package per line; '#' and blank lines are ignored.
-# The installer (installation/backend/ryoku-install) pacstraps this whole set.
-# Per-profile GPU drivers and CPU microcode come from hardware.packages.
+# Ryoku source package manifest. One package per line; '#' and blank lines are
+# ignored. Fedora consumers translate names or use the RPM specs directly.
 
 # Core system
 base
@@ -60,8 +59,7 @@ nftables
 
 # Bluetooth (BlueZ). bluetoothd is the org.bluez D-Bus daemon the shell and hub
 # Bluetooth UIs (Quickshell.Bluetooth) talk to; bluez-utils ships bluetoothctl,
-# which the pair-trust-connect flows shell out to. The installer enables
-# bluetooth.service (see installation/backend/lib/bootloader.sh).
+# which the pair-trust-connect flows shell out to.
 bluez
 bluez-utils
 

@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-# PATH wrapper for the install backend.
-#
-# real script + lib/ sit under /usr/local/lib/ryoku/backend so the backend
-# resolves its lib via realpath of its own path. lib has to live next to the
-# real script, not this wrapper. exec keeps argv + exit status intact.
-exec /usr/local/lib/ryoku/backend/ryoku-install "$@"

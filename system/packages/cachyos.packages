@@ -5,12 +5,10 @@
 #
 # These live in the CachyOS repositories (added to the target's pacman.conf above
 # [core] by the installer, mirroring system/extras/ryoku-pkg-cachyos). The offline
-# ISO bakes them into the [offline] file:// repo so the whole set installs with no
-# network (installation/iso/build.sh, offline-repo.sh).
+# Retained as input for distro translation and compatibility tooling.
 
 # CachyOS-optimized kernel (sched-ext / BORE) + its headers for DKMS. The stock
-# `linux` kernel stays in base.packages as a fallback; the bootloader boots this
-# one by default (installation/backend/lib/bootloader.sh).
+# `linux` kernel stays in base.packages as a fallback.
 linux-cachyos
 linux-cachyos-headers
 

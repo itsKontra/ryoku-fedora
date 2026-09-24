@@ -1,9 +1,9 @@
-# Ryoku Arch
+# Ryoku Fedora
 
-A hand-built Arch Linux distribution: a Hyprland or niri desktop (the Ryoku shell), a
-guided installer, and the system definition that produces both. This repository
-is the single source of truth. It deploys one way, into a live system; live
-machines are never the source.
+A Fedora 44 desktop distribution: a Hyprland or niri desktop (the Ryoku shell),
+an Anaconda/Kickstart installer, and the system definition that produces both.
+This repository is the single source of truth. It deploys one way, into a live
+system; live machines are never the source.
 
 New here? Read these in order, then keep them open while you work:
 
@@ -73,8 +73,8 @@ These are not negotiable. Most are enforced by the git hooks in `.githooks/`.
 | Path | Purpose |
 |---|---|
 | `ryoku/` | The desktop: app configs, the window-manager seam and its per-compositor configs (Hyprland in Lua, niri in KDL), the shell UI, the lockscreen, brand assets. |
-| `system/` | The machine definition: boot chain, hardware policy, package sets. |
-| `installation/` | How a machine is built: the TUI, the backend installer, the ISO profile. |
+| `system/` | Hardware policy, service helpers, and package manifests. |
+| `installation/` | Fedora ISO composition, offline provisioning, first boot, and install tests. |
 | `release/` | Fedora RPM packaging and publication. |
 | `docs/` | These guides. |
 | `.githooks/` | The commit/push gates every change must pass. |

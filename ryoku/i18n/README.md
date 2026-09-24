@@ -2,7 +2,7 @@
 
 One catalog of English source strings and their translations, read by every
 Ryoku surface: the shell, the Hub, the apps, the wallpaper picker, the greeter,
-both installers and the `ryoku` CLI.
+the standalone installer and the `ryoku` CLI.
 
 The developer-facing guide is `docs/i18n.md`. This file is the map of the
 directory.
@@ -24,8 +24,7 @@ The tools live in `tools/` and not here because this directory is a Go module
 package's sources. Keeping the module root to Go and `langs.json` keeps a
 vendored copy down to three small files.
 
-The other three readers of this catalog live with the code that uses them:
+The other readers of this catalog live with the code that uses them:
 
 - `ryoku/ui/Singletons/I18n.qml` - QML, live-reloading, layered with the user overlay
-- `installation/backend/lib/i18n.sh` - the installer's shell, one jq pass at start
 - `.github/workflows/i18n.yml` - the job that keeps the catalogs current
