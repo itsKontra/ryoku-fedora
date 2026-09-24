@@ -25,10 +25,16 @@ depends=(
   # compositor + Wayland session (ships /usr/share/wayland-sessions/niri.desktop)
   'niri'
   # niri has no built-in Xwayland; X11 apps reach a display through the satellite.
+  # [ryoku] ships a build past 0.8.2 (see release/packages/xwayland-satellite):
+  # 0.8.2 regressed override-redirect popups, so Steam and Wine menus close on
+  # sight until the fix in that build.
   'xwayland-satellite'
   # screencast/screenshot portal: ryoku-wm-niri caps reports portalBackend "gnome",
   # and doctor's portal reconciler routes xdg-desktop-portal to this backend.
   'xdg-desktop-portal-gnome'
+  # night-light backend: warms the screen over wlr-gamma-control, niri's route,
+  # so it is niri's variant to ship and reclaim (ryoku-cmd-nightlight, pill Super+U).
+  'gammastep'
 )
 provides=('ryoku-desktop-compositor')
 # deliberately not exclusive: both variants may be installed, so a switch is a

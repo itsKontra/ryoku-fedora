@@ -186,20 +186,20 @@ func reconcileAiUsageTimer(checkOnly bool) recResult {
 	return fixedRes(i18n.T("enabled the AI usage collector timer"))
 }
 
-// reconcileProwlAgent surfaces a rashin box that lost its prowl-agent binary.
-// ryoku-rashin now depends on prowl-agent (its `index` builds the vault code map
+// reconcileProwlAgent surfaces a rashin box that lost its prowl binary.
+// ryoku-rashin now depends on prowl (its `index` builds the vault code map
 // and its `wire` installs Prowl's agent skills), so a box that enabled rashin
 // before that dependency shipped can run without it. `pacman -Syu` delivers it
 // going forward; this reports the gap for a box still stuck without it. Reported,
 // never auto-run: installing a package is the user's call.
 func reconcileProwlAgent(checkOnly bool) recResult {
 	enabled := rashinUnitEnabled()
-	present := sys.Has("prowl-agent")
+	present := sys.Has("prowl") || sys.Has("prowl-agent")
 	if !prowlAgentNeeded(enabled, present) {
 		if !enabled {
 			return okRes(i18n.T("rashin daemon is opt-in and not enabled"))
 		}
-		return okRes(i18n.T("prowl-agent is present for the rashin agent index"))
+		return okRes(i18n.T("prowl is present for the rashin agent index"))
 	}
 	fix := "sudo pacman -S prowl-agent"
 	if !sys.Has("pacman") {

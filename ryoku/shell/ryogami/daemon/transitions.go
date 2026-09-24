@@ -171,7 +171,7 @@ func (d *daemon) pickTransition() *pickedTransition {
 // onto a fresh backdrop at login, and live-reload, which relaunches the current
 // clip after a settings change. A user-driven switch follows the picker's
 // transition block (the skwd keys in ryogami-wall/config.json): off means a
-// plain cut, "random" is a no-repeat pick over the 38-shader skwd catalog, a
+// plain cut, "random" is a no-repeat pick over the 39-shader skwd catalog, a
 // catalog name pins that shader, and the "ryoku" sentinel (or an unknown value)
 // falls back to the shell's 22-preset reveal engine, which
 // wallpaper.transition_preset in shell.json can pin further.
@@ -185,13 +185,7 @@ func (d *daemon) transitionFor(mode string) *pickedTransition {
 	}
 	switch {
 	case prefs.Shader == transitionRandom:
-		return &pickedTransition{
-			Name:       "skwd",
-			Kind:       "skwd",
-			Shader:     d.pickSkwdShader(),
-			DurationMs: prefs.DurationMs,
-			Seed:       rand.Float64(),
-		}
+		return d.pickAnyTransition(prefs.DurationMs)
 	case knownSkwdShader(prefs.Shader):
 		return &pickedTransition{
 			Name:       "skwd",
@@ -201,10 +195,43 @@ func (d *daemon) transitionFor(mode string) *pickedTransition {
 			Seed:       rand.Float64(),
 		}
 	}
+	// A picker selection may name a reveal preset as well as a skwd shader: the
+	// two engines share one pool in the UI, so resolve a preset by that name here.
+	if p, okPreset := lookupTransitionPreset(prefs.Shader); okPreset {
+		return resolveTransition(p)
+	}
+	// Legacy path: shell.json wallpaper.transition_preset pins a reveal preset.
 	if p, okPreset := lookupTransitionPreset(wallpaperTransitionPreset()); okPreset {
 		return resolveTransition(p)
 	}
 	return d.pickTransition()
+}
+
+// pickAnyTransition is the no-repeat random pick over the merged pool: every skwd
+// shader and every reveal preset is one candidate, so "Random" rotates the whole
+// transition set the picker shows rather than only the shader half. The skwd
+// candidates carry the picker's duration; the reveal candidates keep the engine's
+// shared reveal duration, exactly as when each is pinned.
+func (d *daemon) pickAnyTransition(durationMs int) *pickedTransition {
+	total := len(skwdShaders) + len(transitionPresets)
+	if total == 0 {
+		return nil
+	}
+	i := rand.IntN(total)
+	if total > 1 && i == d.lastTransition {
+		i = (i + 1 + rand.IntN(total-1)) % total
+	}
+	d.lastTransition = i
+	if i < len(skwdShaders) {
+		return &pickedTransition{
+			Name:       "skwd",
+			Kind:       "skwd",
+			Shader:     skwdShaders[i],
+			DurationMs: durationMs,
+			Seed:       rand.Float64(),
+		}
+	}
+	return resolveTransition(transitionPresets[i-len(skwdShaders)])
 }
 
 // transitionRandom is the sentinel wallpaper.transition_preset value: a fresh
@@ -313,16 +340,17 @@ func originForPreset(p transitionPreset) (x, y float64) {
 	return 0.5, 0.5
 }
 
-// The skwd shader catalog: the 38 GLSL transitions ported from skwd-paper,
+// The skwd shader catalog: the 39 GLSL transitions ported from skwd-paper,
 // compiled beside the shell's Backdrop (modules/wallpaper/skwd/<name>.frag.qsb).
-// Names match upstream's SHADER_CATALOG verbatim, so the picker's shader
-// dropdown and a config.json written for skwd both keep meaning.
+// Names match upstream's catalog verbatim, so the picker's shader dropdown and a
+// config.json written for skwd both keep meaning; crossfade is the clean cross
+// dissolve carried over from skwd-wall v2's transition.wgsl default branch.
 var skwdShaders = []string{
 	"pixelate", "iris", "liquid-ripple", "wave-warp", "glitch",
 	"voronoi-shatter", "heat-melt", "plasma-flow", "ink-splash", "smoke",
 	"chromatic-bloom", "inkwell-drop", "pixelfade-wave", "soft-warp-fade",
 	"zoom-blur-pull", "flyeye", "mosaic-tumble", "crosswarp", "morph",
-	"bounce", "circle-crop", "colour-distance", "crazy-parametric",
+	"bounce", "circle-crop", "colour-distance", "crossfade", "crazy-parametric",
 	"directional", "directional-scaled", "edge-transition", "glitch-displace",
 	"overexposure", "polka-dots-curtain", "puzzle-right", "static-fade",
 	"crosshatch", "directional-wipe", "fadecolor", "parametric-glitch",
@@ -362,18 +390,6 @@ func readWallUITransition() wallUITransition {
 		out.DurationMs = m.Transition.DurationMs
 	}
 	return out
-}
-
-// pickSkwdShader is the no-repeat random pick over the skwd catalog, sharing
-// the daemon's last-index guard with the preset picker.
-func (d *daemon) pickSkwdShader() string {
-	n := len(skwdShaders)
-	i := rand.IntN(n)
-	if n > 1 && i == d.lastTransition {
-		i = (i + 1 + rand.IntN(n-1)) % n
-	}
-	d.lastTransition = i
-	return skwdShaders[i]
 }
 
 func knownSkwdShader(name string) bool {

@@ -93,6 +93,113 @@ Item {
         pg.tick++;
     }
 
+    property var barLive: ({})
+    property var widgetLive: ({})
+
+    function displayFlag(name, kind) {
+        void pg.tick;
+        if (!name)
+            return true;
+        const live = kind === "bar" ? pg.barLive : pg.widgetLive;
+        if (typeof live[name] === "boolean")
+            return live[name];
+        return kind === "bar"
+            ? Tokens.barEnabledFor(name)
+            : Tokens.widgetsEnabledFor(name);
+    }
+
+    function setDisplayFlag(name, kind, enabled) {
+        if (!name)
+            return;
+
+        const source = kind === "bar" ? pg.barLive : pg.widgetLive;
+        const next = {};
+        for (var k in source)
+            next[k] = source[k];
+        next[name] = !!enabled;
+
+        if (kind === "bar")
+            pg.barLive = next;
+        else
+            pg.widgetLive = next;
+
+        Settings.patch("displays." + kind + "." + name, !!enabled);
+        pg.tick++;
+    }
+
+    // ── night light (a display-wide comfort setting on the daemon topic) ─────
+    // The daemon owns the on/off truth (the provider's backend process) and the
+    // saved temperature; the page reads the pushed frame and sends the intent
+    // back on a second socket, the split the Settings singleton uses. Gated on
+    // the nightLight capability, so a compositor with no backend shows no group.
+    property bool nightOn: false
+    property int nightTemp: 4000
+
+    function applyNightFrame(line) {
+        try {
+            var f = JSON.parse(line);
+            if (f && typeof f === "object" && !Array.isArray(f)) {
+                pg.nightOn = f.on === true;
+                if (typeof f.temperature === "number" && f.temperature > 0)
+                    pg.nightTemp = f.temperature;
+            }
+        } catch (e) {}
+    }
+
+    function sendNight(on, temp) {
+        nlCtl.queued += "call nightlight.set " + JSON.stringify({ on: on === true, temperature: temp }) + "\n";
+        if (nlCtl.connected)
+            nlCtl.flushQueued();
+        else
+            nlCtl.connected = true;
+    }
+
+    // Optimistic so the switch and stepper read back instantly; the confirming
+    // frame lands on the same values. Temperature applies live only while on
+    // (nightlight.set with on:false just turns off), so the row is inert when off.
+    function setNight(on) {
+        pg.nightOn = on === true;
+        pg.sendNight(pg.nightOn, pg.nightTemp);
+    }
+    function setNightTemp(temp) {
+        pg.nightTemp = temp;
+        if (pg.nightOn)
+            pg.sendNight(true, temp);
+    }
+
+    Socket {
+        id: nlSub
+        path: Settings.sockPath
+        parser: SplitParser { onRead: line => pg.applyNightFrame(line) }
+        Component.onCompleted: connected = true
+        onConnectionStateChanged: {
+            if (connected) {
+                write("subscribe nightlight\n");
+                flush();
+            } else {
+                nlRetry.restart();
+            }
+        }
+    }
+    Timer {
+        id: nlRetry
+        interval: 2000
+        onTriggered: if (!nlSub.connected) nlSub.connected = true
+    }
+    Socket {
+        id: nlCtl
+        path: Settings.sockPath
+        property string queued: ""
+        function flushQueued() {
+            if (queued.length === 0)
+                return;
+            write(queued);
+            flush();
+            queued = "";
+        }
+        onConnectionStateChanged: if (connected) flushQueued()
+    }
+
     // ── data load: the seam's output list + saved profiles ──────────────────
     Process {
         id: listProc
@@ -200,17 +307,20 @@ Item {
     // for the selected mode, and a compositor that accepts a finer scale still
     // accepts every value it offers.
     function scaleLadder(m) {
-        return pg.computeLadder(m.width, m.height);
+        return pg.computeLadder(m.width, m.height, (m.transform & 1) ? 1 : 0);
     }
     // Whole-logical-pixel scales for a mode: k/120 (k in 30..720) dividing both
     // dimensions to whole logical pixels, floored at 1x and never shrinking the
-    // logical desktop below 640×360.
-    function computeLadder(w, h) {
+    // logical desktop below 640×360. The floor applies to the on-screen
+    // rectangle, so a rotated panel is capped by its (shorter) vertical width
+    // rather than being offered landscape-appropriate scales.
+    function computeLadder(w, h, tf) {
+        var lw = tf ? h : w, lh = tf ? w : h;
         var out = [];
         for (var k = 30; k <= 720; k++)
             if ((w * 120) % k === 0 && (h * 120) % k === 0) {
                 var s = Math.round(k / 120 * 10000) / 10000;
-                if (s >= 1 && s <= 3 && (w / s) >= 640 && (h / s) >= 360)
+                if (s >= 1 && s <= 3 && (lw / s) >= 640 && (lh / s) >= 360)
                     out.push(s);
             }
         return out.length ? out : [1];
@@ -965,6 +1075,42 @@ Item {
                     SettingRow {
                         anchors.left: parent.left; anchors.right: parent.right
                         divider: true
+                        label: I18n.tr("SHOW BAR")
+                        desc: I18n.tr("Show the active Ryoku bar style on this display.")
+                        source: "shell.json"
+                        controlWidth: 54
+                        Sw {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            on: {
+                                void pg.tick;
+                                return pg.sel ? pg.displayFlag(pg.sel.name, "bar") : true;
+                            }
+                            onToggled: value => pg.setDisplayFlag(
+                                pg.sel ? pg.sel.name : "", "bar", value)
+                        }
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        divider: true
+                        label: I18n.tr("DESKTOP WIDGETS")
+                        desc: I18n.tr("Show desktop widgets and desktop-widget plugins on this display.")
+                        source: "shell.json"
+                        controlWidth: 54
+                        Sw {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            on: {
+                                void pg.tick;
+                                return pg.sel ? pg.displayFlag(pg.sel.name, "widgets") : true;
+                            }
+                            onToggled: value => pg.setDisplayFlag(
+                                pg.sel ? pg.sel.name : "", "widgets", value)
+                        }
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        divider: true
                         label: I18n.tr("ROTATION")
                         block: true
                         Seg {
@@ -1222,6 +1368,42 @@ Item {
 
                     // breathing room below the list so it clears the card border.
                     Item { width: parent.width; height: Tokens.s3 }
+                }
+
+                // Night light: a display-wide comfort setting, not per-monitor,
+                // so it sits in its own card. On/off and temperature ride the
+                // daemon `nightlight` topic; gated on the capability so a
+                // compositor with no backend shows nothing here.
+                SettingCard {
+                    width: ctlCol.width
+                    visible: Settings.supports("nightLight")
+                    title: I18n.tr("NIGHT LIGHT")
+
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        label: I18n.tr("WARM SCREEN")
+                        desc: I18n.tr("Cut blue light with a warmer screen tint.")
+                        controlWidth: 54
+                        Sw {
+                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                            on: pg.nightOn
+                            onToggled: (v) => pg.setNight(v)
+                        }
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        divider: true
+                        enabled: pg.nightOn
+                        label: I18n.tr("TEMPERATURE")
+                        value: pg.nightTemp + " K"
+                        controlWidth: 58
+                        Step {
+                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                            from: 1000; to: 6500; stepBy: 100
+                            value: pg.nightTemp
+                            onModified: (v) => pg.setNightTemp(v)
+                        }
+                    }
                 }
             }
         }

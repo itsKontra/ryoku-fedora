@@ -22,7 +22,7 @@ name: Game mode
 on:
   pull_request:
     paths:
-      - 'ryoku/hyprland/scripts/ryoku-cmd-game-mode'
+      - 'ryoku/shell/scripts/ryoku-cmd-game-mode'
       - 'system/hardware/power/ryoku-game-tune'
       - 'system/hardware/power/53-ryoku-game-tune.rules'
       - 'tests/game-mode.sh'
@@ -32,7 +32,7 @@ on:
     branches:
       - main
     paths:
-      - 'ryoku/hyprland/scripts/ryoku-cmd-game-mode'
+      - 'ryoku/shell/scripts/ryoku-cmd-game-mode'
       - 'system/hardware/power/ryoku-game-tune'
       - 'system/hardware/power/53-ryoku-game-tune.rules'
       - 'tests/game-mode.sh'

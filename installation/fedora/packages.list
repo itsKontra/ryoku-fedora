@@ -182,9 +182,11 @@ gstreamer1-plugin-libav
 # Ryoku desktop packages and Wayland environment
 ryoku-desktop
 ryoku-desktop-hyprland
+ryoku-palette-bridge
 ryoku-extras
 hyprland
 hyprpolkitagent
+gammastep
 hypridle
 hyprpicker
 hyprsunset

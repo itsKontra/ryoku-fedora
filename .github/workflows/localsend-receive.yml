@@ -1,6 +1,6 @@
 name: LocalSend receive
 
-# localsend receiver (hyprland/scripts/localsend.sh receive) stalls every
+# localsend receiver (shell/scripts/localsend.sh receive) stalls every
 # incoming transfer at prepare-upload until the shell answers ACCEPT/DECLINE on
 # stdin. ACCEPT -> upload token (200), DECLINE or silence -> 403, no bytes
 # move. test drives the server over HTTPS, feeds verdicts on its stdin.
@@ -9,13 +9,13 @@ name: LocalSend receive
 on:
   pull_request:
     paths:
-      - 'ryoku/hyprland/scripts/localsend.sh'
+      - 'ryoku/shell/scripts/localsend.sh'
       - 'tests/localsend-receive.sh'
   push:
     branches:
       - main
     paths:
-      - 'ryoku/hyprland/scripts/localsend.sh'
+      - 'ryoku/shell/scripts/localsend.sh'
       - 'tests/localsend-receive.sh'
   workflow_dispatch:
 

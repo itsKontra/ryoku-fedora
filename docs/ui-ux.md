@@ -393,7 +393,7 @@ not look broken; it looks fine and then eats the edit on the way out.
 
 `Hub.qml` owns the frame, so a page only writes its content:
 
-- **The rail.** A masthead (力 seal, `RYOKU ARCH`, `SETTINGS`),
+- **The rail.** A masthead (力 seal, `RYOKU`, `SETTINGS`),
   a search field, then eight groups. A group header is its zero-padded index and
   name in tracked mono (`01 OVERVIEW`, `02 DEVICES`, `03 LOOK`, `04 COMPOSITOR`,
   `05 DESKTOP`, `06 KEYS & APPS`, `07 SYSTEM`, `08 EXTEND`, and a nameless ninth
@@ -537,7 +537,7 @@ and per-monitor visibility from `ShellState`.
 |**overview**|`Super+Tab`|the full-screen workspace expo|
 |**quick settings**|`Super+Escape`|the full-height control sidebar|
 |**feature sidebar**|`Super+S`|the framed card: chat, usage, tools|
-|**clipboard**|`Super+V`|clipboard history, a deep link into the sidebar|
+|**clipboard**|`Super+V`|clipboard history at the bottom edge, with fuzzy search and a starred pane|
 |**wallpaper and theme menu**|`Super+W`|the wallpaper carousel and theme picker|
 |**ryoshot**|`Super+Shift+S`|capture, annotate, pin|
 |**visualiser placement**|`Super+Alt+M`|grab the spectrum box and aim it|

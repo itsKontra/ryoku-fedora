@@ -187,6 +187,40 @@ func TestPatchPathResolution(t *testing.T) {
 // TestPassthroughMergePreservesKeys checks passthrough and schema writes leave
 // every unrelated key intact: the daemon merges one leaf at a time rather than
 // rewriting the file from its own schema view.
+func TestPatchPersistsPerDisplayShellVisibility(t *testing.T) {
+	s := newTestStore(t)
+
+	steps := []struct {
+		path string
+		val  string
+	}{
+		{"displays.bar.DP-1", `true`},
+		{"displays.bar.DP-2", `false`},
+		{"displays.widgets.DP-1", `true`},
+		{"displays.widgets.DP-2", `false`},
+	}
+
+	for _, step := range steps {
+		if err := s.patch(step.path, rm(step.val)); err != nil {
+			t.Fatalf("patch %s=%s: %v", step.path, step.val, err)
+		}
+	}
+
+	frame := s.frameLocked()
+
+	for path, want := range map[string]bool{
+		"displays.bar.DP-1":     true,
+		"displays.bar.DP-2":     false,
+		"displays.widgets.DP-1": true,
+		"displays.widgets.DP-2": false,
+	} {
+		got, ok := frameGet(t, frame, path).(bool)
+		if !ok || got != want {
+			t.Fatalf("%s = %v, want %v", path, got, want)
+		}
+	}
+}
+
 func TestPassthroughMergePreservesKeys(t *testing.T) {
 	s := newTestStore(t)
 	for _, st := range []struct{ path, val string }{
@@ -612,5 +646,95 @@ func TestLoadCorruptFileIsBackedUp(t *testing.T) {
 	}
 	if !reflect.DeepEqual(b, junk) {
 		t.Fatalf(".corrupt backup does not match the original bytes")
+	}
+}
+
+// The window-rules editor reads the active provider's action list off the same
+// settings frame it reads values from, so the frame carries it beside caps and
+// deadKeys. A bare store (no provider probed yet) adds no gating keys, and a
+// provider that lists none must still emit [] so the Hub never reads a null.
+func TestFrameCarriesWindowRuleActions(t *testing.T) {
+	s := newTestStore(t)
+	if frameHas(t, s.frameLocked(), "windowRuleActions") {
+		t.Fatal("bare store leaked windowRuleActions before a provider answered")
+	}
+
+	s.caps = map[string]bool{"windowRules": true}
+	s.deadKeys = []string{}
+	s.windowRuleActions = []string{"float", "tile", "opacity"}
+	got, ok := frameGet(t, s.frameLocked(), "windowRuleActions").([]any)
+	if !ok {
+		t.Fatalf("windowRuleActions not a list in the frame")
+	}
+	want := []string{"float", "tile", "opacity"}
+	if len(got) != len(want) {
+		t.Fatalf("windowRuleActions = %v, want %v", got, want)
+	}
+	for i, v := range want {
+		if got[i] != v {
+			t.Errorf("windowRuleActions[%d] = %v, want %v", i, got[i], v)
+		}
+	}
+
+	s.windowRuleActions = nil
+	empty, ok := frameGet(t, s.frameLocked(), "windowRuleActions").([]any)
+	if !ok || len(empty) != 0 {
+		t.Fatalf("empty windowRuleActions = %v, want []", empty)
+	}
+}
+
+// A list a provider models (its layer rules, its animation items) is a key the
+// other provider's page must read as dead; dropping lists from the flattening
+// left every list-keyed page visible on both compositors.
+func TestFlattenLeavesCountsListsAsKeys(t *testing.T) {
+	var tree map[string]any
+	if err := json.Unmarshal([]byte(`{"desktop":{"appearance":{"rounding":8},"windowRules":[]},"wm":{"x":{"layerRules":[],"anim":{"items":[{"name":"a"}]}}}}`), &tree); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	flattenLeaves("", tree, got)
+	for _, want := range []string{"desktop.appearance.rounding", "desktop.windowRules", "wm.x.layerRules", "wm.x.anim.items"} {
+		if !got[want] {
+			t.Errorf("missing key %q in %v", want, got)
+		}
+	}
+	if got["wm.x.anim.items.name"] {
+		t.Errorf("descended into a list: %v", got)
+	}
+}
+
+// boolAt is how a subsystem reads a switch the daemon does not model. The
+// clipboard's weekly sweep is the caller: a passthrough key has to be readable
+// as a boolean, and anything missing or of the wrong type must read as off
+// rather than as an error.
+func TestSettingsBoolAt(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "shell.json")
+	body := `{"clipboard":{"pruneWeekly":true,"widthPercent":65},"weatherLocation":"Berlin"}`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	s := newSettingsStore(path)
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"clipboard.pruneWeekly", true},   // a passthrough boolean
+		{"clipboard.missing", false},      // absent leaf
+		{"clipboard.widthPercent", false}, // present, but not a boolean
+		{"clipboard", false},              // descends through the object
+		{"weatherLocation", false},        // a string
+	}
+	for _, c := range cases {
+		if got := s.boolAt(c.path); got != c.want {
+			t.Errorf("boolAt(%q) = %v, want %v", c.path, got, c.want)
+		}
+	}
+	// A patch through the store is visible to the next read, which is what makes
+	// the Hub's toggle live for the sweep.
+	if err := s.patch("clipboard.pruneWeekly", json.RawMessage(``+`false`)); err != nil {
+		t.Fatalf("patch: %v", err)
+	}
+	if s.boolAt("clipboard.pruneWeekly") {
+		t.Error("boolAt still true after the key was patched off")
 	}
 }

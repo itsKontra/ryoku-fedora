@@ -165,9 +165,9 @@ before the release that begins it.
 
 ## Reporting bugs and ideas
 
-- Bugs: open a [Bug issue](https://github.com/ryoku-dev/ryoku-arch/issues/new/choose)
+- Bugs: open a [Bug issue](https://github.com/ryoku-dev/ryoku/issues/new/choose)
   with system details and steps to reproduce.
 - Ideas, questions, and feature suggestions:
-  [Discussions](https://github.com/ryoku-dev/ryoku-arch/discussions).
+  [Discussions](https://github.com/ryoku-dev/ryoku/discussions).
 - Security reports: see [`SECURITY.md`](SECURITY.md). Do not file them as public
   issues.

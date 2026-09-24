@@ -27,11 +27,12 @@ truth for the live desktop.
   `monitors.lua` are hardware-managed seeds, and `monitors_user.lua.example` shows
   how to hand-pin a display that autoscale must leave alone. `modules/` is one concern per file
   (`env`, `input`, `displays`, `decoration`, `animations`, `binds`, `ryoshot`,
-  `window_rules`, `fullscreen`, `autostart`). `scripts/` holds the leaf shell helpers the UI
-  calls directly: the `ryoku-cmd-*` screen tools (lens, OCR, color, QR, webcam
-  mirror, screen record, night light, caffeine) plus the stash sidebar's
-  download, compress, and install helpers and `ryoku-sysinfo`. `hypridle.conf`
-  is the idle daemon's native config. `plugins/` holds the one compositor
+  `window_rules`, `fullscreen`, `autostart`). `scripts/` holds Hyprland's own
+  leaf helpers, the ones bound to the compositor: `ryoku-monitor` (output
+  arrangement), `ryoku-workspace`, and the `ryoku-keysounds-import` sample
+  importer. The neutral screen and UI helpers the shell drives by bare name (the
+  `ryoku-cmd-*` tools, `ryoku-sysinfo`, the recorder chain) moved to the shell
+  tree, so every compositor ships them. `plugins/` holds the one compositor
   plugin Ryoku authors, `keysounds` (C++ against the Hyprland plugin API, with
   its `hyprpm.toml` recipe and the sample generator; see
   `docs/hyprland-plugins.md`); it ships as a package, not with the config. The
@@ -68,6 +69,10 @@ truth for the live desktop.
   `plugin/` (`Ryoku.Blobs`, the C++/QML SDF metaball module the frame renders
   with; `build.sh` builds it, and it ships prebuilt), `matugen/` (palette
   templates rendered on every wallpaper change), `qt6ct/` (the Qt icon theme, `qt6ct.conf`),
+  `scripts/` (the neutral leaf helpers the UI drives by bare name: the
+  `ryoku-cmd-*` screen and recorder tools, `ryoku-sysinfo`/`ryoku-profile-stats`,
+  `ryoku-app`, `ryostage`, and the stash `.sh` helpers, shipped with the shell so
+  they resolve on PATH under any compositor),
   `systemd/` (the user session target), `ipc/` (`ryoku-shell`, the Go shell
   daemon that supervises the Quickshell components, owns wallpaper/clipboard/
   lock and the GNOME keyring password prompt (it registers as the keyring system

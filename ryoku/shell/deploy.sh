@@ -149,35 +149,27 @@ for p in "$here/../wm"/*/; do
   install -m755 "$p/ryoku-wm-$name" "$bindir/ryoku-wm-$name"
   say "installed $bindir/ryoku-wm-$name"
 done
-install -m755 "$here/scripts/ryoku-reload-cover" "$bindir/ryoku-reload-cover"
+# Every shell leaf script the bar, launcher, Hub, keybinds, recorder and the
+# daemon call by bare name (ryoku-app, ryoku-cmd-*, ryoku-sysinfo, the recorder
+# helpers, ...). They ride the shell to PATH with no compositor config tree, so
+# a niri box that ships no compositor scripts still gets every one. One glob,
+# mirroring the ryoku-shell package.
+for s in "$here/scripts"/ryoku-*; do
+  [[ -f $s ]] || continue
+  install -m755 "$s" "$bindir/${s##*/}"
+done
+# ryostage: the wallpaper engine's launcher, not a ryoku-* name.
 install -m755 "$here/scripts/ryostage" "$bindir/ryostage"
-install -m755 "$here/scripts/ryoku-eq" "$bindir/ryoku-eq"
-# Keep-Awake's durable idle inhibitor: systemd-inhibit, not compositor config, so
-# it rides the shell and holds on a compositor whose package ships no scripts.
-install -m755 "$here/scripts/ryoku-cmd-caffeine" "$bindir/ryoku-cmd-caffeine"
-# The Stash sidebar's helpers. Shell scripts, not compositor config, so they ride
-# the shell to PATH and work with no compositor config tree.
-for s in "$here/scripts"/stash-*.sh; do
+# The .sh helpers the shell drives by bare name: the Stash sidebar's cobalt queue
+# and its compress/install/download backends, the LocalSend LAN transfer, the
+# clipboard-thumbnail generator. Shell scripts, so they ride the shell to PATH.
+for s in "$here/scripts"/*.sh; do
   [[ -f $s ]] || continue
   install -m755 "$s" "$bindir/${s##*/}"
 done
 # Depth and Parallax merged into ryostage; a checkout box that installed the old
 # helpers keeps them on PATH forever otherwise (pacman drops them on packaged boxes).
 rm -f "$bindir"/ryoku-{depth,parallax-engine}
-
-# Every compositor leaf script a config calls by bare name (ryoku-app, the
-# ryoku-cmd-*, ...). The package ships them to /usr/bin; a checkout must put the
-# current copies on PATH too, else a new one like ryoku-app is simply missing.
-# Per provider, because the scripts are that compositor's payload: a provider
-# with no scripts dir contributes none.
-for d in "$here/../wm"/*/; do
-  name=${d%/}; name=${name##*/}
-  for s in "$here/../$name/scripts"/ryoku-*; do
-    [[ -f $s ]] || continue
-    install -m755 "$s" "$bindir/${s##*/}"
-  done
-done
-say "installed the compositor leaf scripts to $bindir"
 
 # Build ryogami-live, the software-decode video-wallpaper daemon the shell drives
 # for live wallpapers. Needs wayland-scanner + a C toolchain + ffmpeg/wayland dev
@@ -615,6 +607,27 @@ wm_name=$(jq -r '.name // empty' <<<"$wm_conf" 2>/dev/null)
 wm_dir=$(jq -r '.dir // empty' <<<"$wm_conf" 2>/dev/null)
 mapfile -t seeds < <(jq -r '.seeds[]? | sub("^[^/]+/"; "")' <<<"$wm_conf" 2>/dev/null)
 wm_bin="$bindir/ryoku-wm-$wm_name"
+
+# Only the LIVE compositor's leaf scripts (ryoku-monitor and friends) land here,
+# its own payload the way the package ships it: a niri box gets none, a Hyprland
+# box gets Hyprland's. Laying every provider's regardless of the live one is what
+# let a niri checkout look fine while a packaged niri box had them all missing,
+# so the other providers' copies from an earlier deploy are dropped as well.
+for d in "$here/../wm"/*/; do
+  other=${d%/}; other=${other##*/}
+  [[ $other != "$wm_name" ]] || continue
+  for s in "$here/../$other/scripts"/ryoku-*; do
+    [[ -f $s ]] || continue
+    rm -f "$bindir/${s##*/}"
+  done
+done
+if [[ -n $wm_name && -d "$here/../$wm_name/scripts" ]]; then
+  for s in "$here/../$wm_name/scripts"/ryoku-*; do
+    [[ -f $s ]] || continue
+    install -m755 "$s" "$bindir/${s##*/}"
+  done
+  say "installed the $wm_name leaf scripts to $bindir"
+fi
 
 # Liveness comes from the provider, not from the pause below: a compositor that
 # watches its own config has no auto-reload to pause and would read as dead.

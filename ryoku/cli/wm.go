@@ -29,6 +29,8 @@ func cmdWm(args []string) {
 	switch args[0] {
 	case "status":
 		cmdWmStatus()
+	case "caps":
+		cmdWmCaps()
 	case "act":
 		cmdWmAct(args[1:])
 	case "session":
@@ -45,7 +47,7 @@ func cmdWm(args []string) {
 }
 
 func wmUsage() {
-	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  config [name]     print a provider's config dir and the files it owns (JSON)\n  reset-paths       print the config files a factory reset clears (one path per line)\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
+	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  caps              print the active provider's capability manifest (JSON)\n  config [name]     print a provider's config dir and the files it owns (JSON)\n  reset-paths       print the config files a factory reset clears (one path per line)\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
 }
 
 func cmdWmStatus() {
@@ -76,6 +78,21 @@ func cmdWmStatus() {
 	fmt.Printf(i18n.T("Setting domains: %s\n"), strings.Join(caps.SettingDomains, ", "))
 }
 
+// cmdWmCaps prints the active provider's capability manifest as indented JSON,
+// so a script (ryoku-cmd-nightlight) reads nightLightProcess and the rest
+// through one verb instead of probing the provider a second way.
+func cmdWmCaps() {
+	caps, err := wm.Open().Caps()
+	if err != nil {
+		die("%v", err)
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(caps); err != nil {
+		die("%v", err)
+	}
+}
+
 // cmdWmAct dispatches an action and maps the two seam errors to distinct exit
 // codes so a caller (a keybind, lock.sh) can tell "no compositor" from "this
 // compositor cannot". Quiet on success: it runs on the idle and lock paths.
@@ -83,8 +100,14 @@ func cmdWmAct(args []string) {
 	if len(args) == 0 {
 		die("usage: ryoku wm act <action> [args...]")
 	}
-	err := wm.Open().Act(wm.Action(args[0]), args[1:]...)
+	// ActOutput, not Act: an action that answers with a value (input.touchpad
+	// status prints on|off) must reach the caller's stdout, while the silent
+	// actions still print nothing because their output is empty.
+	out, err := wm.Open().ActOutput(wm.Action(args[0]), args[1:]...)
 	if err == nil {
+		if out != "" {
+			fmt.Fprintln(os.Stdout, out)
+		}
 		return
 	}
 	fmt.Fprintf(os.Stderr, "ryoku: %v\n", err)
@@ -216,6 +239,16 @@ func cmdWmUse(args []string) {
 	// the target first, as a plain pacman transaction (no SNAP_PAC_SKIP) so
 	// snap-pac snapshots it and `ryoku rollback` can undo the switch.
 	if deployedProvider(name) {
+		// A checkout box runs deployed trees, so the switch installs no package,
+		// but the leaf scripts (ryoku-monitor and friends) the target's config
+		// and autostart call by bare name live in ~/.local/bin, and deploy.sh
+		// lays only the LIVE provider's. Switching to a compositor whose scripts
+		// an earlier deploy deleted would leave the next session's bare-name
+		// calls falling through PATH to whatever stale copy sits there (or to
+		// nothing). Lay the target's current scripts before declaring it ready.
+		if err := syncLeafScripts(name); err != nil {
+			die(i18n.T("switched to %s but could not lay its desktop scripts (%v); run `ryoku deploy` before logging out"), name, err)
+		}
 		fmt.Printf(i18n.T("%s is ready. Log out and pick %s at the greeter.\n"), name, name)
 	} else {
 		if !packageAvailable(pkg) {
@@ -293,6 +326,41 @@ func deployedProvider(name string) bool {
 	}
 	_, err := os.Stat(filepath.Join(sys.ConfigHome(), dir))
 	return err == nil
+}
+
+// syncLeafScripts lays a checkout box's target-compositor leaf scripts into
+// ~/.local/bin so the next session's bare-name calls (ryoku-monitor from the
+// display seam, ryoku-workspace from a keybind) resolve to the current copy
+// instead of falling through PATH to a stale one. It is additive on purpose: the
+// running session is still the outgoing compositor, so deleting its scripts here
+// would break its keybinds before logout; deploy.sh and the package own pruning.
+// It runs only on a genuine checkout (ResolveRepo): a packaged box ships these in
+// /usr/bin, and dropping a copy in ~/.local/bin would shadow it, which is exactly
+// the drift the dev-residue doctor heals. A provider with no scripts dir (niri)
+// ships none and is a no-op.
+func syncLeafScripts(name string) error {
+	repo := sys.ResolveRepo()
+	if repo == "" {
+		return nil
+	}
+	src := filepath.Join(repo, wm.LeafScriptsDir(name))
+	if !sys.Exists(src) {
+		return nil
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	bindir := filepath.Join(sys.Home(), ".local", "bin")
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), "ryoku-") {
+			continue
+		}
+		if err := sys.CopyFile(filepath.Join(src, e.Name()), filepath.Join(bindir, e.Name())); err != nil {
+			return fmt.Errorf("lay %s: %w", e.Name(), err)
+		}
+	}
+	return nil
 }
 
 // printWmPreviousChoice states the tradeoff in the terms that are actually true:

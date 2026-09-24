@@ -21,7 +21,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-gm="$here/../ryoku/hyprland/scripts/ryoku-cmd-game-mode"
+gm="$here/../ryoku/shell/scripts/ryoku-cmd-game-mode"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 

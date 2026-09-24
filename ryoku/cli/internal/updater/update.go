@@ -589,6 +589,9 @@ func updateStage2(pre string, withSystem bool) error {
 		progress.fail(err)
 		return err
 	}
+	if err := regenerateConfig(); err != nil {
+		progress.logf(i18n.Tf("could not re-author the compositor settings: %v", err))
+	}
 
 	progress.at("reload")
 	progress.logf(i18n.T("Reloading the desktop"))
@@ -629,29 +632,32 @@ func rashinReindex() {
 	}
 }
 
-// prowlRefresh keeps a dev box's prowl-agent current after an update. A packaged
-// box already got it through `pacman -Syu`, so this runs `prowl-agent update`
-// only when the binary is on PATH but not owned by a pacman package (a dev or
-// manual install). Best effort, and it logs one line either way.
+// prowlRefresh keeps a dev box's prowl current after an update. A packaged box
+// already got it through its package transaction, so this runs `<bin> update`
+// only when the binary is on PATH but not owned by a package (a dev or manual
+// install). The CLI was renamed prowl-agent -> prowl; prefer the new name and
+// fall back to the old one upstream still ships. Best effort, one line either way.
 func prowlRefresh() {
-	path, err := exec.LookPath("prowl-agent")
+	path, err := exec.LookPath("prowl")
 	if err != nil {
-		return
+		if path, err = exec.LookPath("prowl-agent"); err != nil {
+			return
+		}
 	}
-	switch prowlDecide(true, prowlPacmanOwned(path)) {
+	switch prowlDecide(true, prowlPackageOwned(path)) {
 	case prowlManaged:
-		fmt.Println(i18n.T("==> prowl-agent is managed by pacman; refreshed with the system packages"))
+		fmt.Println(i18n.T("==> prowl is managed by the system packages"))
 	case prowlSelfUpdate:
-		fmt.Println(i18n.T("==> Updating prowl-agent"))
+		fmt.Println(i18n.T("==> Updating prowl"))
 		if err := sys.Run(path, "update"); err != nil {
-			fmt.Fprintf(os.Stderr, i18n.T("warning: prowl-agent update failed: %v\n"), err)
+			fmt.Fprintf(os.Stderr, i18n.T("warning: prowl update failed: %v\n"), err)
 		}
 	}
 }
 
-// prowlPacmanOwned reports whether path belongs to an installed package;
+// prowlPackageOwned reports whether path belongs to an installed package;
 // returns non-zero for a file no package owns (a dev install).
-func prowlPacmanOwned(path string) bool {
+func prowlPackageOwned(path string) bool {
 	if sys.Has("pacman") {
 		return exec.Command("pacman", "-Qo", path).Run() == nil
 	}
@@ -664,22 +670,22 @@ func prowlPacmanOwned(path string) bool {
 	return false
 }
 
-// prowlAction is what an update should do about prowl-agent.
+// prowlAction is what an update should do about prowl.
 type prowlAction int
 
 const (
 	prowlNoop       prowlAction = iota // not installed; nothing to do
-	prowlManaged                       // pacman-owned; the system upgrade covered it
-	prowlSelfUpdate                    // dev install; run `prowl-agent update`
+	prowlManaged                       // package-owned; the system upgrade covered it
+	prowlSelfUpdate                    // dev install; run `<bin> update`
 )
 
 // prowlDecide is the pure update decision, split out so it is unit-testable
 // without a live PATH or pacman.
-func prowlDecide(onPath, pacmanOwned bool) prowlAction {
+func prowlDecide(onPath, packageOwned bool) prowlAction {
 	if !onPath {
 		return prowlNoop
 	}
-	if pacmanOwned {
+	if packageOwned {
 		return prowlManaged
 	}
 	return prowlSelfUpdate
@@ -1470,6 +1476,21 @@ func reloadConfig() {
 	if c.Detection().Live {
 		_ = c.Act(wm.ActionConfigReload)
 	}
+}
+
+// regenerateConfig re-authors the live provider's generated config from the
+// store. Those files are a pure function of the store and the provider that
+// wrote them, so a provider update that emits a block differently (niri's
+// border only draws with an explicit on flag) has to rewrite them, or the old
+// output stays in force until a Hub edit happens to apply again. A box with
+// no store yet is left to the first Hub save.
+func regenerateConfig() error {
+	store := filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json")
+	if !sys.Exists(store) {
+		return nil
+	}
+	_, err := wm.Open().Apply(store)
+	return err
 }
 
 // pkgBin resolves a Ryoku binary an update drives. The packaged /usr/bin copy

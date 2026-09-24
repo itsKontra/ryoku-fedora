@@ -26,16 +26,18 @@ var ErrNoProvider = errors.New("no window manager provider available")
 // provider is there, the compositor just cannot do that.
 var ErrUnsupported = errors.New("window manager does not support this action")
 
-// Safe for concurrent use. Caps is cached for the process lifetime: a
-// compositor does not gain features while running, and the keybind path cannot
-// afford a fork to re-ask.
+// Safe for concurrent use. A successful Caps probe is cached for the process
+// lifetime: a compositor does not gain features while running, and the keybind
+// path cannot afford a fork to re-ask. A failed probe is NOT cached, so a daemon
+// that asked before the provider was answering re-probes on the next call rather
+// than running its whole life believing the compositor has no features.
 type Client struct {
 	detection Detection
 	bin       string
 
-	once sync.Once
-	caps Caps
-	err  error
+	capsMu sync.Mutex
+	capsOK bool
+	caps   Caps
 }
 
 // Open resolves the active provider without running it, so constructing one in
@@ -68,22 +70,29 @@ func (c *Client) Available() bool {
 	return err == nil
 }
 
-// Caps probes at most once. A failed probe yields a zero Caps, so every Has
-// reads false rather than assuming Hyprland's feature set.
+// Caps probes until it succeeds once, then serves the cached answer. A failed
+// probe returns the error and leaves the cache cold, so the next call probes
+// again: the provider may still be coming up. A zero Caps means every Has reads
+// false rather than assuming Hyprland's feature set.
 func (c *Client) Caps() (Caps, error) {
-	c.once.Do(func() {
-		if c.bin == "" {
-			c.err = ErrNoProvider
-			return
-		}
-		out, err := c.run("caps")
-		if err != nil {
-			c.err = err
-			return
-		}
-		c.err = json.Unmarshal(out, &c.caps)
-	})
-	return c.caps, c.err
+	c.capsMu.Lock()
+	defer c.capsMu.Unlock()
+	if c.capsOK {
+		return c.caps, nil
+	}
+	if c.bin == "" {
+		return c.caps, ErrNoProvider
+	}
+	out, err := c.run("caps")
+	if err != nil {
+		return c.caps, err
+	}
+	var caps Caps
+	if err := json.Unmarshal(out, &caps); err != nil {
+		return c.caps, err
+	}
+	c.caps, c.capsOK = caps, true
+	return c.caps, nil
 }
 
 // Can is the gate before offering an affordance. False on a missing provider
@@ -235,30 +244,22 @@ func (c *Client) Schema() ([]json.RawMessage, error) {
 	return rows, nil
 }
 
-// Binds is the provider's compositor-exclusive keybinds, in the shape the
-// keybind legend consumes: each row a {chord, desc} for a behaviour that has no
-// place in the shared Ryoku bind set, so the cheatsheet can list it under the
-// compositor's own name. The store path resolves the user's rebinds and unbinds
-// the way apply does, so the list reflects the chords actually emitted, never a
-// static default a user has displaced. Empty with no error when a provider adds
-// none, so a compositor that only speaks the shared binds contributes no section.
-func (c *Client) Binds(storePath string) ([]json.RawMessage, error) {
+// Binds is the effective bind legend the active provider reports: the shared
+// Ryoku catalogue resolved against the user's rebinds, each row struck or
+// annotated where the running compositor cannot honour it, followed by that
+// compositor's own binds as custom rows. One list, so the cheatsheet and the Hub
+// read the legend from the seam instead of parsing a compositor's own config.
+// The provider reads the neutral store itself, so the chords reflect what the
+// session actually emits. Empty with no error when a provider answers none.
+func (c *Client) Binds() ([]BindRow, error) {
 	if c.bin == "" {
 		return nil, ErrNoProvider
 	}
-	out, err := c.run("binds", storePath)
+	out, err := c.run("binds")
 	if err != nil {
 		return nil, err
 	}
-	out = bytes.TrimSpace(out)
-	if len(out) == 0 {
-		return []json.RawMessage{}, nil
-	}
-	var rows []json.RawMessage
-	if err := json.Unmarshal(out, &rows); err != nil {
-		return nil, fmt.Errorf("binds: %w", err)
-	}
-	return rows, nil
+	return decodeBinds(out)
 }
 
 // Session is the wayland-session desktop-entry body for this provider, for the

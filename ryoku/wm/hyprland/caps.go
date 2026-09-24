@@ -40,6 +40,20 @@ var capsManifest = []wm.Capability{
 	wm.CapWindowFloat,
 	wm.CapTiledLayout,
 	wm.CapSessionExit,
+	wm.CapNightLight,
+	wm.CapTouchpadToggle,
+	wm.CapPaletteBorder,
+}
+
+// windowRuleActions are the neutral window-rule action ids genWindowRule and
+// genLayerRule accept, in the order the Hub offers them. It is the source the
+// window-rules editor reads, so a control is never shown for a property this
+// provider's config writer would drop.
+var windowRuleActions = []string{
+	"float", "tile", "pin", "fullscreen", "maximize", "center", "immediate",
+	"pseudo", "norounding", "noborder", "opacity", "size", "move", "workspace",
+	"idleinhibit", "suppressevent", "blur", "noanim", "blurpopups", "xray",
+	"abovelock", "noshadow", "ignorealpha", "dimaround",
 }
 
 // The packages ryoku-desktop-hyprland is made of: the variant package itself,
@@ -62,6 +76,9 @@ var compositorPackages = []string{
 	"hyprland-preview-share-picker",
 	"hypridle",
 	"hyprpicker",
+	// hyprsunset holds the warm gamma while the night light is on. A Hyprland-only
+	// CTM client, so it is the Hyprland variant's to ship and reclaim.
+	"hyprsunset",
 }
 
 // The manifest is fixed, not probed: Hyprland does not gain features while
@@ -79,7 +96,9 @@ func runCaps() error {
 		ConfigFiles:    wm.ConfigFiles(wm.ProviderHyprland),
 		GeneratedFiles: wm.GeneratedConfig(wm.ProviderHyprland),
 		PortalBackend:  "hyprland",
-		Packages:       compositorPackages,
+		NightLightProcess: "hyprsunset",
+		Packages:          compositorPackages,
+		WindowRuleActions: windowRuleActions,
 	}
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")

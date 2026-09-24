@@ -21,6 +21,7 @@ Requires:       ryogami = %{version}-%{release}
 Requires:       ryoku-hub = %{version}-%{release}
 Requires:       ryoku-rashin = %{version}-%{release}
 Requires:       ryoku-blobs = %{version}-%{release}
+Requires:       ryoku-palette-bridge = %{version}-%{release}
 Requires:       ryoku-extras = %{version}-%{release}
 Requires:       sddm-theme-ryoku = %{version}-%{release}
 Requires:       ryoku-desktop-compositor

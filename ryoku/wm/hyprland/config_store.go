@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
 // The neutral settings store as Hyprland reads it: the typed override model the
@@ -40,6 +42,7 @@ type Appearance struct {
 	Layout               string  `json:"layout"`
 	ActiveBorder         string  `json:"activeBorder"`
 	InactiveBorder       string  `json:"inactiveBorder"`
+	BorderFollowsPalette bool    `json:"borderFollowsPalette"`
 	ResizeOnBorder       bool    `json:"resizeOnBorder"`
 	SnapEnabled          bool    `json:"snapEnabled"`
 	WobblyWindows        bool    `json:"wobblyWindows"`
@@ -320,7 +323,7 @@ func defaultOverrides() Overrides {
 			ShadowEnabled: true, ShadowRange: 45, ShadowPower: 4,
 			GlowEnabled: false, GlowRange: 10, GlowColor: "#ee33cc",
 			Animations: true, Layout: "dwindle",
-			ActiveBorder: "#e0563b", InactiveBorder: "#313a4d",
+			ActiveBorder: "#e0563b", InactiveBorder: "#313a4d", BorderFollowsPalette: true,
 			ResizeOnBorder: true, SnapEnabled: false,
 			WobblyWindows: false, WindowStyle: "pop",
 			AnimatedBorder: false, BorderAngleSpeed: 3,
@@ -411,6 +414,7 @@ func loadStore(path string) Overrides {
 	if merged, err := json.Marshal(flat); err == nil {
 		_ = json.Unmarshal(merged, &o)
 	}
+	o.Cursor.Theme = wm.ResolveCursorTheme(o.Cursor.Theme)
 	return normalizeOverrides(o)
 }
 
@@ -517,6 +521,15 @@ func themeStatePath() string { return filepath.Join(ryokuConfigDir(), "theme.jso
 // so decoration.lua's palette border wins.
 func paletteDriven() bool {
 	return loadFollowWallpaper() || staticThemeActive()
+}
+
+// borderFollowsPalette reports whether the window border should track the live
+// palette: the theme drives colours (paletteDriven) AND the user has not pinned
+// a fixed border colour in the store. A false store value pins the fixed
+// col.active_border in settings.lua even while the rest of the theme follows the
+// wallpaper, so a chosen border colour is exactly what the user gets.
+func borderFollowsPalette(o Overrides) bool {
+	return paletteDriven() && o.Appearance.BorderFollowsPalette
 }
 
 // loadFollowWallpaper reads theme.json's master, defaulting to follow on a

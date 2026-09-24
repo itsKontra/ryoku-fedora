@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
 // Keybind, unbind and rebind emission for the generated Hyprland config.
@@ -28,10 +30,21 @@ func genKeybind(k Keybind) string {
 	default:
 		return ""
 	}
-	if k.Release {
-		return fmt.Sprintf("hl.bind(%s, %s, { release = true })\n", luaStr(k.Keys), dsp)
+	bind := func(keys string) string {
+		if k.Release {
+			return fmt.Sprintf("hl.bind(%s, %s, { release = true })\n", luaStr(keys), dsp)
+		}
+		return fmt.Sprintf("hl.bind(%s, %s)\n", luaStr(keys), dsp)
 	}
-	return fmt.Sprintf("hl.bind(%s, %s)\n", luaStr(k.Keys), dsp)
+	out := bind(k.Keys)
+	// The number pad fires whichever way NumLock sits: a custom chord on a
+	// KP_<digit> binds its NumLock-off twin to the same dispatcher too, the way
+	// the shipped families cover both keypad faces. Unlike a rebind, a custom
+	// bind is a direct hl.bind, so it can carry the extra line here.
+	for _, twin := range wm.NumpadAliases(k.Keys) {
+		out += bind(twin)
+	}
+	return out
 }
 
 // genUnbinds drops the shipped chords a config import must release so an imported
@@ -65,18 +78,26 @@ func renderRebinds(o Overrides) []byte {
 		if from == "" || to == "" || from == to {
 			continue
 		}
+		// A family rebind is stored as one {n} entry, but binds.lua binds each
+		// member and both number-pad faces through its own K() lookup, so expand
+		// the placeholder into the concrete per-member entries those lookups ask
+		// for. FamilyRebind guards the value shape so a stray entry cannot map ten
+		// workspace keys onto one chord.
+		if eff, ok := wm.FamilyRebind(from, o.KeybindRebinds); ok {
+			for n := 1; n <= 10; n++ {
+				fromN, toN := wm.ExpandChord(from, n), wm.ExpandChord(eff, n)
+				fmt.Fprintf(&b, "\t[%s] = %s,\n", luaStr(fromN), luaStr(toN))
+				// The keypad sends a second keysym with NumLock off; binds.lua
+				// looks that face up too, so a keypad family also maps the twin.
+				fa, ta := wm.NumpadAliases(fromN), wm.NumpadAliases(toN)
+				if len(fa) > 0 && len(ta) > 0 {
+					fmt.Fprintf(&b, "\t[%s] = %s,\n", luaStr(fa[0]), luaStr(ta[0]))
+				}
+			}
+			continue
+		}
 		fmt.Fprintf(&b, "\t[%s] = %s,\n", luaStr(from), luaStr(to))
 	}
 	b.WriteString("}\n")
 	return []byte(b.String())
-}
-
-// runBinds prints Hyprland's compositor-exclusive binds, the seam's binds verb.
-// Hyprland's shipped set IS the shared Ryoku legend (binds.lua), so it adds none
-// of its own: an empty list, which the Hub reads as no compositor section. The
-// store path apply and niri take is accepted and ignored, so the seam call is
-// identical across providers.
-func runBinds(_ []string) error {
-	_, err := stdout.Write([]byte("[]\n"))
-	return err
 }
