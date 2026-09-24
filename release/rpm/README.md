@@ -17,9 +17,9 @@ binary shipped by `xdg-desktop-portal-hyprland`; the similarly named Arch-only
 capture packages are not RPM dependencies.
 
 The first publishing implementation retains `ryoku-extras` as the package
-owner of pinned tools and assets. Packaged installs therefore use DNF for
-matugen, gpk, prowl-agent, fonts and cursors, without running their download
-helper. Splitting the executable payload into source-built packages in
+owner of pinned tools and assets. Packaged installs get its pinned Matugen,
+gpk, prowl-agent, fonts and cursors from `ryoku-extras`, without running their
+download helper. Splitting the executable payload into source-built packages in
 `itskontra/ryoku-deps` remains a separate follow-up; no installer enables that
 project before it has working packages. Fedora 44's matugen 3.1 is not a
 substitute for the currently pinned 4.2 without compatibility validation.
