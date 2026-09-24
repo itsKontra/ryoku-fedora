@@ -59,6 +59,47 @@ services --enabled="sddm,NetworkManager,firewalld,bluetooth,power-profiles-daemo
 
 %end
 
+# Pre-configuration execution: Ensure Anaconda password policy drop-in is present
+%pre
+for candidate in \
+    /run/install/repo/installation/fedora/conf.d/05-ryoku.conf \
+    /run/install/source/installation/fedora/conf.d/05-ryoku.conf; do
+    if [ -f "$candidate" ] && [ ! -f /etc/anaconda/conf.d/05-ryoku.conf ]; then
+        mkdir -p /etc/anaconda/conf.d
+        cp -f "$candidate" /etc/anaconda/conf.d/
+        break
+    fi
+done
+%end
+
+# Pre-installation execution: Validate that a password-protected administrator exists
+%pre-install --erroronfail
+echo "=== Validating Ryoku Administrator Account Requirement ==="
+
+VALIDATE_SCRIPT=""
+for candidate in \
+    /run/install/repo/installation/fedora/validate-admin.py \
+    /run/install/source/installation/fedora/validate-admin.py \
+    /mnt/install/source/installation/fedora/validate-admin.py \
+    /usr/share/ryoku/validate-admin.py; do
+    if [ -f "$candidate" ]; then
+        VALIDATE_SCRIPT="$candidate"
+        break
+    fi
+done
+
+if [ -z "$VALIDATE_SCRIPT" ]; then
+    VALIDATE_SCRIPT=$(find /run/install -name "validate-admin.py" 2>/dev/null | head -n 1 || true)
+fi
+
+if [ -n "$VALIDATE_SCRIPT" ] && [ -f "$VALIDATE_SCRIPT" ]; then
+    python3 "$VALIDATE_SCRIPT"
+else
+    echo "ERROR: Could not locate validate-admin.py on installation media" >&2
+    exit 1
+fi
+%end
+
 # Post-installation execution: Run the offline desktop provisioner
 %post --nochroot --erroronfail
 echo "=== Running Ryoku Desktop Offline Provisioner ==="

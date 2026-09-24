@@ -211,6 +211,7 @@ cp -f "$KS_FILE" "$ISO_STAGE/ks.cfg"
 # Inject offline provisioner and helpers
 mkdir -p "$ISO_STAGE/installation/fedora"
 cp -f "$SCRIPT_DIR/provision-target.py" "$ISO_STAGE/installation/fedora/"
+cp -f "$SCRIPT_DIR/validate-admin.py" "$ISO_STAGE/installation/fedora/"
 cp -f "$SCRIPT_DIR/prepare-firstboot.py" "$ISO_STAGE/installation/fedora/"
 cp -f "$SCRIPT_DIR/firstboot.py" "$ISO_STAGE/installation/fedora/"
 cp -f "$SCRIPT_DIR/ryoku-firstboot.service" "$ISO_STAGE/installation/fedora/"
@@ -218,6 +219,9 @@ cp -f "$SCRIPT_DIR/firstboot-gate.conf" "$ISO_STAGE/installation/fedora/"
 cp -f "$PACKAGES_LIST" "$ISO_STAGE/installation/fedora/"
 if [[ -d "$KEYS_DIR" ]]; then
   cp -rf "$KEYS_DIR" "$ISO_STAGE/installation/fedora/"
+fi
+if [[ -d "$SCRIPT_DIR/conf.d" ]]; then
+  cp -rf "$SCRIPT_DIR/conf.d" "$ISO_STAGE/installation/fedora/"
 fi
 
 # Inject local RPM repository
@@ -277,6 +281,20 @@ EOF
 # Compute Kickstart SHA256
 KS_SHA256=$(sha256sum "$KS_FILE" | awk '{print $1}')
 
+# Build Anaconda updates image if configuration overrides exist
+UPDATES_IMG="$WORK_DIR/updates.img"
+if [[ -d "$SCRIPT_DIR/conf.d" ]] && command -v cpio >/dev/null 2>&1; then
+  log "Building Anaconda updates image at $UPDATES_IMG..."
+  UPDATES_BUILD="$WORK_DIR/updates_root"
+  rm -rf "$UPDATES_BUILD" "$UPDATES_IMG"
+  mkdir -p "$UPDATES_BUILD/etc/anaconda/conf.d"
+  cp -a "$SCRIPT_DIR/conf.d"/* "$UPDATES_BUILD/etc/anaconda/conf.d/"
+  (
+    cd "$UPDATES_BUILD"
+    find . -depth | cpio -c -o | gzip -9 > "$UPDATES_IMG"
+  )
+fi
+
 # Step 5: Stop if stage-only
 if [[ $STAGE_ONLY -eq 1 ]]; then
   log "Stage-only requested. Skipping ISO build."
@@ -301,6 +319,7 @@ provenance = {
     },
     'staging_path': '$ISO_STAGE',
     'manifest_path': '$MANIFEST_FILE',
+    'updates_image': '$UPDATES_IMG' if Path('$UPDATES_IMG').is_file() else None,
 }
 Path('$PROVENANCE_FILE').write_text(json.dumps(provenance, indent=2) + '\n')
 "
@@ -339,6 +358,9 @@ for payload in installation ryoku repo .ryoku-media; do
     mkksiso_args+=(--add "$ISO_STAGE/$payload")
   fi
 done
+if [[ -f "$UPDATES_IMG" ]]; then
+  mkksiso_args+=(--updates "$UPDATES_IMG")
+fi
 if [[ -n "$CMDLINE" ]]; then
   mkksiso_args+=(-c "$CMDLINE")
 fi
