@@ -8,42 +8,10 @@
 # Its sibling may be installed beside it: keeping both makes a switch back
 # instant, and `ryoku wm use --remove-previous` is the only thing that frees disk.
 #
-# built from in-repo sources, no tarball fetch. makepkg runs from a full
-# checkout, so the repo root is three levels up.
-pkgname=ryoku-desktop-hyprland
-pkgver=${RYOKU_PKGVER:-0.1.0}
-pkgrel=2
-pkgdesc="Ryoku desktop: the Hyprland compositor, plugins, portal, and the ryoku-wm-hyprland provider"
-# package() builds the Go provider, so the payload is arch-specific.
-arch=('x86_64')
-url="https://ryoku.dev"
-license=('GPL-3.0-or-later')
-makedepends=('go')
-depends=(
-  "ryoku-desktop=$pkgver"
-  # compositor + Wayland session
-  'hyprland'
-  # Hyprland compositor plugins the Hub can toggle (Settings > Plugins), pinned to
-  # this build so a plugin .so never runs against another release's headers. Off by
-  # default; the generated settings.lua loads one only once the user enables it.
-  "hypr-dynamic-cursors=$pkgver"
-  "ryoku-hypr-plugins=$pkgver"
-  "hyprglass=$pkgver"
-  "imgborders=$pkgver"
-  "ryoku-keysounds=$pkgver"
-  'hyprpolkitagent'
-  'xdg-desktop-portal-hyprland'
-  # XDPH names /usr/bin/hyprland-preview-share-picker for the screen-share source
-  # chooser, so a hard depend keeps the picker atomic with the portal.
-  'hyprland-preview-share-picker'
-  'hypridle'
-  'hyprpicker'
-)
-provides=('ryoku-desktop-compositor')
-# deliberately not exclusive: both variants may be installed, so a switch is a
-# config change with no download and a switch back is instant.
-source=()
-
+# RPM metadata and dependencies live in the sibling .spec file. This sourced
+# recipe only stages the payload assembled by stage-package.sh.
+startdir=${startdir:?stage-package.sh must set startdir}
+pkgdir=${pkgdir:?stage-package.sh must set pkgdir}
 _repo="$startdir/../../.."
 
 package() {
