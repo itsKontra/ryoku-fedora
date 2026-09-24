@@ -73,9 +73,10 @@ declare -A need=(
   [region-select]=slurp
   [ocr]=tesseract
   [qr-scan]=zbar
-  [screen-record]=gpu-screen-recorder
-  [screen-record-fallback]=wf-recorder
-  [screen-share-picker]=hyprland-preview-share-picker
+  # Fedora ships wf-recorder directly. XDPH supplies hyprland-share-picker in
+  # its own package, so neither feature relies on an Arch-only package name.
+  [screen-record]=wf-recorder
+  [screen-share-picker]=xdg-desktop-portal-hyprland
   [night-light]=hyprsunset
   [voice-type]=wtype
   [voice-stt]=voxtype-bin

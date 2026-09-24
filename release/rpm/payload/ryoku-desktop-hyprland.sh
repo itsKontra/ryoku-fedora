@@ -54,14 +54,15 @@ package() {
   install -d "$cfg/hypr"
   cp -a "$_repo/ryoku/hyprland/." "$cfg/hypr/"
 
+  # Fedora's XDPH package ships its supported picker at this name. The custom
+  # preview picker is Arch-only and must not leave the RPM transaction with an
+  # unavailable dependency or the installed portal pointing at a missing tool.
+  sed -i 's/custom_picker_binary = hyprland-preview-share-picker/custom_picker_binary = hyprland-share-picker/' \
+    "$cfg/hypr/xdph.conf"
+
   # xdg-desktop-portal: route ScreenCast/Screenshot to Hyprland for screen sharing.
   install -Dm644 "$_repo/ryoku/hyprland/hyprland-portals.conf" \
     "$cfg/xdg-desktop-portal/hyprland-portals.conf"
-
-  # the screen-share source chooser xdph launches (hypr/xdph.conf names it); its
-  # stylesheet is the matugen template rendered on palette change.
-  install -Dm644 "$_repo/ryoku/apps/hyprland-preview-share-picker/config.yaml" \
-    "$cfg/hyprland-preview-share-picker/config.yaml"
 
   # cp -a kept source modes; keep hypr/scripts executable, the rest world-readable.
   chmod -R u=rwX,go=rX "$pkgdir/usr/share/ryoku"

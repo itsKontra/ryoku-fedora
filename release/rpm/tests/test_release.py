@@ -162,6 +162,19 @@ class FedoraPayload(unittest.TestCase):
         payload = (ROOT / 'payload/ryoku-desktop.sh').read_text()
         self.assertNotIn('system/boot/', payload)
 
+    def test_specs_do_not_require_arch_only_capture_tools(self):
+        desktop = (ROOT / 'ryoku-desktop.spec').read_text()
+        hyprland = (ROOT / 'ryoku-desktop-hyprland.spec').read_text()
+        self.assertNotIn('Requires:       gpu-screen-recorder\n', desktop)
+        self.assertIn('Requires:       wf-recorder\n', desktop)
+        self.assertNotIn('Requires:       hyprland-preview-share-picker\n', hyprland)
+        self.assertIn('Requires:       xdg-desktop-portal-hyprland\n', hyprland)
+
+    def test_hyprland_payload_selects_xdph_picker(self):
+        payload = (ROOT / 'payload/ryoku-desktop-hyprland.sh').read_text()
+        self.assertIn('custom_picker_binary = hyprland-share-picker', payload)
+        self.assertNotIn('apps/hyprland-preview-share-picker/config.yaml', payload)
+
 
 class Publication(unittest.TestCase):
     def candidate(self):
