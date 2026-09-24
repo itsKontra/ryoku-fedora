@@ -125,10 +125,27 @@ specs and `installation/fedora/packages.list` define Fedora delivery.
    first-boot provisioning, repository/dependency configuration, migrations,
    documentation, and tests. Include regenerated i18n catalogs and `.qsb`
    files with their source changes.
+   For every new or changed runtime package, explicitly verify both delivery
+   layers: add it to the owning RPM spec when the packaged feature needs it,
+   and add it to `installation/fedora/packages.list` when it must be present
+   on the ISO or during offline installation. A package is not delivered until
+   both applicable checks pass.
+   Do not port NVIDIA-specific changes into Fedora when the Fedora image does
+   not configure or deliver NVIDIA drivers. Leave those changes out and record
+   them as deferred rather than adding a non-functional Fedora path.
+   Review every changed path under `ryoku/`, including the shell, UI, Hub,
+   apps, compositor seam, providers, translations, and assets. Verify that
+   each feature and new UI surface is included in the Fedora RPM payload and
+   installer path and works with the relevant Hyprland and niri provider. Add
+   a concise summary of the successfully ported `ryoku/*` features to the PR
+   description. If any `ryoku/*` feature cannot be ported, add a PR comment
+   identifying the missing feature, the reason, and the reviewer decision
+   needed before merge.
 7. Commit the resolved merge with the repository hooks enabled, push the branch,
    and open a PR into `main`. The PR description names the upstream start/end
    revisions, summarizes discarded Arch work, lists Fedora adaptations, and
-   links passing validation. Merge the PR with a merge commit so Git retains the
+   includes the ported `ryoku/*` feature summary and any unresolved-port
+   reviewer comments. Merge the PR with a merge commit so Git retains the
    upstream parent.
 
 If the merge is not viable, use `git merge --abort`; do not leave a partial
@@ -147,6 +164,14 @@ fresh install plus an update from the prior package set. Test Hyprland and niri
 when a shared shell, compositor seam, package, or installer change can affect
 both. Validate graphical changes in a Fedora VM with SELinux enforcing when
 they touch login, locks, portals, hardware, or system services.
+
+For NVIDIA-related upstream changes, explicitly verify whether Fedora configures
+and delivers the required NVIDIA driver stack. If it does not, do not claim the
+change is ported: omit the Fedora implementation and record it as deferred.
+For every changed `ryoku/*` feature, verify source inclusion, RPM ownership,
+ISO/install delivery, and the relevant compositor/provider behaviour. The PR
+must summarize the features that passed this review and must contain a reviewer
+comment for each feature that could not be ported.
 
 The PR is ready only when the package owns every shipped file, no Arch delivery
 path has returned, existing user overlays survive materialization, and a Fedora
