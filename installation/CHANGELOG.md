@@ -8,6 +8,8 @@
   Fedora Anaconda/Kickstart is now the only ISO implementation in the tree.
 
 ### Fixed
+- Write the Anaconda updates image through an absolute path so relative ISO
+  work directories remain valid after the compose script enters the staging tree.
 - Wait for the signed COPR package set built from the release commit before
   composing the GitHub release ISO. This prevents an ISO build from racing the
   package publisher and failing because a newly added Ryoku RPM is unavailable.
