@@ -697,29 +697,4 @@ EOF
   install -Dm644 "$_repo/system/hardware/power/53-ryoku-game-tune.rules" \
     "$pkgdir/usr/share/polkit-1/rules.d/53-ryoku-game-tune.rules"
 
-  # Windows dual-boot: cross-drive detector + a limine-entry-tool post.d hook
-  # that re-asserts the uuid()-addressed chainload entry whenever the boot menu
-  # is regenerated -- separate-drive Windows survives kernel updates.
-  install -Dm755 "$_repo/system/boot/limine/ryoku-windows-entry" \
-    "$pkgdir/usr/bin/ryoku-windows-entry"
-  install -Dm755 "$_repo/system/boot/limine/45-ryoku-windows" \
-    "$pkgdir/etc/boot/hooks/post.d/45-ryoku-windows"
-
-  # The initramfs GPU trim: a mkinitcpio install hook named by the HOOKS
-  # drop-in, so it has to exist for any image to build. Keeps the denylisted
-  # nouveau and its GSP firmware out, which is ~100 MiB per kernel image on a
-  # 2 GiB boot partition (issue #140's stale image).
-  install -Dm644 "$_repo/system/boot/mkinitcpio/install/ryoku-gpu-trim" \
-    "$pkgdir/usr/lib/initcpio/install/ryoku-gpu-trim"
-
-  # The boot look, shipped so `ryoku update` refreshes it on every box, not just
-  # fresh installs; the ryoku-desktop scriptlet then runs ryoku-boot-apply.
-  install -d "$pkgdir/usr/share/plymouth/themes/ryoku"
-  cp -a "$_repo/system/boot/plymouth/ryoku/." "$pkgdir/usr/share/plymouth/themes/ryoku/"
-  chmod -R u=rwX,go=rX "$pkgdir/usr/share/plymouth/themes/ryoku"
-  install -Dm644 "$_repo/system/boot/limine/limine.conf" \
-    "$pkgdir/usr/share/ryoku/boot/limine.conf"
-  install -Dm644 "$_repo/system/boot/limine/default.conf" \
-    "$pkgdir/usr/share/ryoku/boot/default.conf"
-  install -Dm755 "$_repo/system/boot/ryoku-boot-apply" "$pkgdir/usr/bin/ryoku-boot-apply"
 }

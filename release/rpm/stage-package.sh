@@ -23,9 +23,6 @@ if [[ -d $stage/usr/lib/qt6 ]]; then
   mv "$stage/usr/lib/qt6" "$stage$libdir/qt6"
 fi
 if [[ $name == ryoku-desktop ]]; then
-  # Fedora owns its boot chain; the desktop must not install Arch boot hooks.
-  rm -rf "$stage/usr/lib/initcpio" "$stage/etc/boot" "$stage/usr/share/ryoku/boot"
-  rm -f "$stage/usr/bin/ryoku-boot-apply" "$stage/usr/bin/ryoku-windows-entry"
   cp "$root/.rpm-release" "$stage/etc/ryoku-release"
   rm -f "$stage/usr/share/applications/mimeapps.list"
 fi
