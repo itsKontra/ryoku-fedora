@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Removed
+- Remove the retired Arch Bubble Tea installer, shell-backend ISO payload,
+  archiso profile, dedicated disabled workflows, and their stale documentation.
+  Fedora Anaconda/Kickstart is now the only ISO implementation in the tree.
+
 ### Fixed
 - Install system policy rules, package extras, hardware helpers, udev rules,
   kernel module/modprobe configurations, logind clamshell policy, and services

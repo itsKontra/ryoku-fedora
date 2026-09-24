@@ -1,9 +1,9 @@
 # What Ryoku is
 
-Ryoku (力, "power") is a hand-built Arch Linux distribution: a complete,
-opinionated Hyprland desktop plus the installer and system definition that
-reproduce it on any machine. The whole thing lives in this one repository and is
-built from it; the live machine is only ever a deployment target.
+Ryoku (力, "power") is an opinionated Fedora desktop with Hyprland or niri, an
+Anaconda/Kickstart installer, and the system definition that reproduces it. The
+whole thing lives in this one repository and is built from it; the live machine
+is only ever a deployment target.
 
 ## Philosophy
 
@@ -82,13 +82,12 @@ locked behind a text editor.
   apps* on (the default), `matugen` fans that same palette into GTK / GUI apps
   (Files, editors, other libadwaita/GTK apps) too; off, they stay stock. Brand-
   fixed elements (the 力 logo, a few accents) stay constant.
-- **The system** (`system/`) defines the boot chain, the hardware policy
-  (GPU/driver/display/power helper scripts), and the package sets.
-- **The installer** (`installation/`) is a Go TUI plus a shell backend that
-  partitions, pacstraps the base, adds the `[ryoku]` package repo and installs
-  `ryoku-desktop`, and sets up the boot chain. The desktop comes from signed
-  packages and the ISO prebuilds the installer, so an install needs no build
-  toolchain.
+- **The system** (`system/`) defines hardware policy
+  (GPU/driver/display/power helper scripts), service helpers, and package
+  manifests.
+- **The installer** (`installation/`) is a Fedora Anaconda/Kickstart image with
+  an offline RPM repository, target provisioner, and gated first-boot setup.
+  Existing Fedora machines use the standalone shell installer instead.
 - **Rashin** (`ryoku/rashin/`, optional and off by default) is the agent OS: a
   machine-generated knowledge vault, a local daemon with a web dashboard, and a
   one-click Hermes setup, so any coding agent starts with an exact map of the

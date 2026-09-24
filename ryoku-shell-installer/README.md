@@ -106,8 +106,7 @@ sha256sum ryoku-shell-install > ryoku-shell-install.sha256
 go test ./...
 ```
 
-The binary and its checksum are committed (same convention as
-`installation/tui/ryoku-tui`) so `install.sh` can fetch them from
+The binary and its checksum are committed so `install.sh` can fetch them from
 raw.githubusercontent.com with no release infrastructure. Test a branch with:
 
 ```bash

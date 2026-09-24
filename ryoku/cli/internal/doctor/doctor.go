@@ -441,15 +441,13 @@ func reconcileSwapSubvolume(checkOnly bool) recResult {
 
 // the snapper "root" config = the safety net behind every ryoku update: the
 // pre/post snapshot pair plus the Limine boot-menu entries that make rollback
-// work. the installer (installation/backend/lib/snapshots.sh) writes it, but a
-// deploy box, an upgrade from an older release, or hand-edited drift can leave
+// work. A deploy box, an upgrade from an older release, or hand-edited drift can leave
 // it missing -- and snapper proceeds silently when it is, so the user believes
 // they have rollback when they don't. doctor restores the canonical layout on
 // a btrfs root, warns honestly on a non-btrfs root (no snapshots there), stays
 // idempotent on a healthy box.
 //
-// snapperRootConfig mirrors installation/backend/lib/snapshots.sh verbatim:
-// keep the two in sync so a doctored box matches a fresh install.
+// Keep this canonical so a doctored box matches a healthy packaged install.
 const snapperRootConfig = `# Ryoku snapper config for the root filesystem. Written by ryoku doctor when
 # the installer's config is missing (a deploy box, an upgrade from an older
 # release, or drift). Keys not listed here fall back to snapper's built-in
@@ -727,8 +725,7 @@ func snapperReadableUnprivileged() bool {
 	return false
 }
 
-// createSnapperRootConfig lays the installer's layout down on a live box.
-// mirrors installation/backend/lib/snapshots.sh:
+// createSnapperRootConfig lays the canonical layout down on a live box:
 //   - /.snapshots = btrfs subvolume, owned root:root, mode 0750.
 //   - write /etc/snapper/configs/root.
 //   - register "root" in the global snapper conf file without dropping siblings.
@@ -1045,9 +1042,8 @@ func baseSource(s string) string {
 
 // ---- reconciler: ryoku package channel + keyring -----------------------------
 
-// ryokuRepoStanza is the [ryoku] block the installer appends to pacman.conf
-// (installation/backend/lib/deploy.sh ryoku_repo_pacman_conf). doctor re-adds
-// this exact block when a pacnew merge or a hand-edit drops it, so a package box
+// ryokuRepoStanza is the legacy [ryoku] block. Doctor re-adds this exact block
+// when a pacnew merge or a hand-edit drops it, so a package box
 // does not silently fall off the update channel.
 const ryokuRepoStanza = "\n[ryoku]\nSigLevel = Required\nServer = " + sys.RepoBase + "/$arch\n"
 

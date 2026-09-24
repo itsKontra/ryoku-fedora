@@ -13,9 +13,8 @@ ships() {
   grep -qE "^(Name|Requires):[[:space:]]+$1([[:space:]]|$)" "$ROOT"/release/rpm/*.spec
 }
 
-# reach: a tool merely in base.packages ships on the ISO (pacstrap) but NEVER
-# reaches an already-installed box on `ryoku update` (that is a pacman -Syu, and
-# base.packages is not a package) nor a shell-installer box unless it is also a
+# reach: a tool merely in base.packages does not necessarily reach an already
+# installed box on `ryoku update` or a shell-installer box unless it is also a
 # hard depend of the ryoku-desktop umbrella, or of a compositor variant the
 # umbrella pulls through its ryoku-desktop-compositor virtual (a tool only that
 # compositor's features shell out to, like hypridle, reaches every box that can
@@ -73,9 +72,10 @@ declare -A need=(
   [region-select]=slurp
   [ocr]=tesseract
   [qr-scan]=zbar
-  [screen-record]=gpu-screen-recorder
-  [screen-record-fallback]=wf-recorder
-  [screen-share-picker]=hyprland-preview-share-picker
+  # Fedora ships wf-recorder directly. XDPH supplies hyprland-share-picker in
+  # its own package, so neither feature relies on an Arch-only package name.
+  [screen-record]=wf-recorder
+  [screen-share-picker]=xdg-desktop-portal-hyprland
   [night-light]=hyprsunset
   [voice-type]=wtype
   [voice-stt]=voxtype-bin
@@ -126,7 +126,7 @@ for feat in "${!need[@]}"; do
   hard_depend "$pkg" || shipped_app "$pkg" || notreached+=("$feat -> $pkg")
 done
 if (( ${#notreached[@]} )); then
-  echo "::error::feature tools in base.packages but NOT a ryoku-desktop hard depend (ISO-only; never reach 'ryoku update' or shell-installer boxes -- the ddcutil-class drift):" >&2
+  echo "::error::feature tools in base.packages but NOT a ryoku-desktop hard depend (never reach 'ryoku update' or shell-installer boxes -- the ddcutil-class drift):" >&2
   printf '  %s\n' "${notreached[@]}" | sort >&2
   exit 1
 fi

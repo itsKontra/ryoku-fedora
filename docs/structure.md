@@ -93,8 +93,7 @@ truth for the live desktop.
   runtime the CLI and both installers link (module `ryoku-i18n`), and `tools/`
   the extractor/translator (`sync.py`, shipped as `/usr/bin/ryoku-i18n`) and the
   QML AST wrapper. Installs to `/usr/share/ryoku/i18n`, which the QML singleton
-  (`ui/Singletons/I18n.qml`), the Go runtime and the installer's shell
-  (`installation/backend/lib/i18n.sh`) all read. See `docs/i18n.md`.
+  (`ui/Singletons/I18n.qml`) and the Go runtime both read. See `docs/i18n.md`.
 - `cli/` the user-facing control CLI, one Go program (`ryoku`): `update`,
   `rollback`, `snapshots`, `status`, `materialize` (lay the base configs into
   `~/.config`), and `reload`. It orchestrates pacman, yay, and snapper; it does
@@ -134,7 +133,6 @@ truth for the live desktop.
 
 System-level definition installed into the target.
 
-- `boot/` the boot chain: `limine/`, `mkinitcpio/`, `plymouth/`.
 - `hardware/` hardware policy and helper scripts (shipped to `/usr/bin` by
   `ryoku-desktop`): `gpu/` (`ryoku-gpu`, `ryoku-gpu-detect`, `ryoku-gpu-mux`,
   udev rule), `display/` (`ryoku-monitor`), `audio/` (`ryoku-mic`, the mic-gain
@@ -154,42 +152,23 @@ System-level definition installed into the target.
   `ryoku-desktop`: `ryostore-install` (installs, removes, and reports the
   optional bundles from the `ryostore` catalogue), the `ryoku-pkg-*` routing
   wrappers (repo, AUR, remove, multilib), and `ryoku-cmd-present`.
-- `packages/` the package sets: `base.packages` (every machine, pacstrapped),
-  `hardware.packages` (per-profile microcode and GPU drivers), `dev.packages`
-  (language toolchains, pacstrapped), `aur.packages` (built post-install).
+- `packages/` the package manifests used to define and audit the desktop and
+  hardware package closure.
 
 ## `installation/` the build
 
-- `tui/` the Go terminal installer (Bubble Tea). Collects choices, writes the
-  `RYOKU_*` contract, gates BIOS/Secure Boot/live-medium/wipe/online, and drives
-  the backend.
-- `backend/` `ryoku-install` (the orchestrator) and `lib/` (one file per step:
-  `preflight`, `disk`, `luks`, `filesystem`, `pacstrap`, `mirrors`, `chroot`,
-  `deploy`, `network`, `drivers`, `bootloader`, `aur`, `snapshots`). It reads
-  `system/packages/`, adds the `[ryoku]` package repository, and installs the
-  desktop onto the target. `alongside` dual-boots with ANY existing OS (Windows or
-  another Linux) by creating a 2 GiB XBOOTLDR boot partition + root in free space
-  and sharing the disk's existing ESP: Limine lands in its own `/EFI/ryoku`, no
-  other vendor's directory is touched.
-- `iso/` the archiso profile. `build.sh` bakes the repo payload into the image,
-  prebuilds the Go binaries, and runs `mkarchiso` (reproducible for a fixed
-  commit). `profiledef.sh`, `packages.x86_64` (live-only set), and `airootfs/`
-  complete the live image.
-- `tests/` install verification: `container-install.sh` (packaged install in a
-  container), `install-vm.py` (real unattended install in QEMU), and
-  `iso-stage-check.sh` (the staged ISO tree is byte-reproducible).
+- `fedora/` the Fedora 44 Anaconda/Kickstart image: ISO composition, offline RPM
+  repository construction, target provisioning, and gated first-boot setup.
+- `tests/` container and VM verification for the Fedora repository, packages,
+  provisioning, first boot, signatures, channels, and ISO.
 
 ## The distribution model
 
-- The desktop ships as signed pacman packages from the `[ryoku]` repository
-  (`release/packages/`). `ryoku-desktop` is the umbrella: it version-pins the
-  monorepo components (`ryoku-shell`, `ryoku-hub`, `ryoku-rashin`, `ryoku-blobs`,
-  `ryoku`, and the Hyprland plugins `hypr-dynamic-cursors`, `ryoku-hypr-plugins`,
-  `hyprglass`, `imgborders`, `ryoku-keysounds`) and also depends on
-  `ryoku-keyring` and the `gpk` package manager, and lays the base config under
-  `/usr/share/ryoku/config`.
-- The installer adds the `[ryoku]` repo, imports the keyring, and installs
-  `ryoku-desktop`; per-user config is then copied into `~/.config` by
+- The desktop ships as signed RPMs from the Ryoku COPR. `ryoku-desktop` is the
+  umbrella package and the compositor-specific RPM supplies the selected
+  provider.
+- The installer configures the COPR and installs `ryoku-desktop` plus its
+  compositor package; per-user config is then copied into `~/.config` by
   `ryoku materialize`, which clobbers Ryoku-owned files and prunes dropped ones
   but never touches user files.
 - It only ever flows **repo to system**. A change starts in the repo, is built
@@ -204,39 +183,19 @@ and the idle policy. Reuse the helper; never re-implement its logic.
 ## `ryoku-shell-installer/` the no-ISO installer
 
 The standalone way in: a curl-able `install.sh` bootstrap plus the
-`ryoku-shell-install` Go TUI that converts an existing Arch machine into a
+`ryoku-shell-install` Go TUI that converts an existing Fedora machine into a
 Ryoku one: config backup with a generated `restore.sh`, rival-shell and
-daemon migration, `[ryoku]` repo trust, the desktop set, SDDM/qylock wiring,
+daemon migration, COPR trust, the desktop set, SDDM/qylock wiring,
 `ryoku materialize`. After it runs once the machine updates through
 `ryoku update` like any other. The binary and its checksum are committed so
 raw.githubusercontent.com serves them with no release infrastructure.
 
 ## `release/` packaging
 
-- `packages/` one directory per pacman package in the `[ryoku]` repo, each a
-  `PKGBUILD`. 31 in all, in four groups by why they exist:
-  - built from the checked-out monorepo: the components (`ryoku-shell`,
-    `ryoku-hub`, `ryoku-rashin`, `ryoku`, `ryoku-blobs`, `ryomotion`,
-    `ryotunes`, `ryogami` the wallpaper daemon), the `ryoku-desktop` umbrella,
-    `ryoku-keyring`, and the `gpk` package manager.
-  - Hyprland plugins: `hypr-dynamic-cursors`, `ryoku-hypr-plugins`, `hyprglass`,
-    `imgborders`, `ryoku-keysounds`; each lays an `.abi` receipt beside its
-    `.so` (see `docs/hyprland-plugins.md`).
-  - rebuilt from upstream so `ryoku update` can reach them, because it is pacman
-    and pacman never touches the AUR: `asusctl`,
-    `hyprland-preview-share-picker`, `limine-mkinitcpio-hook`,
-    `limine-snapper-sync`, `otf-space-grotesk`, `ryoku-cursors`,
-    `ryoku-cursor-material`.
-  - hardware support, same reasoning: `xpadneo-dkms` (Xbox pads over Bluetooth,
-    which the in-kernel `xpad` does not do), `game-devices-udev` (hidraw
-    permissions and battery reporting for 27 vendors' pads),
-    `broadcom-bt-firmware` (the `.hcd` patchram blobs the default
-    `linux-firmware` set omits, without which a Broadcom adapter never comes up),
-    and `dualsensectl` (DualSense lightbar, LEDs and mic; opt-in, since most
-    machines have no DualSense).
-- `repo/` builds the signed `[ryoku]` repo from those PKGBUILDs: `build-repo.sh`
-  runs `makepkg`, signs every artifact with the release key, and `repo-add`s the
-  signed `ryoku.db` into `out/`, laid out exactly as the public mirror serves it.
+- `rpm/` owns Fedora source RPM preparation, clean Mock rebuilds, payload
+  staging, COPR publication, repository configuration, and package verification.
+  Each component has one spec and, when needed, one staging recipe under
+  `payload/`.
 
 ## Tooling
 

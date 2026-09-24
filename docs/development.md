@@ -23,34 +23,9 @@ Edit the repo, deploy, test on the running system.
 
 - Lua: `luac -p <file>` parses every changed Lua file.
 - Shell scripts: `bash -n <file>`; the pre-commit hook also checks staged scripts.
-- Installer: exercise the whole flow without a disk. The dry-run matrix runs the
-  backend across every strategy and profile (from the repo root):
-
-  ```
-  for s in whole alongside; do for p in vm amd intel amd-nvidia; do \
-    RYOKU_DRYRUN=1 RYOKU_DISK=/dev/vda RYOKU_PASSWORD_HASH=x \
-    RYOKU_DISK_STRATEGY=$s RYOKU_PROFILE=$p RYOKU_REPO=$PWD \
-    installation/backend/ryoku-install >/dev/null || echo "FAIL $s/$p"; done; done
-  ```
-
-  Then the focused checks for what you touched:
-  - `tests/install-*.sh` mocked fixtures (no real device unless noted): the
-    whole-disk partition plan, the free-space sizer, the Secure Boot
-    preflight gate, the clock-skew heal, the dry-run step/sentinel matrix, the
-    disk teardown, and the DNS, mirror, and chroot-safety gates. The `alongside`
-    partitioner (`install-partition-alongside.sh`) is a real loop-device test and
-    needs root.
-  - `installation/tui`: `go test ./...` (layout math + safety gates).
-  - `installation/tests/iso-stage-check.sh` stages the ISO twice and diffs, so the
-    build stays byte-reproducible (skips cleanly without `go`/`cmake`/`ninja`).
-  - `installation/tests/iso-preflight.sh` runs the whole root-free installer gate
-    in one command (syntax, ShellCheck, package lists, offline install, boot menu,
-    contract suite, TUI, delivery). Build ISO runs it as a blocking job before
-    mkarchiso; run it yourself before dispatching a build.
-- VM green is not metal green. A clean VM install still misses the real-hardware
-  classes (Intel VMD, Secure Boot, NVIDIA modeset, Windows dual-boot, Broadcom,
-  clock skew, NVRAM, USB media). Before calling an installer change done, walk
-  the matching entry in `docs/installation-hardware.md`.
+- Fedora installer: run the focused scripts in `installation/tests/`. Repository,
+  signature, first-boot, provisioning, RPM, and ISO checks each have their own
+  script; `installation/fedora/README.md` lists the required VM evidence.
 - QML: `qmllint` when available.
 - Test behavior, not just that it parses. Exercise the actual change on the
   running system.
@@ -95,9 +70,8 @@ Where a change lives decides whether, and how, it reaches an installed machine.
   touched: the deploy runs on what is checked out.
 - **The installer (`installation/`)** runs once from the ISO. Fixes here reach
   only new installs from a new ISO, never an existing machine.
-- **Package-set additions (`system/packages/`)** are pacstrapped at install.
-  `ryoku update` upgrades installed packages; it does not pacstrap newly listed
-  ones, so a new package reaches only fresh installs.
+- **RPM dependency additions** belong in the matching spec under `release/rpm/`
+  and must resolve through Fedora or one of `release/rpm/dependency-coprs`.
 - **Stateful drift** the declarative layers cannot express (disk layout,
   subvolumes, swap) is healed by an idempotent `ryoku doctor` reconciler that runs
   inside `ryoku update`.
@@ -118,13 +92,9 @@ every supported install has run it, so the set stays small instead of piling up.
 
 ## Binaries and package managers
 
-- The desktop ships as signed pacman packages from the `[ryoku]` repo
-  (`release/packages/`): `ryoku-shell`, `ryoku-hub`, `ryoku`, and `ryoku-blobs`
-  build from source via their PKGBUILDs. The live ISO still prebuilds the
-  installer TUI (`installation/iso/build.sh`); the installed desktop's binaries
-  come from the repo, so never assume `go` at install time.
-- AUR packages install in the post-install step (`installation/backend/lib/
-  aur.sh`), not via pacstrap.
+- The desktop ships as signed RPMs built from `release/rpm/`. The Fedora ISO
+  installs the same package set from its offline repository, so installed
+  targets have no build-toolchain assumption.
 - User-level package managers install without root, into `~/.local/bin` (`npm`,
   `pip --user`, `go install`, `cargo install`, `pipx`, `mise`). Do not
   reintroduce root-global installs or assume `sudo`.

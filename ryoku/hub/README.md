@@ -140,7 +140,6 @@ is a small subsequence scorer in `quickshell/fuzzy.js`.
 ## Deploy
 
 `ryoku/shell/deploy.sh` builds `ryoku-hub` onto `PATH` and copies the quickshell
-config to `~/.config/quickshell/hub`. The installer installs the prebuilt binary
-and the config; `installation/iso/build.sh` prebuilds the binary into the image
-payload. The `Super + ,` keybind and the float/centre window rule live in
+config to `~/.config/quickshell/hub`. Packaged installs receive the prebuilt
+binary and config from the RPM set. The `Super + ,` keybind and the float/centre window rule live in
 `ryoku/hyprland/modules/binds.lua` and `window_rules.lua`.

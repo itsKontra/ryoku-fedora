@@ -62,8 +62,8 @@ full set, or let the installer's deploy step do it on a fresh machine.
 - A **shell surface**: a new component under `ryoku/shell/quickshell/`, with any
   state wired through `ryoku-shell` (`ryoku/shell/ipc/`).
 - A **system helper**: a `ryoku-<thing>` script under `system/hardware/.../`,
-  installed via `install_bin` in `installation/backend/lib/deploy.sh`, and invoked
-  by name from Lua autostart or a keybind.
+  shipped by the matching RPM payload and invoked by name from compositor
+  autostart or a keybind.
 
 ## Working on a compositor
 

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # ryoku-r2-config: write the rclone remote the release workflows upload
-# through (the [ryoku] repo channels and the ISO), from the R2_* secrets in the
-# environment. One place for the remote's shape, used by publish-repo.yml (the
-# build and publish jobs) and build-iso-reusable.yml.
+# through, from the R2_* secrets in the environment. One place for the remote's
+# shape, used by the legacy repository publication tooling.
 set -euo pipefail
 : "${R2_ACCESS_KEY_ID:?}" "${R2_SECRET_ACCESS_KEY:?}" "${R2_ENDPOINT:?}"
 mkdir -p ~/.config/rclone

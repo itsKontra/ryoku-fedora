@@ -9,22 +9,19 @@
 
 <img src="ryoku/assets/brand/logo-mark-v2.png" alt="Ryoku" width="160" />
 
-# Ryoku Arch
+# Ryoku Fedora
 
 **力と美のために** &middot; *For the sake of power and beauty.*
 
-Ryoku is a hand-built Arch Linux distribution: one cohesive desktop that runs on
-Hyprland or niri, a guided installer, and the system definition that reproduces
-them, all from a single repository. It is a whole operating system you install
-to disk from its own ISO -- the bootloader, drivers, packages, installer and
-desktop are all part of it -- not a shell or a set of dotfiles you layer onto an
-existing distro. The base is lean enough to live in from first boot and
-deliberate in how it looks and moves.
+Ryoku Fedora is one cohesive desktop that runs on Hyprland or niri, a Fedora
+Anaconda/Kickstart installer, and the system definition that reproduces them,
+all from a single repository. It can be installed from its own Fedora ISO or
+layered onto an existing mutable Fedora system. The desktop is ready from first
+boot and deliberate in how it looks and moves.
 
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-E2342A?style=for-the-badge)](LICENSE)
 [![Fedora](https://img.shields.io/badge/Fedora-51A2DA?style=for-the-badge&logo=fedora&logoColor=white)](https://fedoraproject.org)
 [![COPR](https://img.shields.io/badge/COPR-itskontra%2Fryoku-blue?style=for-the-badge)](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)
-[![Built on Arch](https://img.shields.io/badge/Arch_Linux-1793D1?style=for-the-badge&logo=archlinux&logoColor=white)](https://archlinux.org)
 [![Hyprland](https://img.shields.io/badge/Hyprland-58E1C2?style=for-the-badge&logoColor=white)](https://hypr.land)
 [![niri](https://img.shields.io/badge/niri-7E9CD8?style=for-the-badge&logoColor=white)](https://github.com/YaLTeR/niri)
 [![Fedora RPM CI](https://github.com/itsKontra/ryoku-fedora/actions/workflows/fedora-rpm.yml/badge.svg)](https://github.com/itsKontra/ryoku-fedora/actions/workflows/fedora-rpm.yml)
@@ -128,28 +125,27 @@ Everything else waits in Ryoku Settings (`Super + ,`).
 - **The desktop** under `ryoku/`: a Wayland session on Hyprland or niri (its
   config in the compositor's own language), the Quickshell-based Ryoku shell,
   the lockscreen, app configs, and brand assets.
-- **The system definition** under `system/`: the boot chain, hardware policy,
-  and package sets that make a machine a Ryoku machine.
-- **The installer** under `installation/`: a guided TUI, the backend installer,
-  and the archiso profile that builds the signed ISO.
+- **The system definition** under `system/`: hardware policy, service helpers,
+  and package manifests that make a machine a Ryoku machine.
+- **The installer** under `installation/`: the Fedora Anaconda/Kickstart ISO,
+  offline RPM closure, target provisioner, and first-boot setup.
 - **The update system** under `release/`: the `ryoku` control CLI, the desktop
   packages, the signed `[ryoku]` pacman repository, and Fedora RPM delivery under
   [`release/rpm/`](release/rpm/README.md) via [COPR](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/).
 
 ## Requirements
 
-Ryoku is `x86_64` only and boots in UEFI mode. The session is Wayland on
-Hyprland or niri, with the GPU-composited Ryoku shell on top. The installer
-refuses a machine with Secure Boot on (Limine ships unsigned) unless you have
-enrolled your own keys, and there is no 32-bit build and no legacy BIOS path.
+Ryoku is `x86_64` only. The session is Wayland on Hyprland or niri, with the
+GPU-composited Ryoku shell on top. Fedora 44 is the supported installation
+target; immutable Fedora variants are not supported.
 
 |  | Minimum | Recommended |
 |---|---|---|
 | CPU | 64-bit x86_64, dual-core | quad-core or better |
 | RAM | 4 GB | 8 GB, 16 GB with the dev toolchains |
 | GPU | any card with working KMS and OpenGL/Vulkan | recent integrated or discrete |
-| Storage | 32 GB (installer floor) | 64 GB+ SSD |
-| Firmware | UEFI, Secure Boot off | UEFI, Secure Boot off |
+| Storage | 32 GB | 64 GB+ SSD |
+| Firmware | UEFI | UEFI |
 
 The desktop is light on its own: a resting session (the compositor, the shell,
 and its daemons) uses under 1 GB of RAM. What you run on top, the browser,
@@ -182,10 +178,6 @@ primary renderer on a desktop, while a laptop keeps the integrated GPU primary
 for battery; an external GPU always wins. Every GPU stays available, so a monitor
 on a second card still lights up, and dense HiDPI panels are scaled on first
 login.
-
-The playbook for awkward hardware (Intel VMD, NVIDIA modeset, Windows dual-boot,
-Broadcom Wi-Fi, read-only NVRAM, slow USB media) is in
-[`docs/installation-hardware.md`](docs/installation-hardware.md).
 
 ## Install
 
@@ -318,15 +310,15 @@ redeploy the configs without the package step. Details in
 | Path | One job |
 |---|---|
 | `ryoku/` | The desktop: the window-manager seam and per-compositor configs (Hyprland in Lua, niri in KDL), the Quickshell shell, the lockscreen, app configs, brand assets. |
-| `system/` | The machine definition: boot chain, hardware policy, package sets. |
-| `installation/` | How a machine is built: the TUI, the backend installer, the ISO profile. |
+| `system/` | Hardware policy, service helpers, and package manifests. |
+| `installation/` | Fedora ISO composition, offline provisioning, first boot, and install tests. |
 | `release/` | Fedora RPM packaging and publication under [`release/rpm/`](release/rpm/README.md). |
 | `docs/` | The guides. Start with [`docs/ryoku.md`](docs/ryoku.md) and [`docs/structure.md`](docs/structure.md). |
 
 ## Channels
 
-`main` is the stable channel everyone runs; it is published to the `[ryoku]`
-repository and the ISO only on tagged releases. `unstable-dev` is the maintainer
+`main` is the stable channel everyone runs; it publishes the Fedora packages
+and ISO through the release workflows. `unstable-dev` is the maintainer
 preview, consumed through the dev loop and never published. A release promotes
 `unstable-dev` to `main`. See [`docs/development.md`](docs/development.md) for the
 deploy, test, and commit loop.

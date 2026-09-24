@@ -1,11 +1,7 @@
 # Build outputs
-/installation/iso/work/
-/installation/iso/out/
-/installation/iso/staging/
 /installation/fedora/work/
 /installation/fedora/out/
 /installation/tests/cache/
-/installation/tui/ryoku-tui
 /ryoku/shell/ipc/ryoku-shell
 /ryoku/wm/hyprland/ryoku-wm-hyprland
 /ryoku/wm/niri/ryoku-wm-niri

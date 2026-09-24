@@ -84,25 +84,20 @@ LANG_NAMES = {l["code"]: l["name"] for l in LANGS}
 RTL = {l["code"] for l in LANGS if l.get("dir") == "rtl"}
 
 # Every tree that holds displayed copy. QML and the Hub's schema are the
-# desktop; the Go and shell roots are the two installers and the CLI, which
-# speak the same catalog through ryoku/i18n/i18n.go and ryoku/i18n/i18n.sh.
+# desktop; the Go and shell roots are the standalone installer and the CLIs.
 QML_ROOT = os.path.join(REPO, "ryoku")
 SCHEMA_DIR = os.path.join(REPO, "ryoku", "hub", "quickshell", "schema")
 GO_ROOTS = [os.path.join(REPO, p) for p in
-            ("installation/tui", "ryoku-shell-installer", "ryoku/cli",
+            ("ryoku-shell-installer", "ryoku/cli",
              "ryoku/shell/ipc", "ryoku/hub/backend", "ryoku/apps/ryostore/backend")]
-SH_ROOTS = [os.path.join(REPO, p) for p in
-            ("installation/backend", "ryoku-shell-installer")]
+SH_ROOTS = [os.path.join(REPO, "ryoku-shell-installer")]
 
 # QML/JS: I18n.tr("..."). qsTr("...") is Qt's marker, which Quickshell has no
 # loader for; it is matched too so a stray one still reaches the catalog.
 TR_CALL = re.compile(r"""(?:I18n\.tr|qsTr)\(\s*(["'])((?:\\.|(?!\1).)*)\1""")
 # Go: i18n.T("..."), i18n.Tf("...", a, b) and the bare T/Tf a program dot-imports.
 GO_CALL = re.compile(r'\b(?:i18n\.)?Tf?\(\s*"((?:\\.|[^"\\])*)"')
-# shell: the installer's own helpers. log/die take the message as their first
-# argument and run it through tf (installation/backend/lib/common.sh), so their
-# format string is the catalog key exactly as t/tf's is; `step` is a protocol
-# sentinel the TUI parses and is deliberately absent.
+# Shell: translation helpers used by the standalone installer.
 SH_CALL = re.compile(
     r"""(?:^|[|(&;`$]|\s)(?:tf?|log|die)\s+(["'])((?:\\.|(?!\1).)*)\1""", re.M)
 SCHEMA_FIELD = re.compile(r'"(?:tab|label|desc|group)"\s*:\s*"((?:\\.|[^"\\])*)"')

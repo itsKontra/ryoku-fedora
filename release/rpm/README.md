@@ -12,6 +12,9 @@ created with the `fedora-44-x86_64` chroot. The existing third-party dependency
 COPRs are declared once in `dependency-coprs`, consumed by the installer and
 container tests. `itskontra/ryotunes` remains an optional external project;
 its `ryoku-ui` ownership must be reconciled before enabling it with the desktop.
+Fedora uses `wf-recorder` for screen recording and the `hyprland-share-picker`
+binary shipped by `xdg-desktop-portal-hyprland`; the similarly named Arch-only
+capture packages are not RPM dependencies.
 
 The first publishing implementation retains `ryoku-extras` as the package
 owner of pinned tools and assets. Packaged installs therefore use DNF for
