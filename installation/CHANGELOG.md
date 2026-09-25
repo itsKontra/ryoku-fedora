@@ -8,6 +8,9 @@
   Fedora Anaconda/Kickstart is now the only ISO implementation in the tree.
 
 ### Fixed
+- Rebuild the embedded EFI image in release ISOs so UEFI USB boot finds the
+  installer kernel after the ISO volume label changes. Check embedded GRUB
+  configuration against the outer ISO before publishing.
 - Write the Anaconda updates image through an absolute path so relative ISO
   work directories remain valid after the compose script enters the staging tree.
 - Wait for the signed COPR package set built from the release commit before
