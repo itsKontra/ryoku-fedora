@@ -1,0 +1,106 @@
+name: Publish signed NVIDIA modules
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even when the newest kernel already has a module
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: publish-nvidia
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'itsKontra/ryoku-fedora' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: fedora-publish
+    container: fedora:44
+    outputs:
+      built: ${{ steps.build.outputs.built }}
+    steps:
+      - run: dnf -y install git python3-rpm openssl gnupg2 cpio curl
+      - uses: actions/checkout@v4
+      - run: release/rpm/nvidia/enable-rpmfusion.sh
+      - name: Build and sign the modules
+        id: build
+        env:
+          RYOKU_NVIDIA_MOK_KEY: ${{ secrets.RYOKU_NVIDIA_MOK_KEY }}
+          RYOKU_NVIDIA_OUT: /tmp/nvidia-srpm
+          RYOKU_RPM_REVISION: ${{ github.run_number }}
+          RYOKU_NVIDIA_PUBLISHED: ${{ !inputs.force && 'https://download.copr.fedorainfracloud.org/results/itskontra/ryoku-nvidia/fedora-44-x86_64/' || '' }}
+        run: |
+          umask 077
+          RYOKU_NVIDIA_MOK_KEY_FILE=$(mktemp)
+          export RYOKU_NVIDIA_MOK_KEY_FILE
+          trap 'rm -f "$RYOKU_NVIDIA_MOK_KEY_FILE"' EXIT
+          test -n "$RYOKU_NVIDIA_MOK_KEY"
+          printf '%s\n' "$RYOKU_NVIDIA_MOK_KEY" > "$RYOKU_NVIDIA_MOK_KEY_FILE"
+          release/rpm/nvidia/prepare-srpm.sh
+          if [ -f "$RYOKU_NVIDIA_OUT/release.json" ]; then echo built=true >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/upload-artifact@v4
+        if: steps.build.outputs.built == 'true'
+        with:
+          name: nvidia-srpm
+          path: /tmp/nvidia-srpm
+          if-no-files-found: error
+  test:
+    needs: build
+    if: needs.build.outputs.built == 'true'
+    runs-on: ubuntu-latest
+    container: fedora:44
+    steps:
+      - run: dnf -y install git rpm-build systemd-rpm-macros openssl kmod curl
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nvidia-srpm
+          path: /tmp/nvidia-srpm
+      - run: release/rpm/nvidia/enable-rpmfusion.sh
+      - name: Rebuild the SRPM and install it with the RPM Fusion userspace
+        run: |
+          rpmbuild --rebuild --define '_rpmdir /tmp/nvidia-rpms' /tmp/nvidia-srpm/*.src.rpm
+          release/rpm/nvidia/test-install.sh /tmp/nvidia-rpms/x86_64
+  copr:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: fedora-publish
+    container: fedora:44
+    steps:
+      - run: |
+          dnf -y install git python3-copr gnupg2 rpm curl
+          git config --global --add safe.directory '*'
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nvidia-srpm
+          path: /tmp/nvidia-srpm
+      - name: Submit the SRPM, wait, and download the exact build result
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+          COPR_CONFIG_FILE: /tmp/copr-config
+        run: |
+          umask 077
+          trap 'rm -f "$COPR_CONFIG_FILE"' EXIT
+          test -n "$COPR_CONFIG"
+          printf '%s\n' "$COPR_CONFIG" > "$COPR_CONFIG_FILE"
+          python3 release/rpm/copr-build.py /tmp/nvidia-srpm /tmp/nvidia-copr --project ryoku-nvidia
+      - name: Verify the unchanged COPR RPMs
+        env:
+          RYOKU_NVIDIA_COPR_FINGERPRINT: ${{ vars.RYOKU_NVIDIA_COPR_FINGERPRINT }}
+        run: |
+          mkdir -p /tmp/nvidia-copr/keys
+          curl --fail --location --proto '=https' --proto-redir '=https' -o /tmp/nvidia-copr/keys/copr.asc https://download.copr.fedorainfracloud.org/results/itskontra/ryoku-nvidia/pubkey.gpg
+          python3 release/rpm/verify-rpms.py /tmp/nvidia-copr /tmp/nvidia-copr/keys/copr.asc "$RYOKU_NVIDIA_COPR_FINGERPRINT"
+      - name: Publish the tested build on COPR
+        env:
+          COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+          COPR_CONFIG_FILE: /tmp/copr-config
+        run: |
+          umask 077
+          trap 'rm -f "$COPR_CONFIG_FILE"' EXIT
+          printf '%s\n' "$COPR_CONFIG" > "$COPR_CONFIG_FILE"
+          python3 release/rpm/publish.py /tmp/nvidia-copr

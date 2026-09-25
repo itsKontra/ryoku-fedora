@@ -209,6 +209,16 @@ class Publication(unittest.TestCase):
             with self.assertRaises(ValueError): publisher.publish(client, self.candidate())
             client.project_proxy.regenerate_repos.assert_not_called()
 
+    def test_only_known_projects_are_published(self):
+        client = self.client()
+        client.build_proxy.get.return_value = dict(ownername='itskontra', projectname='ryoku-nvidia', state='succeeded')
+        metadata = self.candidate()
+        metadata['copr']['project'] = 'ryoku-nvidia'
+        publisher.publish(client, metadata)
+        client.project_proxy.regenerate_repos.assert_called_once_with('itskontra', 'ryoku-nvidia')
+        metadata['copr']['project'] = 'elsewhere'
+        with self.assertRaises(ValueError): publisher.publish(self.client(), metadata)
+
     def test_incomplete_manifest_rejected(self):
         client = self.client()
         metadata = self.candidate()

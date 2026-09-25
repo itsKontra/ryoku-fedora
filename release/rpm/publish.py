@@ -5,11 +5,17 @@ import os
 from pathlib import Path
 import sys
 
+# Each project is published only by its own serialized workflow.
+TARGETS = {
+    ('itskontra', 'ryoku', 'fedora-44-x86_64'),
+    ('itskontra', 'ryoku-nvidia', 'fedora-44-x86_64'),
+}
+
 
 def publish(client, metadata):
     target = metadata['copr']
     owner, project, chroot = (target[k] for k in ('owner', 'project', 'chroot'))
-    if (owner, project, chroot) != ('itskontra', 'ryoku', 'fedora-44-x86_64'):
+    if (owner, project, chroot) not in TARGETS:
         raise ValueError('unexpected publication target')
     project_info = client.project_proxy.get(owner, project)
     if not (project_info.get('devel_mode') or project_info.get('disable_createrepo')):
