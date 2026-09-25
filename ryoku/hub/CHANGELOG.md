@@ -1,6 +1,10 @@
 # Changelog: ryoku/hub/
 
 ### Fixed
+- The keybind recorder takes the keys of German and other European layouts:
+  umlauts, `ß`, `+`, `#`, `<`, `§`, accented letters and the `´` `` ` `` `^`
+  dead keys record as their XKB keysyms and show as their characters
+  (`Combos.js`, `pages/KeybindsPage.qml`).
 - Bar Studio preserves changes saved in QS Bar Settings when saving, reverting,
   or closing the Hub, while retaining its own unsaved edits.
 
