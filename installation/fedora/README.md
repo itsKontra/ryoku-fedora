@@ -392,8 +392,8 @@ The Arch lists under `system/packages/` also inform this manifest. Fedora names
 cover the compiler/build tools, Rust and Cargo, Node.js 24 and npm, Python pip
 and pipx, Intel VA-API, and controller access rules (`steam-devices`). The Node
 `-bin` packages ensure the unversioned commands are installed. `ryoku-extras`
-already supplies Matugen, Bibata, Space Grotesk, Material Symbols and JetBrains
-Mono Nerd Font; QEMU's desktop backends are dependencies of `qemu-system-x86`.
+already supplies Matugen, Bibata, Space Grotesk, Material Symbols, JetBrains
+Mono Nerd Font and SpaceMono Nerd Font; QEMU's desktop backends are dependencies of `qemu-system-x86`.
 Arch boot hooks, pacman/AUR tooling, CachyOS packages, 32-bit graphics and
 out-of-tree NVIDIA/xpadneo modules are excluded from this comparison.
 

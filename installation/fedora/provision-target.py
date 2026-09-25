@@ -504,6 +504,7 @@ def seed_desktop_extras(root, repo_dir=None):
         "space-grotesk": "share/fonts/SpaceGrotesk/*.otf",
         "material-symbols": "share/fonts/MaterialSymbolsRounded.ttf",
         "jetbrains-mono-nerd-fonts": "share/fonts/JetBrainsMonoNerdFont/*.ttf",
+        "space-mono-nerd-fonts": "share/fonts/SpaceMonoNerdFont/*.ttf",
         "matugen": "bin/matugen",
     }
     prefix = root / "usr"
