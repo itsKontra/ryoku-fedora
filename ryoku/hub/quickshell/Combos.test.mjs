@@ -31,6 +31,12 @@ const Qt = {
     Key_Backspace: 0x01000003, Key_Equal: 0x3d, Key_Backslash: 0x5c,
     Key_Semicolon: 0x3b, Key_Apostrophe: 0x27,
     Key_BracketLeft: 0x5b, Key_BracketRight: 0x5d, Key_QuoteLeft: 0x60,
+    // the non-US main-block keys and dead keys
+    Key_NumberSign: 0x23, Key_Less: 0x3c, Key_section: 0xa7,
+    Key_Agrave: 0xc0, Key_Adiaeresis: 0xc4, Key_Aring: 0xc5, Key_Ccedilla: 0xc7,
+    Key_Egrave: 0xc8, Key_Eacute: 0xc9, Key_Odiaeresis: 0xd6, Key_Udiaeresis: 0xdc,
+    Key_ssharp: 0xdf,
+    Key_Dead_Grave: 0x01001250, Key_Dead_Acute: 0x01001251, Key_Dead_Circumflex: 0x01001252,
 };
 
 const source = fs
@@ -99,6 +105,22 @@ test("chordFrom orders modifiers SUPER, CTRL, ALT, SHIFT before the key", () => 
         chordFrom(ev(Qt.Key_Q, Qt.ShiftModifier, Qt.AltModifier, Qt.ControlModifier, Qt.MetaModifier)),
         "SUPER + CTRL + ALT + SHIFT + Q",
     );
+});
+
+test("a German layout's umlauts, sharp s and dead keys record as keysyms", () => {
+    assert.equal(chordFrom(ev(Qt.Key_Odiaeresis, Qt.MetaModifier)), "SUPER + odiaeresis");
+    assert.equal(chordFrom(ev(Qt.Key_Adiaeresis, Qt.MetaModifier)), "SUPER + adiaeresis");
+    assert.equal(chordFrom(ev(Qt.Key_Udiaeresis, Qt.MetaModifier)), "SUPER + udiaeresis");
+    assert.equal(chordFrom(ev(Qt.Key_ssharp, Qt.MetaModifier)), "SUPER + ssharp");
+    assert.equal(chordFrom(ev(Qt.Key_Dead_Acute, Qt.MetaModifier)), "SUPER + dead_acute");
+    assert.equal(chordFrom(ev(Qt.Key_Dead_Circumflex, Qt.MetaModifier)), "SUPER + dead_circumflex");
+    assert.equal(chordFrom(ev(Qt.Key_Plus, Qt.MetaModifier)), "SUPER + plus");
+    assert.equal(chordFrom(ev(Qt.Key_NumberSign, Qt.MetaModifier)), "SUPER + numbersign");
+    assert.equal(chordFrom(ev(Qt.Key_Less, Qt.MetaModifier)), "SUPER + less");
+});
+
+test("keypad plus still records as the number-pad keysym", () => {
+    assert.equal(qtKeyName(ev(Qt.Key_Plus, Qt.KeypadModifier)), "KP_Add");
 });
 
 test("a lone modifier press yields no chord yet", () => {

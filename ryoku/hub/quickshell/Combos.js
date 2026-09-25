@@ -93,7 +93,8 @@ function formingChord(event) {
 }
 
 // KeyEvent -> the token the store binds on. Covers letters, digits, the
-// function row, navigation, the common punctuation and the whole number pad;
+// function row, navigation, the common punctuation, the letters and dead keys
+// of the common European layouts, and the whole number pad;
 // anything unmapped returns "" so the recorder keeps waiting (and the field
 // stays typeable for the exotic rest).
 function qtKeyName(event) {
@@ -162,6 +163,25 @@ function qtKeyName(event) {
     case Qt.Key_BracketLeft: return "bracketleft";
     case Qt.Key_BracketRight: return "bracketright";
     case Qt.Key_QuoteLeft: return "grave";
+    // the keys a non-US layout (German, Nordic, French) carries on its main
+    // block, spelled as the lowercase XKB keysym both compositors bind on
+    case Qt.Key_Plus: return "plus";
+    case Qt.Key_NumberSign: return "numbersign";
+    case Qt.Key_Less: return "less";
+    case Qt.Key_section: return "section";
+    case Qt.Key_Adiaeresis: return "adiaeresis";
+    case Qt.Key_Odiaeresis: return "odiaeresis";
+    case Qt.Key_Udiaeresis: return "udiaeresis";
+    case Qt.Key_ssharp: return "ssharp";
+    case Qt.Key_Aring: return "aring";
+    case Qt.Key_Agrave: return "agrave";
+    case Qt.Key_Egrave: return "egrave";
+    case Qt.Key_Eacute: return "eacute";
+    case Qt.Key_Ccedilla: return "ccedilla";
+    // a dead key types nothing on its own but still sends its own keysym
+    case Qt.Key_Dead_Grave: return "dead_grave";
+    case Qt.Key_Dead_Acute: return "dead_acute";
+    case Qt.Key_Dead_Circumflex: return "dead_circumflex";
     }
     return "";
 }
