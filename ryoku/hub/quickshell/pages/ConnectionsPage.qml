@@ -237,7 +237,7 @@ Item {
         }
     }
 
-    // a small tappable pill (Pair / Disconnect / Show / Hide). 22 tall so it
+    // a small tappable pill (Pair / Disconnect / Forget / Show / Hide). 22 tall so it
     // sits inside a device tile; a shorter sibling of Ryoku.Ui Btn.
     component MiniPill: Rectangle {
         id: mp
@@ -1345,6 +1345,7 @@ Item {
     // adapter toggle, scan with 25s auto-stop, live device list. known devices
     // use Quickshell's connect/disconnect; unpaired ones run bluetoothctl
     // pair-trust-connect with a pairing pulse and a transient failure chip.
+    // any device BlueZ remembers can be forgotten with a two-tap Forget pill.
     component BtBody: Item {
         id: bt
 
@@ -1382,6 +1383,7 @@ Item {
         property string pairingAddress: ""
         property string failedAddress: ""
         property string serviceError: ""
+        property string forgetArmed: ""
 
         function metaFor(d) {
             if (!d) return "";
@@ -1420,6 +1422,25 @@ Item {
                 return;
             }
             bt.pairDevice(d);
+        }
+
+        // a stale bond (keys lost on one side) refuses every connect, and the
+        // only cure is dropping it and pairing fresh. first tap arms, the
+        // second within 3s removes the device from BlueZ.
+        function forgetDevice(d) {
+            if (!d || !d.address)
+                return;
+            if (bt.forgetArmed !== d.address) {
+                bt.forgetArmed = d.address;
+                forgetTimer.restart();
+                return;
+            }
+            forgetTimer.stop();
+            bt.forgetArmed = "";
+            if (bt.failedAddress === d.address)
+                bt.failedAddress = "";
+            if (typeof d.forget === "function")
+                d.forget();
         }
 
         function pairDevice(d) {
@@ -1474,6 +1495,13 @@ Item {
             interval: 4000
             repeat: false
             onTriggered: bt.failedAddress = ""
+        }
+
+        Timer {
+            id: forgetTimer
+            interval: 3000
+            repeat: false
+            onTriggered: bt.forgetArmed = ""
         }
 
         Process {
@@ -1698,6 +1726,7 @@ Item {
                                 required property var modelData
                                 readonly property bool isConnected: modelData ? modelData.connected === true : false
                                 readonly property bool isPaired: modelData ? modelData.paired === true : false
+                                readonly property bool isKnown: isPaired || (modelData ? (modelData.trusted === true || modelData.bonded === true) : false)
                                 readonly property string addr: (modelData && modelData.address) ? modelData.address : ""
                                 readonly property bool pairing: addr.length > 0 && bt.pairingAddress === addr
                                 readonly property bool failed: addr.length > 0 && bt.failedAddress === addr
@@ -1722,7 +1751,15 @@ Item {
                                     Behavior on border.color { ColorAnimation { duration: Tokens.snap } }
 
                                     HoverHandler { id: rowHov; cursorShape: Qt.PointingHandCursor }
-                                    TapHandler { onTapped: bt.activateDevice(dev.modelData) }
+                                    // the pills sit inside the tile; a tap on one must not
+                                    // also count as a row tap.
+                                    TapHandler {
+                                        onTapped: (point) => {
+                                            var p = devRight.mapFromItem(tile, point.position);
+                                            if (!devRight.contains(p))
+                                                bt.activateDevice(dev.modelData);
+                                        }
+                                    }
 
                                     Rectangle {
                                         id: iconTile
@@ -1819,6 +1856,13 @@ Item {
                                             visible: dev.isConnected
                                             text: I18n.tr("Disconnect")
                                             onAct: bt.activateDevice(dev.modelData)
+                                        }
+
+                                        MiniPill {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            visible: dev.isKnown && !dev.pairing
+                                            text: bt.forgetArmed === dev.addr ? I18n.tr("Confirm") : I18n.tr("Forget")
+                                            onAct: bt.forgetDevice(dev.modelData)
                                         }
                                     }
                                 }
