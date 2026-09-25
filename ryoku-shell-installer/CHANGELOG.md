@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+- The driver step runs `ryoku-nvidia install`: a Turing or newer NVIDIA GPU
+  without a host akmod driver gets the Secure Boot signed driver and a queued
+  MokManager enrollment. The sparse payload now includes `system/hardware/gpu`.
+
 ### Removed
 - The proprietary NVIDIA driver toggle and signing-key/Secure Boot instructions.
   Fedora keeps its existing NVIDIA graphics driver.

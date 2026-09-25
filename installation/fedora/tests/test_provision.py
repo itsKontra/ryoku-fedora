@@ -490,6 +490,19 @@ class ProvisionTargetTest(unittest.TestCase):
             self.assertTrue(target_script.is_file(), f"Missing driver script: {script}")
             self.assertEqual(target_script.stat().st_mode & 0o777, 0o755)
 
+    @patch("shutil.which", return_value="/usr/sbin/chroot")
+    def test_run_hardware_drivers_installs_signed_nvidia_driver(self, _which):
+        (self.root / "usr/bin").mkdir(parents=True, exist_ok=True)
+        (self.root / "usr/bin/bash").write_text("")
+        calls = []
+        provision_target.run_hardware_drivers(self.root, runner=calls.append)
+        self.assertNotIn(["chroot", str(self.root), "/usr/bin/ryoku-nvidia", "install"], calls)
+
+        (self.root / "usr/bin/ryoku-nvidia").write_text("")
+        calls.clear()
+        provision_target.run_hardware_drivers(self.root, runner=calls.append)
+        self.assertEqual(calls[-1], ["chroot", str(self.root), "/usr/bin/ryoku-nvidia", "install"])
+
 
 if __name__ == "__main__":
     unittest.main()
