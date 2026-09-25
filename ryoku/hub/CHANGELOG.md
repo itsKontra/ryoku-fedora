@@ -1,5 +1,8 @@
 # Changelog: ryoku/hub/
 
+### Fixed
+- Bar Studio preserves changes saved in QS Bar Settings when saving, reverting,
+  or closing the Hub, while retaining its own unsaved edits.
 
 ### Added
 - **Keybinds, rebuilt around use.** A search field that fuzzy-matches labels,

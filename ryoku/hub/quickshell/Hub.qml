@@ -606,8 +606,21 @@ Rectangle {
         return s;
     }
     function rebase() {
-        hub.committed = snapshot();
-        if (hub.pristine) hub.draft = JSON.parse(JSON.stringify(hub.committed));
+        var next = snapshot();
+        var d = JSON.parse(JSON.stringify(hub.draft));
+        var b = hub.liveBaseline ? JSON.parse(JSON.stringify(hub.liveBaseline)) : null;
+        for (var k in next) {
+            // Other settings surfaces save independently. Adopt their changes
+            // unless this Hub has an unsaved edit to the same setting.
+            if (!hub.liveEdited[k] && (hub.pristine || d[k] === undefined
+                    || JSON.stringify(d[k]) === JSON.stringify(hub.committed[k]))) {
+                d[k] = next[k];
+                if (b && hub.liveKeys.indexOf(k) >= 0) b[k] = next[k];
+            }
+        }
+        hub.draft = d;
+        hub.liveBaseline = b;
+        hub.committed = next;
         // the first real daemon frame is the saved state Bar Studio's live
         // edits are measured against (and walked back to on an unsaved close)
         if (!hub.liveBaseline && Settings.ready) hub.captureLiveBaseline();
@@ -639,6 +652,7 @@ Rectangle {
     readonly property var liveKeys: ["frameBars", "frameEnabled", "frameOpacity", "frameThickness", "frameCorner", "fontFamily", "fontSize", "barStyle", "obi", "nacre", "qsbar", "dock", "clipboard.widthPercent", "clipboard.heightPercent", "clipboard.bottomPercent", "clipboard.panelRadius", "clipboard.paneRadius", "clipboard.cardRadius"]
     property var liveBaseline: null
     property var livePending: ({})
+    property var liveEdited: ({})
     function captureLiveBaseline() {
         var b = {};
         for (var i = 0; i < hub.liveKeys.length; i++) {
@@ -647,9 +661,13 @@ Rectangle {
             b[k] = JSON.parse(JSON.stringify(v === undefined ? hub.defs[k] : v));
         }
         hub.liveBaseline = b;
+        hub.liveEdited = ({});
     }
     function stageLive(k, v) {
         hub.edit(k, v);
+        var edited = Object.assign({}, hub.liveEdited);
+        edited[k] = true;
+        hub.liveEdited = edited;
         var p = {};
         for (var x in hub.livePending) p[x] = true;
         p[k] = true;
@@ -682,6 +700,7 @@ Rectangle {
         hub.livePending = ({});
         if (!hub.liveBaseline) return false;
         var changed = hub.liveChanges;
+        hub.liveEdited = ({});
         if (!changed.length) return false;
         var d = {};
         for (var x in hub.draft) d[x] = hub.draft[x];
