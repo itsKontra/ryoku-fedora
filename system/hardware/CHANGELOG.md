@@ -4,8 +4,7 @@
 
 ### Changed
 - Vendor driver installers now use Fedora DNF packages and exclude i686.
-  NVIDIA drivers and boot configuration remain owned by the host Fedora install;
-  Ryoku does not require signing-key enrollment.
+  A host akmod NVIDIA driver and its boot configuration stay the host's.
 - The backlight workaround uses grubby. Wi-Fi reports Fedora's actual backend,
   checks the selected supplicant is installed, and persists country settings
   through cfg80211 plus a boot service. New network files get SELinux labels.
@@ -20,6 +19,12 @@
   ignored without installing GPU libraries.
 
 ### Added
+- `gpu/ryoku-nvidia`: **the Secure Boot signed NVIDIA driver.** On a Turing or
+  newer GPU, `install` enables the `itskontra/ryoku-nvidia` COPR, installs
+  `ryoku-nvidia` (NVIDIA's open modules signed with the Ryoku key, plus the
+  matching RPM Fusion userspace), and `enroll` queues the key for MokManager with
+  the documented password `ryoku`. `status` feeds `ryoku doctor`. Older GPUs and
+  host akmod drivers are left alone.
 - `display/ryoku-monitor`: **a hand-entered resolution is forced, not ignored.**
   When a layout carries a `WxH@rate` mode the panel does not advertise (the Hub's
   new Displays "Custom…" entry), `apply`/`save` generate a CVT reduced-blanking

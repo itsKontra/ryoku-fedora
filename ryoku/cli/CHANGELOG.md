@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Doctor keeps the signed NVIDIA driver loadable under Secure Boot.** On a
+  Fedora box with a Turing or newer GPU, the `Secure Boot signed NVIDIA driver`
+  check re-queues a skipped Ryoku key enrollment and points a GPU still on
+  nouveau at `sudo ryoku-nvidia install`. It never replaces a host akmod driver
+  (`reconcile_nvidia_signed.go`).
 - **`ryoku wm caps` prints the active provider's capabilities as JSON**, the
   same payload the daemon and the Hub gate on, so a script can read the night
   light backend or a capability without spelling a compositor. `ryoku wm act`

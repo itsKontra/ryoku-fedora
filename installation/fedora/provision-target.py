@@ -482,12 +482,15 @@ def run_hardware_drivers(root, repo_dir=None, runner=None):
         shutil.copyfile(item, dest)
         dest.chmod(0o755)
 
-    scripts = ["amd.sh", "intel.sh", "vulkan.sh"]
+    commands = [["/bin/bash", f"/usr/share/ryoku/hardware/drivers/{name}"] for name in ("amd.sh", "intel.sh", "vulkan.sh")]
+    # A Turing+ NVIDIA GPU gets the signed driver, and the MOK request is queued
+    # so the first boot opens MokManager. A failure leaves the system on nouveau.
+    if (root / "usr/bin/ryoku-nvidia").is_file():
+        commands.append(["/usr/bin/ryoku-nvidia", "install"])
     has_bash = (root / "bin/bash").is_file() or (root / "usr/bin/bash").is_file()
     if has_bash and shutil.which("chroot"):
-        for script_name in scripts:
-            target_script = f"/usr/share/ryoku/hardware/drivers/{script_name}"
-            cmd = ["chroot", str(root), "/bin/bash", target_script]
+        for command in commands:
+            cmd = ["chroot", str(root), *command]
             try:
                 if runner:
                     runner(cmd)

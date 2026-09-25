@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- Install the Secure Boot signed NVIDIA driver on Turing and newer GPUs. The
+  ISO provisioner and the Fedora shell installer run `ryoku-nvidia install`,
+  which queues the Ryoku module key so the first boot opens MokManager. Any
+  failure leaves the system on nouveau.
+
 ### Removed
 - Remove the retired Arch Bubble Tea installer, shell-backend ISO payload,
   archiso profile, dedicated disabled workflows, and their stale documentation.

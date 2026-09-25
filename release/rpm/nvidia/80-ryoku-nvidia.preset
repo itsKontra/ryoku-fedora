@@ -1,0 +1,2 @@
+# Boot on nouveau when the signed module cannot load (key not yet enrolled).
+enable nvidia-fallback.service

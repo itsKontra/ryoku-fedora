@@ -141,7 +141,58 @@ DNF option semantics are documented in the
 [DNF5 manual](https://dnf5.readthedocs.io/en/latest/dnf5.8.html) and
 [distro-sync reference](https://dnf5.readthedocs.io/en/latest/commands/distro-sync.8.html).
 
-## Installer modes
+## Signed NVIDIA modules
+
+`nvidia/` publishes `ryoku-nvidia` to its own COPR project, `itskontra/ryoku-nvidia`.
+`publish.py` requires each project to be fed only by its own serialized
+workflow, and the desktop project must never interleave with a schedule.
+Hosts enable it through `ryoku-nvidia install` (`dnf copr enable`), only on a
+supported GPU. It is not a dependency COPR.
+
+COPR accepts only Fedora-allowed licenses, so the package carries NVIDIA's open
+kernel modules (`Dual MIT/GPL`) and no closed module. Those need a Turing or
+newer GPU. COPR cannot hold a signing key either, so the modules are signed
+before COPR sees them:
+
+1. `publish-nvidia-kmod.yml` runs every six hours. `prepare-srpm.sh` takes
+   the newest `xorg-x11-drv-nvidia` in RPM Fusion and the three newest kernels
+   tagged `f44-updates` in Koji (Fedora's default `installonly_limit`).
+   `fetch-kernels.py` downloads their signed `kernel-devel`. A run stops early
+   when COPR already has that driver for the newest kernel.
+2. It rebuilds RPM Fusion's own `nvidia-kmod` SRPM (taken from the signed
+   `akmod-nvidia`) in open mode, one kernel at a time, with the kmodtool signing
+   macros pointed at the Ryoku key. `verify-modules.sh` fails the build unless
+   every module names the Ryoku signer and certificate serial and `nvidia.ko`
+   reports the open license.
+3. The signed modules go into the `ryoku-nvidia` SRPM (`nvidia/ryoku-nvidia.spec`).
+   It installs them unchanged; `__os_install_post` is disabled so nothing
+   strips the signature. One `ryoku-nvidia-kmod-<kernel>` subpackage exists per
+   kernel. The main package requires the newest one and pins
+   `xorg-x11-drv-nvidia` to the same driver version. It conflicts with
+   `kernel-core` newer than the newest kernel, so `dnf upgrade` holds that
+   kernel until its module is published. It also conflicts with akmods.
+4. A keyless job rebuilds the SRPM and installs it with the RPM Fusion userspace
+   (`nvidia/test-install.sh`). Then COPR builds it, and the RPMs are verified
+   against the pinned COPR key and published with `publish.py`.
+
+**One-time setup.** Create the COPR project `itskontra/ryoku-nvidia` with the
+`fedora-44-x86_64` chroot and manual repository generation, as for
+`itskontra/ryoku`. Record its key fingerprint as the repository variable
+`RYOKU_NVIDIA_COPR_FINGERPRINT`. Then create the module key once:
+
+```sh
+release/rpm/nvidia/generate-mok-key.sh ~/ryoku-mok.priv
+gh secret set RYOKU_NVIDIA_MOK_KEY --env fedora-publish < ~/ryoku-mok.priv
+git add release/rpm/nvidia/ryoku-mok.der
+```
+
+Keep the private key offline after uploading it. The certificate is limited to
+module signing (EKU `1.3.6.1.4.1.2312.16.1.2`), so shim will not boot a
+bootloader signed with it. Anyone holding the key can still produce kernel
+modules that every enrolled machine loads, so treat it like the COPR
+credentials. Rotating it strands every enrolled machine until they enroll the
+new certificate, which is why `generate-mok-key.sh` refuses to overwrite one.
+
 
 For a packaged Fedora install, run the shell installer with
 `--install-mode=packages`. It verifies the pinned COPR key before configuring

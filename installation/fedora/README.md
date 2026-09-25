@@ -33,6 +33,9 @@ sysroot from Anaconda's `%post --nochroot --erroronfail`:
    - Configures logind clamshell policy (`/etc/systemd/logind.conf.d/10-ryoku-lid.conf`).
    - Applies BlueZ tuning to `/etc/bluetooth/main.conf` if present.
    - Stages and executes hardware vendor driver scripts (`intel.sh`, `amd.sh`, `vulkan.sh`).
+   - Runs `ryoku-nvidia install`: on a Turing or newer NVIDIA GPU it installs the
+     Secure Boot signed driver and queues the Ryoku module key for MokManager
+     (see "Out-of-Tree Modules & MOK Enrollment" below). A failure leaves nouveau.
 6. **Lockscreen**: Seeds the qylock in-session lockscreen bundle and `clockwork/orbital`
    theme into each login account’s home, wiring the themes link and setting theme preference.
 7. **Assets and Integration**: Seeds desktop entries, vendor MIME defaults
@@ -344,8 +347,17 @@ Fedora installation media and installed target preserve this chain of trust:
 
 4. **Out-of-Tree Modules & MOK Enrollment**:
    - `mokutil` is included in the base bootloader payload (`packages.list`).
-   - For DKMS or akmods packages (such as proprietary NVIDIA drivers or
-     `v4l2loopback`), enroll a local Machine Owner Key (MOK):
+   - **NVIDIA (Turing and newer)**: the installer installs `ryoku-nvidia`, whose
+     open kernel modules are prebuilt and signed with the Ryoku module key
+     (`release/rpm/nvidia/ryoku-mok.der`, limited to module signing). With
+     Secure Boot on it queues that key, so the first boot stops at the blue
+     `MokManager` (`mmx64.efi`) screen: select **Enroll MOK**, optionally
+     **View key 0** (`Ryoku NVIDIA module signing`), **Continue**, **Yes**, type
+     the password `ryoku` (US QWERTY), then **Reboot**. A skipped prompt boots on
+     nouveau; `ryoku doctor` queues it again. Details are in
+     `system/hardware/README.md`.
+   - Other DKMS or akmods modules (older NVIDIA branches, `v4l2loopback`) need a
+     local Machine Owner Key:
      1. Generate a local MOK keypair:
         ```sh
         sudo /usr/sbin/kmodgenca

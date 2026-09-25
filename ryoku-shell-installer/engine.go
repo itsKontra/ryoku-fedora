@@ -81,7 +81,7 @@ var devPkgs = []string{"go", "nodejs", "npm", "python", "python-pip", "python-pi
 
 var sparsePaths = []string{
 	"ryoku/lockscreen", "ryoku/assets", "ryoku/apps",
-	"system/hardware/drivers", "system/hardware/input",
+	"system/hardware/drivers", "system/hardware/gpu", "system/hardware/input",
 	"system/packages", "release/rpm",
 }
 
@@ -1080,6 +1080,11 @@ func stepDrivers(e *engine) error {
 		if err := e.cmd("", nil, "bash", filepath.Join(drv, s)); err != nil {
 			e.sayf(i18n.T("warning: %s did not finish; check its output and retry the driver setup before rebooting"), s)
 		}
+	}
+	// A Turing+ NVIDIA GPU gets the signed driver; a host akmod driver is kept.
+	nvidia := filepath.Join(e.payload, "system/hardware/gpu/ryoku-nvidia")
+	if err := e.sudo("bash", nvidia, "install"); err != nil {
+		e.sayf(i18n.T("warning: %s did not finish; check its output and retry the driver setup before rebooting"), "ryoku-nvidia")
 	}
 	return nil
 }
