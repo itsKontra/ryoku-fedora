@@ -28,7 +28,7 @@
 #   --skip-closure-verify    Skip isolated installroot closure resolution check
 #   --cmdline <string>       Extra kernel cmdline arguments to append
 #   --fast-boot              Set Grub default=0 and timeout=5 for faster/direct boot
-#   --skip-mkefiboot         Skip rebuilding the EFI boot image (safe when remastering an existing ISO)
+#   --skip-mkefiboot         Developer use only: output may not boot from UEFI USB
 #   -h, --help               Show this help message
 set -euo pipefail
 
@@ -138,7 +138,9 @@ if [[ $STAGE_ONLY -eq 0 ]]; then
   command -v mkksiso >/dev/null 2>&1 || die "mkksiso (lorax) is required to preserve ISO boot metadata"
   command -v xorriso >/dev/null 2>&1 || die "xorriso is required to verify ISO boot metadata"
   if [[ $SKIP_MKEFIBOOT -eq 0 ]]; then
-    [[ $EUID -eq 0 ]] || die "ISO composition requires root to update the embedded EFI boot image (use --skip-mkefiboot to skip)"
+    [[ $EUID -eq 0 ]] || die "ISO composition requires root to update the embedded EFI boot image (use --stage-only for rootless staging)"
+  else
+    warn "Skipping the embedded EFI update: this ISO may not boot from UEFI USB and must not be released"
   fi
   if [[ -n "$BOOT_ISO" ]]; then
     [[ -f "$BOOT_ISO" ]] || die "Boot ISO not found: $BOOT_ISO"

@@ -40,6 +40,7 @@ jobs:
             lorax \
             pykickstart \
             xorriso \
+            mtools \
             createrepo_c \
             python3 \
             jq \
@@ -127,10 +128,12 @@ jobs:
             --work-dir work \
             --repo-dir work/repo \
             --skip-closure-verify \
-            --skip-mkefiboot \
             --verify-netinstall \
             --iso-name "$ISO_NAME" \
             --volid "Ryoku-44-x86_64"
+
+      - name: Verify USB EFI boot configuration
+        run: bash installation/fedora/verify-iso-efi.sh "out/$ISO_NAME"
 
       - name: Verify checksum and provenance
         run: |

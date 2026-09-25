@@ -114,6 +114,7 @@ echo "=== 6. Remastering existing boot media and inspecting boot metadata ==="
   --repo-dir "$work/repo" --out-dir "$work/out" --work-dir "$work/staging" \
   --iso-name test-ryoku-44.iso --skip-closure-verify
 (cd "$work/out" && sha256sum -c test-ryoku-44.iso.sha256)
+bash "$root/installation/fedora/verify-iso-efi.sh" "$work/out/test-ryoku-44.iso"
 grep -Eq 'El Torito boot img :.*UEFI' "$work/out/boot-metadata.txt"
 grep -Eq 'System area summary:.*GPT' "$work/out/boot-metadata.txt"
 

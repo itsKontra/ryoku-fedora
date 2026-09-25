@@ -322,10 +322,17 @@ Fedora installation media and installed target preserve this chain of trust:
      `grubx64.efi`, `vmlinuz`) remain untouched and valid.
    - `mkksiso` updates both root ISO configuration and the embedded El Torito
      FAT image `images/efiboot.img`.
-   - The `--skip-mkefiboot` flag is reserved for rootless developer staging.
+   - The `--skip-mkefiboot` flag is only for developer experiments, not release
+     media: the embedded GRUB configuration retains the source ISO's volume
+     label and Kickstart arguments, which can break booting from a UEFI USB.
+     Use `--stage-only` for rootless payload staging.
      Official release builds require root to update `images/efiboot.img`,
      guaranteeing UEFI systems booting the embedded partition execute the
      matching Kickstart parameters.
+   - Release builds run `bash installation/fedora/verify-iso-efi.sh ISO` before
+     uploading. This requires `xorriso` and `mtools`, compares the embedded and
+     outer GRUB configurations, and checks the installer kernel and initrd.
+     It does not replace a Secure Boot test on a VM or physical USB.
 
 3. **Kernel Lockdown Mode Compatibility**:
    - Booting with Secure Boot enables Linux kernel lockdown mode (`integrity`).

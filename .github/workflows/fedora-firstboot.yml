@@ -51,7 +51,7 @@ jobs:
         run: |
           podman build -t ryoku-firstboot-test - <<'EOF'
           FROM registry.fedoraproject.org/fedora:44
-          RUN dnf -y install systemd python3 passwd fish sudo kbd glibc-all-langpacks rpm-build createrepo_c xorriso pykickstart
+          RUN dnf -y install systemd python3 passwd fish sudo kbd glibc-all-langpacks rpm-build createrepo_c xorriso mtools dosfstools pykickstart
           EOF
       - name: Test without network access
         run: |
