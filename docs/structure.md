@@ -140,9 +140,10 @@ System-level definition installed into the target.
 
 - `hardware/` hardware policy and helper scripts (shipped to `/usr/bin` by
   `ryoku-desktop`): `gpu/` (`ryoku-gpu`, `ryoku-gpu-detect`, `ryoku-gpu-mux`,
-  udev rule), `display/` (`ryoku-monitor`), `audio/` (`ryoku-mic`, the mic-gain
-  normalizer), `drivers/` (per-vendor
-  `nvidia`/`intel`/`amd`/`vulkan` install scripts), `power/` (`ryoku-hw-laptop`,
+  `ryoku-nvidia` the signed NVIDIA driver installer, udev rule), `display/`
+  (`ryoku-monitor`), `audio/` (`ryoku-mic`, the mic-gain normalizer),
+  `drivers/` (per-vendor `intel`/`amd`/`vulkan` install scripts), `power/`
+  (`ryoku-hw-laptop`,
   the shared laptop detector; `ryoku-idle`, the laptop-gated `hypridle` launcher;
   `ryoku-power`, the battery charge ceiling and PCIe link power). What actually
   moves power draw and temperature, measured, is in `docs/power.md`.
@@ -201,6 +202,10 @@ raw.githubusercontent.com serves them with no release infrastructure.
   staging, COPR publication, repository configuration, and package verification.
   Each component has one spec and, when needed, one staging recipe under
   `payload/`.
+  - `rpm/nvidia/` the Secure Boot signed NVIDIA open modules (`ryoku-nvidia`):
+    the build that signs RPM Fusion's module source for the newest Fedora
+    kernels, the spec that packages them, and the public module-signing
+    certificate. Published to its own COPR project by `publish-nvidia-kmod.yml`.
 
 ## Tooling
 

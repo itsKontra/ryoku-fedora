@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+#
+# ryoku-nvidia: the Secure Boot signed NVIDIA driver for Turing and newer GPUs.
+#
+#   ryoku-nvidia status    key=value facts (gpu, driver, secureboot, key), read by ryoku doctor
+#   ryoku-nvidia install   enable the ryoku-nvidia repository, install the driver, enroll the key
+#   ryoku-nvidia enroll    queue the Ryoku module key for MokManager on the next boot
+#
+# Only NVIDIA's open modules are published, and they need a GSP-firmware GPU
+# (Turing, GTX 16xx / RTX 20xx, and newer). Older GPUs stay on nouveau. A host
+# akmod driver is left alone.
+
+set -euo pipefail
+
+PCI_ROOT=${RYOKU_NVIDIA_PCI_ROOT:-/sys/bus/pci/devices}
+CERT=${RYOKU_NVIDIA_CERT:-/usr/share/ryoku/keys/ryoku-mok.der}
+COPR=itskontra/ryoku-nvidia
+# Fixed and documented: MokManager only accepts it from someone at the console,
+# and the enrollment request itself already needed root.
+PASSWORD=ryoku
+
+die() { echo "ryoku-nvidia: $*" >&2; exit 1; }
+
+# none | legacy | turing. Turing's first device ID is 0x1e00 (TU102); every
+# NVIDIA display controller below it predates GSP firmware.
+gpu_generation() {
+  local dev vendor class device found=none
+  for dev in "$PCI_ROOT"/*; do
+    [[ -r $dev/vendor && -r $dev/class && -r $dev/device ]] || continue
+    read -r vendor <"$dev/vendor"
+    read -r class <"$dev/class"
+    read -r device <"$dev/device"
+    [[ $vendor == 0x10de ]] || continue
+    [[ $class == 0x0300* || $class == 0x0302* ]] || continue
+    if (( device >= 0x1e00 )); then
+      echo turing
+      return
+    fi
+    found=legacy
+  done
+  echo "$found"
+}
+
+# ryoku | host | none
+driver_state() {
+  if rpm -q --quiet ryoku-nvidia; then
+    echo ryoku
+  elif rpm -q --quiet akmod-nvidia || rpm -q --quiet akmod-nvidia-open; then
+    echo host
+  else
+    echo none
+  fi
+}
+
+# on | off | unsupported
+secure_boot() {
+  local state
+  state=$(mokutil --sb-state 2>/dev/null) || { echo unsupported; return; }
+  case $state in
+    *"SecureBoot enabled"*) echo on ;;
+    *) echo off ;;
+  esac
+}
+
+# enrolled | pending | missing | nocert
+key_state() {
+  [[ -f $CERT ]] || { echo nocert; return; }
+  local result
+  result=$(mokutil --test-key "$CERT" 2>&1 || true)
+  case $result in
+    *"in the enrollment request"*) echo pending ;;
+    *"is not enrolled"*) echo missing ;;
+    *"enrolled"*) echo enrolled ;;
+    *) echo missing ;;
+  esac
+}
+
+# Anaconda's chroot binds /sys without the efivarfs mount mokutil writes to.
+mount_efivars() {
+  local vars=/sys/firmware/efi/efivars
+  [[ -d $vars ]] || return 0
+  mountpoint -q "$vars" || mount -t efivarfs efivarfs "$vars"
+}
+
+cmd_status() {
+  echo "gpu=$(gpu_generation)"
+  echo "driver=$(driver_state)"
+  echo "secureboot=$(secure_boot)"
+  echo "key=$(key_state)"
+}
+
+cmd_enroll() {
+  (( EUID == 0 )) || die 'enroll needs root'
+  [[ -f $CERT ]] || die "missing $CERT; run: ryoku-nvidia install"
+  mount_efivars
+  if [[ $(secure_boot) != on ]]; then
+    echo 'ryoku-nvidia: Secure Boot is off; the signed modules load without enrollment.'
+    return 0
+  fi
+  case $(key_state) in
+    enrolled)
+      echo 'ryoku-nvidia: the Ryoku module key is already enrolled.'
+      return 0
+      ;;
+    pending) ;;
+    *)
+      local hash
+      hash=$(mktemp)
+      mokutil --generate-hash="$PASSWORD" >"$hash"
+      mokutil --import "$CERT" --hash-file "$hash" || { rm -f "$hash"; die 'mokutil could not queue the key'; }
+      rm -f "$hash"
+      ;;
+  esac
+  mokutil --timeout -1 || true
+  cat <<EOF
+ryoku-nvidia: the Ryoku module key is queued for enrollment.
+  Reboot. In the blue MokManager screen choose "Enroll MOK", "Continue", "Yes",
+  type the password: $PASSWORD   (the keyboard is US QWERTY there), then "Reboot".
+  Until then the desktop runs on nouveau.
+EOF
+}
+
+cmd_install() {
+  (( EUID == 0 )) || die 'install needs root'
+  case $(gpu_generation) in
+    none)
+      echo 'ryoku-nvidia: no NVIDIA GPU detected, nothing to do.'
+      return 0
+      ;;
+    legacy)
+      echo 'ryoku-nvidia: this NVIDIA GPU predates Turing and has no open module; it stays on nouveau.'
+      return 0
+      ;;
+  esac
+  if [[ $(driver_state) == host ]]; then
+    echo 'ryoku-nvidia: keeping the installed akmod NVIDIA driver.'
+    return 0
+  fi
+  dnf copr --help >/dev/null 2>&1 || dnf -y install dnf5-plugins
+  dnf -y copr enable "$COPR"
+  if ! dnf -y install ryoku-nvidia; then
+    die 'could not install ryoku-nvidia (no network, or no signed module for the installed kernel yet); nouveau stays active, retry later with: sudo ryoku-nvidia install'
+  fi
+  cmd_enroll
+}
+
+case ${1:-} in
+  status) cmd_status ;;
+  install) cmd_install ;;
+  enroll) cmd_enroll ;;
+  -h | --help | '') sed -n '3,11p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) die "unknown command: $1" ;;
+esac

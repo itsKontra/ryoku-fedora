@@ -35,6 +35,13 @@ reports what that lane is holding (`N system package(s) waiting`), `ryoku
 status` prints it as `system:`, and the Hub lists it under SYSTEM PACKAGES;
 `ryoku update --system` runs both lanes in one command for those who want that.
 
+One opt-in exception: a Fedora box running the Secure Boot signed NVIDIA driver
+(`ryoku-nvidia`) holds kernels newer than the newest one it has a signed module
+for. The package conflicts with them, so the distribution lane skips that
+kernel until the module is published instead of booting it without a GPU
+driver. Ryoku still decides nothing about when the kernel moves; it only waits
+for the module. See `system/hardware/README.md`.
+
 - A **dev box** runs the checkout: `ryoku deploy` builds the binaries and lays
   `ryoku/` into `~/.config`. `ryoku update` on it tracks `origin/main` (the git
   channel) and redeploys.

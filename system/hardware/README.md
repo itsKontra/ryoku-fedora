@@ -24,6 +24,11 @@ in the machine, and do not waste power doing it.
     when it sees the condition. See `docs/power.md`.
   - `90-ryoku-gpu.rules` A udev rule that gives every GPU a stable, predictable
     name under `/dev/dri` so the pin keeps working across reboots.
+  - `ryoku-nvidia` The Secure Boot signed NVIDIA driver. `install` enables the
+    ryoku-nvidia repository and installs the signed open modules on a Turing or
+    newer GPU, then `enroll` queues the Ryoku module key for MokManager.
+    `status` prints the GPU, driver, Secure Boot and key facts `ryoku doctor`
+    reads. See "Signed NVIDIA driver" below.
 - `display/` Backlight and output policy. The scaling tool itself moved to the
   compositor payload (`ryoku/hyprland/scripts/ryoku-monitor`): it speaks the
   compositor's output config, so each window manager ships its own.
@@ -165,16 +170,34 @@ transactions; run vendor scripts from this directory so it remains available.
 - Intel: Mesa OpenGL/Vulkan, `intel-gpu-firmware`, `alsa-sof-firmware`, and
   `libva-intel-media-driver` unless RPM Fusion's full media driver is installed.
 - Vulkan: `vulkan-loader` for any detected graphics device.
-NVIDIA drivers remain managed by the host Fedora installation. Ryoku does not
-install or rebuild NVIDIA akmods, enroll module-signing keys, or change Secure
-Boot. The installer has no proprietary-driver toggle, and Fedora doctor leaves
-NVIDIA boot configuration alone. Existing GPU detection, display routing and
-MUX controls remain available.
+NVIDIA is covered by `gpu/ryoku-nvidia` (below), not a vendor script here.
 
 The Fedora shell installer runs these helpers after installing the desktop,
 including in source mode. Vendor scripts skip absent hardware. DNF handles
 already-installed packages. `RYOKU_DRYRUN=1` or `--dry-run` prints planned changes.
 The installer reports driver failures and continues.
+
+## Signed NVIDIA driver
+
+`ryoku-nvidia install` runs during installation and by hand afterwards. It acts
+only on a Turing or newer NVIDIA GPU (PCI device 0x1e00 and up, the GSP-firmware
+generations NVIDIA's open modules require); older cards stay on nouveau, and a
+host `akmod-nvidia` install is left alone. It installs `ryoku-nvidia`, which
+carries NVIDIA's open modules prebuilt for the newest Fedora kernels and signed
+with the Ryoku module key, plus RPM Fusion's matching userspace. No compiler
+lands on the machine.
+
+With Secure Boot on, the kernel loads the modules only after the Ryoku key is
+enrolled. `ryoku-nvidia enroll` queues it with `mokutil` and sets MokManager to
+wait for input. On the next boot the blue MokManager screen asks to approve it:
+choose "Enroll MOK", "Continue", "Yes", and type the password `ryoku` (US
+QWERTY). Until then `nvidia-fallback.service` boots the desktop on nouveau.
+`ryoku doctor` re-queues a skipped enrollment and suggests `ryoku-nvidia
+install` for a supported GPU that is still on nouveau.
+
+`ryoku-nvidia` holds kernels newer than the newest one it has a module for, so
+`dnf upgrade` skips such a kernel until the signed module is published (a build
+runs every six hours). The package build is described in `release/rpm/README.md`.
 
 The ASUS AMD/NVIDIA backlight workaround uses
 [Fedora's grubby kernel-argument interface](https://fedoraproject.org/wiki/GRUB_2)
