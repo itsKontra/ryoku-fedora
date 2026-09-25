@@ -213,6 +213,7 @@ func reconcilers() []reconciler {
 		{i18n.T("Kepler NVIDIA recovery"), reconcileKeplerNvidia},
 		{i18n.T("NVIDIA boot reliability"), reconcileNvidiaModeset},
 		{i18n.T("NVIDIA update guard hook"), reconcileNvidiaGuardHook},
+		{i18n.T("Secure Boot signed NVIDIA driver"), reconcileNvidiaSigned},
 		{i18n.T("pending config (.pacnew)"), reconcilePacnew},
 		{i18n.T("orphaned packages"), reconcileOrphans},
 	}
