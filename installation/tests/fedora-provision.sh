@@ -89,7 +89,8 @@ chmod 755 "$target/usr/bin/ryoku" "$target/usr/bin/ryoku-wm-hyprland"
 # Model extras already supplied by the package payload, with no network needed.
 for asset in share/icons/Bibata-Modern-Ice/cursors/left_ptr \
   share/fonts/SpaceGrotesk/regular.otf share/fonts/MaterialSymbolsRounded.ttf \
-  share/fonts/JetBrainsMonoNerdFont/regular.ttf bin/matugen; do
+  share/fonts/JetBrainsMonoNerdFont/regular.ttf \
+  share/fonts/SpaceMonoNerdFont/regular.ttf bin/matugen; do
   install -Dm644 /etc/hostname "$target/usr/$asset"
 done
 

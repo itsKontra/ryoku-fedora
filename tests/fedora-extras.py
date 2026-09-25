@@ -83,6 +83,21 @@ class Extras(unittest.TestCase):
             self.assertTrue(target.is_file())
             self.assertEqual(target.read_bytes(), font_data)
 
+    def test_space_mono_nerd_fonts_extraction(self):
+        import io, tarfile
+        blob = io.BytesIO()
+        with tarfile.open(fileobj=blob, mode='w:xz') as archive:
+            font_data = b'\x00\x01\x00\x00mock font data'
+            info = tarfile.TarInfo('SpaceMonoNerdFont-Regular.ttf')
+            info.size = len(font_data)
+            archive.addfile(info, io.BytesIO(font_data))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(extra, 'download', return_value=blob.getvalue()):
+                extra.install('space-mono-nerd-fonts', root)
+            target = root / 'share/fonts/SpaceMonoNerdFont/SpaceMonoNerdFont-Regular.ttf'
+            self.assertEqual(target.read_bytes(), font_data)
+
     def test_truncated_download_fails_checksum(self):
         import io
         with patch.object(extra.urllib.request, 'urlopen', return_value=io.BytesIO(b'partial')):
