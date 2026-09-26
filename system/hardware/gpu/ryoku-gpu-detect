@@ -331,7 +331,7 @@ beneficial() {
   # passthrough owns the pin file itself (the iGPU solo, dGPU free for a VM).
   # RYOKU_GPU_MODE_SET lets `ryoku-gpu mode <m>` override the stored choice
   # for the call that applies the new one.
-  case "${RYOKU_GPU_MODE_SET:-$(gpu_mode_choice)}" in
+  case "${RYOKU_GPU_MODE_SET:-$(gpu_mode_choice "")}" in
     hybrid | passthrough) return 1 ;;
   esac
   # An external GPU is hot-plugged on purpose for power, so pin it anywhere.
