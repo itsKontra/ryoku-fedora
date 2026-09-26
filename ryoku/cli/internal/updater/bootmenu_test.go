@@ -173,3 +173,25 @@ func TestBLSKernelsSkipsRescueAndTwins(t *testing.T) {
 		t.Fatalf("kernels = %q, want %q", got, want)
 	}
 }
+
+func TestSnapshotsListedNeedsAKernelCopy(t *testing.T) {
+	old := bootDir
+	bootDir = t.TempDir()
+	defer func() { bootDir = old }()
+	if snapshotsListed() {
+		t.Fatal("listed with no kernel copies")
+	}
+	dir := filepath.Join(snapshotKernelDir(), "6.17.1-300.fc44.x86_64")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if snapshotsListed() {
+		t.Fatal("listed with an empty kernel directory")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "initramfs.img"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !snapshotsListed() {
+		t.Fatal("not listed with a kernel copy")
+	}
+}

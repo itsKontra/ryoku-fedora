@@ -372,6 +372,19 @@ func modTime(path string) time.Time {
 	return time.Time{}
 }
 
+// snapshotsListed reports whether the last sync put any snapshot in the menu:
+// a kernel copy exists exactly while a listed snapshot boots it, and unlike
+// the menu file under /boot/grub2 it is readable without root.
+func snapshotsListed() bool {
+	entries, _ := os.ReadDir(snapshotKernelDir())
+	for _, e := range entries {
+		if sys.Exists(filepath.Join(snapshotKernelDir(), e.Name(), "initramfs.img")) {
+			return true
+		}
+	}
+	return false
+}
+
 func fileSize(path string) int64 {
 	if fi, err := os.Stat(path); err == nil {
 		return fi.Size()
