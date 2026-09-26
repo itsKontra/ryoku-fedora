@@ -4,7 +4,7 @@
 # is the policy; the path lists below are its machine-readable half.
 #
 #   ryoku-dev-sync-upstream --report          classify the pending upstream commits, change nothing
-#   ryoku-dev-sync-upstream                   merge upstream unstable-dev into the current branch
+#   ryoku-dev-sync-upstream                   merge upstream main into the current branch
 #   ryoku-dev-sync-upstream --ref <rev>       merge a specific upstream revision instead
 #
 # The merge is left uncommitted. Resolve what it lists, run the checks in
@@ -12,7 +12,7 @@
 set -euo pipefail
 
 upstream_url=https://github.com/neur0map/ryoku-arch
-upstream_branch=unstable-dev
+upstream_branch=main
 
 # Fedora owns these: a conflict keeps main and is listed for a manual port.
 fedora_owned='^(installation/fedora/|installation/tests/fedora-|installation/README\.md$|release/rpm/|\.github/workflows/(build-fedora-iso|fedora-firstboot|fedora-iso-vm|fedora-rpm|publish-copr)\.yml$|ryoku/cli/internal/sys/rpm(_test)?\.go$|ryoku-shell-installer/fedora_repo\.go$)'

@@ -71,7 +71,7 @@ jobs:
         if: steps.merge.outputs.state == 'clean'
         run: |
           candidate=$(git rev-parse MERGE_HEAD)
-          if git commit -m "Merge upstream unstable-dev ${candidate:0:9}" >"$RUNNER_TEMP/hooks.txt" 2>&1; then
+          if git commit -m "Merge upstream main ${candidate:0:9}" >"$RUNNER_TEMP/hooks.txt" 2>&1; then
             git push -u origin "${{ steps.merge.outputs.branch }}"
             echo "committed=true" >>"$GITHUB_OUTPUT"
           else
