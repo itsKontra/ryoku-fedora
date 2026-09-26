@@ -633,10 +633,19 @@ func updateStage2(pre string, withSystem bool) error {
 		progress.fail(err)
 		return err
 	}
+	generationGuardHeld := false
+	defer func() {
+		// A failed update may never restart the shell whose ExecStartPost would
+		// release the guard; left held, every lock and suspend blocks on it.
+		if generationGuardHeld {
+			_ = runPowerHelper("ryoku-power-cutover", "generation-guard-stop")
+		}
+	}()
 	if graphicalPresent {
 		// Stop admission before quiescing the old daemon. New launchers queue at
 		// this boundary; already-loaded wrappers can still use the old daemon to
 		// complete their ordered unlock.
+		generationGuardHeld = true
 		if err := runPowerHelper("ryoku-power-cutover", "generation-guard-start"); err != nil {
 			progress.fail(err)
 			return err
@@ -735,6 +744,7 @@ func updateStage2(pre string, withSystem bool) error {
 			progress.fail(err)
 			return err
 		}
+		generationGuardHeld = false
 	}
 	if err := cutoverGuard.Release(); err != nil {
 		progress.fail(err)
