@@ -1,6 +1,6 @@
 # Merging Ryoku upstream into Fedora
 
-Use this playbook whenever upstream Ryoku (`unstable-dev` on
+Use this playbook whenever upstream Ryoku (`main` on
 https://github.com/neur0map/ryoku-arch) needs to be brought into this Fedora
 port. It keeps the desktop and product changes from Ryoku while keeping
 Fedora as the only delivery, installer, package-manager, and boot-stack
@@ -106,7 +106,7 @@ specs and `installation/fedora/packages.list` define Fedora delivery.
    starting: `git status --short`, `git fetch origin --prune`, then
    `git switch main` and `git pull --ff-only`.
 2. Review what is pending with `bin/ryoku-dev-sync-upstream --report`. It adds
-   the `upstream` remote when missing, fetches `unstable-dev`, and lists every
+   the `upstream` remote when missing, fetches `main`, and lists every
    new upstream commit as `auto` (version bumps and translation runs),
    `discard` (only paths on the discard list), `mixed`, or `portable`.
 3. Create `merge/fedora-upstream-YYYY-MM-DD` from `main` and run
