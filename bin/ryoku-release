@@ -4,8 +4,8 @@
 #   ryoku-release <X.Y.Z[-rc.N]>
 #
 # The annotated v<version> tag is the only human version Ryoku has. Pushing it
-# runs build-fedora-iso.yml, which waits for the signed RPMs of this commit,
-# builds the ISO, and publishes the GitHub release with notes harvested from
+# runs publish-copr.yml, which republishes this commit's signed RPMs, builds
+# the ISO, and publishes the GitHub release with notes harvested from
 # the Note: trailers since the previous release (bin/ryoku-release-notes).
 #
 # Bump the minor for a release carrying a Note: New or Note: Removed, the patch
@@ -53,4 +53,4 @@ read -r -p "Push $tag? [y/N] " answer
 
 git tag -a "$tag" -m "Ryoku $tag"
 git push origin "refs/tags/$tag"
-echo "Pushed $tag; build-fedora-iso.yml publishes the release."
+echo "Pushed $tag; publish-copr.yml publishes the release."

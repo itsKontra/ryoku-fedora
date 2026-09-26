@@ -1,9 +1,8 @@
 name: Build Fedora ISO
 
+# a v* tag reaches this through publish-copr.yml once its RPMs are published
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_call:
   workflow_dispatch:
     inputs:
       base_iso_url:
@@ -55,7 +54,11 @@ jobs:
         run: |
           set -euo pipefail
           repo_url='https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-44-x86_64/'
-          expected_version="0.$(git rev-list --count HEAD)"
+          expected="0.$(git rev-list --count HEAD)-"
+          # a tag waits for its own rebuild, not the main build of the same commit
+          if [[ $GITHUB_EVENT_NAME != workflow_dispatch ]]; then
+            expected+="${{ github.run_number }}."
+          fi
           mapfile -t packages < <(
             awk '/^Name:[[:space:]]+/ { print $2 }' release/rpm/*.spec | sort -u
           )
@@ -64,21 +67,21 @@ jobs:
             missing=()
             for package in "${packages[@]}"; do
               version=$(
-                dnf5 --disablerepo='*' \
+                dnf5 --refresh --disablerepo='*' \
                   --repofrompath="RyokuCOPR,$repo_url" \
-                  repoquery --latest-limit=1 --qf '%{version}' "$package" \
+                  repoquery --latest-limit=1 --qf '%{version}-%{release}' "$package" \
                   2>/dev/null || true
               )
-              [[ "$version" == "$expected_version" ]] || missing+=("$package")
+              [[ "$version" == "$expected"* ]] || missing+=("$package")
             done
 
             if ((${#missing[@]} == 0)); then
-              echo "Signed Ryoku RPMs for version $expected_version are"
+              echo "Signed Ryoku RPMs for ${expected%[-.]} are"
               echo "available."
               break
             fi
 
-            echo "Waiting for signed Ryoku RPMs at version $expected_version:"
+            echo "Waiting for signed Ryoku RPMs at ${expected%[-.]}:"
             echo "${missing[*]}"
             sleep 60
           done
