@@ -20,7 +20,9 @@ import (
 //
 //   - /etc/grub.d/42_ryoku_snapshots, rendered into grub.cfg once, sources
 //     snapshotMenuCfg, which `ryoku boot-menu sync` rewrites after every
-//     snapshot (the snapper plugin starts ryoku-snapshot-menu.service).
+//     snapshot: ryoku-snapshot-menu.path starts ryoku-snapshot-menu.service
+//     when /.snapshots changes, which the snapper plugin makes sure of once a
+//     snapshot is complete.
 //   - GRUB cannot read the root filesystem on an encrypted install, so each
 //     kernel version a snapshot needs gets a copy on /boot under
 //     snapshotKernelDir: Fedora's signed vmlinuz, which shim and GRUB verify
@@ -68,7 +70,18 @@ func BootMenu(args []string) error {
 	}
 	switch {
 	case len(args) == 1 && args[0] == "sync":
-		return syncSnapshotMenu()
+		// the path unit fires as soon as snapper starts a snapshot, and
+		// systemd does not restart a unit that is still running, so go again
+		// until /.snapshots holds still.
+		for {
+			before := modTime(snapshotsDir)
+			if err := syncSnapshotMenu(); err != nil {
+				return err
+			}
+			if modTime(snapshotsDir).Equal(before) {
+				return nil
+			}
+		}
 	case len(args) == 1 && args[0] == "restored":
 		return snapshotRestored()
 	}
@@ -350,6 +363,13 @@ func newerThan(dir, path string) bool {
 		return nil
 	})
 	return newer
+}
+
+func modTime(path string) time.Time {
+	if fi, err := os.Stat(path); err == nil {
+		return fi.ModTime()
+	}
+	return time.Time{}
 }
 
 func fileSize(path string) int64 {

@@ -169,10 +169,14 @@ submenu around them (`system/bootmenu/`, issue #48).
 
 - **The menu.** `/etc/grub.d/42_ryoku_snapshots` is rendered into `grub.cfg`
   once and only sources `/boot/grub2/ryoku-snapshots.cfg`. A snapper plugin
-  (`/usr/libexec/snapper/plugins/50-ryoku-boot-menu`) starts
-  `ryoku-snapshot-menu.service` after every snapshot is created or deleted;
-  it runs `ryoku boot-menu sync`, which rewrites that file. No
-  `grub2-mkconfig` per snapshot, and Fedora's BLS entries are never touched.
+  (`/usr/libexec/snapper/plugins/50-ryoku-boot-menu`) touches `/.snapshots`
+  after every snapshot is created or deleted, and `ryoku-snapshot-menu.path`
+  starts `ryoku-snapshot-menu.service` when that directory changes. SELinux
+  lets snapperd neither start units nor write a file systemd may watch, but
+  systemd may watch `/.snapshots`. The service runs `ryoku boot-menu sync`,
+  which rewrites that file, and syncs again until `/.snapshots` holds still.
+  No `grub2-mkconfig` per snapshot, and Fedora's BLS entries are never
+  touched.
 - **Kernels.** GRUB cannot read an encrypted root, so each kernel version a
   snapshot needs gets a copy under `/boot/ryoku/snapshots/<kver>/`: Fedora's
   signed `vmlinuz`, which shim and GRUB verify like any kernel, and an

@@ -3,7 +3,8 @@
 # bootable from the GRUB menu (issue #48).
 #
 # case 1: the payload, the spec, the units and the CLI agree on names and
-#         paths, and the snapper plugin resyncs only after a snapshot changed.
+#         paths, and the snapper plugin touches /.snapshots only after a
+#         snapshot is created or deleted.
 # case 2: the initramfs restore hook, driven with stubbed dracut helpers
 #         against a fake btrfs top level: it swaps the snapshot in and keeps
 #         the old root, and leaves the disk alone on anything unexpected.
@@ -39,6 +40,7 @@ for dest in \
   usr/share/ryoku/grub/theme/theme.txt \
   usr/libexec/snapper/plugins/50-ryoku-boot-menu \
   usr/lib/systemd/system/ryoku-snapshot-menu.service \
+  usr/lib/systemd/system/ryoku-snapshot-menu.path \
   usr/lib/systemd/system/ryoku-snapshot-restored.service; do
   check "ryoku-desktop ships /$dest" has "$payload" "\"\$pkgdir/$dest\""
 done
@@ -47,14 +49,22 @@ check "ryoku ships the snapper config the installer seeds" has "$repo/release/rp
   '"$pkgdir/usr/share/ryoku/snapper/root.conf"'
 check "the doctor embeds that same file" has "$repo/ryoku/cli/internal/doctor/doctor.go" "//go:embed snapper-root.conf"
 check "%posttrans themes GRUB" has "$spec" "/usr/bin/ryoku-grub-menu install"
-check "%posttrans lists the snapshots on disk" has "$spec" "systemctl start --no-block ryoku-snapshot-menu.service"
-check "%post enables the restore follow-up" has "$spec" "systemctl enable ryoku-snapshot-restored.service"
+check "%posttrans lists the snapshots on disk and watches for more" has "$spec" \
+  "systemctl start --no-block ryoku-snapshot-menu.path ryoku-snapshot-menu.service"
+check "%post enables the restore follow-up and the menu trigger" has "$spec" \
+  "systemctl enable ryoku-snapshot-restored.service ryoku-snapshot-menu.path"
+check "%preun disables the menu trigger" has "$spec" \
+  "systemctl disable ryoku-snapshot-restored.service ryoku-snapshot-menu.path"
 check "%preun undoes the theme and the menu" has "$spec" "/usr/bin/ryoku-grub-menu purge"
 check "%postun drops them from grub.cfg" has "$spec" "grub2-mkconfig -o /boot/grub2/grub.cfg"
 for dep in grub2-tools btrfs-progs snapper dracut; do
   check "ryoku-desktop requires $dep" grep -qE "^Requires: +$dep\$" "$spec"
 done
 check "the menu unit runs the CLI sync" line "$bm/ryoku-snapshot-menu.service" "ExecStart=/usr/bin/ryoku boot-menu sync"
+check "the trigger watches /.snapshots" line "$bm/ryoku-snapshot-menu.path" "PathChanged=/.snapshots"
+check "the trigger starts the menu unit" line "$bm/ryoku-snapshot-menu.path" "Unit=ryoku-snapshot-menu.service"
+check "the plugin touches /.snapshots" has "$bm/snapper/50-ryoku-boot-menu" '${RYOKU_SNAPSHOTS_DIR:-/.snapshots}'
+check "the CLI rescans until /.snapshots holds still" grep -q 'modTime(snapshotsDir).Equal(before)' "$cli"
 check "the restored unit runs the CLI follow-up" line "$bm/ryoku-snapshot-restored.service" "ExecStart=/usr/bin/ryoku boot-menu restored"
 check "the restored unit waits for the hook's flag" line "$bm/ryoku-snapshot-restored.service" "ConditionPathExists=/run/ryoku/restored"
 check "the CLI reads the flag the hook writes" grep -q 'restoredFlag *= "/run/ryoku/restored"' "$cli"
@@ -64,16 +74,23 @@ check "the snippet sources the file the CLI writes" has "$bm/grub/42_ryoku_snaps
 check "the grub.d snippet renders" sh -c "sh '$bm/grub/42_ryoku_snapshots' | grep -q '^if \\[ -f '"
 check "the module is only built in on request" grep -q '^  return 255$' "$mod/module-setup.sh"
 
+plugin() { RYOKU_SNAPSHOTS_DIR="$work/snapshots" sh "$bm/snapper/50-ryoku-boot-menu" "$1" / btrfs 42; }
+touched() { test "$(stat -c %Y "$work/snapshots")" != 0; }
+mkdir "$work/snapshots" && touch -d @0 "$work/snapshots"
+for event in create-snapshot-pre modify-snapshot-post create-config; do
+  plugin "$event"
+done
+check "the plugin leaves /.snapshots alone before or besides a snapshot" test "$(stat -c %Y "$work/snapshots")" = 0
+plugin create-snapshot-post
+check "the plugin touches /.snapshots after a snapshot is created" touched
+touch -d @0 "$work/snapshots"
+plugin delete-snapshot-post
+check "the plugin touches /.snapshots after a snapshot is deleted" touched
+check "the plugin never starts a unit, which SELinux denies snapperd" \
+  test -z "$(grep -n systemctl "$bm/snapper/50-ryoku-boot-menu")"
+
 stubs="$work/bin"
 mkdir -p "$stubs"
-printf '#!/bin/sh\necho "$*" >>"%s/systemctl.log"\n' "$work" >"$stubs/systemctl"
-chmod +x "$stubs/systemctl"
-for event in create-snapshot-pre create-snapshot-post modify-snapshot-post delete-snapshot-post; do
-  PATH="$stubs:$PATH" sh "$bm/snapper/50-ryoku-boot-menu" "$event" / btrfs 42
-done
-check "the plugin resyncs after a snapshot is created or deleted, only" test \
-  "$(cat "$work/systemctl.log")" = "start --no-block ryoku-snapshot-menu.service
-start --no-block ryoku-snapshot-menu.service"
 
 # case 2
 # hook <script> <cmdline>: source a dracut hook with the dracut-lib helpers

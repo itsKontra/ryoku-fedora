@@ -161,7 +161,7 @@ systemctl enable ryoku-wifi-regdom.service >/dev/null 2>&1 || :
 # any login. Then give the kernels already installed a Ryoku console entry.
 systemctl --global disable grub-boot-success.timer >/dev/null 2>&1 || :
 /usr/lib/kernel/install.d/95-ryoku-console.install sync >/dev/null 2>&1 || :
-systemctl enable ryoku-snapshot-restored.service >/dev/null 2>&1 || :
+systemctl enable ryoku-snapshot-restored.service ryoku-snapshot-menu.path >/dev/null 2>&1 || :
 
 %posttrans
 # Theme GRUB and render the snapshot submenu's snippet into grub.cfg (the
@@ -174,7 +174,7 @@ systemctl enable ryoku-snapshot-restored.service >/dev/null 2>&1 || :
 # `ryoku update` retries or the box reboots.
 [ -d /run/systemd/system ] || exit 0
 systemd-detect-virt --quiet --chroot && exit 0
-systemctl start --no-block ryoku-snapshot-menu.service >/dev/null 2>&1 || :
+systemctl start --no-block ryoku-snapshot-menu.path ryoku-snapshot-menu.service >/dev/null 2>&1 || :
 [ -x /usr/bin/ryoku-power-cutover ] || exit 0
 /usr/bin/ryoku-power-cutover package
 
@@ -187,10 +187,11 @@ systemctl start --no-block ryoku-snapshot-menu.service >/dev/null 2>&1 || :
 [ "$1" -eq 0 ] || exit 0
 systemctl --global enable grub-boot-success.timer >/dev/null 2>&1 || :
 /usr/lib/kernel/install.d/95-ryoku-console.install purge >/dev/null 2>&1 || :
-systemctl disable ryoku-snapshot-restored.service >/dev/null 2>&1 || :
+systemctl disable ryoku-snapshot-restored.service ryoku-snapshot-menu.path >/dev/null 2>&1 || :
 /usr/bin/ryoku-grub-menu purge >/dev/null 2>&1 || :
 [ -d /run/systemd/system ] || exit 0
 systemd-detect-virt --quiet --chroot && exit 0
+systemctl stop ryoku-snapshot-menu.path >/dev/null 2>&1 || :
 [ -x /usr/bin/ryoku-power-cutover ] || exit 0
 /usr/bin/ryoku-power-cutover prepare-package
 

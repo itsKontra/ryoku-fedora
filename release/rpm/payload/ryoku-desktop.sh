@@ -250,8 +250,9 @@ EOF
     "$pkgdir/usr/lib/kernel/install.d/95-ryoku-console.install"
 
   # boot menu (system/bootmenu): the Ryoku GRUB theme and bootable snapshots.
-  # The snapper plugin resyncs the "Ryoku snapshots" submenu after every
-  # snapshot; %posttrans themes GRUB and renders the snippet into grub.cfg.
+  # The snapper plugin and ryoku-snapshot-menu.path resync the "Ryoku
+  # snapshots" submenu after every snapshot; %posttrans themes GRUB and
+  # renders the snippet into grub.cfg.
   local bm="$_repo/system/bootmenu"
   install -Dm755 "$bm/grub/ryoku-grub-menu" "$pkgdir/usr/bin/ryoku-grub-menu"
   install -Dm755 "$bm/grub/42_ryoku_snapshots" "$pkgdir/etc/grub.d/42_ryoku_snapshots"
@@ -260,6 +261,8 @@ EOF
     "$pkgdir/usr/libexec/snapper/plugins/50-ryoku-boot-menu"
   install -Dm644 "$bm/ryoku-snapshot-menu.service" \
     "$pkgdir/usr/lib/systemd/system/ryoku-snapshot-menu.service"
+  install -Dm644 "$bm/ryoku-snapshot-menu.path" \
+    "$pkgdir/usr/lib/systemd/system/ryoku-snapshot-menu.path"
   install -Dm644 "$bm/ryoku-snapshot-restored.service" \
     "$pkgdir/usr/lib/systemd/system/ryoku-snapshot-restored.service"
   local mod
