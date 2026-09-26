@@ -204,9 +204,12 @@ submenu around them (`system/bootmenu/`, issue #48).
 - **Theme.** `ryoku-grub-menu install` copies the theme and GRUB's Unifont to
   `/boot/grub2/themes/ryoku/` and sets `GRUB_TERMINAL_OUTPUT`, `GRUB_FONT`
   and `GRUB_THEME` in `/etc/default/grub`, rebuilding `grub.cfg` only when
-  that changed or it does not source the snapshot menu yet. The font is
-  pinned on `/boot`: left to itself, `grub2-mkconfig` would pick one from the
-  root filesystem, which GRUB cannot read when it is encrypted.
+  the theme or those keys changed or it does not source the snapshot menu
+  yet. The theme's black background is an image as well as a colour: with
+  only a colour, GRUB shows a bitmap error whenever an entry boots from a
+  submenu. The font is pinned on `/boot`: left to itself, `grub2-mkconfig`
+  would pick one from the root filesystem, which GRUB cannot read when it is
+  encrypted.
 
 `ryoku-desktop` ships it; `%posttrans` themes GRUB and lists the snapshots
 already on disk, so existing boxes get it on their next `ryoku update`. A new

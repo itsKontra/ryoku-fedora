@@ -257,6 +257,7 @@ EOF
   install -Dm755 "$bm/grub/ryoku-grub-menu" "$pkgdir/usr/bin/ryoku-grub-menu"
   install -Dm755 "$bm/grub/42_ryoku_snapshots" "$pkgdir/etc/grub.d/42_ryoku_snapshots"
   install -Dm644 "$bm/grub/theme/theme.txt" "$pkgdir/usr/share/ryoku/grub/theme/theme.txt"
+  install -Dm644 "$bm/grub/theme/background.png" "$pkgdir/usr/share/ryoku/grub/theme/background.png"
   install -Dm755 "$bm/snapper/50-ryoku-boot-menu" \
     "$pkgdir/usr/libexec/snapper/plugins/50-ryoku-boot-menu"
   install -Dm644 "$bm/ryoku-snapshot-menu.service" \

@@ -4,8 +4,8 @@
 # exactly as Fedora signs them (issue #48).
 #
 #   install   copy the theme onto /boot, point /etc/default/grub at it, and
-#             rebuild grub.cfg when that changed or grub.cfg does not source
-#             the snapshot submenu yet (ryoku-desktop %posttrans)
+#             rebuild grub.cfg when either changed or grub.cfg does not
+#             source the snapshot submenu yet (ryoku-desktop %posttrans)
 #   purge     undo all of it and drop the snapshot menu and its kernels
 #             (ryoku-desktop %preun on removal; %postun rebuilds grub.cfg)
 #
@@ -43,6 +43,12 @@ drop_key() {
   sed -i "/^$1=/d" "$defaults"
 }
 
+# copy_new <src> <dest>: copy when the content differs; returns 0 when it did.
+copy_new() {
+  cmp -s "$1" "$2" && return 1
+  cp -f "$1" "$2"
+}
+
 rebuild() {
   "$mkconfig" -o "$grub_dir/grub.cfg" >/dev/null
 }
@@ -50,12 +56,16 @@ rebuild() {
 install_menu() {
   [ -d "$grub_dir" ] && [ -f "$defaults" ] || return 0
   mkdir -p "$theme_dir"
-  cp -f "$shipped/theme.txt" "$theme_dir/theme.txt"
+  # grub2-mkconfig loads the image modules the theme directory needs, so a
+  # changed theme rebuilds grub.cfg too.
+  local changed=1 file
+  for file in "$shipped"/*; do
+    copy_new "$file" "$theme_dir/${file##*/}" && changed=0
+  done
   [ -f "$unifont" ] && cp -f "$unifont" "$theme_dir/unicode.pf2"
 
   # only Fedora's plain console becomes graphical; a serial or other chosen
   # terminal is kept, and the theme simply does not show there.
-  local changed=1
   case "$(terminal_output)" in
     "" | console) set_key GRUB_TERMINAL_OUTPUT gfxterm && changed=0 ;;
   esac

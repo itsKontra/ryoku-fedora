@@ -38,6 +38,7 @@ for dest in \
   usr/bin/ryoku-grub-menu \
   etc/grub.d/42_ryoku_snapshots \
   usr/share/ryoku/grub/theme/theme.txt \
+  usr/share/ryoku/grub/theme/background.png \
   usr/libexec/snapper/plugins/50-ryoku-boot-menu \
   usr/lib/systemd/system/ryoku-snapshot-menu.service \
   usr/lib/systemd/system/ryoku-snapshot-menu.path \
@@ -200,7 +201,8 @@ menu() {
 runs() { test "$(wc -l <"$work/mkconfig.log" 2>/dev/null || echo 0)" = "$1"; }
 
 menu install
-check "install copies the theme onto /boot" test -f "$grub/themes/ryoku/theme.txt" -a -f "$grub/themes/ryoku/unicode.pf2"
+check "install copies the theme onto /boot" test -f "$grub/themes/ryoku/theme.txt" \
+  -a -f "$grub/themes/ryoku/background.png" -a -f "$grub/themes/ryoku/unicode.pf2"
 check "install turns on the graphical terminal" line "$work/etc/grub" 'GRUB_TERMINAL_OUTPUT="gfxterm"'
 check "install points GRUB at the theme" line "$work/etc/grub" "GRUB_THEME=\"$grub/themes/ryoku/theme.txt\""
 check "install takes the font from /boot, not the root filesystem" line "$work/etc/grub" \
@@ -213,6 +215,10 @@ check "a second install does not repeat a key" test "$(grep -c '^GRUB_THEME=' "$
 : >"$grub/grub.cfg"
 menu install
 check "install rebuilds a grub.cfg that lost the snapshot menu" runs 2
+echo stale >>"$grub/themes/ryoku/theme.txt"
+menu install
+check "install rebuilds grub.cfg for a changed theme" runs 3
+check "install puts the shipped theme back" cmp -s "$bm/grub/theme/theme.txt" "$grub/themes/ryoku/theme.txt"
 
 mkdir -p "$work/boot/ryoku/snapshots/k" && : >"$grub/ryoku-snapshots.cfg"
 menu purge

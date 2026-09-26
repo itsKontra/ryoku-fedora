@@ -1,11 +1,14 @@
 # Ryoku GRUB theme: the desktop's default palette (paper #000000, ink
-# #cdc4ba, sun #e2342a) on the Unifont GRUB ships, so it needs no image or
-# font of its own. Installed to /boot/grub2/themes/ryoku by ryoku-grub-menu.
+# #cdc4ba, sun #e2342a) on the Unifont GRUB ships. Installed to
+# /boot/grub2/themes/ryoku by ryoku-grub-menu. The background is a black
+# image as well as a colour because GRUB, left with only a colour, fails to
+# scale a missing bitmap whenever an entry boots from a submenu.
 
 title-text: "Ryoku"
 title-font: "Unifont Regular 16"
 title-color: "#e2342a"
 desktop-color: "#000000"
+desktop-image: "background.png"
 message-font: "Unifont Regular 16"
 message-color: "#b0a9a0"
 terminal-font: "Unifont Regular 16"
