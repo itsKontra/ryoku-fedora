@@ -306,7 +306,48 @@ func TestLatestAvailableRPMPicksNewestBuild(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
-	if got := latestAvailable("ryoku-desktop"); got != "0.3723-8.fc44" {
+	if got := latestAvailable("ryoku-desktop", false); got != "0.3723-8.fc44" {
 		t.Fatalf("latestAvailable = %q, want the single newest build", got)
+	}
+}
+
+// The status check runs as the user, whose dnf cache can lag the root one
+// `ryoku update` refreshed. A repo view older than the running package must
+// not read as an update: the bar kept offering "Click to update" after one.
+func TestPackagedStatusOlderRepoIsNotAnUpdate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("RYOKU_GITHUB_API", srv.URL)
+	t.Setenv("RYOKU_REPO_SLUG", "owner/repo")
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+
+	r := packagedStatus("0.3916-35.fc44", "0.3739-24.fc44")
+
+	if r.Available || r.Behind != 0 || len(r.Updates) != 0 {
+		t.Fatalf("available=%v behind=%d updates=%v, want nothing pending", r.Available, r.Behind, r.Updates)
+	}
+	if r.Latest != "0.3916-35.fc44" {
+		t.Errorf("latest = %q, want the running version", r.Latest)
+	}
+}
+
+func TestLatestAvailableRPMRefreshRefetchesMetadata(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"for a in \"$@\"; do\n" +
+		"  if [ \"$a\" = \"--refresh\" ]; then printf '0.3916-35.fc44\\n'; exit 0; fi\n" +
+		"done\n" +
+		"printf '0.3739-24.fc44\\n'\n"
+	if err := os.WriteFile(filepath.Join(bin, "dnf"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	if got := latestAvailable("ryoku-desktop", false); got != "0.3739-24.fc44" {
+		t.Fatalf("cached latestAvailable = %q, want the cached answer", got)
+	}
+	if got := latestAvailable("ryoku-desktop", true); got != "0.3916-35.fc44" {
+		t.Fatalf("refreshed latestAvailable = %q, want the refetched answer", got)
 	}
 }
