@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# Start an upstream Ryoku sync as a real merge and resolve what has a fixed
+# answer, so only the conflicts that need a person are left. MergeToFedora.md
+# is the policy; the path lists below are its machine-readable half.
+#
+#   ryoku-dev-sync-upstream --report          classify the pending upstream commits, change nothing
+#   ryoku-dev-sync-upstream                   merge upstream unstable-dev into the current branch
+#   ryoku-dev-sync-upstream --ref <rev>       merge a specific upstream revision instead
+#
+# The merge is left uncommitted. Resolve what it lists, run the checks in
+# MergeToFedora.md, then commit with the hooks enabled.
+set -euo pipefail
+
+upstream_url=https://github.com/neur0map/ryoku-arch
+upstream_branch=unstable-dev
+
+# Fedora owns these: a conflict keeps main and is listed for a manual port.
+fedora_owned='^(installation/fedora/|installation/tests/fedora-|installation/README\.md$|release/rpm/|\.github/workflows/(build-fedora-iso|fedora-firstboot|fedora-iso-vm|fedora-rpm|publish-copr)\.yml$|ryoku/cli/internal/sys/rpm(_test)?\.go$|ryoku-shell-installer/fedora_repo\.go$)'
+# Arch and CachyOS delivery, plus what the port retired: never comes back.
+discard='^(installation/(backend|iso|tui)/|release/(packages|repo|gradle-offline)/|system/boot/|(.*/)?CHANGELOG\.md$|VERSION$|bin/ryoku-dev-verify-pkgbuild-deps$)'
+catalog='^ryoku/i18n/catalog/[^/]+\.json$'
+leak='pacman|yay|AUR|CachyOS|PKGBUILD|makepkg|pacstrap|archiso|mkinitcpio|limine|snapper'
+
+report_only=0
+ref=
+while (($#)); do
+	case $1 in
+	--report) report_only=1 ;;
+	--ref)
+		ref=${2:?--ref needs a revision}
+		shift
+		;;
+	*)
+		echo "usage: ryoku-dev-sync-upstream [--report] [--ref <rev>]" >&2
+		exit 2
+		;;
+	esac
+	shift
+done
+
+repo="$(git rev-parse --show-toplevel)"
+cd "$repo"
+
+if ! git remote get-url upstream >/dev/null 2>&1; then
+	git remote add upstream "$upstream_url"
+fi
+git fetch --quiet upstream "$upstream_branch"
+candidate=$(git rev-parse --verify "${ref:-upstream/$upstream_branch}^{commit}")
+base=$(git merge-base HEAD "$candidate")
+
+section() { printf '\n== %s\n' "$*"; }
+
+classify() {
+	local c subject files total arch
+	for c in $(git rev-list --reverse --first-parent --no-merges "$base..$candidate"); do
+		subject=$(git log -1 --format=%s "$c")
+		if [[ $subject =~ ^release:\ bump|i18n:\ regenerate ]]; then
+			printf 'auto      %s %s\n' "${c:0:9}" "$subject"
+			continue
+		fi
+		files=$(git diff-tree --no-commit-id --name-only -r "$c")
+		total=$(grep -c . <<<"$files" || true)
+		arch=$(grep -cE "$discard" <<<"$files" || true)
+		if ((arch == total)); then
+			printf 'discard   %s %s\n' "${c:0:9}" "$subject"
+		elif ((arch > 0)); then
+			printf 'mixed     %s %s\n' "${c:0:9}" "$subject"
+		else
+			printf 'portable  %s %s\n' "${c:0:9}" "$subject"
+		fi
+	done
+}
+
+section "Upstream range ${base:0:9}..${candidate:0:9}"
+commits=$(classify)
+printf '%s\n' "$commits"
+section "By kind"
+awk '{print $1}' <<<"$commits" | sort | uniq -c
+if ((report_only)); then
+	exit 0
+fi
+
+if [[ $(git symbolic-ref --short -q HEAD) == main ]]; then
+	echo "ryoku-dev-sync-upstream: run on a merge branch, not main (git switch -c merge/fedora-upstream-$(date +%F))" >&2
+	exit 1
+fi
+if [[ -n $(git status --porcelain --untracked-files=no) ]]; then
+	echo "ryoku-dev-sync-upstream: commit or stash local changes first" >&2
+	exit 1
+fi
+
+git merge --no-ff --no-commit "$candidate" >/dev/null 2>&1 || true
+[[ -f $(git rev-parse --git-path MERGE_HEAD) ]] || {
+	echo "ryoku-dev-sync-upstream: nothing to merge from ${candidate:0:9}" >&2
+	exit 0
+}
+
+kept_deleted=()
+discarded=()
+kept_main=()
+catalogs=()
+
+in_head() { git cat-file -e "HEAD:$1" 2>/dev/null; }
+
+# Upstream additions and edits to discarded paths, merged cleanly or not.
+while IFS= read -r path; do
+	[[ $path =~ $discard ]] || continue
+	in_head "$path" && continue
+	git rm --quiet --force --cached -- "$path"
+	rm -f -- "$path"
+	discarded+=("$path")
+done < <(git diff --cached --name-only HEAD --diff-filter=AMU)
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+while IFS= read -r path; do
+	[[ -n $path ]] || continue
+	if ! in_head "$path"; then
+		# main deleted it on purpose; a new upstream edit does not revive it.
+		git rm --quiet --force -- "$path"
+		kept_deleted+=("$path")
+	elif [[ $path =~ $fedora_owned ]]; then
+		git checkout --quiet --ours -- "$path"
+		git add -- "$path"
+		kept_main+=("$path")
+	elif [[ $path =~ $catalog ]]; then
+		git show ":1:$path" >"$tmp/base" 2>/dev/null || : >"$tmp/base"
+		git show ":2:$path" >"$tmp/ours"
+		git show ":3:$path" >"$tmp/theirs"
+		python3 ryoku/i18n/tools/merge3.py "$tmp/base" "$tmp/ours" "$tmp/theirs" "$path"
+		git add -- "$path"
+		catalogs+=("$path")
+	fi
+done < <(git diff --name-only --diff-filter=U)
+
+# Vendored seam copies follow ryoku/wm once the seam itself is resolved.
+if ! git diff --name-only --diff-filter=U -- ryoku/wm | grep -q .; then
+	while IFS= read -r copy; do
+		seam="ryoku/wm/$(basename "$copy")"
+		[[ -f $seam ]] || continue
+		cp -- "$seam" "$copy"
+		git add -- "$copy"
+	done < <(git ls-files -- '*/vendor/ryoku-wm/*.go' | grep -v '_test\.go$')
+fi
+
+list() {
+	local title=$1
+	shift
+	(($#)) || return 0
+	section "$title ($#)"
+	printf '  %s\n' "$@"
+}
+
+list "Discarded Arch paths" "${discarded[@]}"
+list "Kept deleted on main (upstream edited them)" "${kept_deleted[@]}"
+list "Merged catalogs key by key" "${catalogs[@]}"
+list "Kept main; port the upstream change by hand (git diff $base $candidate -- <path>)" "${kept_main[@]}"
+
+mapfile -t open < <(git diff --name-only --diff-filter=U)
+list "Conflicts to resolve" "${open[@]}"
+
+mapfile -t leaks < <(git diff --cached --name-only -G "$leak" HEAD -- . ':!docs/archived/**' ':!ryoku/i18n/catalog/**')
+list "Arch terms in the staged diff (each needs a reason or a translation)" "${leaks[@]}"
+
+section "Record for the PR"
+cat <<EOF
+Upstream range: $base..$candidate
+Merge commit parent: $candidate
+EOF
