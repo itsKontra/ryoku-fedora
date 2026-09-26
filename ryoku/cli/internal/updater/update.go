@@ -1486,7 +1486,7 @@ func printSnapshotTable(rows []snapshotRow) {
 	switch {
 	case snapshotsInBootMenu():
 		summary += i18n.T(", listed in the boot menu")
-	case sys.RPMManager() != "" && sys.Exists(snapshotMenuScript):
+	case sys.RPMManager() != "" && sys.Exists(snapshotMenuTool):
 		summary += i18n.T(", NOT in the boot menu (journalctl -u ryoku-snapshot-menu says why)")
 	case sys.RPMManager() != "":
 		summary += i18n.T(", NOT in the boot menu (ryoku-desktop ships it; run ryoku update)")
@@ -1509,7 +1509,7 @@ func shortSnapDate(d string) string {
 // in the GRUB snapshot submenu on Fedora, limine-snapper-sync under Limine.
 func snapshotsInBootMenu() bool {
 	if sys.RPMManager() != "" {
-		return sys.Exists(snapshotMenuScript) && snapshotsListed()
+		return sys.Exists(snapshotMenuTool) && snapshotsListed()
 	}
 	return sys.PkgInstalled("limine") &&
 		sys.PkgInstalled("limine-snapper-sync") &&

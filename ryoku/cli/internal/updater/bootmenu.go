@@ -36,10 +36,12 @@ import (
 //     not in the snapshot, so its entries are brought in line with the kernels
 //     the restored root has.
 const (
-	snapshotMenuID     = "ryoku-snapshots"
-	snapshotMenuScript = "/etc/grub.d/42_ryoku_snapshots"
-	snapshotDracutMod  = "ryoku-snapshot"
-	restoredFlag       = "/run/ryoku/restored"
+	snapshotMenuID = "ryoku-snapshots"
+	// ships beside /etc/grub.d/42_ryoku_snapshots; /etc/grub.d is root-only
+	// and `ryoku snapshots` runs as the user.
+	snapshotMenuTool  = "/usr/bin/ryoku-grub-menu"
+	snapshotDracutMod = "ryoku-snapshot"
+	restoredFlag      = "/run/ryoku/restored"
 	// a set-aside root is deleted this long after a restore; the newest one
 	// is always kept.
 	brokenRootKeep = 14 * 24 * time.Hour
