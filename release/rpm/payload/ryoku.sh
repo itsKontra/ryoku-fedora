@@ -1,28 +1,19 @@
 # Maintainer: Ryoku <releases@ryoku.dev>
 #
-# Ryoku control CLI (Go). single front door to update, rollback, snapshot, and
-# the config materialize step. orchestrates pacman, yay, snapper -- never
-# reimplements them.
-# built from in-repo source at ryoku/cli. the keyring subcommand talks to
-# gnome-keyring over D-Bus via godbus, which is vendored, so the signed-repo CI
-# builds offline regardless of whatever GOFLAGS makepkg picked up.
-pkgname=ryoku
-pkgver=${RYOKU_PKGVER:-0.1.0}
-pkgrel=1
-pkgdesc="Ryoku control CLI: updates, rollback, snapshots, materialize"
-arch=('x86_64')
-url="https://ryoku.dev"
-license=('GPL-3.0-or-later')
-depends=('pacman' 'pacman-contrib' 'snapper')
-optdepends=('yay: AUR package updates during ryoku update'
-            'lua: luac config-syntax pre-check for the Hyprland reconciler in ryoku doctor')
-makedepends=('go')
-source=()
-
+# Ryoku control CLI (Go): the single front door to update, rollback, snapshot,
+# and the config materialize step.
+#
+# RPM metadata and dependencies live in release/rpm/ryoku.spec. This sourced
+# recipe only builds from ryoku/cli and stages the payload for stage-package.sh.
+# The keyring subcommand's godbus is vendored, so the signed-repo CI builds
+# offline.
+startdir=${startdir:?stage-package.sh must set startdir}
+srcdir=${srcdir:?stage-package.sh must set srcdir}
+pkgdir=${pkgdir:?stage-package.sh must set pkgdir}
 _repo="$startdir/../../.."
 
 build() {
-  cd "$_repo/ryoku/cli"
+  cd "$_repo/ryoku/cli" || return
   CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryoku" .
 }
 
