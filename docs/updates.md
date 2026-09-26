@@ -111,14 +111,17 @@ guard. Without one, the boot counts: on the second, the guard tracks the
 previous release back (`ryoku track <from>`, then an explicit
 reinstall of `ryoku-desktop`; the Ryoku set only, the base system untouched),
 re-materializes every user's config from it, and leaves
-a notice `ryoku doctor` shows once. On a third it points the Limine boot menu
-at the pre-update snapshot entry, for the case where the packages were not what
-broke.
+a notice `ryoku doctor` shows once. On a third it turns to the pre-update
+snapshot, for the case where the packages were not what broke: under Limine it
+makes that snapshot's entry the default; on Fedora it sends the next boot, once,
+to the snapshot's read-only look entry in the GRUB menu (`grub2-reboot`), never
+to an unattended restore. The notice then says to run `ryoku rollback <id>`
+there to keep it.
 
-The revert steps are still the Arch build's: they run pacman and edit
-`/boot/limine.conf`. Fedora has one rolling COPR channel with no release tags to
-track back to, and boots through GRUB, so on a Fedora box the guard can arm but
-cannot revert yet. `sudo ryoku boot-guard --disarm` clears a marker by hand. The `ryoku`
+The second step is still the Arch build's: it runs pacman. Fedora has one
+rolling COPR channel with no release tags to track back to, so on a Fedora box
+that step fails and the guard moves on to the snapshot on the next boot.
+`sudo ryoku boot-guard --disarm` clears a marker by hand. The `ryoku`
 package ships the unit and its tmpfiles entry; the doctor enables the unit and
 prepares the record directory on every update, so boxes installed before it get
 it on their next update.
@@ -157,6 +160,55 @@ set, so recovery is a wheel user signing in and using `sudo`.
 
 All of it ships in `ryoku-desktop` and needs no unit enabled, so existing boxes
 get it on their next `ryoku update`.
+
+### Snapshots in the boot menu
+
+Fedora keeps shim, GRUB and its kernels exactly as Fedora signs them, so Secure
+Boot works on stock firmware; Ryoku adds a theme and a "Ryoku snapshots"
+submenu around them (`system/bootmenu/`, issue #48).
+
+- **The menu.** `/etc/grub.d/42_ryoku_snapshots` is rendered into `grub.cfg`
+  once and only sources `/boot/grub2/ryoku-snapshots.cfg`. A snapper plugin
+  (`/usr/libexec/snapper/plugins/50-ryoku-boot-menu`) starts
+  `ryoku-snapshot-menu.service` after every snapshot is created or deleted;
+  it runs `ryoku boot-menu sync`, which rewrites that file. No
+  `grub2-mkconfig` per snapshot, and Fedora's BLS entries are never touched.
+- **Kernels.** GRUB cannot read an encrypted root, so each kernel version a
+  snapshot needs gets a copy under `/boot/ryoku/snapshots/<kver>/`: Fedora's
+  signed `vmlinuz`, which shim and GRUB verify like any kernel, and an
+  initramfs built with the `ryoku-snapshot` dracut module
+  (`dracut --add ryoku-snapshot`; Fedora's own images stay as they are).
+  Copies are made while the kernel is still installed, shared by every
+  snapshot of that version, skipped when `/boot` would drop under 300 MiB
+  free, and pruned when no snapshot needs them.
+- **Two entries per snapshot.** *Look* boots it read-only: its initramfs
+  stacks a RAM overlay on the snapshot, so it runs normally and nothing on
+  disk changes. *Restore* runs in the initramfs after LUKS is unlocked, so an
+  encrypted disk restores like a plain one: it renames the root subvolume to
+  `<root>.broken-<time>`, puts a writable snapshot of the chosen one in its
+  place, and boots it. Anything unexpected leaves the disk alone.
+- **After a restore.** `/boot` is not in the snapshot. On the first boot of a
+  restored root, `ryoku-snapshot-restored.service` (`ryoku boot-menu
+  restored`) removes the BLS entries for kernels the restored root has no
+  modules for, adds entries for its own, makes the running kernel the
+  default, and leaves a notice for `ryoku doctor`. Set-aside roots are
+  deleted two weeks after the restore; the newest is always kept.
+- **Picking it.** `ryoku rollback <id>` explains both entries and, from a
+  terminal, offers to restore on the next boot only (`grub2-reboot`). The
+  boot guard's third step uses the look entry. The menu itself shows when
+  the previous boot never proved itself (see the console fallback).
+- **Theme.** `ryoku-grub-menu install` copies the theme and GRUB's Unifont to
+  `/boot/grub2/themes/ryoku/` and sets `GRUB_TERMINAL_OUTPUT`, `GRUB_FONT`
+  and `GRUB_THEME` in `/etc/default/grub`, rebuilding `grub.cfg` only when
+  that changed or it does not source the snapshot menu yet. The font is
+  pinned on `/boot`: left to itself, `grub2-mkconfig` would pick one from the
+  root filesystem, which GRUB cannot read when it is encrypted.
+
+`ryoku-desktop` ships it; `%posttrans` themes GRUB and lists the snapshots
+already on disk, so existing boxes get it on their next `ryoku update`. A new
+install also gets it from the installer, after Anaconda has written the
+bootloader config, which also seeds the snapper root config so the very first
+update is covered. Removing the package takes the theme and the menu out again.
 
 ## materialize: the config a user receives
 
@@ -332,9 +384,10 @@ On the box:
   that repository, so only the Ryoku set moves.
 - `ryoku track copr` (or `main`) points `RyokuCOPR` back at the COPR channel;
   stable, testing and release tags are refused.
-- `ryoku rollback` lists the system snapshots. COPR keeps a limited package
-  history, so there is no rollback to a release tag; DNF can downgrade only to
-  versions COPR still retains.
+- `ryoku rollback` lists the system snapshots, and `ryoku rollback <id>` restores
+  one from the GRUB menu (see "Snapshots in the boot menu"). COPR keeps a
+  limited package history, so there is no rollback to a release tag; DNF can
+  downgrade only to versions COPR still retains.
 - `ryoku version` prints `RELEASE=`: the release tag on a release build, the
   tag plus the commits past it otherwise.
 

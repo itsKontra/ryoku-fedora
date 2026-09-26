@@ -12,6 +12,10 @@ How an installed Ryoku machine is put together, separate from the desktop in
   drop-in and units that fall back to a text login on tty1 with a recovery
   banner, and the kernel-install plugin that adds a "Ryoku console" boot entry
   per kernel. See "The console fallback" in `docs/updates.md`.
+- `bootmenu/` The GRUB boot menu: the Ryoku theme, and snapper snapshots you can
+  look at read-only or restore from the "Ryoku snapshots" submenu, encrypted
+  disks included, with shim, GRUB and the kernels left as Fedora signs them.
+  See "Snapshots in the boot menu" in `docs/updates.md`.
 - `hardware/` Hardware setup. `gpu/` picks the most capable GPU and pins it for
   Hyprland, `display/` scales high-resolution screens, and `drivers/` installs the
   right packages per vendor. The GPU and monitor settings are written as Hyprland

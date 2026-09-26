@@ -57,6 +57,9 @@ Requires:       usbutils
 Requires:       kmod
 Requires:       dracut
 Requires:       grubby
+Requires:       grub2-tools
+Requires:       btrfs-progs
+Requires:       snapper
 Requires:       wireless-regdb
 Requires:       wireplumber
 Requires:       brightnessctl
@@ -158,24 +161,34 @@ systemctl enable ryoku-wifi-regdom.service >/dev/null 2>&1 || :
 # any login. Then give the kernels already installed a Ryoku console entry.
 systemctl --global disable grub-boot-success.timer >/dev/null 2>&1 || :
 /usr/lib/kernel/install.d/95-ryoku-console.install sync >/dev/null 2>&1 || :
+systemctl enable ryoku-snapshot-restored.service >/dev/null 2>&1 || :
 
 %posttrans
+# Theme GRUB and render the snapshot submenu's snippet into grub.cfg (the
+# installer does this itself, after Anaconda writes the bootloader config).
+# On a running system, list the snapshots already on disk in the background,
+# since a kernel image is built per kernel version they need.
+/usr/bin/ryoku-grub-menu install >/dev/null 2>&1 || :
 # Adopt the new sleep and lid policy in every live Hyprland or niri session,
 # then release the guard %pre took. A failure keeps sleep blocked until
 # `ryoku update` retries or the box reboots.
 [ -d /run/systemd/system ] || exit 0
 systemd-detect-virt --quiet --chroot && exit 0
+systemctl start --no-block ryoku-snapshot-menu.service >/dev/null 2>&1 || :
 [ -x /usr/bin/ryoku-power-cutover ] || exit 0
 /usr/bin/ryoku-power-cutover package
 
 %preun
-# Removal: hand the boot flag back to Fedora's timer and drop the console
-# entries while their plugin is still on disk, then keep a copy of the
+# Removal: hand the boot flag back to Fedora's timer, drop the console
+# entries while their plugin is still on disk and the GRUB theme and snapshot
+# menu while their helper is, then keep a copy of the
 # executor in /run so %postun can still hand the live sessions back to
 # logind's default policy.
 [ "$1" -eq 0 ] || exit 0
 systemctl --global enable grub-boot-success.timer >/dev/null 2>&1 || :
 /usr/lib/kernel/install.d/95-ryoku-console.install purge >/dev/null 2>&1 || :
+systemctl disable ryoku-snapshot-restored.service >/dev/null 2>&1 || :
+/usr/bin/ryoku-grub-menu purge >/dev/null 2>&1 || :
 [ -d /run/systemd/system ] || exit 0
 systemd-detect-virt --quiet --chroot && exit 0
 [ -x /usr/bin/ryoku-power-cutover ] || exit 0
@@ -183,6 +196,8 @@ systemd-detect-virt --quiet --chroot && exit 0
 
 %postun
 [ "$1" -eq 0 ] || exit 0
+# the theme and the snapshot snippet are gone; drop them from grub.cfg too.
+grub2-mkconfig -o /boot/grub2/grub.cfg >/dev/null 2>&1 || :
 [ -x /run/ryoku-power-cutover ] || exit 0
 /run/ryoku-power-cutover package
 

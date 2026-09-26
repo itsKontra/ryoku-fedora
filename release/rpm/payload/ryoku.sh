@@ -35,4 +35,8 @@ package() {
     "$pkgdir/usr/lib/systemd/system/ryoku-boot-guard.service"
   install -Dm644 "$_repo/ryoku/cli/systemd/ryoku.tmpfiles.conf" \
     "$pkgdir/usr/lib/tmpfiles.d/ryoku.conf"
+  # the canonical snapper root config the doctor embeds, for the Fedora
+  # installer to seed before the first update runs.
+  install -Dm644 "$_repo/ryoku/cli/internal/doctor/snapper-root.conf" \
+    "$pkgdir/usr/share/ryoku/snapper/root.conf"
 }

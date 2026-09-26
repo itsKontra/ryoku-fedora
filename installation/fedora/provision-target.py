@@ -264,6 +264,54 @@ def initialize_boot_guard(root):
         subprocess.run(["systemd-tmpfiles", f"--root={root}", "--create", str(tmpfiles_conf)], check=False, stderr=subprocess.DEVNULL)
 
 
+def seed_snapshots(root):
+    """Seed the snapper root config the ryoku package ships, so the very first
+    update already takes a snapshot pair. The kickstart makes /.snapshots its
+    own subvolume; a target without it, or with a config already, is left to
+    `ryoku doctor`."""
+    shipped = root / "usr/share/ryoku/snapper/root.conf"
+    snapshots = root / ".snapshots"
+    config = root / "etc/snapper/configs/root"
+    if not shipped.is_file() or not snapshots.is_dir() or config.exists():
+        return
+    config.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(shipped, config)
+    config.chmod(0o640)
+    snapshots.chmod(0o750)
+
+    sysconfig = root / "etc/sysconfig/snapper"
+    lines = sysconfig.read_text().splitlines() if sysconfig.is_file() else []
+    for i, line in enumerate(lines):
+        if line.startswith("SNAPPER_CONFIGS="):
+            names = line.split("=", 1)[1].strip().strip('"').split()
+            if "root" not in names:
+                lines[i] = 'SNAPPER_CONFIGS="%s"' % " ".join(names + ["root"])
+            break
+    else:
+        lines.append('SNAPPER_CONFIGS="root"')
+    sysconfig.parent.mkdir(parents=True, exist_ok=True)
+    sysconfig.write_text("\n".join(lines) + "\n")
+
+    timers = root / "etc/systemd/system/timers.target.wants"
+    timers.mkdir(parents=True, exist_ok=True)
+    link = timers / "snapper-cleanup.timer"
+    if not link.exists() and not link.is_symlink():
+        link.symlink_to("/usr/lib/systemd/system/snapper-cleanup.timer")
+
+
+def install_boot_menu(root, runner=None):
+    """Theme GRUB and render the snapshot submenu's snippet into grub.cfg. The
+    package scriptlet does this on updates; on a new install Anaconda writes
+    /etc/default/grub after the packages, so it runs again here, last."""
+    if not (root / "usr/bin/ryoku-grub-menu").is_file():
+        return
+    cmd = ["chroot", str(root), "/usr/bin/ryoku-grub-menu", "install"]
+    if runner:
+        runner(cmd)
+    else:
+        subprocess.run(cmd, check=False)
+
+
 def resolve_repo_dir(repo_dir=None):
     if repo_dir:
         candidate = Path(repo_dir)
@@ -907,6 +955,7 @@ def relabel_selinux(root, runner=None, home=RYOKU_HOME):
         str(root / "usr/lib/udev"),
         str(root / "usr/lib/modprobe.d"),
         str(root / "usr/lib/systemd"),
+        str(root / "boot/grub2"),
         str(root / home.lstrip("/")),
     ]
     targets = [t for t in targets if Path(t).exists()]
@@ -1003,6 +1052,8 @@ def provision(root, repo_dir=None, runner=None, allow_running=False, anaconda=Fa
         seed_lockscreen(root, repo_dir=repo_dir, home=home)
         materialize_config(root, runner=runner, user=user, home=home)
     run_hardware_drivers(root, repo_dir=repo_dir, runner=runner)
+    seed_snapshots(root)
+    install_boot_menu(root, runner=runner)
     if not anaconda:
         if allow_running:
             arm_firstboot(root, runner=runner, allow_running=True)
