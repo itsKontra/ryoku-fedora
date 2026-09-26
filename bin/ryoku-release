@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# ryoku-release: tag the tip of main as a Ryoku release.
+#
+#   ryoku-release <X.Y.Z[-rc.N]>
+#
+# The annotated v<version> tag is the only human version Ryoku has. Pushing it
+# runs build-fedora-iso.yml, which waits for the signed RPMs of this commit,
+# builds the ISO, and publishes the GitHub release with notes harvested from
+# the Note: trailers since the previous release (bin/ryoku-release-notes).
+#
+# Bump the minor for a release carrying a Note: New or Note: Removed, the patch
+# otherwise. See docs/updates.md, "Cutting a release".
+set -euo pipefail
+
+die() { echo "ryoku-release: $*" >&2; exit 1; }
+
+version=${1:?usage: ryoku-release <X.Y.Z[-rc.N]>}
+version=${version#v}
+tag="v$version"
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] || die "not a release version: $version"
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+git fetch --quiet origin main 'refs/tags/v*:refs/tags/v*' || die 'could not fetch main and the release tags'
+[[ -z $(git status --porcelain --untracked-files=no) ]] || die 'the checkout has uncommitted changes'
+[[ $(git rev-parse HEAD) == "$(git rev-parse origin/main)" ]] || die 'HEAD is not origin/main; switch to main and pull'
+git rev-parse -q --verify "refs/tags/$tag" >/dev/null && die "$tag already exists"
+
+previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD 2>/dev/null || true)
+# compare cores only: sort -V orders 1.0.0 before 1.0.0-rc.1, yet the final
+# release follows its candidates.
+if [[ -n $previous ]]; then
+  prev_core=${previous#v}
+  prev_core=${prev_core%%-*}
+  newest=$(printf '%s\n%s\n' "$prev_core" "${version%%-*}" | sort -V | tail -n1)
+  [[ $newest == "${version%%-*}" ]] || die "$tag does not follow $previous"
+fi
+
+if command -v gh >/dev/null; then
+  failing=$(gh run list --commit "$(git rev-parse HEAD)" --json conclusion,name \
+    --jq '.[] | select(.conclusion == "failure") | .name')
+  [[ -z $failing ]] || die "CI failed on this commit: $failing"
+fi
+
+echo "Releasing $tag ($(tr -d '[:space:]' < CODENAME)) from $(git rev-parse --short HEAD)"
+echo "Notes since ${previous:-the start of history}:"
+echo
+bin/ryoku-release-notes "$previous" HEAD
+echo
+read -r -p "Push $tag? [y/N] " answer
+[[ $answer == [yY] ]] || die 'aborted'
+
+git tag -a "$tag" -m "Ryoku $tag"
+git push origin "refs/tags/$tag"
+echo "Pushed $tag; build-fedora-iso.yml publishes the release."

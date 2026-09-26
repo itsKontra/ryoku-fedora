@@ -296,17 +296,8 @@ serves, and `manifest.json` beside it lists every package the release is made
 of, by lane (base, dev, hardware, AUR, first-party, compositor, provisioned),
 generated from the checkout by `build-repo.sh` and never hand-edited.
 
-A release is a tag: `main` advances only by fast-forward from `unstable-dev`,
-and publishing nothing on that push. The maintainer runs **Stable Release**
-(`bump_type: none` tags the `VERSION` main already carries; a bump rewrites it
-first), which tags `main`, publishes `releases/<tag>/`, moves the stable
-pointer onto it, records the ledger entry, and dispatches both release ISOs
-(plain Arch and CachyOS) from that frozen directory, so an ISO named for a
-release installs exactly that release. Arch itself keeps rolling between
-releases; only the Ryoku set is frozen.
-
-**Work on `unstable-dev` reaches testing on every push, and stable only when a
-release is tagged.**
+On Fedora every push to `main` publishes to the `copr` channel, and a release
+is a named point on that stream; see "Cutting a release" below.
 
 On a packaged box the channel is nothing but the `Server` line of the `[ryoku]`
 stanza, so there is no second state to drift from it:
@@ -336,6 +327,35 @@ already on a checkout is migrated onto packages by a plain track without
 `--source`: the checkout is retired as the update source (the `~/ryoku-arch`
 clone stays on disk) and `ryoku update` runs `pacman` from then on.
 
+### Cutting a release
+
+The annotated `v<X.Y.Z>` tag is the only human version Ryoku has; there is no
+version file. The RPM `Version` is `0.<commit count>` (`prepare-srpms.sh`), the
+one number dnf orders by, and never the release name. `/etc/ryoku-release`
+(`RELEASE=`) carries `git describe` of the build: `v0.73.0` on a release,
+`v0.73.0-5-gabc1234` past it, and `ryoku version` prints the same on a checkout.
+
+Bump the minor for a release carrying a `Note: New` or `Note: Removed`, the
+patch otherwise; `-rc.N` marks a candidate. Releases below 1.0 and candidates
+are GitHub prereleases. Release when there is something to announce or the ISO
+needs a refresh: `main` already ships continuously.
+
+From a clean `main` at `origin/main`, with CI green on that commit:
+
+```sh
+bin/ryoku-release 0.73.0
+```
+
+It checks the tree, the tag, the version order and CI, prints the notes the
+release will carry, and pushes the tag on confirmation. The tag then runs:
+
+- `publish-copr.yml`: rebuilds the tagged commit under a higher RPM revision so
+  boxes update onto the build whose `RELEASE=` names the release.
+- `build-fedora-iso.yml`: waits for the signed RPMs, builds the ISO, and creates
+  the GitHub release titled `Ryoku <CODENAME> <version>` with the notes
+  `bin/ryoku-release-notes` harvests from the `Note:` trailers since the
+  previous tag, then attaches the ISO and its checksum.
+
 ### Release names
 
 Every release line has a name from the creation stories Ryoku draws on (the
@@ -345,9 +365,8 @@ name changes when a line begins (the pre-1.0 line is Onogoro, the first
 island; 1.0 is Amaterasu) and every release inside the line keeps it. It
 travels with the release: `build-repo.sh` writes it into `release.json` and
 the ryoku-desktop package into `/etc/ryoku-release` (`NAME=`), the publish
-copies it into `releases/index.json`, the Stable Release and Release Notes
-workflows title the tag and the GitHub release with it (a line's first release
-opens with its story), and a box shows it in `ryoku version --pretty` (which
+copies it into `releases/index.json`, `build-fedora-iso.yml` titles the GitHub
+release with it, and a box shows it in `ryoku version --pretty` (which
 fastfetch's OS line uses), `ryoku status`, `ryoku rollback`, the update
 island (when the channel serves the next line) and the Hub's Updates page.
 

@@ -143,11 +143,9 @@ repo-relative path lives under `release/media/`:
 
     Note: New: redesigned wallpaper picker | release/media/wallpaper.gif
 
-A note only reaches a release if its commit reaches the tag intact, so `main`
-advances by fast-forward from `unstable-dev`, and a release is the **Stable
-Release** workflow run on `main` (`bump_type: none` tags the version `main`
-carries). Never squash-merge into a release
-branch: squashing collapses commits and drops their notes.
+A note only reaches a release if it reaches `main` intact: a squash merge must
+keep every `Note:` trailer in the squashed message. A release is a tag on
+`main` pushed by `bin/ryoku-release` (`docs/updates.md`, "Cutting a release").
 
 A release line carries a name (`CODENAME`, its story in `release/names.md`);
 the release is titled with it and a line's first release opens with the story.

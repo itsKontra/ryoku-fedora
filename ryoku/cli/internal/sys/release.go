@@ -40,14 +40,15 @@ var PacmanConf = "/etc/pacman.conf"
 // release a box runs; a var for tests.
 var ReleaseFile = "/etc/ryoku-release"
 
-// the shape stable-release.yml tags (bin/ryoku-release-bump): a core version
-// with an optional alpha/beta/rc counter. a testing build's name
-// (v0.56.0-beta.19.dev.363+g4d1cf63) is deliberately not one: nothing frozen
-// stands behind it, so it can be neither tracked nor gone back to.
+// the shape bin/ryoku-release tags: a core version with an optional rc counter
+// (alpha and beta name the releases from before the beta suffix was dropped).
+// a build past a release (v0.73.0-5-gabc1234, git describe) is deliberately not
+// one: nothing frozen stands behind it, so it can be neither tracked nor gone
+// back to.
 var releaseTagRe = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$`)
 
-// IsReleaseTag reports whether s names a frozen release (v0.55.7-beta.19,
-// v1.0.0), the shape stable-release.yml tags.
+// IsReleaseTag reports whether s names a frozen release (v0.73.0,
+// v1.0.0-rc.1), the shape bin/ryoku-release tags.
 func IsReleaseTag(s string) bool { return releaseTagRe.MatchString(s) }
 
 // ChannelServer is the [ryoku] Server line for a channel or release tag, or ""

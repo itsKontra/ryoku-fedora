@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       base_iso_url:
@@ -92,8 +90,6 @@ jobs:
             VERSION="${GITHUB_REF#refs/tags/}"
           elif [[ -n "${{ github.event.inputs.release_tag }}" ]]; then
             VERSION="${{ github.event.inputs.release_tag }}"
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
           else
             VERSION="snapshot-$(git rev-parse --short HEAD)"
           fi
@@ -156,13 +152,15 @@ jobs:
   release:
     name: "Attach ISO to GitHub Release"
     needs: build
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download built ISO artifacts
         uses: actions/download-artifact@v4
@@ -177,8 +175,6 @@ jobs:
           set -euo pipefail
           if [[ -n "${{ github.event.inputs.release_tag }}" ]]; then
             TAG="${{ github.event.inputs.release_tag }}"
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            TAG="${{ github.event.release.tag_name }}"
           else
             TAG="${GITHUB_REF#refs/tags/}"
           fi
@@ -188,7 +184,13 @@ jobs:
 
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG does not exist yet. Creating release..."
-            gh release create "$TAG" --title "Ryoku Fedora $TAG" --generate-notes
+            previous=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$TAG^" 2>/dev/null || true)
+            title="Ryoku $(tr -d '[:space:]' < CODENAME) ${TAG#v}"
+            MEDIA_REF="$TAG" bin/ryoku-release-notes "$previous" "$TAG" --title "$title" > "$RUNNER_TEMP/notes.md"
+            # a 0.x line or a release candidate is not yet a stable promise
+            prerelease=()
+            [[ $TAG == v0.* || $TAG == *-rc.* ]] && prerelease=(--prerelease)
+            gh release create "$TAG" --verify-tag --title "$title" --notes-file "$RUNNER_TEMP/notes.md" "${prerelease[@]}"
           fi
 
           echo "Attaching assets to release $TAG..."
