@@ -476,3 +476,66 @@ func reconcileNvidiaAutostart(checkOnly bool) recResult {
 	_ = sys.Run("systemctl", "--user", "reset-failed", "app-nvidia\\x2dsettings\\x2duser@autostart.service")
 	return fixedRes("masked nvidia-settings autostart in ~/.config/autostart (fails under Wayland)")
 }
+
+// ---- reconciler: NVIDIA sleep units ------------------------------------------
+
+// nvidiaSleepUnits are the systemd sleep hooks xorg-x11-drv-nvidia-power ships
+// and presets enabled. They save and restore the GPU's VRAM across
+// suspend/hibernate; with the driver's default NVreg_UseKernelSuspendNotifiers=1
+// they exit early (the kernel PM chain does the work), but boxes that turn the
+// notifier off depend on them. A box that carries them disabled has drifted
+// from the package's preset, repaired here.
+var nvidiaSleepUnits = []string{
+	"nvidia-suspend.service",
+	"nvidia-hibernate.service",
+	"nvidia-resume.service",
+}
+
+const nvidiaUnitDir = "/usr/lib/systemd/system"
+
+// planNvidiaSleepUnits decides from observed state: which of the units exist
+// and which are enabled. Pure, so the healthy-box silence and the
+// partial-enable repair are testable without a live systemd.
+func planNvidiaSleepUnits(nvidiaActive bool, exists map[string]bool, enabled map[string]bool) (missing []string, verdict string) {
+	if !nvidiaActive {
+		return nil, "no proprietary NVIDIA driver in use"
+	}
+	for _, u := range nvidiaSleepUnits {
+		if !exists[u] {
+			// xorg-x11-drv-nvidia-power not installed: nothing to enable.
+			return nil, "the NVIDIA sleep units are not installed on this machine"
+		}
+	}
+	for _, u := range nvidiaSleepUnits {
+		if !enabled[u] {
+			missing = append(missing, u)
+		}
+	}
+	if len(missing) == 0 {
+		return nil, "the NVIDIA sleep units are enabled"
+	}
+	return missing, ""
+}
+
+func reconcileNvidiaSleepUnits(checkOnly bool) recResult {
+	exists := map[string]bool{}
+	enabled := map[string]bool{}
+	for _, u := range nvidiaSleepUnits {
+		exists[u] = sys.Exists(nvidiaUnitDir + "/" + u)
+		enabled[u] = sys.UnitEnabled(u)
+	}
+	missing, verdict := planNvidiaSleepUnits(nvidiaDriverActive(), exists, enabled)
+	if verdict != "" {
+		return okRes(i18n.T("%s"), verdict)
+	}
+	if checkOnly {
+		return wouldRes(i18n.T("the NVIDIA sleep units (%s) are disabled, so VRAM is not saved across suspend the way the driver package presets them; a box with the kernel suspend notifier off wakes to a corrupted session"), strings.Join(missing, ", ")).
+			withFix(i18n.T("ryoku doctor  (enables them with sudo systemctl)"))
+	}
+	args := append([]string{"systemctl", "enable"}, missing...)
+	if err := sys.Sudo(args...); err != nil {
+		return failRes(i18n.T("could not enable %s: %v"), strings.Join(missing, ", "), err).
+			withFix(i18n.T("sudo systemctl enable %s"), strings.Join(missing, " "))
+	}
+	return fixedRes(i18n.T("enabled the NVIDIA sleep units so VRAM is preserved across suspend, matching the driver package's preset"))
+}

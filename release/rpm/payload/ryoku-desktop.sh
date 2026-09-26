@@ -213,6 +213,13 @@ EOF
   cp -a "$_repo/ryoku/lockscreen/qylock" "$pkgdir/usr/share/ryoku/lockscreen/qylock"
   install -Dm755 "$_repo/ryoku/lockscreen/install-qylock" \
     "$pkgdir/usr/share/ryoku/lockscreen/install-qylock"
+  install -Dm755 "$_repo/ryoku/lockscreen/ryoku-qylock-activate" \
+    "$pkgdir/usr/bin/ryoku-qylock-activate"
+  install -Dm755 "$_repo/ryoku/lockscreen/ryoku-qylock-lock" \
+    "$pkgdir/usr/bin/ryoku-qylock-lock"
+  install -Dm755 \
+    "$_repo/ryoku/lockscreen/qylock/quickshell-lockscreen/ryoku-qylock-unlock-prepare" \
+    "$pkgdir/usr/bin/ryoku-qylock-unlock-prepare"
   # the Wayland greeter compositor wrapper: weston --shell=kiosk at each
   # output's top mode, so the login screen matches a high-refresh session.
   install -Dm755 "$_repo/ryoku/lockscreen/sddm/ryoku-greeter" \
@@ -449,10 +456,13 @@ EOF
   install -Dm644 "$_repo/system/containers/46-ryoku-docker.rules" \
     "$pkgdir/usr/share/polkit-1/rules.d/46-ryoku-docker.rules"
 
-  # Laptop clamshell: logind suspends on lid close in every case; the
-  # ryoku-clamshell daemon (installed to /usr/bin by the hardware glob above) is
-  # the only thing that keeps a closed lid awake, and only on AC power with an
-  # external display. The .install reloads logind so it applies without a reboot.
+  # Laptop clamshell: logind provides the sessionless fallback, while
+  # ryoku-clamshell (installed to /usr/bin by the hardware glob above) holds
+  # the active session's lid inhibitor. It keeps AC-plus-external closes awake
+  # and sends every other close through the shell's secure suspend transaction.
+  # The spec's %pre/%posttrans scriptlets hold a durable sleep block while
+  # ryoku-power-cutover reloads logind and adopts every live Hyprland/niri
+  # user; the block remains if adoption fails.
   install -Dm644 "$_repo/system/hardware/power/logind-ryoku-lid.conf" \
     "$pkgdir/etc/systemd/logind.conf.d/10-ryoku-lid.conf"
 
@@ -463,6 +473,14 @@ EOF
   # stays safe.
   install -Dm644 "$_repo/system/hardware/power/47-ryoku-power.rules" \
     "$pkgdir/usr/share/polkit-1/rules.d/47-ryoku-power.rules"
+
+  # Hardware GPU MUX: the same one-click grant for ryoku-gpu-mux (installed by
+  # the hardware glob above), so the Machine page can flip the display-routing
+  # knob without a terminal. The helper accepts only hybrid|discrete and writes
+  # a constant derived from that pair, so the grant stays safe; the change only
+  # takes effect after a reboot the user performs.
+  install -Dm644 "$_repo/system/hardware/gpu/45-ryoku-gpu-mux.rules" \
+    "$pkgdir/usr/share/polkit-1/rules.d/45-ryoku-gpu-mux.rules"
 
   # Game Mode's system tuning: the same one-click grant for ryoku-game-tune
   # (installed by the hardware glob above), so the panel toggle applies the deep

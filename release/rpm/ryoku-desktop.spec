@@ -67,6 +67,8 @@ Requires:       grim
 Requires:       slurp
 Requires:       cava
 Requires:       jq
+Requires:       hypridle
+Requires:       dbus-tools
 Requires:       dnf
 Requires:       rpm
 Requires:       sudo
@@ -129,10 +131,50 @@ bash release/rpm/stage-package.sh %{name} "$PWD/stage" %{_libdir}
 cp -a stage/. %{buildroot}/
 find %{buildroot} -type f -o -type l | sed 's|^%{buildroot}||' > rpm-files
 
+%pre
+# Block sleep before the old lid, idle and shell owners are replaced. An
+# upgrade runs the installed helper, which also records the live sessions; the
+# first release that ships it holds the same durable guard directly.
+[ -d "${RYOKU_SYSTEMD_RUNTIME_DIR:-/run/systemd/system}" ] || exit 0
+systemd-detect-virt --quiet --chroot && exit 0
+helper="${RYOKU_POWER_CUTOVER_HELPER:-/usr/bin/ryoku-power-cutover}"
+[ -x "$helper" ] && exec "$helper" prepare-package
+systemctl is-active --quiet ryoku-power-cutover-guard.service && exit 0
+systemctl reset-failed ryoku-power-cutover-guard.service >/dev/null 2>&1 || :
+systemd-run --quiet --collect --unit=ryoku-power-cutover-guard.service \
+  --property=Type=exec --property=TimeoutStopSec=5s \
+  /usr/bin/systemd-inhibit --what=sleep --mode=block \
+  --who=ryoku-package-cutover \
+  --why="keep sessions awake while packaged suspend owners are replaced" \
+  /usr/bin/sleep infinity
+
 %post
 systemctl --global enable ryoku-bootstrap.service ryoku-bluetooth-reset.service >/dev/null 2>&1 || :
 systemctl daemon-reload >/dev/null 2>&1 || :
 systemctl enable ryoku-wifi-regdom.service >/dev/null 2>&1 || :
 /usr/bin/ryoku-bluetooth-tune >/dev/null 2>&1 || :
+
+%posttrans
+# Adopt the new sleep and lid policy in every live Hyprland or niri session,
+# then release the guard %pre took. A failure keeps sleep blocked until
+# `ryoku update` retries or the box reboots.
+[ -d /run/systemd/system ] || exit 0
+systemd-detect-virt --quiet --chroot && exit 0
+[ -x /usr/bin/ryoku-power-cutover ] || exit 0
+/usr/bin/ryoku-power-cutover package
+
+%preun
+# Removal: keep a copy of the executor in /run so %postun can still hand the
+# live sessions back to logind's default policy.
+[ "$1" -eq 0 ] || exit 0
+[ -d /run/systemd/system ] || exit 0
+systemd-detect-virt --quiet --chroot && exit 0
+[ -x /usr/bin/ryoku-power-cutover ] || exit 0
+/usr/bin/ryoku-power-cutover prepare-package
+
+%postun
+[ "$1" -eq 0 ] || exit 0
+[ -x /run/ryoku-power-cutover ] || exit 0
+/run/ryoku-power-cutover package
 
 %files -f rpm-files

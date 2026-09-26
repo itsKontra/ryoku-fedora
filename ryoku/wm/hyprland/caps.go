@@ -59,7 +59,8 @@ var windowRuleActions = []string{
 // The packages ryoku-desktop-hyprland is made of. Kept in step with that
 // package's RPM Requires; this is the list a switch away from Hyprland reclaims,
 // minus ryoku-desktop, which is shared with the compositor that replaces it.
-// hyprsunset is a ryoku-desktop dependency, not this variant's, so it stays.
+// hyprsunset and hypridle (ryoku-idle drives it on both desktops) are
+// ryoku-desktop dependencies, not this variant's, so they stay.
 // The variant package belongs in the list: on a packaged box it owns every
 // satellite below, so a reclaim that left it out could free none of them.
 var compositorPackages = []string{
@@ -67,7 +68,6 @@ var compositorPackages = []string{
 	"hyprland",
 	"hyprpolkitagent",
 	"xdg-desktop-portal-hyprland",
-	"hypridle",
 	"hyprpicker",
 }
 

@@ -114,6 +114,18 @@ func (m Manifest) Lane(name string) string {
 // Go list to whatever the release's manifest says.
 func (m Manifest) DeliverableOnce() []string { return m.Provisioned }
 
+// OptIn names packages the release publishes but no box must carry by
+// default: an explicit user choice owns them, so the manifest's converge lanes
+// never install them. ryoku-palette-bridge is a Ryogami setting the user turns
+// on. Without this list the control manifest reads every Ryoku RPM spec as a
+// requirement and offers to install all of them on every machine.
+var OptIn = []string{
+	"ryoku-palette-bridge",
+}
+
+// IsOptIn reports whether a package name belongs to no box by default.
+func IsOptIn(name string) bool { return contains(OptIn, name) }
+
 func contains(set []string, name string) bool {
 	for _, n := range set {
 		if n == name {
