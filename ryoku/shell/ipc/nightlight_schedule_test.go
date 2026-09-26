@@ -50,6 +50,17 @@ func TestIsDaytime(t *testing.T) {
 	}
 }
 
+func TestIsDaytimeFollowsYesterdaysObservation(t *testing.T) {
+	now := time.Now()
+	yesterday := now.AddDate(0, 0, -1)
+	sr := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 6, 30, 0, 0, time.Local)
+	ss := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 19, 30, 0, 0, time.Local)
+	noon := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.Local)
+	if !isDaytime(noon, sr, ss) {
+		t.Fatal("noon read as night because the sun window was observed yesterday")
+	}
+}
+
 func TestNocturnalWindowSpansMidnight(t *testing.T) {
 	sunriseISO, sunsetISO := dayWindow(t)
 	sr, _ := parseISOTime(sunriseISO)
