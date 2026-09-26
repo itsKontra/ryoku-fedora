@@ -6,7 +6,9 @@
 # changes. sysroot.mount has already mounted the snapshot read-only (the
 # entry's rootflags name it); the overlay is stacked on top of /sysroot, and
 # its lower layer is a second mount under /run, which switch-root carries
-# into the booted system.
+# into the booted system. fstab's options for / name a btrfs subvolume, which
+# the overlay refuses on remount, so systemd-remount-fs is masked for this
+# boot only (/run).
 #
 # dracut sources hooks, so this returns and never exits.
 
@@ -34,6 +36,8 @@ ryoku_snapshot_preview() {
     umount "$base/rw" "$base/lower"
     return 0
   fi
+  mkdir -p "$run/systemd/system"
+  ln -sf /dev/null "$run/systemd/system/systemd-remount-fs.service"
   info "ryoku: previewing $snap; changes stay in RAM"
 }
 

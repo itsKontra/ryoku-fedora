@@ -8,7 +8,8 @@
 # case 2: the initramfs restore hook, driven with stubbed dracut helpers
 #         against a fake btrfs top level: it swaps the snapshot in and keeps
 #         the old root, and leaves the disk alone on anything unexpected.
-# case 3: the initramfs look hook stacks a RAM overlay on the snapshot.
+# case 3: the initramfs look hook stacks a RAM overlay on the snapshot and
+#         masks systemd-remount-fs for that boot.
 # case 4: ryoku-grub-menu themes GRUB idempotently and purge undoes it.
 # shellcheck disable=SC2329 # stubs and predicates run indirectly
 # shellcheck disable=SC2016 # single-quoted patterns are literal file text
@@ -176,6 +177,8 @@ check "look keeps its writes in RAM" grep -qxF "mount -t tmpfs -o mode=0755 ryok
 check "look stacks the overlay on the root" grep -qxF \
   "mount -t overlay ryoku-preview -o lowerdir=$base/lower,upperdir=$base/rw/upper,workdir=$base/rw/work $work/sysroot" \
   "$work/mount.log"
+check "look masks systemd-remount-fs for this boot" \
+  test "$(readlink "$work/run/systemd/system/systemd-remount-fs.service")" = /dev/null
 
 rm -f "$work/mount.log"
 hook "$mod/ryoku-snapshot-preview.sh" "root=UUID=abc ro rootflags=subvol=root"

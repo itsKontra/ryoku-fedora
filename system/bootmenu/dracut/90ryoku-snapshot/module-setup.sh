@@ -20,7 +20,7 @@ installkernel() {
 
 # shellcheck disable=SC2154 # dracut sets moddir
 install() {
-  inst_multiple mkdir mount umount mv date
+  inst_multiple mkdir mount umount mv date ln
   inst_hook pre-mount 90 "$moddir/ryoku-snapshot-restore.sh"
   inst_hook pre-pivot 10 "$moddir/ryoku-snapshot-preview.sh"
 }
