@@ -71,7 +71,7 @@ check "the restored unit runs the CLI follow-up" line "$bm/ryoku-snapshot-restor
 check "the restored unit waits for the hook's flag" line "$bm/ryoku-snapshot-restored.service" "ConditionPathExists=/run/ryoku/restored"
 check "the CLI reads the flag the hook writes" grep -q 'restoredFlag *= "/run/ryoku/restored"' "$cli"
 check "the CLI builds images with the shipped module" grep -q 'snapshotDracutMod *= "ryoku-snapshot"' "$cli"
-check "the CLI names the snippet the package ships" grep -q 'snapshotMenuScript *= "/etc/grub.d/42_ryoku_snapshots"' "$cli"
+check "the CLI detects the menu by the tool the package ships" grep -q 'snapshotMenuTool *= "/usr/bin/ryoku-grub-menu"' "$cli"
 check "the snippet sources the file the CLI writes" has "$bm/grub/42_ryoku_snapshots" 'source "${config_directory}/ryoku-snapshots.cfg"'
 check "the grub.d snippet renders" sh -c "sh '$bm/grub/42_ryoku_snapshots' | grep -q '^if \\[ -f '"
 check "the module is only built in on request" grep -q '^  return 255$' "$mod/module-setup.sh"
