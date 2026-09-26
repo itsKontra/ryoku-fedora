@@ -249,6 +249,25 @@ EOF
   install -Dm755 "$rec/95-ryoku-console.install" \
     "$pkgdir/usr/lib/kernel/install.d/95-ryoku-console.install"
 
+  # boot menu (system/bootmenu): the Ryoku GRUB theme and bootable snapshots.
+  # The snapper plugin resyncs the "Ryoku snapshots" submenu after every
+  # snapshot; %posttrans themes GRUB and renders the snippet into grub.cfg.
+  local bm="$_repo/system/bootmenu"
+  install -Dm755 "$bm/grub/ryoku-grub-menu" "$pkgdir/usr/bin/ryoku-grub-menu"
+  install -Dm755 "$bm/grub/42_ryoku_snapshots" "$pkgdir/etc/grub.d/42_ryoku_snapshots"
+  install -Dm644 "$bm/grub/theme/theme.txt" "$pkgdir/usr/share/ryoku/grub/theme/theme.txt"
+  install -Dm755 "$bm/snapper/50-ryoku-boot-menu" \
+    "$pkgdir/usr/libexec/snapper/plugins/50-ryoku-boot-menu"
+  install -Dm644 "$bm/ryoku-snapshot-menu.service" \
+    "$pkgdir/usr/lib/systemd/system/ryoku-snapshot-menu.service"
+  install -Dm644 "$bm/ryoku-snapshot-restored.service" \
+    "$pkgdir/usr/lib/systemd/system/ryoku-snapshot-restored.service"
+  local mod
+  for mod in module-setup.sh ryoku-snapshot-restore.sh ryoku-snapshot-preview.sh; do
+    install -Dm755 "$bm/dracut/90ryoku-snapshot/$mod" \
+      "$pkgdir/usr/lib/dracut/modules.d/90ryoku-snapshot/$mod"
+  done
+
   # user session units: the target, and the shell daemon service the autostart
   # now starts (systemctl --user start ryoku-shell). Ship the whole dir so a
   # unit added to the tree cannot be forgotten here again; ExecStart already

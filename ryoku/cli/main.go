@@ -56,6 +56,8 @@ func main() {
 		err = updater.Rollback(os.Args[2:])
 	case "boot-guard":
 		err = updater.BootGuard(os.Args[2:])
+	case "boot-menu":
+		err = updater.BootMenu(os.Args[2:])
 	case "snapshots":
 		err = updater.Snapshots()
 	case "status":
