@@ -102,20 +102,26 @@ catalogs=()
 
 in_head() { git cat-file -e "HEAD:$1" 2>/dev/null; }
 
+# Each list is read in full before the index changes: porcelain git diff
+# refreshes the index under index.lock, which would race the git rm below.
+mapfile -t staged < <(git diff --cached --name-only HEAD --diff-filter=AMU)
+mapfile -t unmerged < <(git diff --name-only --diff-filter=U)
+mapfile -t copies < <(git ls-files -- '*/vendor/ryoku-wm/*.go' | grep -v '_test\.go$')
+
 # Upstream additions and edits to discarded paths, merged cleanly or not.
-while IFS= read -r path; do
+for path in "${staged[@]}"; do
 	[[ $path =~ $discard ]] || continue
 	in_head "$path" && continue
 	git rm --quiet --force --cached -- "$path"
 	rm -f -- "$path"
 	discarded+=("$path")
-done < <(git diff --cached --name-only HEAD --diff-filter=AMU)
+done
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-while IFS= read -r path; do
-	[[ -n $path ]] || continue
+for path in "${unmerged[@]}"; do
+	[[ -e $path || $(git ls-files --unmerged -- "$path") ]] || continue
 	if ! in_head "$path"; then
 		# main deleted it on purpose; a new upstream edit does not revive it.
 		git rm --quiet --force -- "$path"
@@ -132,16 +138,16 @@ while IFS= read -r path; do
 		git add -- "$path"
 		catalogs+=("$path")
 	fi
-done < <(git diff --name-only --diff-filter=U)
+done
 
 # Vendored seam copies follow ryoku/wm once the seam itself is resolved.
-if ! git diff --name-only --diff-filter=U -- ryoku/wm | grep -q .; then
-	while IFS= read -r copy; do
+if [[ -z $(git diff --name-only --diff-filter=U -- ryoku/wm) ]]; then
+	for copy in "${copies[@]}"; do
 		seam="ryoku/wm/$(basename "$copy")"
 		[[ -f $seam ]] || continue
 		cp -- "$seam" "$copy"
 		git add -- "$copy"
-	done < <(git ls-files -- '*/vendor/ryoku-wm/*.go' | grep -v '_test\.go$')
+	done
 fi
 
 list() {

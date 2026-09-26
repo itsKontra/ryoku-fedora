@@ -60,7 +60,7 @@ jobs:
           echo "branch=$branch" >>"$GITHUB_OUTPUT"
           if [[ ! -f $(git rev-parse --git-path MERGE_HEAD) ]]; then
             echo "state=current" >>"$GITHUB_OUTPUT"
-          elif git diff --name-only --diff-filter=U | grep -q .; then
+          elif [[ -n $(git diff --name-only --diff-filter=U) ]]; then
             echo "state=conflicts" >>"$GITHUB_OUTPUT"
           else
             echo "state=clean" >>"$GITHUB_OUTPUT"
