@@ -32,9 +32,12 @@ Edit the repo, deploy, test on the running system.
 
 ## Adding things
 
-- **A package:** the right set in `system/packages/` (`base` for everyone,
-  `dev` for toolchains, `hardware` per profile, `aur` for the AUR). Prefer the
-  official repos over the AUR when both have it.
+- **A package:** a `Requires:` in the owning spec under `release/rpm/` for
+  anything the desktop needs at runtime, so it reaches every packaged box on
+  `ryoku update`, plus the matching section of
+  `installation/fedora/packages.list` so the offline ISO carries it. Prefer the
+  Fedora repositories; a package only a COPR provides needs that COPR listed in
+  `release/rpm/dependency-coprs`.
 - **A keybind:** `ryoku/hyprland/modules/binds.lua`.
 - **A Hyprland concern:** a new module under `ryoku/hyprland/modules/` plus one
   `require` in `hyprland.lua`. Do not grow an unrelated module.
@@ -42,13 +45,14 @@ Edit the repo, deploy, test on the running system.
   state wired through `ryoku-shell` (`ryoku/shell/ipc/`).
 - **A QML plugin (C++):** build it against the installed Qt and rebuild it on
   every Qt update. Qt's private API carries no cross-version promise, so a stale
-  module (or a stale `quickshell` from the AUR) fails to load and takes the whole
+  module (or a stale `quickshell` build) fails to load and takes the whole
   surface down to a black screen. `deploy.sh` stamps `Ryoku.Blobs` with the Qt it
   built against and rebuilds when that changes; `ryoku doctor` reports a renderer
   or module that cannot load.
 - **A system helper:** a `ryoku-<thing>` script under `system/hardware/.../`,
-  shipped to `/usr/bin` by the `ryoku-desktop` package (its PKGBUILD installs
-  every `system/hardware/*/ryoku-*`), and invoked by name from Lua autostart or
+  shipped to `/usr/bin` by the `ryoku-desktop` package (its payload,
+  `release/rpm/payload/ryoku-desktop.sh`, installs every
+  `system/hardware/*/ryoku-*`), and invoked by name from Lua autostart or
   a keybind.
 
 ## How a change reaches users
@@ -115,7 +119,7 @@ the change documented where future readers will look.
 
 ## Research
 
-When something is unfamiliar, look it up against primary sources (the Arch Wiki,
+When something is unfamiliar, look it up against primary sources (the Fedora docs,
 the Hyprland wiki, Quickshell and Qt docs, each tool's own docs), cross-check
 anything load-bearing, and confirm the result on the running system. Match
 existing patterns in the repo over introducing a new one.

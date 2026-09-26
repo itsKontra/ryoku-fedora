@@ -79,10 +79,10 @@ func RunSetup() error {
 	// "uv lock missing" a broken or offline install throws) into one clear line.
 	reportPhase("preflight", "checking tools, connectivity, and disk space", true)
 	if !haveCmd("curl") {
-		return errors.New("curl is required for the Hermes installer (sudo pacman -S curl)")
+		return errors.New("curl is required for the Hermes installer (sudo dnf install curl)")
 	}
 	if !haveCmd("uv") && !haveCmd("python3") {
-		return errors.New("Hermes needs uv or python3 to install (sudo pacman -S uv), then re-run setup")
+		return errors.New("Hermes needs uv or python3 to install (sudo dnf install uv), then re-run setup")
 	}
 	if !setupOnline() {
 		return errors.New("Hermes setup needs an internet connection: it downloads the agent and its Python dependencies from GitHub and PyPI")

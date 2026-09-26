@@ -25,14 +25,14 @@ ordinary as changing how your bar looks. The power is all still there. It is
 just within reach.
 
 So Ryoku is not a pile of overglorified basic dotfiles pretending to be the
-future of Arch. It is a finished desktop with a front door: taste already
+future of Linux. It is a finished desktop with a front door: taste already
 applied, and every choice that matters put behind a control you can actually
 find. A beginner gets a real computer on day one. Everyone else gets to stop
 babysitting a pile of configs and just use the thing.
 
 Freedom of choice cuts the other way too. There is a strange trick going
-around lately where a desktop built on Arch, an operating system whose whole
-reason for being is choice and restraint, gets turned into a storefront: a
+around lately where a desktop built on Linux, a platform whose whole reason
+for being is choice and restraint, gets turned into a storefront: a
 stack of big-tech web wrappers and somebody's paid, subscription apps bundled
 in and sold to you as open-source freedom. That is not freedom, it is a sales
 pitch with a monthly bill hiding inside your window manager. Ryoku ships what a
@@ -57,11 +57,10 @@ locked behind a text editor.
 - **Minimal and legible.** No cruft, no dead code, no duplicated config. Small,
   focused files you can read.
 - **Opinionated by default, swappable by choice.** A fresh install is a
-  deliberate set of choices, the stock Arch kernel among them. Where a
+  deliberate set of choices, Fedora's stock kernel among them. Where a
   power-user lever is genuinely worth it, Ryoku offers it as an explicit opt-in
-  that leaves the default untouched: the Extras section can swap in the CachyOS
-  kernel, for one, without changing what a fresh install is. See
-  `docs/kernels.md`.
+  that leaves the default untouched: the Secure Boot signed NVIDIA driver, for
+  one, without changing what a fresh install is. See `docs/kernels.md`.
 
 ## How the parts fit
 
@@ -72,9 +71,9 @@ locked behind a text editor.
   control plane: it supervises the UI components, owns the wallpaper, clipboard,
   and lock, and answers one socket. Keybinds and the UI talk to it; it decides.
 - **The control CLI** (`ryoku/cli/`, the `ryoku` command) is the system front
-  door: `ryoku update` (snapshot, then pacman and the AUR, then materialize, then
-  reload), plus `rollback`, `snapshots`, `status`, and `materialize`. It
-  orchestrates pacman, yay, and snapper.
+  door: `ryoku update` (snapshot, then the Ryoku packages from COPR through dnf,
+  then materialize, then reload), plus `rollback`, `snapshots`, `status`, and
+  `materialize`. It orchestrates dnf, flatpak, and snapper.
 - **Hyprland** (`ryoku/hyprland/`) is the compositor, configured in Lua, one
   concern per module. Its autostart brings up the shell and the hardware helpers.
 - **Theming** is wallpaper-driven: `matugen` regenerates the palette from the

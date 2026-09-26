@@ -136,7 +136,7 @@ func repoLayout(root string) []layoutRow {
 		"bin":                   "repo tooling and CI checks",
 		"tests":                 "standalone CI check scripts",
 		".githooks":             "commit and push gates",
-		"ryoku-shell-installer": "no-ISO converter for existing Arch installs",
+		"ryoku-shell-installer": "no-ISO installer for existing Fedora systems",
 	}
 	skip := map[string]bool{".git": true, "node_modules": true, ".worktrees": true, "local": true}
 

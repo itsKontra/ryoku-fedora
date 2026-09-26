@@ -153,9 +153,9 @@ Tiers, computed per command and per pipeline segment, highest wins:
 
 | Tier | Meaning | Examples | `--run` gate |
 |---|---|---|---|
-| `read` | looks, never touches | `eza`, `bat`, `fd`, `rg`, `df`, `pacman -Q` | y/N |
+| `read` | looks, never touches | `eza`, `bat`, `fd`, `rg`, `df`, `rpm -q` | y/N |
 | `write` | changes user files | `mv`, `cp`, `mkdir`, `sed -i`, `git push` | y/N |
-| `system` | root or service state | `sudo ...`, `pacman -S`, `systemctl enable` | y/N |
+| `system` | root or service state | `sudo ...`, `dnf install`, `systemctl enable` | y/N |
 | `danger` | destructive or irreversible | `rm -rf` near `/` or `~`, `dd of=/dev/..`, `mkfs`, `curl \| sh` | type `yes` |
 
 The classifier is deny-first and pessimistic: an unknown binary classifies as

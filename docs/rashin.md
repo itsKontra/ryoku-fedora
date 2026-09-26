@@ -70,7 +70,7 @@ minutes and rewrites `user.md` when it drifts.
 counts, key entry points, and the docs list. The installed target has no
 checkout, so the map ships as a snapshot:
 
-- **Packaged:** the `ryoku-rashin` PKGBUILD runs `ryoku-rashin repo-index` over
+- **Packaged:** the `ryoku-rashin` RPM build (`release/rpm/payload/ryoku-rashin.sh`) runs `ryoku-rashin repo-index` over
   the exact release tree and installs the result to
   `/usr/share/ryoku/rashin/ryoku-repo.md`. A system update replaces the
   snapshot with the new release's, and the post-update reindex folds it in.
@@ -136,7 +136,7 @@ Subcommands:
 |---|---|
 | `serve [--if-enabled]` | HTTP and WebSocket on `127.0.0.1:3600`, embedded dashboard. `--if-enabled` exits 0 immediately when the gate is off (the autostart path) |
 | `index` | Regenerate all vault maps: `system.md`, `desktop.md`, `packages.md`, `ryoku-repo.md`, `user.md` |
-| `repo-index <root> [out]` | Build the Ryoku source map from a checkout; used by the PKGBUILD and `deploy.sh` |
+| `repo-index <root> [out]` | Build the Ryoku source map from a checkout; used by the RPM build and `deploy.sh` |
 | `ask <question>` | One-shot quick ask, built for the launcher's `\` prefix: POSTs to `/api/ask` and pipes streamed `@working`/`@perm`/`@answer` markers to stdout. `ask --recent` prints the resume history as JSON; `ask --cancel` stops the running turn. See "Quick asks: two lanes" below |
 | `setup` | One-click actuator: install Hermes, run its onboarding, wire, enable |
 | `wire [agent]` | Apply vault pointers to all detected agents, or one named agent |
@@ -297,19 +297,18 @@ vault workspace.
 agent brain uses to read this system's source: it builds a `.prowl` index over a
 tree and answers structural questions (where a symbol is defined, who calls it, a
 change's blast radius) in one call instead of grepping. The CLI was renamed from
-`prowl-agent` to `prowl`; the pacman package is still `prowl-agent` and upstream
-still ships the old binary name, so both may be on PATH during the transition. It
-is no longer an optional hand-install: `ryoku-rashin` depends on the `prowl-agent`
-package, so the desktop set ships it and every rashin box has it.
+`prowl-agent` to `prowl`; the package is still `prowl-agent` and upstream
+still ships the old binary name, so both may be on PATH during the transition. On
+Fedora the `ryoku-rashin` RPM does not depend on it: when rashin is enabled and
+Prowl is missing, `ryoku doctor` installs `prowl-agent` as a desktop extra
+(`ryoku-install-extra prowl-agent`).
 
-- **`ryoku update` keeps it current.** A packaged box gets new Prowl builds with
-  the rest of the system through `pacman -Syu`; the packaged binary carries a
-  managed-build guard, so a hand-run `prowl update` defers to the package
-  manager instead of overwriting the pacman-owned file. On a dev box (Prowl
-  installed by hand, not owned by pacman) `ryoku update` runs `prowl update`
-  for you. Either way the update logs one line saying which path it took.
-  If a box enabled rashin before the dependency shipped and lacks the binary,
-  `ryoku doctor` reports it with the fix `sudo pacman -S prowl-agent`.
+- **`ryoku update` keeps it current.** When Prowl is owned by an RPM it moves
+  with `sudo dnf upgrade`; the packaged binary carries a managed-build guard, so
+  a hand-run `prowl update` defers to the package manager instead of
+  overwriting the package-owned file. On a dev box (Prowl installed by hand, not
+  owned by a package) `ryoku update` runs `prowl update` for you. Either way the
+  update logs one line saying which path it took.
 - **The mirror index lives with the vault.** `ryoku-rashin index` builds a
   read-only mirror of the live config at `~/.local/share/ryoku/rashin/source/`
   and indexes it with Prowl (see "The source mirror" below), so `search_code`
@@ -398,7 +397,7 @@ idempotent (wire replaces an existing block or appends a fresh one) and reversib
 <!-- ryoku-rashin:begin -->
 ## Ryoku Rashin system vault
 
-This machine runs Ryoku (Arch Linux, Hyprland desktop). A maintained map of the
+This machine runs Ryoku (Fedora Linux, Hyprland desktop). A maintained map of the
 system lives at `~/.local/share/ryoku/rashin/`. Before exploring the machine or
 guessing paths, read `AGENTS.md` there: it says where every config lives, which
 binary owns it, and how to reload it. Write durable notes to `memory/` and

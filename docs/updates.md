@@ -11,25 +11,23 @@ separate:
 
 | Lane | Command | What moves |
 |---|---|---|
-| **Ryoku** | `ryoku update` | the packages the signed `[ryoku]` repo serves, the config, the doctor |
-| **Your distribution** | `sudo pacman -Syu` | the base system and its kernel, from Arch or CachyOS, whichever you installed |
+| **Ryoku** | `ryoku update` | the packages the signed `RyokuCOPR` repository serves, the config, the doctor |
+| **Your distribution** | `sudo dnf upgrade` | the base system and its kernel, from Fedora |
 
-`ryoku update` upgrades the installed `[ryoku]` packages by name
-(`pacman -Sy`, then `pacman -S --needed ryoku/<pkg>...`) and never runs a
-sysupgrade. The reasons are the design:
+`ryoku update` upgrades the installed Ryoku packages by name
+(`dnf --repo=RyokuCOPR distro-sync <pkg>...`) and never runs a system upgrade.
+The reasons are the design:
 
-- **The kernel is not ours to move.** Ryoku ships a plain Arch variant and a
-  CachyOS variant and publishes neither kernel. A Ryoku release must not decide
-  when your box changes kernel, rebuilds its DKMS modules, or rewrites its boot
-  image.
-- **A release has to be reversible.** `ryoku rollback` puts the Ryoku set back;
-  it cannot put Arch back. An update that moved both was never fully
-  reversible.
-- **The lanes fail apart.** A box that cannot take an Arch upgrade today (a
+- **The kernel is not ours to move.** Ryoku runs on Fedora's kernel and
+  publishes none. A Ryoku release must not decide when your box changes kernel,
+  rebuilds its modules, or rewrites its boot image.
+- **A release has to be reversible.** A snapshot can put the Ryoku set back; an
+  update that also moved Fedora was never fully reversible.
+- **The lanes fail apart.** A box that cannot take a Fedora upgrade today (a
   mirror out of sync, a full boot partition) must still be able to take a Ryoku
   fix, and the reverse.
 
-So a plain `sudo pacman -Syu` is expected, supported, and the only thing that
+So a plain `sudo dnf upgrade` is expected, supported, and the only thing that
 moves your kernel. Ryoku ships no hook that blocks it. Every `ryoku update`
 reports what that lane is holding (`N system package(s) waiting`), `ryoku
 status` prints it as `system:`, and the Hub lists it under SYSTEM PACKAGES;
@@ -45,43 +43,25 @@ for the module. See `system/hardware/README.md`.
 - A **dev box** runs the checkout: `ryoku deploy` builds the binaries and lays
   `ryoku/` into `~/.config`. `ryoku update` on it tracks `origin/main` (the git
   channel) and redeploys.
-- A **user box** runs signed packages: `ryoku update` moves the `[ryoku]` set,
+- A **user box** runs signed packages: `ryoku update` moves the Ryoku set,
   then `ryoku materialize`, then `ryoku doctor`.
 
 They must converge. A change that lands on one but not the other is the bug this
 page exists to prevent.
 
-### Ryotunes: an external app on its own channel
+### Ryotunes
 
-Ryotunes updates are released independently as prebuilt Arch packages on
-[ryoku-dev/ryotunes](https://github.com/ryoku-dev/ryotunes)' GitHub
-releases (`ryotunes-<ver>-1-x86_64.pkg.tar.zst`, with a `.sha256` beside it), so
-it is a third channel a Ryoku box tracks directly rather than through the
-`[ryoku]` repo. `ryoku update` runs the check on every channel (dev checkout and
-packaged) and outside the `[ryoku]` set, so a box with no other changes still
-picks up a new Ryotunes (`internal/ryotunesrelease`, `internal/updater/ryotunes.go`):
-
-- **`ryoku update` installs a newer build.** It re-reads the latest release
-  fresh, verifies the download by sha256 and by its own pacman metadata (name,
-  version, `x86_64`), installs it with `pacman -U`, and only ever moves the
-  version forward. A build that is not strictly newer is left alone, so an
-  external build is never downgraded, and a box without Ryotunes installed gets
-  nothing (a removal stays removed).
-- **`ryoku doctor --check` reports a pending release** without installing
-  anything. Advisory findings also appear with `--verbose` and `--json`; plain
-  doctor remains quiet for advisory notes. Failed release lookups are reported
-  as unavailable rather than "up to date".
-- Ryotunes is **excluded from the `[ryoku]` update set** so the repo's base
-  build can never overwrite a newer external one. Only the download origin Ryoku
-  trusts (the `ryoku-dev/ryotunes` GitHub release path) is used, and the package
-  lands through `pacman -U`, which honours pacman's signature policy and file
-  ownership -- never a raw `/usr/bin` replacement. The `[ryoku]` repo still
-  builds the `ryotunes` package (a sha256-pinned source tarball) for the initial
-  install.
+On Fedora, Ryotunes is an RPM from its own COPR project (`itskontra/ryotunes`,
+enabled as a dependency repository) and moves with `sudo dnf upgrade`. When the desktop expects it and it is missing,
+`ryoku doctor` installs it with `dnf install ryotunes` and enables its socket.
+The Arch build tracked prebuilt packages from the
+[ryoku-dev/ryotunes](https://github.com/ryoku-dev/ryotunes) GitHub releases
+(`internal/ryotunesrelease`); that path installs with pacman and does not apply
+to Fedora.
 
 ## `ryoku update`
 
-Snapper pre-snapshot, then the channel (git fast-forward, or the `[ryoku]`
+Snapper pre-snapshot, then the channel (git fast-forward, or the `RyokuCOPR`
 package set), then stage2 through the just-installed binary: quiesce the shell,
 `ryoku materialize`, reload the compositor, restart the shell, `ryoku doctor`,
 snapper post-snapshot. Each stage publishes to
@@ -90,17 +70,17 @@ ordered steps, the current label, a live log tail, and, on failure, the error
 and the pre-update snapshot), so the update island and the Hub's Updates page
 render a determinate run and a one-click rollback.
 
-The database refresh happens before the set is read, so a rollback onto a frozen
-release only ever asks for packages that release actually served; targets are
-repo-qualified (`ryoku/<name>`), so pacman takes our build of a name that also
-exists in `extra`, and moves it down as readily as up.
+The metadata refresh happens before the set is read, so the update only ever
+asks for packages the repository serves now; the transaction is restricted to
+`--repo=RyokuCOPR`, so dnf takes our build of a name that also exists in the
+Fedora repositories, and `distro-sync` moves it down as readily as up.
 
 After the desktop is back, the update refreshes the agent OS when it is present:
 `ryoku-rashin index` regenerates the vault and re-indexes the config mirror with
 Prowl, then `prowl` is brought current. On a dev box (Prowl on PATH but
-not owned by a pacman package) it runs `prowl update`; a packaged box
-already got the new build from the `[ryoku]` set, so the step just logs that the
-binary is managed by pacman. Both are best effort and never fail an update.
+not owned by an RPM) it runs `prowl update`; a packaged box already got the new
+build from the Ryoku set, so the step just logs that the binary is managed by
+the package manager. Both are best effort and never fail an update.
 
 ### The boot guard
 
@@ -113,11 +93,16 @@ boot once the shell has stayed up 45 s (`/var/lib/ryoku/boot/ok-<uid>`, the boot
 id); a record from any boot other than the one the update ran in disarms the
 guard. Without one, the boot counts: on the second, the guard tracks the
 previous release back (`ryoku track <from>`, then an explicit
-`pacman -S ryoku-desktop`; the Ryoku set only, Arch untouched),
+reinstall of `ryoku-desktop`; the Ryoku set only, the base system untouched),
 re-materializes every user's config from it, and leaves
 a notice `ryoku doctor` shows once. On a third it points the Limine boot menu
 at the pre-update snapshot entry, for the case where the packages were not what
-broke. `sudo ryoku boot-guard --disarm` clears a marker by hand. The `ryoku`
+broke.
+
+The revert steps are still the Arch build's: they run pacman and edit
+`/boot/limine.conf`. Fedora has one rolling COPR channel with no release tags to
+track back to, and boots through GRUB, so on a Fedora box the guard can arm but
+cannot revert yet. `sudo ryoku boot-guard --disarm` clears a marker by hand. The `ryoku`
 package ships the unit and its tmpfiles entry; the doctor enables the unit and
 prepares the record directory on every update, so boxes installed before it get
 it on their next update.
@@ -230,7 +215,8 @@ release retired is reported, never uninstalled. The deliver-once apps stay
 `reconcileShippedApps'` lane, so one update never runs two transactions over the
 same names. Best-effort: a box with no mirror or no network reports what did not
 land and the update moves on. `ryoku verify` answers the same diff read-only, so
-two machines can be compared line by line.
+two machines can be compared line by line. This reconciler is the Arch build's: it
+reports `ok` on a box without pacman, where package dependencies carry the set.
 
 ## Two compositors
 
@@ -260,12 +246,12 @@ untouched; recovery deliberately resets both when both are installed.
   command from the freshly fetched checkout first (`go run . wm reset-paths`), so
   a broken installed build cannot skew the list, then redeploys the shipped
   defaults. The per-machine seeds (monitors, gpu, keyboard) and saved rices are
-  not in that set and survive. `--no-packages` skips pacman; it refuses on a
+  not in that set and survive. `--no-packages` skips dnf; it refuses on a
   machine that is not Ryoku.
 - **Switching** (`ryoku wm use <name> [--keep-previous|--remove-previous]`)
   installs the target's package; removing the old compositor reclaims its
   packages. `wm.Reclaim` computes the free set from the outgoing provider's
-  `Caps.Packages`, and the package and byte counts shown come from pacman's own
+  `Caps.Packages`, and the package and byte counts shown come from the rpm
   removal plan, re-checked immediately before the transaction. Full switch
   contract in `docs/compositors.md`.
 
@@ -348,34 +334,29 @@ island (when the channel serves the next line) and the Hub's Updates page.
 ## The contract
 
 - **Ryoku moves only what Ryoku publishes.** `ryoku update` upgrades the
-  installed `[ryoku]` packages by name and nothing else: no sysupgrade, no
-  kernel, no `--ignore` list to maintain. Anything Ryoku needs from the base
-  system belongs in a package dependency, where pacman resolves it, not in a
+  installed Ryoku packages by name and nothing else: no system upgrade, no
+  kernel, no exclude list to maintain. Anything Ryoku needs from the base
+  system belongs in a package dependency, where dnf resolves it, not in a
   transaction that quietly upgrades the machine. A user must never have to
   choose between a Ryoku fix and their own upgrade schedule, and nothing may
-  block `sudo pacman -Syu`.
+  block `sudo dnf upgrade` (the one exception is the signed NVIDIA driver
+  above, which waits for its module).
 - **What a surface shows about the system must be read from the system.** No
   kernel, variant, or OS name is hardcoded into a menu, a default, or a report:
   boot entries come from the installed kernels
   (`/usr/lib/modules/*/pkgbase`), the boot default from
   `/etc/ryoku/default-kernel` (what the install chose) then the running kernel,
-  and an entry whose image is not on the boot partition is removed. A box that
-  never had the CachyOS kernel must never be offered it.
+  and an entry whose image is not on the boot partition is removed. A box must
+  never be offered a kernel it does not have.
 - **A user-facing config file must be delivered by a path a user runs**: shipped
   in a package (then materialized) or seeded by the installer. A file only
   `deploy.sh` lays, or one no path lays, reaches no user. `ryoku-dev-verify-delivery`
   fails the commit on such an orphan.
-- **A package the release is made of must reach every box on update.** A name in
-  a `system/packages/*.packages` set, the AUR set, or `release/packages/` is
-  carried to a packaged box by the control manifest: `build-repo.sh` generates
-  `manifest.json` at publish time and the doctor's `reconcileManifest` converges
-  each box to it on `ryoku update`, so adding a package to a set needs no hard
-  depend and no per-box install step. A box's own removals are respected (a name
-  present when its baseline was saved and gone now stays gone), and `ryoku
-  verify` reports the box-vs-release diff so two machines can be proved the same
-  one. The container-install gate fails a publish whose channel serves no
-  manifest, because a reconciler with nothing to converge to is inert, not
-  delivered.
+- **A package the release is made of must reach every box on update.** On
+  Fedora that means a package dependency: the `ryoku-desktop` spec in
+  `release/rpm/` pins its components, so a package added there arrives with the
+  next `ryoku update`. The control-manifest reconciler (`reconcileManifest`) is
+  the Arch build's mechanism and reports `ok` on a box without pacman.
 - **A removed or renamed `shell.json` key, or a changed default that must reach
   existing users, needs a `doctor` reconciler** (materialize never edits a user's
   `shell.json`). An additive key needs nothing.

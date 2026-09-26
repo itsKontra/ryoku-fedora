@@ -216,7 +216,7 @@ being left; pruning stays deploy's and the package's job.
 It previews first: what carries over, what the target cannot honour and why, and
 that the compositor you are leaving keeps its `wm.<name>.*` settings in the store
 so they return if you come back. Then it installs `ryoku-desktop-<name>` as a
-plain pacman transaction, which is what lets `ryoku rollback` undo the switch.
+plain dnf transaction, which is what lets `ryoku rollback` undo the switch.
 Both variants may be installed at once, so the switch never removes the desktop
 you are leaving unless you ask it to: a second switch is a config change with no
 package transaction at all. The Hub offers the same flow on its Global page.
@@ -231,7 +231,7 @@ names how many packages and how much space that is, from the outgoing
 compositor's own installed packages, so the choice is offered even on a checkout
 box where the meta-package was never installed. A package the incoming
 compositor also needs, or one another installed package still depends on, is
-kept; and the removal is cross-checked against pacman's own plan and refused if
+kept; and the removal is cross-checked against the rpm removal plan and refused if
 it would touch anything outside the reviewed set, so a switch can never break
 the machine. Either way the settings survive, which is what makes removal safe.
 Keeping is the default because it is the reversible choice.

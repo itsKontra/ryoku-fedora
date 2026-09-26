@@ -1,7 +1,7 @@
 > [!WARNING]
 > ### ⚠️ Work in Progress / Experimental Fedora Port
 >
-> **Notice:** This is a **forked repository**. This is **NOT** a battle-tested approach to a Fedora port, and more like a forked, vibe code fixed Fedora version with still lots of problems and a currently non-functional distro build.
+> **Notice:** This is a **forked repository** that ports Ryoku from Arch Linux to Fedora. The port is still a work in progress and not yet battle-tested, so bugs can still happen.
 >
 > Huge credit and thanks to the original maintainer, **[neur0map](https://github.com/neur0map)**, for this great project! Be sure to check out the original upstream repository at **[neur0map/ryoku-arch](https://github.com/neur0map/ryoku-arch)**.
 
@@ -28,7 +28,7 @@ boot and deliberate in how it looks and moves.
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/8KjBmUEyKA)
 [![Reddit](https://img.shields.io/badge/Reddit-r%2FRyokuArch-FF4500?style=for-the-badge&logo=reddit&logoColor=white)](https://www.reddit.com/r/RyokuArch/)
 
-<kbd>[COPR](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)</kbd> &middot; <kbd>[Fedora RPMs](release/rpm/README.md)</kbd> &middot; <kbd>[Download ISO](https://ryoku.dev)</kbd> &middot; <kbd>[Ryoku](docs/ryoku.md)</kbd> &middot; <kbd>[Docs](docs/)</kbd> &middot; <kbd>[Structure](docs/structure.md)</kbd> &middot; <kbd>[Discord](https://discord.gg/8KjBmUEyKA)</kbd> &middot; <kbd>[Subreddit](https://www.reddit.com/r/RyokuArch/)</kbd>
+<kbd>[COPR](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)</kbd> &middot; <kbd>[Fedora RPMs](release/rpm/README.md)</kbd> &middot; <kbd>[Build the ISO](installation/fedora/README.md)</kbd> &middot; <kbd>[Ryoku](docs/ryoku.md)</kbd> &middot; <kbd>[Docs](docs/)</kbd> &middot; <kbd>[Structure](docs/structure.md)</kbd> &middot; <kbd>[Discord](https://discord.gg/8KjBmUEyKA)</kbd> &middot; <kbd>[Subreddit](https://www.reddit.com/r/RyokuArch/)</kbd>
 
 </div>
 
@@ -63,7 +63,8 @@ controls move as a single thing: paper and ink, warm bone type on pure black,
 with the frame retinting live from your wallpaper. 力と美のために: for the sake
 of power and beauty.
 
-Underneath, Ryoku is a hand-built Arch distribution rather than a config dump.
+Underneath, Ryoku Fedora is a hand-built Fedora distribution rather than a config
+dump, ported from the original [Ryoku Arch](https://github.com/neur0map/ryoku-arch).
 The desktop, the installer, and the system definition all live in this
 repository, and every machine is built from it; the repository is the single
 source of truth, and a live machine is only ever a deployment target. The
@@ -82,7 +83,7 @@ full-time engineering team behind it. Community ideas help shape what gets built
 within the time, knowledge, and maintenance capacity available. Ryoku favours a
 rich, deliberate desktop on capable hardware -- it is not designed as a
 lightweight distribution for older or low-resource machines. It builds on the
-work of Arch Linux, Hyprland, niri, and Quickshell, and keeps the credits noted
+work of Fedora, Hyprland, niri, and Quickshell, and keeps the credits noted
 above.
 
 ## The desktop
@@ -129,9 +130,9 @@ Everything else waits in Ryoku Settings (`Super + ,`).
   and package manifests that make a machine a Ryoku machine.
 - **The installer** under `installation/`: the Fedora Anaconda/Kickstart ISO,
   offline RPM closure, target provisioner, and first-boot setup.
-- **The update system** under `release/`: the `ryoku` control CLI, the desktop
-  packages, the signed `[ryoku]` pacman repository, and Fedora RPM delivery under
-  [`release/rpm/`](release/rpm/README.md) via [COPR](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/).
+- **The update system** under `release/`: the `ryoku` control CLI and the signed
+  desktop RPMs, built under [`release/rpm/`](release/rpm/README.md) and served from
+  [COPR](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/).
 
 ## Requirements
 
@@ -153,7 +154,7 @@ editor, and toolchains, is the rest of the budget: 8 GB is a sensible floor for
 daily use, and 16 GB is comfortable once the language toolchains are in. The
 32 GB disk figure is the installer's hard floor. The base plus developer and
 desktop package closure is about 13 to 15 GB, and the root filesystem needs 20 GB
-before swap so Btrfs snapshots and AUR builds have somewhere to go. Use an SSD;
+before swap so Btrfs snapshots and package transactions have somewhere to go. Use an SSD;
 snapshots on every `ryoku update`, package builds, and the shell itself all feel
 a slow disk.
 
@@ -211,38 +212,14 @@ curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-s
 Details in [`ryoku-shell-installer/`](ryoku-shell-installer/README.md),
 and Fedora RPM delivery in [`release/rpm/`](release/rpm/README.md).
 
-### Already on Arch (no ISO)
-
-One line converts an existing Arch machine into a Ryoku box: it backs up your
-configs (with a `restore.sh` to undo), trusts the signed `[ryoku]` repo, migrates
-you off conflicting shells and daemons, and wires up the full desktop. It never
-partitions a disk.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
-```
-
-Preview everything it would do without changing anything by appending
-`-s -- --dry-run` after `bash`. Details in
-[`ryoku-shell-installer/`](ryoku-shell-installer/README.md).
-
 > [!WARNING]
 > The shell installer is young and still being tested across different hardware,
-> distributions, and existing setups. It rewrites your shell and desktop
+> Fedora setups. It rewrites your shell and desktop
 > configuration in place, and it may not behave the same on a setup we have not
 > seen yet. **Back up your system first.** It writes a `restore.sh` and refuses
 > to run as root, but making proper backups is your responsibility, and Ryoku is
 > not responsible for data loss or for breaking your current desktop. Run it with
 > `--dry-run` before you commit, and prefer a machine you can afford to reinstall.
-
-### CachyOS kernel, in one click
-
-Want the CachyOS scheduler and build? Open the Hub, go to **Extras**, and install
-the **CachyOS Kernel** bundle. One click adds the CachyOS `x86-64-v3` repository
-(its own signing key, layered above `[core]` and never replacing it) and installs
-`linux-cachyos`. It is additive and idempotent, and it leaves your stock kernel in
-place as a fallback, so you keep the choice of what to boot. Full details in
-[`docs/kernels.md`](docs/kernels.md).
 
 ## Updating
 
@@ -250,25 +227,24 @@ Ryoku updates its own layer, and leaves the rest of the system to you:
 
 ```bash
 ryoku update          # the Ryoku packages, the configs, the doctor
-sudo pacman -Syu      # Arch: your distribution, the base system and its kernel
-sudo dnf upgrade      # Fedora: your distribution, the base system and its kernel
+sudo dnf upgrade      # your distribution, the base system and its kernel
 ```
 
-`ryoku update` takes a snapshot, moves the packages served by the signed `[ryoku]`
-repo on Arch or [COPR (`itskontra/ryoku`)](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)
-on Fedora (by name, never a full sysupgrade), re-lays the desktop configs into your
+`ryoku update` takes a snapshot, moves the packages served by the signed
+[COPR repository (`itskontra/ryoku`)](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)
+(by name, never a full system upgrade), re-lays the desktop configs into your
 home, reloads the shell, and takes a paired post-snapshot. A failed package step
 aborts before anything else changes.
 
-The kernel is deliberately not part of that. Ryoku runs on Arch, Fedora, or on the
-CachyOS kernel, publishes neither, and never picks the moment your boot image is
-rebuilt: `sudo pacman -Syu` or `sudo dnf upgrade` does that, when you say so. Every
-`ryoku update` tells you how many system packages are waiting, and `ryoku update --system`
-runs both in one go if you prefer that.
+The kernel is deliberately not part of that. Ryoku runs on Fedora's own kernel,
+does not publish one, and never picks the moment your boot image is rebuilt:
+`sudo dnf upgrade` does that, when you say so. Every `ryoku update` tells you how
+many system packages are waiting, and `ryoku update --system` runs both in one go
+if you prefer that.
 
-The desktop ships from the `[ryoku]` pacman repository on Arch and the signed
-COPR repository on Fedora (see [`release/rpm/`](release/rpm/README.md)), so updates
-are verified the same way the rest of the system is.
+The desktop ships as signed RPMs from COPR (see
+[`release/rpm/`](release/rpm/README.md)), so updates are verified the same way
+the rest of the system is.
 
 Your settings survive every update. The base configs are Ryoku-owned and
 refreshed in place, while your own edits live in override files that are never
@@ -277,14 +253,14 @@ shipped or touched (your compositor's user override, `kitty/user.conf`,
 migration ledger: the config
 is reconciled to the shipped state on every update, and the rare stateful fix
 (disk layout and the like) is an idempotent `ryoku doctor` reconciler that runs
-inside `ryoku update`. If an update goes wrong, run `ryoku rollback` or pick the
-previous snapshot from the Limine boot menu.
+inside `ryoku update`. If an update goes wrong, `ryoku rollback` lists the
+snapper snapshots taken around each update.
 
 ## Recovery
 
 When an update leaves the desktop unusable and `ryoku update` cannot fix it,
 there is a last-resort recovery. It pulls the latest `main`, reinstalls the base
-packages (via pacman on Arch or dnf on Fedora), and rebuilds and redeploys the whole
+packages with dnf, and rebuilds and redeploys the whole
 desktop from source, overwriting your Ryoku configs:
 
 ```bash
@@ -326,6 +302,9 @@ loop.
 
 ## Credits and license
 
+Ryoku Fedora is a port of [Ryoku Arch](https://github.com/neur0map/ryoku-arch) by
+[neur0map](https://github.com/neur0map); the desktop, its design, and most of its
+code come from there.
 Ryoku's alpha series began as a fork of Omarchy, created by David Heinemeier
 Hansson and contributors. From the beta series on it was pruned and rebuilt as an
 independent project that shares no code with Omarchy. The Ryoku shell is custom,
