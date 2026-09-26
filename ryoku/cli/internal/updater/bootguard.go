@@ -98,6 +98,9 @@ func BootGuard(args []string) error {
 	if len(args) > 0 && args[0] == "--disarm" {
 		return disarmBootGuard(i18n.T("disarmed by hand"))
 	}
+	if len(args) > 0 && args[0] == "--console" {
+		return consoleGuard()
+	}
 	raw, err := os.ReadFile(pendingFile)
 	if err != nil {
 		return nil // nothing pending

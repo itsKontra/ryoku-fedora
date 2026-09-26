@@ -1,0 +1,16 @@
+[Unit]
+# Started by sddm's OnFailure, or by the console guard when it holds the
+# desktop back: shows the recovery banner and a text login on tty1. Root
+# stays locked, so recovery is a wheel user signing in and using sudo.
+Description=Ryoku console login (the desktop did not start)
+
+[Service]
+Type=oneshot
+# systemd fires OnFailure on every crash sddm restarts from as well; only a
+# display manager that is really down (failed, or held back by the guard)
+# gets the console. getty@tty1 conflicts with sddm, so it is started here,
+# past that check, rather than pulled in by the unit.
+ExecCondition=/bin/sh -c 'case "$$(systemctl show -P ActiveState sddm.service)" in failed|inactive) exit 0 ;; esac; exit 1'
+ExecStart=/usr/bin/install -Dm644 /usr/share/ryoku/recovery/console-fallback.issue /etc/issue.d/ryoku-console-fallback.issue
+ExecStartPost=/usr/bin/systemctl start --no-block getty@tty1.service
+ExecStartPost=-/usr/bin/chvt 1

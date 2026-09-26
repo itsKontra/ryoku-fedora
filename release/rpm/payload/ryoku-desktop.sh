@@ -231,6 +231,24 @@ EOF
   install -Dm755 "$_repo/ryoku/lockscreen/sddm/ryoku-wayland-session" \
     "$pkgdir/usr/share/ryoku/lockscreen/ryoku-wayland-session"
 
+  # console recovery (system/recovery): a text login with a banner on tty1
+  # when sddm fails or the login screen keeps restarting, and a "Ryoku console"
+  # GRUB entry per kernel. The sddm drop-in pulls the guard in, so nothing
+  # needs enabling; %posttrans twins the kernels already installed.
+  local rec="$_repo/system/recovery"
+  install -Dm644 "$rec/sddm-console-fallback.conf" \
+    "$pkgdir/usr/lib/systemd/system/sddm.service.d/50-ryoku-console-fallback.conf"
+  install -Dm644 "$rec/ryoku-console-fallback.service" \
+    "$pkgdir/usr/lib/systemd/system/ryoku-console-fallback.service"
+  install -Dm644 "$rec/ryoku-console-guard.service" \
+    "$pkgdir/usr/lib/systemd/system/ryoku-console-guard.service"
+  install -Dm644 "$rec/console-fallback.issue" \
+    "$pkgdir/usr/share/ryoku/recovery/console-fallback.issue"
+  install -Dm644 "$rec/ryoku-recovery.tmpfiles.conf" \
+    "$pkgdir/usr/lib/tmpfiles.d/ryoku-recovery.conf"
+  install -Dm755 "$rec/95-ryoku-console.install" \
+    "$pkgdir/usr/lib/kernel/install.d/95-ryoku-console.install"
+
   # user session units: the target, and the shell daemon service the autostart
   # now starts (systemctl --user start ryoku-shell). Ship the whole dir so a
   # unit added to the tree cannot be forgotten here again; ExecStart already
