@@ -96,8 +96,9 @@ truth for the live desktop.
   `catalog/<code>.json` the generated strings, `catalog/overrides/<code>.json`
   the human fixes the generator may never overwrite, `i18n.go`/`langs.go` the Go
   runtime the CLI and both installers link (module `ryoku-i18n`), and `tools/`
-  the extractor/translator (`sync.py`, shipped as `/usr/bin/ryoku-i18n`) and the
-  QML AST wrapper. Installs to `/usr/share/ryoku/i18n`, which the QML singleton
+  the extractor/translator (`sync.py`, shipped as `/usr/bin/ryoku-i18n`), the
+  QML AST wrapper, and `merge3.py`, the key-by-key catalog merge the upstream
+  sync uses. Installs to `/usr/share/ryoku/i18n`, which the QML singleton
   (`ui/Singletons/I18n.qml`) and the Go runtime both read. See `docs/i18n.md`.
 - `cli/` the user-facing control CLI, one Go program (`ryoku`): `update`,
   `rollback`, `snapshots`, `status`, `materialize` (lay the base configs into
@@ -212,7 +213,8 @@ raw.githubusercontent.com serves them with no release infrastructure.
 
 - `bin/` repo tooling: the release helpers (`ryoku-release` tags a release,
   `ryoku-release-notes` writes its notes), the CI/hook checks (`ryoku-dev-scan-slop`,
-  `ryoku-dev-audit-shell-binds`), and `art/` for art authoring (`ryodither` bakes
+  `ryoku-dev-audit-shell-binds`), `ryoku-dev-sync-upstream` (starts an upstream
+  Ryoku merge, see `MergeToFedora.md`), and `art/` for art authoring (`ryodither` bakes
   an image or gif into a 1-bit bone-on-transparent decor; `tiling-demos`
   generates the Appearance tiling-layout preview loops).
 - `tests/` standalone CI check scripts (install chroot-safety, shell tool
