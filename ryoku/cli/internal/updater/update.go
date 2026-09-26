@@ -1201,7 +1201,13 @@ func baseStatus() statusReport {
 		return r
 	}
 	installed := sys.InstalledVersion()
-	latest := latestAvailable("ryoku-desktop")
+	latest := latestAvailable("ryoku-desktop", false)
+	// the check runs as the user, whose dnf metadata cache is not the one
+	// `ryoku update` (root) just refreshed; a repo older than the running
+	// package means that cache is stale, so ask the repo again.
+	if latest != "" && installed != "" && versionCompare(latest, installed) < 0 {
+		latest = latestAvailable("ryoku-desktop", true)
+	}
 	for _, u := range pendingUpdates() {
 		if u.Name == "ryoku-desktop" {
 			latest = u.New
@@ -1215,6 +1221,10 @@ func baseStatus() statusReport {
 // (RYOKU_GITHUB_API), so the sha/compare/recent branching is unit-testable
 // without pacman, the same reason wantedSnapperHelpers is split out.
 func packagedStatus(installed, latest string) statusReport {
+	// a repo view older than the running package is never an update.
+	if latest != "" && installed != "" && versionCompare(latest, installed) < 0 {
+		latest = installed
+	}
 	installedSha := shortCommit(installed)
 	latestSha := shortCommit(latest)
 
@@ -1287,7 +1297,8 @@ func isHex(s string) bool {
 
 // latestAvailable: version of pkg in the [ryoku] repo, or "" when the repo
 // isn't synced/configured. `pacman -Sl ryoku` = "<repo> <pkg> <ver>".
-func latestAvailable(pkg string) string {
+// refresh makes dnf refetch the repo metadata instead of trusting its cache.
+func latestAvailable(pkg string, refresh bool) string {
 	if sys.Has("pacman") {
 		out, err := sys.RunOut("pacman", "-Sl", "ryoku")
 		if err != nil {
@@ -1305,8 +1316,12 @@ func latestAvailable(pkg string) string {
 		// repoquery lists every one; dnf5's --qf adds no newline, so the versions
 		// came back glued into one string that never matches the installed
 		// version, and a fully updated box reported itself behind.
-		out, err := sys.RunOut(manager, "repoquery", "--repo="+sys.RPMRepoName,
-			"--latest-limit=1", "--qf", "%{VERSION}-%{RELEASE}", pkg)
+		args := []string{"repoquery", "--repo=" + sys.RPMRepoName,
+			"--latest-limit=1", "--qf", "%{VERSION}-%{RELEASE}", pkg}
+		if refresh {
+			args = append(args, "--refresh")
+		}
+		out, err := sys.RunOut(manager, args...)
 		if err == nil && strings.TrimSpace(out) != "" {
 			return strings.TrimSpace(out)
 		}
