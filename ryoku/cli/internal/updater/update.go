@@ -14,6 +14,7 @@ import (
 	"ryoku-cli/internal/sys"
 	i18n "ryoku-i18n"
 	wm "ryoku-wm"
+	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -1224,7 +1225,8 @@ func runFreshDoctor() {
 // btrfs default subvolume, which a pinned subvol= simply ignores;
 // limine-snapper-sync's own tooling states the layout is "not compatible with
 // 'snapper rollback'". So the command teaches that flow instead of running a
-// snapper command that cannot restore the system.
+// snapper command that cannot restore the system. Fedora pins its root the
+// same way (rootflags=subvol=root) and restores from the GRUB snapshot menu.
 func Rollback(args []string) error {
 	if sys.RPMManager() != "" {
 		for _, arg := range args {
@@ -1317,6 +1319,9 @@ func restoreGuide(id string) error {
 		}
 	}
 	fmt.Printf(i18n.T("Restoring snapshot %s\n\n"), label)
+	if sys.RPMManager() != "" {
+		return grubRestoreGuide(id)
+	}
 	fmt.Println(i18n.T("Ryoku boots the @ subvolume directly, so a live `snapper rollback` cannot"))
 	fmt.Println(i18n.T("restore the system; the restore runs from the boot menu:"))
 	fmt.Printf(i18n.T("  1. Reboot, and in the Limine menu open Snapshots -> %s.\n"), id)
@@ -1329,6 +1334,45 @@ func restoreGuide(id string) error {
 		fmt.Println(i18n.T("menu. Install it first:"))
 		fmt.Println("  ryoku-pkg-aur-add limine-snapper-sync && sudo systemctl enable --now limine-snapper-sync.service")
 	}
+	return nil
+}
+
+// grubRestoreGuide is the Fedora restore: the "Ryoku snapshots" GRUB submenu
+// that `ryoku boot-menu sync` writes. With a terminal it offers to pick the
+// restore entry for the next boot only (grub2-reboot), so nothing changes on
+// disk until the machine restarts, and the boot after that is normal again.
+func grubRestoreGuide(id string) error {
+	if n, err := strconv.Atoi(id); err != nil || n <= 0 {
+		return fmt.Errorf(i18n.T("%q is not a snapshot number (see `ryoku snapshots`)"), id)
+	}
+	if !snapshotsInBootMenu() {
+		fmt.Println(i18n.T("The snapshot boot menu is not set up on this machine (ryoku-desktop ships it)."))
+		return nil
+	}
+	restore := snapshotEntryID(id, "restore")
+	if sys.Sudo("grep", "-q", "--", "--id "+strings.TrimPrefix(restore, snapshotMenuID+">")+" ", snapshotMenuCfg()) != nil {
+		fmt.Printf(i18n.T("Snapshot %s is not in the boot menu. `ryoku snapshots` lists the ones that are;\n"), id)
+		fmt.Println(i18n.T("a snapshot whose kernel was removed before its copy was made cannot be booted."))
+		return nil
+	}
+	fmt.Println(i18n.T("The GRUB menu lists it under \"Ryoku snapshots\":"))
+	fmt.Println(i18n.T("  look (read-only)  boots it with changes kept in RAM; nothing on disk changes"))
+	fmt.Println(i18n.T("  restore           makes it the system again and boots it; the current system"))
+	fmt.Println(i18n.T("                    is kept on the disk for two weeks as root.broken-<date>"))
+	fmt.Println(i18n.T("Your home folder is not part of the snapshot and stays as it is."))
+	if !sys.StdinIsTTY() {
+		return nil
+	}
+	fmt.Printf(i18n.T("\nRestore snapshot %s on the next boot? [y/N] "), id)
+	var resp string
+	_, _ = fmt.Scanln(&resp)
+	if r := strings.ToLower(strings.TrimSpace(resp)); r != "y" && r != "yes" {
+		return nil
+	}
+	if err := sys.Sudo("grub2-reboot", restore); err != nil {
+		return fmt.Errorf(i18n.T("setting the next boot failed: %v"), err)
+	}
+	fmt.Println(i18n.T("Done. Reboot to restore it; the boot after that uses the normal menu again."))
 	return nil
 }
 
@@ -1439,9 +1483,12 @@ func printSnapshotTable(rows []snapshotRow) {
 	if free := rootFree(); free != "" {
 		summary += ", " + free + i18n.T(" free on /")
 	}
-	if snapshotsInBootMenu() {
-		summary += i18n.T(", listed in the Limine boot menu")
-	} else {
+	switch {
+	case snapshotsInBootMenu():
+		summary += i18n.T(", listed in the boot menu")
+	case sys.RPMManager() != "":
+		summary += i18n.T(", NOT in the boot menu (ryoku-desktop ships it; run ryoku update)")
+	default:
 		summary += i18n.T(", NOT in the boot menu (ryoku doctor fixes that)")
 	}
 	fmt.Println(summary)
@@ -1456,9 +1503,12 @@ func shortSnapDate(d string) string {
 	return d
 }
 
-// snapshotsInBootMenu reports whether limine-snapper-sync is in place to list
-// snapshots in the Limine boot menu (Ryoku's only supported restore path).
+// snapshotsInBootMenu reports whether snapshots reach the boot menu: the
+// GRUB snapshot submenu on Fedora, limine-snapper-sync under Limine.
 func snapshotsInBootMenu() bool {
+	if sys.RPMManager() != "" {
+		return sys.Exists(snapshotMenuScript)
+	}
 	return sys.PkgInstalled("limine") &&
 		sys.PkgInstalled("limine-snapper-sync") &&
 		sys.UnitEnabled("limine-snapper-sync.service")

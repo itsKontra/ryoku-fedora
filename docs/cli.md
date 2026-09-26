@@ -83,9 +83,12 @@ pick one. COPR keeps a limited package history, so there is no rollback to a
 release tag on Fedora; the snapshots taken around each `ryoku update` are the
 way back.
 
-The step-by-step restore it prints for an id still describes the Limine
-Snapshots menu of the Arch build. A Fedora install boots through GRUB, which
-does not list snapshots, so that guide does not apply to Fedora yet.
+With an id it explains the two entries the snapshot has under "Ryoku snapshots"
+in the GRUB menu: look boots it read-only with changes kept in RAM, restore
+makes it the system again (the replaced root is kept for two weeks). From a
+terminal it then offers to restore it on the next boot only (`grub2-reboot`).
+Your home folder is not part of the snapshot. See "Snapshots in the boot menu"
+in `docs/updates.md`.
 
 ### `ryoku snapshots`
 
