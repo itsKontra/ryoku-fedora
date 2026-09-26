@@ -10,6 +10,7 @@ session_id=${1:-}
 unit="ryoku-qylock-unlock-guard-${session_id}.service"
 who="ryoku-qylock-unlock-${session_id}"
 proof_helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/proof.sh"
+[[ -x $proof_helper ]] || proof_helper=/usr/share/ryoku/lockscreen/qylock/quickshell-lockscreen/proof.sh
 for command in systemctl systemd-run systemd-inhibit jq loginctl busctl; do
   command -v "$command" >/dev/null 2>&1 || {
     printf 'ryoku-qylock-unlock-prepare: %s is required\n' "$command" >&2
