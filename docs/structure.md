@@ -209,12 +209,12 @@ raw.githubusercontent.com serves them with no release infrastructure.
 
 ## Tooling
 
-- `bin/` repo tooling: the release version helpers (`ryoku-release-version`,
-  `ryoku-release-bump`), the CI/hook checks (`ryoku-dev-scan-slop`,
+- `bin/` repo tooling: the release helpers (`ryoku-release` tags a release,
+  `ryoku-release-notes` writes its notes), the CI/hook checks (`ryoku-dev-scan-slop`,
   `ryoku-dev-audit-shell-binds`), and `art/` for art authoring (`ryodither` bakes
   an image or gif into a 1-bit bone-on-transparent decor; `tiling-demos`
   generates the Appearance tiling-layout preview loops).
 - `tests/` standalone CI check scripts (install chroot-safety, shell tool
   availability).
 - `.github/` the workflows and issue/PR templates; `.githooks/` the commit gates.
-- `VERSION` the base semver; `.woke.yml` the inclusive-language config.
+- `.woke.yml` the inclusive-language config.

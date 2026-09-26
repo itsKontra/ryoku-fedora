@@ -3,9 +3,6 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
-      release:
-        type: string
-        default: ''
       channel:
         type: string
         default: testing
@@ -41,7 +38,6 @@ jobs:
       - name: Prepare self-contained SRPMs
         env:
           RYOKU_SRPM_OUT: /tmp/srpms
-          RYOKU_RELEASE: ${{ inputs.release || format('v0.0.0-alpha.{0}', github.run_number) }}
           RYOKU_CHANNEL: ${{ inputs.channel || 'testing' }}
           RYOKU_RPM_REVISION: ${{ github.run_number }}
         run: release/rpm/prepare-srpms.sh

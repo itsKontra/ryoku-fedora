@@ -149,15 +149,13 @@ func deployRun(path string) error {
 	return renderQuiet([]string{path})
 }
 
-// readVersion reads the checkout's VERSION file (e.g. 0.50.8-beta.19), the
-// release bump every push carries, so the update names the version, not just the
-// commit. "?" when absent.
+// readVersion names the checkout's version (checkoutVersion) so the update
+// names the release, not just the commit. "?" before the first release tag.
 func readVersion(repo string) string {
-	b, err := os.ReadFile(filepath.Join(repo, "VERSION"))
-	if err != nil {
-		return "?"
+	if v := checkoutVersion(repo); v != "" {
+		return v
 	}
-	return strings.TrimSpace(string(b))
+	return "?"
 }
 
 // syncChannel advances a clean checkout onto origin/<ch> when that is a lossless

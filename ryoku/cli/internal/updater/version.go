@@ -9,7 +9,7 @@ import (
 )
 
 // Version prints the running Ryoku version. Plain form feeds fastfetch's OS
-// line ("Ryoku v0.1.0-beta.14"); `--branch` feeds its BRANCH line as
+// line ("Ryoku v0.73.0"); `--branch` feeds its BRANCH line as
 // "<channel> · <sha>" (e.g. "main · dcd7b80"). Deliberately fast: it runs on
 // every shell launch, so it never touches the network or `pacman -Sl`. A
 // checkout reads git, a packaged box parses the local pacman version. Any
@@ -25,7 +25,7 @@ func Version(args []string) error {
 		}
 	}
 	base, sha := versionParts()
-	// --pretty: the line's name in front ("Onogoro v0.56.0-beta.19"); on a
+	// --pretty: the line's name in front ("Onogoro v0.73.0"); on a
 	// terminal the line's art above it. fastfetch and scripts read a pipe, so
 	// they get the one line.
 	if pretty {
@@ -78,15 +78,23 @@ func ReleaseName() string {
 	return strings.TrimSpace(string(b))
 }
 
-// versionParts returns (base semver, short sha) for the running Ryoku. On a
-// checkout: the VERSION file + git HEAD. On a packaged install: parsed from the
-// pacman version "<core>.r<count>.g<sha>-<rel>" the repo build embeds (the
-// r<count> token is skipped). Any field comes back "" when undeterminable.
+// checkoutVersion names a checkout by its nearest release tag, without the v:
+// 0.73.0 on the tag, 0.73.0-5-gabc1234 past it, "" before the first one.
+func checkoutVersion(repo string) string {
+	out, err := sys.RunOut("git", "-C", repo, "describe", "--tags", "--match", "v[0-9]*", "HEAD")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(strings.TrimSpace(out), "v")
+}
+
+// versionParts returns (base version, short sha) for the running Ryoku. On a
+// checkout: the nearest release tag + git HEAD. On a packaged install: parsed
+// from the pacman version "<core>.r<count>.g<sha>-<rel>" the repo build embeds
+// (the r<count> token is skipped). Any field comes back "" when undeterminable.
 func versionParts() (base, sha string) {
 	if repo := sys.ResolveRepo(); repo != "" {
-		if b, err := os.ReadFile(filepath.Join(repo, "VERSION")); err == nil {
-			base = strings.TrimSpace(string(b))
-		}
+		base = checkoutVersion(repo)
 		if out, err := sys.RunOut("git", "-C", repo, "rev-parse", "--short=7", "HEAD"); err == nil {
 			sha = strings.TrimSpace(out)
 		}

@@ -1,7 +1,10 @@
 name: Publish Fedora COPR packages
+# a v* tag republishes its main commit under a higher RPM revision, so boxes
+# receive the build whose /etc/ryoku-release names the release.
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,10 +13,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   gate:
-    if: github.repository == 'itsKontra/ryoku-fedora' && github.ref == 'refs/heads/main'
+    if: github.repository == 'itsKontra/ryoku-fedora' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     uses: ./.github/workflows/fedora-rpm.yml
     with:
-      release: ${{ format('v0.0.0-alpha.{0}', github.run_number) }}
       channel: copr
   copr:
     needs: gate
@@ -31,7 +33,11 @@ jobs:
         env:
           COPR_FINGERPRINT: ${{ vars.RYOKU_COPR_FINGERPRINT }}
         run: |
-          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            git merge-base --is-ancestor HEAD origin/main
+          else
+            test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          fi
           test -n "$COPR_FINGERPRINT"
       - uses: actions/download-artifact@v4
         with:

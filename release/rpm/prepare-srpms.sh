@@ -48,7 +48,7 @@ cache.mkdir()
 for version, url, digest, relative in extra.RELEASES.values():
     (cache / digest).write_bytes(extra.download(url, digest))
 PYEXTRAS
-release=${RYOKU_RELEASE:-local-$version}
+release=${RYOKU_RELEASE:-$(git -C "$root" describe --tags --match 'v[0-9]*' HEAD 2>/dev/null || echo "local-$version")}
 cat > "$work/tree/ryoku-$version/.rpm-release" <<META
 RELEASE=$release
 NAME=$(cat "$root/CODENAME")
