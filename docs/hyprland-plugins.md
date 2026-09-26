@@ -1,8 +1,8 @@
 # Hyprland compositor plugins
 
 A compositor plugin is a `.so` Hyprland dlopens into itself: title bars, glass,
-image borders, cursor motion, focus flash, key sounds. Ryoku bundles six as
-`[ryoku]` packages, the Hub manages every one of them (and any the user adds)
+image borders, cursor motion, focus flash, key sounds. Ryoku bundles six,
+built on the machine against the installed Hyprland; the Hub manages every one of them (and any the user adds)
 on one page, and the machinery below keeps them loading across Hyprland
 updates. Shell plugins (the Quickshell widgets under `docs/plugins.md`) are a
 different thing: they run in the shell, not the compositor.
@@ -14,13 +14,12 @@ the major.minor of aquamarine, hyprutils, hyprgraphics, hyprcursor and
 hyprlang. Hyprland bakes that string into itself (`hyprctl version -j` reports
 it as `abiHash`) and into every plugin (`__hyprland_api_get_client_hash`), and
 refuses a plugin whose string differs: `version mismatch, built against: ...,
-running compositor: ...`. Arch can bump any of those libraries between two
-Ryoku releases, and then a copy that loaded yesterday does not load today.
+running compositor: ...`. A `dnf upgrade` can bump any of those libraries
+(Hyprland comes from the `sdegler/hyprland` COPR) between two Ryoku releases, and then a copy that loaded yesterday does not load today.
 
 So every copy Ryoku builds carries a receipt: `<name>.abi` beside `<name>.so`,
-the ABI string it was compiled for. The `[ryoku]` packages write it from the
-build host's `version.h` (the same formula, in `release/packages/*/PKGBUILD`),
-and the local builder writes it from the installed headers. With the receipt,
+the ABI string it was compiled for. The local builder writes it from the
+installed headers. With the receipt,
 the Hub, `settings.lua` and the doctor can all tell a stale copy from a working
 one without loading it.
 
@@ -29,7 +28,7 @@ Three places can hold a copy, and `ryoku-hub` resolves them in this order:
 | Tier | Path | Written by |
 |---|---|---|
 | built | `~/.local/lib/hyprland/plugins/<id>.so` (+ `.abi`, `<id>.json` receipt) | `deploy.sh` on a checkout, the Plugins page's Rebuild and Add, the doctor |
-| package | `/usr/lib/hyprland/plugins/<id>.so` (+ `.abi`) | the `[ryoku]` package |
+| package | `/usr/lib/hyprland/plugins/<id>.so` (+ `.abi`) | a system package; the Fedora RPMs ship none, so this tier is empty unless you add one |
 | hyprpm | `~/.local/share/hyprpm/<repo>/<id>.so` | hyprpm, by the user's own hand; read-only here |
 
 The generated `settings.lua` loads the first copy whose receipt matches the
@@ -97,8 +96,8 @@ Nothing is enabled behind the user's back: the page turns the new plugin on in
 the draft and Save loads it. The build steps are the repository's own, run on
 this machine, so the page says to add only repositories you trust. hyprpm
 itself is not used: it clones and builds Hyprland's own source for headers and
-rewrites the system `hyprland.pc` with sudo, where the Arch `hyprland` package
-already ships the headers a plugin build needs.
+rewrites the system `hyprland.pc` with sudo, where the installed Hyprland
+development headers already are what a plugin build needs.
 
 ### Settings, detected
 
@@ -140,13 +139,11 @@ Ryoku extension: the builder lays that directory beside the `.so`
   Hyprland bump taken with `ryoku update` is converged before the next login. A
   disabled stale plugin costs nothing and is left to the page. Without a
   toolchain it warns and names the packages to install.
-- `deploy.sh` runs the same builder (`--stale --checkout <repo>`) instead of
-  makepkg: a checkout rebuilds only what its receipts say is missing or stale,
+- `deploy.sh` runs the same builder (`--stale --checkout <repo>`): a checkout rebuilds only what its receipts say is missing or stale,
   and keysounds when its source changed.
-- The packages pin to the release (`ryoku-desktop` depends on
-  `<plugin>=$pkgver`) and rebuild on every publish against the build host's
-  Hyprland. Between publishes an Arch bump leaves them stale; the receipt makes
-  that visible and the local rebuild covers it until the next release ships.
+- The Fedora RPMs ship no prebuilt plugin, so every copy on a packaged box is
+  the built tier, and the receipt is what tells the doctor a Hyprland bump from
+  `dnf upgrade` left it stale.
 
 ## The backend
 

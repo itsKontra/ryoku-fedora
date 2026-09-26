@@ -20,11 +20,14 @@ Ryoku Settings manages what is already present.
   Settings remains the destination for activation, configuration, updates,
   placement, and removal.
 - **Install = the actuator.** `ryostore-install` routes each bundle item by
-  type: `package` through `pacman -Syu` / the AUR helper (one package at a time,
-  so one failure never strands the rest), `script` through `installers/<name>.sh`,
+  type: `package` through `ryoku-pkg-add` into dnf, from the enabled Fedora and
+  COPR repositories (each item's state is checked afterwards, so one failure is
+  reported against that item), `script` through `installers/<name>.sh`,
   and `plugin` / `nautilus-pack` through the shell's guest paths. It runs in a
   floating terminal for the sudo prompt; a bundle's `requires` (such as
-  `multilib`) is ensured first. Removal is symmetric.
+  `multilib`, which on Fedora checks i686 package support) is ensured first;
+  an unsupported one, such as the Arch-only `cachyos`, fails the bundle.
+  Removal is symmetric.
 - **Guests = host/guest.** The shell is the *host*; a bundle ships *guests*
   (a plugin that renders in a widget or frame-popout host, a nautilus pack that
   drops right-click scripts). A guest declares its host and mounts on install,

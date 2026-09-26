@@ -360,6 +360,6 @@ must be on both install paths, which the delivery check enforces.
 - Engine: `bash -n` + shellcheck on `ryostage`; `check`, `models --json` and a
   `cut` against a provisioned cache.
 - Delivery: `ryostage` is on both install paths (`deploy.sh` and the
-  `ryoku-shell` PKGBUILD), enforced by the delivery check.
+  `ryoku-shell` RPM payload), enforced by the delivery check.
 - The live visual result and real cut quality need a running session with the
   engine provisioned, exercised on the dev box via `dev-run.sh`.

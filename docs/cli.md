@@ -1,7 +1,7 @@
 # The `ryoku` command
 
 The user-facing control CLI (`ryoku/cli/`, one Go program). It is the front door
-to updates, rollback, status, and the shell; it orchestrates pacman, yay, and
+to updates, rollback, status, and the shell; it orchestrates dnf, flatpak, and
 snapper rather than reimplementing them. This is the per-command reference: what
 each command does, where it is meant to run, and who runs it.
 
@@ -11,7 +11,7 @@ Every command behaves with respect to one of two ways Ryoku can exist on a
 machine. Most confusion about the CLI comes from mixing them up.
 
 - **A packaged install** the normal case. The desktop is installed from the
-  `[ryoku]` pacman repo; `ryoku-desktop` ships the base config under
+  `RyokuCOPR` repository (the COPR project `itskontra/ryoku`); `ryoku-desktop` ships the base config under
   `/usr/share/ryoku/config`, and there is no git checkout and no build toolchain.
 - **A dev checkout** a clone of this repo on a maintainer's machine. There is no
   `/usr/share/ryoku/config`; the desktop is laid down from the checkout by
@@ -20,7 +20,7 @@ machine. Most confusion about the CLI comes from mixing them up.
   the deployed `ryoku` binary later finds the repo again.
 
 `ryoku update` auto-detects which world it is in (a recorded checkout means the
-git path, otherwise the pacman path), so the same command is correct on both. A
+git path, otherwise the package path), so the same command is correct on both. A
 few commands belong to only one world; that is called out per command below.
 
 ## At a glance
@@ -53,13 +53,13 @@ anything else changes). What it actually runs depends on the world:
   branch (`main` for everyone), fast-forwards the checkout when it is sitting
   cleanly on that branch, and redeploys with `deploy.sh`. A feature branch or a
   dirty tree is left to git only the redeploy runs.
-- **Packaged install:** the packages the `[ryoku]` repo serves, by name
-  (`pacman -Sy`, then `pacman -S --needed ryoku/<pkg>...`), then
-  `ryoku materialize`, then a shell reload. It is not a sysupgrade: the base
-  system and its kernel come from Arch or CachyOS, and `sudo pacman -Syu` is
-  what moves them. The run reports how many packages that lane is holding, and
-  `ryoku update --system` runs it too (the full `pacman -Syu`, `yay -Sua`, and
-  `flatpak update`) for a box that wants one command.
+- **Packaged install:** the installed packages the `RyokuCOPR` repository
+  serves, by name (`dnf --repo=RyokuCOPR --refresh makecache`, then
+  `dnf --repo=RyokuCOPR distro-sync <pkg>...`), then `ryoku materialize`, then a
+  shell reload. It is not a system upgrade: the base system and its kernel come
+  from Fedora, and `sudo dnf upgrade` is what moves them. The run reports how
+  many packages that lane is holding, and `ryoku update --system` runs it too
+  (`dnf -y upgrade` and `flatpak update`) for a box that wants one command.
 
 Throughout, it publishes progress to `$XDG_RUNTIME_DIR/ryoku-update.json` so the
 shell's update island can show the run.
@@ -69,8 +69,8 @@ shell's update island can show the run.
 A read-only report. It always prints the active config base. On a checkout it
 shows the channel, the deployed commit (`installed`), and how many commits behind
 the channel you are; on a packaged install it shows the installed `ryoku-desktop`
-version, what the `[ryoku]` repo offers, and the count of pending package
-updates (via `checkupdates` from `pacman-contrib`), listed as `system:` because
+version, what the `RyokuCOPR` repository offers, and the count of pending
+package updates (via `dnf check-update`), listed as `system:` because
 `ryoku update` does not take them. It ends with the snapshot count.
 
 `--json` is the data seam the Hub and the update island read; it is not meant for
@@ -79,12 +79,13 @@ humans.
 ### `ryoku rollback [id]`
 
 Guide restoring a snapper snapshot. With no id it lists the snapshots so you can
-pick one. Ryoku boots the `@` subvolume directly (`rootflags=subvol=@`), a layout
-`snapper rollback` cannot restore (it flips the btrfs default subvolume, which a
-pinned `subvol=` ignores), so the restore runs from the boot menu: reboot, boot
-the snapshot under the Limine Snapshots menu, and run `sudo
-limine-snapper-restore` there; it copies the booted snapshot (and its matching
-kernels on the ESP) back onto `@`.
+pick one. COPR keeps a limited package history, so there is no rollback to a
+release tag on Fedora; the snapshots taken around each `ryoku update` are the
+way back.
+
+The step-by-step restore it prints for an id still describes the Limine
+Snapshots menu of the Arch build. A Fedora install boots through GRUB, which
+does not list snapshots, so that guide does not apply to Fedora yet.
 
 ### `ryoku snapshots`
 
@@ -203,14 +204,14 @@ for a GUI. `ryoku update` runs `ryoku doctor` itself, so healing is seamless and
 a finding never aborts the update.
 
 Current reconcilers (in `ryoku/cli/internal/doctor/`): swap kept out of snapshots,
-snapper config consistency, stale pacman lock, the ryoku package channel + keyring,
-desktop session components, the keyring unlock policy (how the GNOME keyring
+snapper config consistency, the `RyokuCOPR` package channel, the signed NVIDIA
+driver (`ryoku-nvidia`), desktop session components, the keyring unlock policy (how the GNOME keyring
 unlocks at sign-in; see `ryoku keyring`), Hyprland config integrity (revalidates and repairs the
 generated monitors.lua/gpu.lua drop-ins so a corrupt one cannot strand the desktop
 backlight (catches a missing interface, missing brightnessctl, or a hybrid-GPU
-firmware-only backlight), the pacman progress bar (seeds Ryoku's `ILoveCandy`
-default into `/etc/pacman.conf` once, so deleting the line sticks), pending
-`.pacnew` config, and orphaned packages.
+firmware-only backlight), and orphaned packages (`dnf repoquery --unneeded`).
+Reconcilers that only concern pacman (its lock, its progress bar, `.pacnew`
+files) report `ok` on Fedora.
 Reconcilers retire once every supported install has run them, so the set stays
 small rather than growing like an ordered migration list.
 
@@ -218,7 +219,7 @@ small rather than growing like an ordered migration list.
 single shareable text report and points you to it. Generate one any time with
 `ryoku doctor --report [file]`: it bundles the findings with system state (btrfs
 usage and device errors, `/proc/swaps`, failed units, recent journal errors,
-pacman state, the ryoku channel state, session env, and hardware: backlight
+package state, the ryoku channel state, session env, and hardware: backlight
 devices, GPU drivers, kernel cmdline, recent display-driver log) into one `.txt`
 the maintainers can read. It contains no passwords or keys.
 
@@ -291,7 +292,7 @@ bar without touching JSON.
   bar). `ryoku-shell bar hide battery`
 - `bar set <id> <key> <value>` set one of a widget's own settings, validated
   against the catalogue (built-in) or the plugin manifest.
-  `ryoku-shell bar set launcher launcherLogoText arch`
+  `ryoku-shell bar set launcher launcherLogoText fedora`
 - `bar position top|bottom` move the bar to the top or bottom edge.
   `ryoku-shell bar position bottom`
 - `bar form full|fit|dock|notch|islands` set the shell shape the bar takes.

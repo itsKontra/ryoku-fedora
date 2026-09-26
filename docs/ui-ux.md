@@ -926,7 +926,7 @@ sources and confirm on the running system:
 - The Hyprland wiki for compositor behavior, dispatchers, and protocols
   (idle-inhibit, layer rules, window rules).
 - The Qt/QML documentation for animation, layouts, and bindings.
-- The Arch Wiki and each tool's own docs for system-level pieces.
+- The Fedora docs, the Arch Wiki, and each tool's own docs for system-level pieces.
 
 Prefer official sources, cross-check a second one for anything load-bearing, and
 verify the result live with the dev loop rather than assuming it renders. Then

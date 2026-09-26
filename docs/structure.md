@@ -101,7 +101,7 @@ truth for the live desktop.
   (`ui/Singletons/I18n.qml`) and the Go runtime both read. See `docs/i18n.md`.
 - `cli/` the user-facing control CLI, one Go program (`ryoku`): `update`,
   `rollback`, `snapshots`, `status`, `materialize` (lay the base configs into
-  `~/.config`), and `reload`. It orchestrates pacman, yay, and snapper; it does
+  `~/.config`), and `reload`. It orchestrates dnf, flatpak, and snapper; it does
   not reimplement them. `main.go` is a thin dispatcher over the concerns under
   `internal/`: `updater` (update, status, rollback, channel, run-state,
   materialize, version), `doctor` (the convergent reconcilers, report, and
@@ -157,7 +157,8 @@ System-level definition installed into the target.
 - `extras/` the helpers behind the Hub's Extras section, shipped to `/usr/bin` by
   `ryoku-desktop`: `ryostore-install` (installs, removes, and reports the
   optional bundles from the `ryostore` catalogue), the `ryoku-pkg-*` routing
-  wrappers (repo, AUR, remove, multilib), and `ryoku-cmd-present`.
+  wrappers (repo, remove, multilib, and the legacy AUR name, which routes to
+  dnf on Fedora), and `ryoku-cmd-present`.
 - `packages/` the package manifests used to define and audit the desktop and
   hardware package closure.
 
