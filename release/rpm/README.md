@@ -26,7 +26,9 @@ substitute for the currently pinned 4.2 without compatibility validation.
 
 **Publisher setup**
 
-Create a GitHub environment named `fedora-publish`. Add these repository
+Create a GitHub environment named `fedora-publish`. Its deployment branches
+and tags must allow the `main` branch and the `v*` tags; a release tag the
+environment does not allow never reaches COPR. Add these repository
 variables (the signature-only install jobs must be able to read them too):
 
 | Variable | Value |

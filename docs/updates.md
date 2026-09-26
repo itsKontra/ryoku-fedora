@@ -313,8 +313,10 @@ It checks the tree, the tag, the version order and CI, prints the notes the
 release will carry, and pushes the tag on confirmation. The tag then runs:
 
 - `publish-copr.yml`: rebuilds the tagged commit under a higher RPM revision so
-  boxes update onto the build whose `RELEASE=` names the release.
-- `build-fedora-iso.yml`: waits for the signed RPMs, builds the ISO, and creates
+  boxes update onto the build whose `RELEASE=` names the release. The
+  `fedora-publish` environment must allow `v*` tags to deploy.
+- `build-fedora-iso.yml`, called by `publish-copr.yml` once that rebuild is
+  published: waits for COPR to serve it, builds the ISO, and creates
   the GitHub release titled `Ryoku <CODENAME> <version>` with the notes
   `bin/ryoku-release-notes` harvests from the `Note:` trailers since the
   previous tag, then attaches the ISO and its checksum.
