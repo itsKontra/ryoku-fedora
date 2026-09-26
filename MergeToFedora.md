@@ -1,16 +1,23 @@
 # Merging Ryoku upstream into Fedora
 
-Use this playbook whenever `origin/unstable-dev` needs to be brought into this
-Fedora port. It keeps the desktop and product changes from Ryoku while keeping
+Use this playbook whenever upstream Ryoku (`unstable-dev` on
+https://github.com/neur0map/ryoku-arch) needs to be brought into this Fedora
+port. It keeps the desktop and product changes from Ryoku while keeping
 Fedora as the only delivery, installer, package-manager, and boot-stack
 implementation.
 
-`main` and `origin/unstable-dev` deliberately diverged at
-`550993aedc9c9bdf87d2372bef3462efc6f06082`. The first sync after this document
-will therefore be large. Finish it with a regular merge commit on a PR branch.
-That merge records the upstream parent, making every later sync contain only
-new upstream commits. Do not squash it and do not cherry-pick the whole range:
-either would leave the branches unrelated for the next update.
+Every sync is a regular merge commit on a PR branch, and the PR is merged with
+a merge commit. That records the upstream parent, so the next sync contains
+only newer upstream commits. Do not squash it and do not cherry-pick the whole
+range: either leaves the branches unrelated, and the next sync replays
+everything already taken as conflicts. PR #23 was squashed that way; the merge
+that records its upstream tip (`3fa2b4ed`) as a parent repaired it without
+changing a file. Picking single commits does not fit this upstream either:
+many upstream commits touch shared code and Arch delivery at once.
+
+`bin/ryoku-dev-sync-upstream` does the mechanical half of this playbook. Its
+path lists are the machine-readable copy of the tables below; change both
+together.
 
 ## Scope rule
 
@@ -90,28 +97,36 @@ specs and `installation/fedora/packages.list` define Fedora delivery.
 1. Start from a clean, up-to-date `main`. Preserve unrelated local work before
    starting: `git status --short`, `git fetch origin --prune`, then
    `git switch main` and `git pull --ff-only`.
-2. Create `merge/fedora-upstream-YYYY-MM-DD` from `main`. Record the exact
-   candidate with `git rev-parse origin/unstable-dev` and review
-   `git log --oneline main..origin/unstable-dev` plus
-   `git diff --dirstat=files,0 main...origin/unstable-dev`.
-3. Begin one ancestry-preserving merge, without committing it yet:
-
-   ```bash
-   git merge --no-ff --no-commit origin/unstable-dev
-   ```
+2. Review what is pending with `bin/ryoku-dev-sync-upstream --report`. It adds
+   the `upstream` remote when missing, fetches `unstable-dev`, and lists every
+   new upstream commit as `auto` (version bumps and translation runs),
+   `discard` (only paths on the discard list), `mixed`, or `portable`.
+3. Create `merge/fedora-upstream-YYYY-MM-DD` from `main` and run
+   `bin/ryoku-dev-sync-upstream` on it (`--ref <sha>` pins a candidate). It
+   begins one ancestry-preserving `git merge --no-ff --no-commit`, then:
+   - removes upstream additions and edits under the discard list;
+   - keeps files `main` deleted deleted, and lists them;
+   - keeps `main` for conflicted Fedora-owned paths, and lists them so the
+     upstream change can be ported by hand;
+   - merges conflicted i18n catalogs key by key
+     (`ryoku/i18n/tools/merge3.py`);
+   - refreshes the vendored `ryoku-wm` copies from `ryoku/wm` once the seam
+     is resolved;
+   - prints the conflicts left, the files whose staged diff names an Arch
+     term, and the upstream range for the PR record.
 
    Do not use `-X ours`, `-s ours`, a blanket checkout of one side, or a
-   squashed import. Those hide conflicts that may contain product work or
-   reintroduce an Arch implementation.
-4. Resolve conflicts by category. Keep the `main` version of the Fedora-owned
-   paths, discard the Arch-only paths, and merge product/source changes by hand.
-   For each source conflict, preserve the upstream behaviour and retain the
-   Fedora package, installer, update, and service contracts. If an upstream
-   change adds a path that is on the discard list, remove that addition after
-   confirming it is not used by a portable change.
+   squashed import for a sync. Those hide conflicts that may contain product
+   work or reintroduce an Arch implementation. (`-s ours` is only right for
+   recording a range whose content already reached `main`, as with #23.)
+4. Resolve the remaining conflicts by hand. For each source conflict, preserve
+   the upstream behaviour and retain the Fedora package, installer, update,
+   and service contracts. Read each "kept main" path's upstream diff and port
+   what applies. Check each "kept deleted" path for a portable fix that
+   belongs somewhere else in the Fedora tree.
 5. Search the staged result for distribution leakage and for untracked delivery
-   work. Review `git diff --cached --name-status`, then run an exact search such
-   as:
+   work. The script lists files with a match; review `git diff --cached
+   --name-status`, then read the matches with an exact search such as:
 
    ```bash
    git diff --cached -G 'pacman|yay|AUR|CachyOS|PKGBUILD|makepkg|pacstrap|archiso|mkinitcpio|limine|snapper' -- . ':!docs/archived/**'
