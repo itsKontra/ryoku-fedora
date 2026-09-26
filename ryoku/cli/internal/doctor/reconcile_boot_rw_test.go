@@ -19,6 +19,9 @@ func TestReadBootRWState(t *testing.T) {
 			bootRWState{target: "/efi", source: "/dev/nvme0n1p1", fstype: "vfat", ro: true}, true},
 		{"", "/efi", bootRWState{}, false},
 		{"rw,relatime only-two", "/boot", bootRWState{}, false},
+		{"rw,relatime,fd=52,pgrp=1,timeout=120 systemd-1 autofs\nro,relatime /dev/nvme0n1p1 vfat", "/boot/efi",
+			bootRWState{target: "/boot/efi", source: "/dev/nvme0n1p1", fstype: "vfat", ro: true}, true},
+		{"rw,relatime,fd=52,pgrp=1,timeout=120 systemd-1 autofs", "/boot/efi", bootRWState{}, false},
 	}
 	for _, c := range cases {
 		got, ok := readBootRWState(c.out, c.target)

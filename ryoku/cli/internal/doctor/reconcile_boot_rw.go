@@ -40,15 +40,23 @@ func bootRWOptionsRO(opts string) bool {
 	return len(first) > 0 && first[0] == "ro"
 }
 
-// readBootRWState parses one `findmnt -n -o OPTIONS,SOURCE,FSTYPE <target>`
-// line. None of the three columns carries a space, so the line is three fields;
-// anything else is a findmnt we do not understand and reads as absent.
+// readBootRWState parses `findmnt -n -o OPTIONS,SOURCE,FSTYPE <target>`. None
+// of the three columns carries a space, so a line is three fields. An
+// automounted volume prints the autofs trigger and then the real mount, so the
+// autofs line is skipped and the last mount wins; an automount not yet
+// triggered, or a line we do not understand, reads as absent.
 func readBootRWState(out, target string) (bootRWState, bool) {
-	f := strings.Fields(out)
-	if len(f) != 3 {
-		return bootRWState{}, false
+	var st bootRWState
+	found := false
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		if len(f) != 3 || f[2] == "autofs" {
+			continue
+		}
+		st = bootRWState{target: target, source: f[1], fstype: f[2], ro: bootRWOptionsRO(f[0])}
+		found = true
 	}
-	return bootRWState{target: target, source: f[1], fstype: f[2], ro: bootRWOptionsRO(f[0])}, true
+	return st, found
 }
 
 // Seams over the live box, replaced in tests.
