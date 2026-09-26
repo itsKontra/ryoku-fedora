@@ -68,7 +68,7 @@ class TestKickstartSpecification(unittest.TestCase):
                 self.assertIn(f"/results/{repo}/fedora-44-x86_64/", self.content)
 
     def test_accounts_are_collected_in_anaconda(self):
-        self.assertIn("rootpw --lock", self.lines)
+        self.assertFalse(any(line.startswith("rootpw") for line in self.lines))
         self.assertFalse(any(line.startswith("user ") for line in self.lines))
         self.assertIn("/mnt/sysroot --anaconda", self.content)
         self.assertNotIn("keyboard us", self.lines)
