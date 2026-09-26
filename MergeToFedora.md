@@ -19,6 +19,14 @@ many upstream commits touch shared code and Arch delivery at once.
 path lists are the machine-readable copy of the tables below; change both
 together.
 
+`.github/workflows/upstream-sync.yml` runs it every Monday (or on demand).
+When nothing is left for a person, it commits the merge with the repo hooks
+and opens a draft `merge/fedora-upstream-<date>` PR. Otherwise it keeps one
+"Upstream sync needs a hand merge" issue current with the report. It skips
+while a sync PR is open. Its PRs are pushed with the workflow token, which does
+not start other workflows, so push a commit to the branch (the Fedora
+follow-through) before relying on its checks.
+
 ## Scope rule
 
 Classify every upstream change by the interface it affects, rather than by its
