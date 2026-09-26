@@ -472,7 +472,8 @@ func pruneBrokenRoots(l menuLayout) {
 		if err != nil || time.Since(at) < brokenRootKeep {
 			continue
 		}
-		if err := sys.Run("btrfs", "subvolume", "delete", m); err == nil {
+		// -R: systemd creates var/lib/portables as a subvolume inside the root
+		if err := sys.Run("btrfs", "subvolume", "delete", "-R", m); err == nil {
 			fmt.Printf("boot menu: deleted %s, set aside by a restore on %s\n", filepath.Base(m), at.Format("2006-01-02"))
 		}
 	}
