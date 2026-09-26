@@ -40,7 +40,9 @@ changing a page's look.
   - `ryoku-hub lock list|set|apply-greeter <slug>` manages installed qylock
     themes: `list` is the local inventory, `set` writes the in-session
     preference and applies the SDDM greeter, and `apply-greeter` is the
-    privileged half under `/usr/share/sddm/themes/ryoku`. RyoStore owns remote
+    privileged half: a picked skin goes to `/usr/share/sddm/themes/ryoku-user`,
+    leaving the package-owned stock `/usr/share/sddm/themes/ryoku` alone, and
+    `/etc/sddm.conf.d/99-ryoku.conf` selects between them. RyoStore owns remote
     discovery and installation; Settings owns activation only.
 - `quickshell/` The UI, hand-written Quickshell (QML), deployed to
   `~/.config/quickshell/hub` and launched with `qs -c hub`:

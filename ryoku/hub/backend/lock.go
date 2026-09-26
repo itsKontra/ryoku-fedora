@@ -368,7 +368,15 @@ func setLockSkinIn(dir, pref, slug string) error {
 	return atomicWrite(pref, []byte(slug+"\n"), 0o644)
 }
 
-const greeterTheme = "ryoku"
+// greeterTheme is the stock greeter the sddm-theme-ryoku package owns and
+// refreshes on every update; pickedGreeterTheme holds any other skin the user
+// picks. A pick copied over the package's dir was undone by the next package
+// update, which laid the stock Main.qml back over it.
+const (
+	greeterTheme       = "ryoku"
+	pickedGreeterTheme = "ryoku-user"
+	defaultLockSkin    = "clockwork/orbital"
+)
 
 func sddmThemesDir() string {
 	if v := os.Getenv("RYOKU_SDDM_THEMES_DIR"); v != "" {
@@ -437,9 +445,10 @@ func invokingUserThemes() string {
 	return qylockThemesDir()
 }
 
-// installGreeter copies srcThemes/slug into themesDir under a fixed name and
-// points the greeter config at it, so the login screen wears the same skin as
-// the in-session lock. privileged; broken out for tests.
+// installGreeter points the greeter config at the skin the user picked, so the
+// login screen wears the same skin as the in-session lock. The stock skin is the
+// package's own greeter dir; any other is copied into pickedGreeterTheme.
+// privileged; broken out for tests.
 func installGreeter(srcThemes, themesDir, confPath, slug string) error {
 	if err := validSlug(slug); err != nil {
 		return err
@@ -448,8 +457,26 @@ func installGreeter(srcThemes, themesDir, confPath, slug string) error {
 	if !fileExists(filepath.Join(src, "Main.qml")) {
 		return fmt.Errorf("not an installed skin: %s", slug)
 	}
-	dst := filepath.Join(themesDir, greeterTheme)
-	if err := os.MkdirAll(themesDir, 0o755); err != nil {
+	picked := filepath.Join(themesDir, pickedGreeterTheme)
+	theme := pickedGreeterTheme
+	if slug == defaultLockSkin && fileExists(filepath.Join(themesDir, greeterTheme, "Main.qml")) {
+		theme = greeterTheme
+		if err := os.RemoveAll(picked); err != nil {
+			return err
+		}
+	} else if err := copyGreeterTheme(src, picked); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(confPath), 0o755); err != nil {
+		return err
+	}
+	return atomicWrite(confPath, []byte("[Theme]\nCurrent="+theme+"\n"), 0o644)
+}
+
+// copyGreeterTheme replaces dst with a copy of the skin at src that the greeter
+// can read.
+func copyGreeterTheme(src, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
 	if err := os.RemoveAll(dst); err != nil {
@@ -468,10 +495,7 @@ func installGreeter(srcThemes, themesDir, confPath, slug string) error {
 	if out, err := exec.Command("chmod", "-R", "a+rX", dst).CombinedOutput(); err != nil {
 		return fmt.Errorf("make greeter theme readable: %v: %s", err, out)
 	}
-	if err := os.MkdirAll(filepath.Dir(confPath), 0o755); err != nil {
-		return err
-	}
-	return atomicWrite(confPath, []byte("[Theme]\nCurrent="+greeterTheme+"\n"), 0o644)
+	return nil
 }
 
 func fileExists(p string) bool {
