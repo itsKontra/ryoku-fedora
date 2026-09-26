@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,6 +31,7 @@ func recordBootOK(exited <-chan struct{}) {
 		return // died inside the window; not a good boot
 	case <-time.After(bootOKSettle):
 	}
+	markGrubBootSuccess()
 	id, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
 	if err != nil {
 		return
@@ -39,4 +41,18 @@ func recordBootOK(exited <-chan struct{}) {
 	}
 	path := filepath.Join(bootOKDir, fmt.Sprintf("ok-%d", os.Getuid()))
 	_ = os.WriteFile(path, []byte(strings.TrimSpace(string(id))+"\n"), 0o644)
+}
+
+// markGrubBootSuccess sets GRUB's boot_success flag. Fedora's GRUB hides its
+// menu unless the previous boot never set the flag. Stock Fedora sets it from
+// grub-boot-success.timer two minutes into any login, which ryoku-desktop
+// turns off, so here it means the desktop came up: a boot that never got that
+// far shows the menu, with its Ryoku console entries, the next time.
+// grub2-set-bootflag is setuid root on Fedora.
+func markGrubBootSuccess() {
+	bin := "/usr/sbin/grub2-set-bootflag"
+	if _, err := os.Stat(bin); err != nil {
+		return
+	}
+	_ = exec.Command(bin, "boot_success").Run()
 }

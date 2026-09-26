@@ -162,6 +162,12 @@ System-level definition installed into the target.
   dnf on Fedora), and `ryoku-cmd-present`.
 - `packages/` the package manifests used to define and audit the desktop and
   hardware package closure.
+- `recovery/` the console fallback when the desktop cannot start, shipped by
+  `ryoku-desktop`: the `sddm.service` drop-in, `ryoku-console-fallback.service`
+  (a text login on tty1 with a recovery banner), `ryoku-console-guard.service`
+  (`ryoku boot-guard --console`, after a login-screen crash loop), and
+  `95-ryoku-console.install`, the kernel-install plugin behind the "Ryoku
+  console" boot entries.
 
 ## `installation/` the build
 

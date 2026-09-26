@@ -153,6 +153,11 @@ systemctl --global enable ryoku-bootstrap.service ryoku-bluetooth-reset.service 
 systemctl daemon-reload >/dev/null 2>&1 || :
 systemctl enable ryoku-wifi-regdom.service >/dev/null 2>&1 || :
 /usr/bin/ryoku-bluetooth-tune >/dev/null 2>&1 || :
+# boot_success is set by the shell once the desktop proves itself, so a boot
+# that never gets there shows the GRUB menu; Fedora's timer would set it for
+# any login. Then give the kernels already installed a Ryoku console entry.
+systemctl --global disable grub-boot-success.timer >/dev/null 2>&1 || :
+/usr/lib/kernel/install.d/95-ryoku-console.install sync >/dev/null 2>&1 || :
 
 %posttrans
 # Adopt the new sleep and lid policy in every live Hyprland or niri session,
@@ -164,9 +169,13 @@ systemd-detect-virt --quiet --chroot && exit 0
 /usr/bin/ryoku-power-cutover package
 
 %preun
-# Removal: keep a copy of the executor in /run so %postun can still hand the
-# live sessions back to logind's default policy.
+# Removal: hand the boot flag back to Fedora's timer and drop the console
+# entries while their plugin is still on disk, then keep a copy of the
+# executor in /run so %postun can still hand the live sessions back to
+# logind's default policy.
 [ "$1" -eq 0 ] || exit 0
+systemctl --global enable grub-boot-success.timer >/dev/null 2>&1 || :
+/usr/lib/kernel/install.d/95-ryoku-console.install purge >/dev/null 2>&1 || :
 [ -d /run/systemd/system ] || exit 0
 systemd-detect-virt --quiet --chroot && exit 0
 [ -x /usr/bin/ryoku-power-cutover ] || exit 0

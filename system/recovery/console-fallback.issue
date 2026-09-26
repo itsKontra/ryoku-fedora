@@ -1,0 +1,9 @@
+
+  The Ryoku desktop did not start.
+
+  Log in with your user account, then run:
+    ryoku doctor      to find and repair what broke
+    ryoku rollback    to go back to a snapshot from before an update
+
+  Reboot to try the desktop again.
+

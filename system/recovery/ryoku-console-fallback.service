@@ -1,0 +1,12 @@
+[Unit]
+# Started by sddm's OnFailure, or by the console guard when it holds the
+# desktop back: shows the recovery banner and a text login on tty1. Root
+# stays locked, so recovery is a wheel user signing in and using sudo.
+Description=Ryoku console login (the desktop did not start)
+Wants=getty@tty1.service
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/install -Dm644 /usr/share/ryoku/recovery/console-fallback.issue /etc/issue.d/ryoku-console-fallback.issue
+ExecStartPost=-/usr/bin/chvt 1

@@ -1,0 +1,44 @@
+name: Console recovery
+
+# When the desktop cannot start, the machine must land on a text login, not a
+# black screen (issue #49). console-recovery.sh checks that the sddm drop-in,
+# the fallback and guard units, the CLI and the package payload agree on names
+# and paths, and drives the kernel-install plugin that adds a "Ryoku console"
+# boot entry per kernel against a fake BLS directory.
+
+on:
+  pull_request:
+    paths:
+      - 'system/recovery/**'
+      - 'ryoku/cli/internal/updater/consoleguard.go'
+      - 'release/rpm/payload/ryoku-desktop.sh'
+      - 'release/rpm/ryoku-desktop.spec'
+      - 'tests/console-recovery.sh'
+      - '.github/workflows/console-recovery.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'system/recovery/**'
+      - 'ryoku/cli/internal/updater/consoleguard.go'
+      - 'release/rpm/payload/ryoku-desktop.sh'
+      - 'release/rpm/ryoku-desktop.spec'
+      - 'tests/console-recovery.sh'
+      - '.github/workflows/console-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recovery:
+    name: Console fallback units and the boot entry plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Units, drop-in, payload and the kernel-install plugin
+        shell: bash
+        run: bash tests/console-recovery.sh

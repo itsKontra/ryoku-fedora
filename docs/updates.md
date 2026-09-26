@@ -123,6 +123,33 @@ package ships the unit and its tmpfiles entry; the doctor enables the unit and
 prepares the record directory on every update, so boxes installed before it get
 it on their next update.
 
+### The console fallback
+
+When the desktop cannot start, the box lands on a text login on tty1 with a
+banner naming `ryoku doctor` and `ryoku rollback`, instead of a black screen
+(`system/recovery/`). Root stays locked and `SYSTEMD_SULOGIN_FORCE` is never
+set, so recovery is a wheel user signing in and using `sudo`.
+
+- An `sddm.service` drop-in sets `OnFailure=ryoku-console-fallback.service`,
+  which writes `/etc/issue.d/ryoku-console-fallback.issue` and starts
+  `getty@tty1`. A tmpfiles `r!` line clears the banner on the next boot.
+- The same drop-in pulls in `ryoku-console-guard.service` before sddm. It runs
+  `ryoku boot-guard --console`, which reads the previous boot's sddm journal:
+  three or more greeter sessions and no `ok-<uid>` record for that boot mean
+  the login screen kept restarting, so it writes `/run/ryoku/console-boot`
+  (the drop-in's `ConditionPathExists=!` then skips sddm for this boot) and
+  starts the fallback. The boot after that tries the desktop again.
+- `95-ryoku-console.install`, a kernel-install plugin, adds a "Ryoku console"
+  BLS twin of every kernel entry with `systemd.unit=multi-user.target`.
+  `%post` twins the kernels already installed; `%preun` removes the twins.
+- The shell daemon runs `grub2-set-bootflag boot_success` with its good-boot
+  record, and `ryoku-desktop` turns off Fedora's `grub-boot-success.timer`
+  (which sets the flag two minutes into any login), so a boot whose desktop
+  never came up shows the GRUB menu, with the console entries, next time.
+
+All of it ships in `ryoku-desktop` and needs no unit enabled, so existing boxes
+get it on their next `ryoku update`.
+
 ## materialize: the config a user receives
 
 `ryoku materialize` lays the package's base config (`/usr/share/ryoku/config`,
