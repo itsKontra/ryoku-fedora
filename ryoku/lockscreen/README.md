@@ -10,8 +10,8 @@ desktop shell, so it works on a clean Hyprland session.
   lockscreen), trimmed to just what Ryoku ships. Copied verbatim from upstream;
   see `qylock/README.ryoku.md` for the source commit and license.
 - `install-qylock` Installs the greeter and the in-session lock on the target
-  machine: the default skin to `/usr/share/sddm/themes/ryoku` (the fixed greeter
-  name the Hub later overwrites), the SDDM selection to
+  machine: the default skin to `/usr/share/sddm/themes/ryoku` (the stock
+  greeter, which the `sddm-theme-ryoku` package owns on a package box), the SDDM selection to
   `/etc/sddm.conf.d/99-ryoku.conf`, and the Quickshell lockscreen into the user's home.
 - `sddm/setup` The install-time SDDM wiring: enable the service, default to the
   graphical target, drop `pam_gnome_keyring` from the SDDM PAM stack, and make
@@ -28,8 +28,11 @@ the in-session lock reads `~/.config/qylock/theme`.
 
 The skin is chosen in Ryoku Settings (**Lockscreen**), which browses the full qylock
 catalogue live from upstream with looping previews. Selecting a skin rewrites
-`~/.config/qylock/theme` (the in-session lock) and reinstalls it as the SDDM greeter
-under `/usr/share/sddm/themes/ryoku`. The greeter half lives on a system path, so the
+`~/.config/qylock/theme` (the in-session lock) and points the SDDM greeter at it: the
+stock skin selects `/usr/share/sddm/themes/ryoku`, any other is copied to
+`/usr/share/sddm/themes/ryoku-user`. The stock dir belongs to the package, so a pick
+never lands there; a package update would lay the stock skin back over it, and
+`ryoku doctor` restores a pick an older Hub lost that way. The greeter half lives on a system path, so the
 Hub escalates it with pkexec (`ryoku-hub lock apply-greeter`); skins not yet present
 download into `~/.local/share/qylock/themes` first. Only the theme changes; the
 login/auth flow is untouched.

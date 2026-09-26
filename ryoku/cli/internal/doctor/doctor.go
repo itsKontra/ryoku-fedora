@@ -2488,7 +2488,16 @@ func reconcileGtkSession(checkOnly bool) recResult {
 
 // ---- reconciler: SDDM greeter theme readable ---------------------------------
 
-const greeterThemeDir = "/usr/share/sddm/themes/ryoku"
+// The stock greeter dir is owned by the sddm-theme-ryoku package; a skin the
+// user picks other than the stock one lives in its own dir beside it, and the
+// greeter config selects between the two.
+const (
+	stockGreeterTheme     = "ryoku"
+	pickedGreeterTheme    = "ryoku-user"
+	greeterThemeDir       = "/usr/share/sddm/themes/" + stockGreeterTheme
+	pickedGreeterThemeDir = "/usr/share/sddm/themes/" + pickedGreeterTheme
+	greeterThemeConf      = "/etc/sddm.conf.d/99-ryoku.conf"
+)
 
 // greeterThemeHealthy: can the unprivileged `sddm` greeter read the theme? sddm
 // is neither the owner nor a group member, so readability rides on the world
@@ -2498,40 +2507,55 @@ func greeterThemeHealthy(ownerUID uint32, dirPerm, mainPerm os.FileMode) bool {
 	return ownerUID == 0 && dirPerm&0o005 == 0o005 && mainPerm&0o004 != 0
 }
 
-// reconcileGreeterTheme keeps the SDDM greeter theme readable by the sddm user.
-// `ryoku-hub lock set` copies the picked skin into the fixed greeter dir; a skin
+// reconcileGreeterTheme keeps the SDDM greeter themes readable by the sddm
+// user. `ryoku-hub lock set` copies the picked skin into a greeter dir; a skin
 // pulled from the catalogue downloads into an os.MkdirTemp dir (always 0700,
 // user-owned), so an older `cp -a` left the greeter unreadable to sddm and SDDM
 // silently fell back to its embedded theme on every boot. installGreeter now
 // normalizes on write; this backports the fix to boxes that already picked a
-// skin. only ever touches the one fixed Ryoku greeter dir.
+// skin. only ever touches the Ryoku greeter dirs.
 func reconcileGreeterTheme(checkOnly bool) recResult {
-	di, err := os.Stat(greeterThemeDir)
-	if err != nil {
-		return okRes(i18n.T("no Ryoku greeter theme installed"))
+	var unreadable []string
+	for _, dir := range []string{greeterThemeDir, pickedGreeterThemeDir} {
+		if greeterDirUnreadable(dir) {
+			unreadable = append(unreadable, dir)
+		}
 	}
-	mi, err := os.Stat(filepath.Join(greeterThemeDir, "Main.qml"))
-	if err != nil {
-		return okRes(i18n.T("no Ryoku greeter theme installed"))
-	}
-	st, ok := di.Sys().(*syscall.Stat_t)
-	if !ok {
-		return okRes(i18n.T("greeter theme ownership not checkable"))
-	}
-	if greeterThemeHealthy(st.Uid, di.Mode().Perm(), mi.Mode().Perm()) {
+	if len(unreadable) == 0 {
 		return okRes(i18n.T("greeter theme readable by the sddm greeter"))
 	}
-	fix := fmt.Sprintf("sudo chown -R root:root %s && sudo chmod -R a+rX %s", greeterThemeDir, greeterThemeDir)
+	dirs := strings.Join(unreadable, " ")
+	fix := fmt.Sprintf("sudo chown -R root:root %s && sudo chmod -R a+rX %s", dirs, dirs)
 	if checkOnly {
 		return wouldRes(i18n.T("greeter theme unreadable by the sddm greeter; SDDM falls back to its default")).withFix(fix)
 	}
-	if err := sys.Run("sudo", "chown", "-R", "root:root", greeterThemeDir); err != nil {
-		return failRes(i18n.T("could not fix greeter theme ownership: %v"), err).withFix(fix)
-	}
-	if err := sys.Run("sudo", "chmod", "-R", "a+rX", greeterThemeDir); err != nil {
-		return failRes(i18n.T("could not fix greeter theme permissions: %v"), err).withFix(fix)
+	for _, dir := range unreadable {
+		if err := sys.Run("sudo", "chown", "-R", "root:root", dir); err != nil {
+			return failRes(i18n.T("could not fix greeter theme ownership: %v"), err).withFix(fix)
+		}
+		if err := sys.Run("sudo", "chmod", "-R", "a+rX", dir); err != nil {
+			return failRes(i18n.T("could not fix greeter theme permissions: %v"), err).withFix(fix)
+		}
 	}
 	return fixedRes(i18n.T("normalized greeter theme so the sddm greeter can read it"))
+}
+
+// greeterDirUnreadable: an installed greeter theme dir the sddm user cannot
+// read. A missing dir, or one whose ownership cannot be checked, is not one.
+func greeterDirUnreadable(dir string) bool {
+	di, err := os.Stat(dir)
+	if err != nil {
+		return false
+	}
+	mi, err := os.Stat(filepath.Join(dir, "Main.qml"))
+	if err != nil {
+		return false
+	}
+	st, ok := di.Sys().(*syscall.Stat_t)
+	if !ok {
+		return false
+	}
+	return !greeterThemeHealthy(st.Uid, di.Mode().Perm(), mi.Mode().Perm())
 }
 
 // ---- reconciler: SDDM greeter on Wayland ------------------------------------

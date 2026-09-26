@@ -12,7 +12,7 @@ var rows = [
         "label": "Lock skin",
         "desc": "Reskins the lock and sign-in screens",
         "ctl": "chips",
-        "src": "99-ryoku.conf (contents `[Theme]\\nCurrent=ryoku\\n`). Paths overridable by env: RYOKU_SDDM_THEMES_DIR, RYOKU_SDDM_CONF, RYOKU_QYLOCK_THEMES.",
+        "src": "99-ryoku.conf (contents `[Theme]\\nCurrent=ryoku\\n` for the stock skin, `Current=ryoku-user` for a picked one). Paths overridable by env: RYOKU_SDDM_THEMES_DIR, RYOKU_SDDM_CONF, RYOKU_QYLOCK_THEMES.",
         "opts": [
             "clockwork/orbital",
             "clockwork/tape",

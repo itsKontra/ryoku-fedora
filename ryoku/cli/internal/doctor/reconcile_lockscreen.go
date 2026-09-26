@@ -74,14 +74,10 @@ func lockscreenStale(bundle string) bool {
 		treeDiffers(filepath.Join(bundle, "themes", defaultLockSkin), filepath.Join(home, ".local", "share", "qylock", "themes", defaultLockSkin))
 }
 
-// greeterStale: the SDDM greeter is the shipped default skin (the preference
-// names it, or was never written) and its installed copy drifted from the
-// bundle. A picked skin is the user's; leave it.
+// greeterStale: the stock SDDM greeter drifted from the bundle. That dir holds
+// only the shipped default skin; a picked skin lives in pickedGreeterThemeDir, so
+// an older Hub that copied a pick over the stock dir is healed here too.
 func greeterStale(bundle string) bool {
-	pref := strings.TrimSpace(readFileSafe(filepath.Join(sys.ConfigHome(), "qylock", "theme")))
-	if pref != "" && pref != defaultLockSkin {
-		return false
-	}
 	if !sys.Exists(filepath.Join(greeterThemeDir, "Main.qml")) {
 		return false
 	}
@@ -91,8 +87,12 @@ func greeterStale(bundle string) bool {
 // refreshGreeter re-lays the shipped default skin as the SDDM greeter, with the
 // ownership and modes the sddm user needs (see reconcileGreeterTheme).
 func refreshGreeter(bundle string) error {
-	src := filepath.Join(bundle, "themes", defaultLockSkin)
-	tmp := greeterThemeDir + ".new"
+	return layGreeterDir(filepath.Join(bundle, "themes", defaultLockSkin), greeterThemeDir)
+}
+
+// layGreeterDir replaces dst with a root-owned, world-readable copy of src.
+func layGreeterDir(src, dst string) error {
+	tmp := dst + ".new"
 	if err := sys.Run("sudo", "rm", "-rf", tmp); err != nil {
 		return err
 	}
@@ -105,10 +105,82 @@ func refreshGreeter(bundle string) error {
 	if err := sys.Run("sudo", "chmod", "-R", "a+rX", tmp); err != nil {
 		return err
 	}
-	if err := sys.Run("sudo", "rm", "-rf", greeterThemeDir); err != nil {
+	if err := sys.Run("sudo", "rm", "-rf", dst); err != nil {
 		return err
 	}
-	return sys.Run("sudo", "mv", tmp, greeterThemeDir)
+	return sys.Run("sudo", "mv", tmp, dst)
+}
+
+// greeterPick is the greeter the user's lock preference asks for: theme is the
+// SDDM theme name the greeter config must select, src the user's skin to copy
+// into pickedGreeterThemeDir ("" for the stock skin). An empty theme means there
+// is nothing to reconcile (the picked skin is no longer installed, or the
+// preference is not a plain slug).
+type greeterPick struct {
+	theme string
+	src   string
+}
+
+func wantGreeterPick(pref, userThemes string) greeterPick {
+	pref = strings.TrimSpace(pref)
+	if pref == "" || pref == defaultLockSkin {
+		return greeterPick{theme: stockGreeterTheme}
+	}
+	if filepath.IsAbs(pref) || strings.Contains(pref, "..") {
+		return greeterPick{}
+	}
+	src := filepath.Join(userThemes, pref)
+	if !sys.Exists(filepath.Join(src, "Main.qml")) {
+		return greeterPick{}
+	}
+	return greeterPick{theme: pickedGreeterTheme, src: src}
+}
+
+// greeterConfTheme is the theme the Ryoku greeter config selects, and whether
+// that config exists at all (a box without it has no Ryoku greeter to steer).
+func greeterConfTheme(conf string) (string, bool) {
+	b, err := os.ReadFile(conf)
+	if err != nil {
+		return "", false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "Current="); ok {
+			return strings.TrimSpace(v), true
+		}
+	}
+	return "", true
+}
+
+// greeterPickStale: the login screen does not wear the skin the user picked.
+// Before the pick had its own dir, the Hub copied it over the package-owned
+// stock dir and the next package update laid the stock skin back.
+func greeterPickStale(pick greeterPick, conf, pickedDir string) bool {
+	if pick.theme == "" {
+		return false
+	}
+	current, ok := greeterConfTheme(conf)
+	if !ok {
+		return false
+	}
+	return current != pick.theme || (pick.src != "" && treeDiffers(pick.src, pickedDir))
+}
+
+func userGreeterPick() greeterPick {
+	pref, _ := os.ReadFile(filepath.Join(sys.ConfigHome(), "qylock", "theme"))
+	return wantGreeterPick(string(pref), filepath.Join(sys.Xdg("XDG_DATA_HOME", ".local/share"), "qylock", "themes"))
+}
+
+// applyGreeterPick lays the picked skin into its own dir and points the greeter
+// config at it; the stock pick drops that copy and selects the package's dir.
+func applyGreeterPick(pick greeterPick) error {
+	if pick.src != "" {
+		if err := layGreeterDir(pick.src, pickedGreeterThemeDir); err != nil {
+			return err
+		}
+	} else if err := sys.Run("sudo", "rm", "-rf", pickedGreeterThemeDir); err != nil {
+		return err
+	}
+	return writeRootFile(greeterThemeConf, "[Theme]\nCurrent="+pick.theme+"\n", "0644")
 }
 
 // greeterScriptSource is the shipped greeter compositor script. On a package box
@@ -234,9 +306,11 @@ func reconcileLockscreenDrift(checkOnly bool) recResult {
 	}
 	lockStale := lockscreenStale(bundle)
 	greeter := greeterStale(bundle)
+	pick := userGreeterPick()
+	pickStale := greeterPickStale(pick, greeterThemeConf, pickedGreeterThemeDir)
 	gscriptSrc := greeterScriptSource()
 	gscriptStale := greeterScriptStale(gscriptSrc)
-	if !lockStale && !greeter && !gscriptStale {
+	if !lockStale && !greeter && !pickStale && !gscriptStale {
 		return okRes(i18n.T("in-session lockscreen installed and current"))
 	}
 	if checkOnly {
@@ -258,7 +332,7 @@ func reconcileLockscreenDrift(checkOnly bool) recResult {
 		}
 		did = append(did, i18n.T("in-session lock"))
 	}
-	if greeter || gscriptStale {
+	if greeter || pickStale || gscriptStale {
 		if exec.Command("sudo", "-n", "true").Run() != nil {
 			return noteRes(i18n.T("the SDDM greeter predates the shipped bundle; refreshing it needs sudo")).
 				withFix(i18n.T("sudo ryoku doctor (or the next ryoku update)"))
@@ -269,6 +343,13 @@ func reconcileLockscreenDrift(checkOnly bool) recResult {
 					withFix("sudo " + lockscreenInstaller())
 			}
 			did = append(did, i18n.T("SDDM greeter"))
+		}
+		if pickStale {
+			if err := applyGreeterPick(pick); err != nil {
+				return failRes(i18n.T("could not apply the picked skin to the SDDM greeter: %v"), err).
+					withFix(i18n.T("pick the skin again in Ryoku Settings"))
+			}
+			did = append(did, i18n.T("SDDM greeter skin"))
 		}
 		if gscriptStale {
 			if err := refreshGreeterScript(gscriptSrc); err != nil {

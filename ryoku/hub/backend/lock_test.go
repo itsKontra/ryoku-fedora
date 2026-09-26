@@ -126,23 +126,20 @@ func TestInstallGreeter(t *testing.T) {
 	if err := installGreeter(src, themes, conf, "material-you"); err != nil {
 		t.Fatalf("install greeter: %v", err)
 	}
-	if !fileExists(filepath.Join(themes, greeterTheme, "Main.qml")) {
-		t.Fatalf("greeter theme %q not installed under %s", greeterTheme, themes)
+	if !fileExists(filepath.Join(themes, pickedGreeterTheme, "Main.qml")) {
+		t.Fatalf("greeter theme %q not installed under %s", pickedGreeterTheme, themes)
 	}
-	b, err := os.ReadFile(conf)
-	if err != nil {
-		t.Fatalf("read conf: %v", err)
-	}
-	if !strings.Contains(string(b), "Current="+greeterTheme) {
-		t.Fatalf("conf does not select the greeter theme: %q", b)
+	if got := greeterConfTheme(t, conf); got != pickedGreeterTheme {
+		t.Fatalf("conf selects %q, want %q", got, pickedGreeterTheme)
 	}
 
-	// second skin overwrites the same fixed greeter dir; nothing orphans.
-	mkSkin(t, src, "clockwork/orbital", false)
-	if err := installGreeter(src, themes, conf, "clockwork/orbital"); err != nil {
+	// no stock greeter dir (a box without the package): the default skin is
+	// copied like any other pick.
+	mkSkin(t, src, defaultLockSkin, false)
+	if err := installGreeter(src, themes, conf, defaultLockSkin); err != nil {
 		t.Fatalf("reinstall greeter: %v", err)
 	}
-	if !fileExists(filepath.Join(themes, greeterTheme, "Main.qml")) {
+	if !fileExists(filepath.Join(themes, pickedGreeterTheme, "Main.qml")) {
 		t.Fatalf("greeter theme missing after switch")
 	}
 
@@ -150,6 +147,60 @@ func TestInstallGreeter(t *testing.T) {
 	if err := installGreeter(src, themes, conf, "ghost/none"); err == nil {
 		t.Fatalf("installing an unknown skin should error")
 	}
+}
+
+// The stock greeter dir belongs to the sddm-theme-ryoku package, which lays its
+// own Main.qml back on every update. A pick copied there was undone by the next
+// update, so a pick must land beside it and leave the package's dir alone.
+func TestInstallGreeterLeavesPackageThemeAlone(t *testing.T) {
+	src := t.TempDir()
+	mkSkin(t, src, "nier-automata", false)
+	mkSkin(t, src, defaultLockSkin, false)
+	themes := t.TempDir()
+	stock := filepath.Join(themes, greeterTheme)
+	if err := os.MkdirAll(stock, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stockMain := []byte("// stock orbital\n")
+	if err := os.WriteFile(filepath.Join(stock, "Main.qml"), stockMain, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	conf := filepath.Join(t.TempDir(), "99-ryoku.conf")
+
+	if err := installGreeter(src, themes, conf, "nier-automata"); err != nil {
+		t.Fatalf("install greeter: %v", err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(stock, "Main.qml")); string(got) != string(stockMain) {
+		t.Fatalf("a pick overwrote the package's greeter: %q", got)
+	}
+	if got := greeterConfTheme(t, conf); got != pickedGreeterTheme {
+		t.Fatalf("conf selects %q, want %q", got, pickedGreeterTheme)
+	}
+
+	// back to the stock skin: point at the package's dir and drop the copy.
+	if err := installGreeter(src, themes, conf, defaultLockSkin); err != nil {
+		t.Fatalf("install default greeter: %v", err)
+	}
+	if got := greeterConfTheme(t, conf); got != greeterTheme {
+		t.Fatalf("conf selects %q, want %q", got, greeterTheme)
+	}
+	if fileExists(filepath.Join(themes, pickedGreeterTheme)) {
+		t.Fatalf("picked greeter copy left behind after returning to the stock skin")
+	}
+}
+
+func greeterConfTheme(t *testing.T, conf string) string {
+	t.Helper()
+	b, err := os.ReadFile(conf)
+	if err != nil {
+		t.Fatalf("read conf: %v", err)
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if v, ok := strings.CutPrefix(line, "Current="); ok {
+			return v
+		}
+	}
+	return ""
 }
 
 func TestValidSlug(t *testing.T) {
@@ -187,7 +238,7 @@ func TestInstallGreeterMakesThemeWorldReadable(t *testing.T) {
 		t.Fatalf("install greeter: %v", err)
 	}
 
-	dir := filepath.Join(themes, greeterTheme)
+	dir := filepath.Join(themes, pickedGreeterTheme)
 	di, err := os.Stat(dir)
 	if err != nil {
 		t.Fatal(err)
