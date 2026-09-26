@@ -19,7 +19,7 @@ ignore_files:
 
 # `blacklist` is the exact modprobe.d directive Ryoku writes and greps for to keep
 # nouveau from racing the NVIDIA driver (system/hardware/drivers/*, the doctor's
-# reconcile_hardware.go, their tests, and the changelogs describing them). It is
+# reconcile_hardware.go, and their tests). It is
 # kernel syntax, not a word choice, and every occurrence in the tree is that one
 # legitimate use, so neutralize woke's default blacklist rule (empty terms) instead
 # of ignoring whole files, which would drop all their other lint.

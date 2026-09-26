@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 # verify that what a dev box runs actually reaches an installed box.
 #
-# two ways a change silently fails to reach users:
-#   1. a per-app config lands in the repo but no package/installer/deploy path
-#      ships it, so `ryoku update` (materialize) never lays it. this catches it.
-#   2. work sits on unstable-dev while main (the [ryoku] repo publishes from it)
-#      lags, so users are behind until main fast-forwards. this reports the gap.
+# a per-app config can land in the repo while no package/installer/deploy path
+# ships it, so `ryoku update` (materialize) never lays it. this catches it.
 #
 #   ryoku-dev-verify-delivery            run every check (exit 1 on a hard gap)
 #   ryoku-dev-verify-delivery --quiet    same, only print problems
@@ -41,7 +38,7 @@ delivered() {
 
 fail=0
 
-# 1. config orphans. every dotfile under ryoku/apps that ends up in a user's
+# config orphans. every dotfile under ryoku/apps that ends up in a user's
 # home must be laid by a delivery path. skip a GUI app's quickshell tree, bin
 # helpers, .desktop handlers, docs, Go build sources/artifacts, and a Go
 # backend's testdata fixtures (test-only, never shipped): those ship by their
@@ -82,18 +79,6 @@ if [[ -f $langs ]]; then
 	else
 		echo "delivery: no package installs ryoku/i18n/catalog to /usr/share/ryoku/i18n (every surface would read English on an installed box)" >&2
 		fail=1
-	fi
-fi
-
-# 2. publish lag. the [ryoku] repo publishes on push to main; unstable-dev work
-# only reaches users once main fast-forwards. report the gap so it is never
-# silent. best-effort: no network / no refs = skip, never a hard failure.
-if git rev-parse --verify -q origin/main >/dev/null && git rev-parse --verify -q origin/unstable-dev >/dev/null; then
-	behind="$(git rev-list --count origin/main..origin/unstable-dev 2>/dev/null || echo 0)"
-	if [[ ${behind:-0} -gt 0 ]]; then
-		say "delivery: origin/main is $behind commit(s) behind origin/unstable-dev; users get them only after main fast-forwards and publish-repo runs"
-	else
-		say "delivery: origin/main is level with origin/unstable-dev"
 	fi
 fi
 

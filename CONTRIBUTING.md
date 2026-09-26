@@ -124,7 +124,7 @@ Every commit passes the hooks in `.githooks/`. Never use `--no-verify`.
   technical detail belongs in the body, not the subject.
 - No em-dash anywhere in text. No authorship or attribution trailers. No filler.
 - One logical change per commit.
-- Update the matching `CHANGELOG.md` in the area you touched.
+- Give anything a user would notice a `Note:` trailer (see below).
 
 ### Release notes
 
@@ -147,16 +147,15 @@ A note only reaches a release if it reaches `main` intact: a squash merge must
 keep every `Note:` trailer in the squashed message. A release is a tag on
 `main` pushed by `bin/ryoku-release` (`docs/updates.md`, "Cutting a release").
 
-A release line carries a name (`CODENAME`, its story in `release/names.md`);
-the release is titled with it and a line's first release opens with the story.
-Starting a new line is one commit that changes `CODENAME`, adds the section
-and the line's ASCII mark (`ryoku/cli/internal/updater/art/<name>.txt`),
-before the release that begins it.
+A release line carries a name (`CODENAME`) and the release is titled with it.
+Starting a new line is one commit that changes `CODENAME` and adds the line's
+ASCII mark (`ryoku/cli/internal/updater/art/<name>.txt`), before the release
+that begins it.
 
 ## Pull requests
 
 1. Fork the repository and branch off the current development branch.
-2. Make one focused change, with its changelog entry, and verify it on a running
+2. Make one focused change, with its `Note:` trailer, and verify it on a running
    system.
 3. Make sure the hooks pass locally; do not bypass them.
 4. Open a pull request describing what changed and how you tested it.

@@ -269,63 +269,40 @@ untouched; recovery deliberately resets both when both are installed.
   removal plan, re-checked immediately before the transaction. Full switch
   contract in `docs/compositors.md`.
 
-## Publishing: releases and channels
+## Publishing: the COPR channel
 
-The `[ryoku]` repo is published into named states, all under the one bucket
-mount the repo domain serves (`repo.ryoku.dev/stable/<key>` is bucket object
-`<key>`; the `stable` path segment is the mount, not the channel):
+A packaged Fedora box takes its Ryoku set from one repository: the COPR project
+`itskontra/ryoku`, configured as `/etc/yum.repos.d/RyokuCOPR.repo` (repository
+ID `RyokuCOPR`, channel name `copr`). There is no stable/testing split and no
+frozen release directory: the channel rolls, and a release is a named point on
+it.
 
-| Directory | Channel | Written when |
-|---|---|---|
-| `x86_64/` | **stable**: the URL every installed box has | a release tag is published: a byte copy of that release |
-| `releases/<tag>/x86_64/` | one frozen release; never rewritten | the tag is published (`publish-repo.yml` refuses an existing directory) |
-| `releases/index.json` | the release ledger, newest first, with each release's ISO per variant (`images.plain`, `images.cachyos`) | after each release |
-| `channels/testing/x86_64/` | **testing** | every push to `unstable-dev` |
+Every push to `main` runs `publish-copr.yml`, which prepares the SRPMs once,
+rebuilds them in clean Mock roots, installs the result on both compositors with
+DNF5 and DNF4, submits the same SRPMs to COPR, verifies the returned RPMs
+against the pinned COPR key, installs those unchanged RPMs again, and only then
+regenerates the repository. A run that fails any gate publishes nothing.
+Details and the publisher setup are in `release/rpm/README.md`.
 
-So a box on stable moves between named releases, and can be put back on any
-earlier one, on either variant: the `[ryoku]` packages are one `x86_64` build
-that both variants install, the frozen release directories are never pruned,
-and the ledger's `images` map names the Arch and CachyOS ISO of each release
-(derived from the per-ISO manifests in the bucket, so it heals on every
-rebuild) for a reinstall of an older release. Each build carries a strictly
-increasing package version (`core.r<commit-count>.g<sha>`) that the Ryoku
-upgrade moves to, and the `ryoku-desktop` package writes `/etc/ryoku-release`
-(`RELEASE=`, `CHANNEL=`, `VERSION=`, `COMMIT=`) so a box can say which release
-it runs; `release.json` beside each channel's db says which one the channel
-serves, and `manifest.json` beside it lists every package the release is made
-of, by lane (base, dev, hardware, AUR, first-party, compositor, provisioned),
-generated from the checkout by `build-repo.sh` and never hand-edited.
+Each build carries a strictly increasing package version (`0.<commit count>`,
+with the workflow run number as the RPM Release), and the `ryoku-desktop`
+package writes `/etc/ryoku-release` (`RELEASE=`, `NAME=`, `CHANNEL=`,
+`VERSION=`, `COMMIT=`, `DATE=`) so a box can say what it runs.
 
-On Fedora every push to `main` publishes to the `copr` channel, and a release
-is a named point on that stream; see "Cutting a release" below.
+On the box:
 
-On a packaged box the channel is nothing but the `Server` line of the `[ryoku]`
-stanza, so there is no second state to drift from it:
+- `ryoku update` refreshes `RyokuCOPR` and runs `dnf distro-sync` restricted to
+  that repository, so only the Ryoku set moves.
+- `ryoku track copr` (or `main`) points `RyokuCOPR` back at the COPR channel;
+  stable, testing and release tags are refused.
+- `ryoku rollback` lists the system snapshots. COPR keeps a limited package
+  history, so there is no rollback to a release tag; DNF can downgrade only to
+  versions COPR still retains.
+- `ryoku version` prints `RELEASE=`: the release tag on a release build, the
+  tag plus the commits past it otherwise.
 
-- `ryoku track unstable-dev` turns any box into a **testing box**: it follows the
-  `testing` channel, rebuilt on every push to `unstable-dev`, so a tester gets
-  each push as signed packages through `ryoku update`. `ryoku track main` returns
-  it to **stable** (named releases). The two are aliases for `ryoku track testing`
-  and `ryoku track stable`.
-- `ryoku track stable | testing | v<tag>` rewrites that line and runs an update
-  that moves the Ryoku set to what the channel serves, down as well as up: the
-  databases are force-refreshed (a frozen release's db is older than the
-  channel's, so pacman would keep the cached one), then the installed
-  `ryoku/<pkg>` set is installed at the versions that channel publishes. A tag
-  pins the box to that release until it is tracked away.
-- `ryoku rollback --to v<tag>` is `track` onto a frozen release: the Ryoku set
-  goes back in one pacman transaction while Arch stays current. Bare
-  `ryoku rollback` lists the ledger and the snapshots.
-- `ryoku status` reports `release` (this box) and `channelRelease` (what the
-  channel serves); `ryoku version` prints the release tag.
-- The doctor names the channel it finds and warns, without touching it, when
-  `[ryoku]` points at a mirror Ryoku does not publish.
-
-`ryoku track main | unstable-dev --source` is the developer path: it builds and
-tracks a git checkout instead of packages (see `docs/development.md`). A box
-already on a checkout is migrated onto packages by a plain track without
-`--source`: the checkout is retired as the update source (the `~/ryoku-arch`
-clone stays on disk) and `ryoku update` runs `pacman` from then on.
+`ryoku track main --source` is the developer path: it builds and tracks a git
+checkout (`~/ryoku-fedora`) instead of packages (see `docs/development.md`).
 
 ### Cutting a release
 
@@ -360,13 +337,11 @@ release will carry, and pushes the tag on confirmation. The tag then runs:
 
 Every release line has a name from the creation stories Ryoku draws on (the
 Kojiki and the Theogony), in the order those stories tell them; `CODENAME`
-holds the current one and `release/names.md` tells each name's story. The
-name changes when a line begins (the pre-1.0 line is Onogoro, the first
+holds the current one. The name changes when a line begins (the pre-1.0 line is Onogoro, the first
 island; 1.0 is Amaterasu) and every release inside the line keeps it. It
-travels with the release: `build-repo.sh` writes it into `release.json` and
-the ryoku-desktop package into `/etc/ryoku-release` (`NAME=`), the publish
-copies it into `releases/index.json`, `build-fedora-iso.yml` titles the GitHub
-release with it, and a box shows it in `ryoku version --pretty` (which
+travels with the release: `prepare-srpms.sh` writes it into `release.json` and
+the ryoku-desktop package into `/etc/ryoku-release` (`NAME=`),
+`build-fedora-iso.yml` titles the GitHub release with it, and a box shows it in `ryoku version --pretty` (which
 fastfetch's OS line uses), `ryoku status`, `ryoku rollback`, the update
 island (when the channel serves the next line) and the Hub's Updates page.
 
@@ -448,9 +423,9 @@ island (when the channel serves the next line) and the Hub's Updates page.
   `ryoku-shell` bound to the dead compositor; `start` then does nothing and the
   login lands on bare Hyprland. The autostart reloads units, clears a start
   limit, and `restart`s the shell and wallpaper daemons every session.
-- **A change reaches stable only when a release is tagged**, and testing on
-  every `unstable-dev` push. Keep the gap small; the delivery check reports it
-  on every push.
+- **A change reaches users when it lands on `main`**: every push publishes to
+  the COPR channel. A release tag names a point on that stream; it gates
+  nothing.
 - **Displayed English must be wrapped where it is displayed, or it never
   translates.** `I18n.tr("...")` in QML, a Hub schema `label`/`desc`, `i18n.T`
   in Go, `log 'fmt %s'` in the installer's shell. The `i18n` workflow extracts
@@ -462,17 +437,16 @@ island (when the channel serves the next line) and the Hub's Updates page.
 
 ## Checks
 
-- `bin/ryoku-dev-verify-delivery` flags orphan configs (hard fail) and reports
-  the publish lag. It runs in `pre-commit`, `post-commit`, and the Delivery check
+- `bin/ryoku-dev-verify-delivery` flags orphan configs (hard fail). It runs in `pre-commit`, `post-commit`, and the Delivery check
   workflow.
 - The install-test workflow builds the ISO and runs a real, unattended install in
   a VM, then verifies the desktop comes up, so a broken install or a missing
   package is caught before a user hits it.
-- The publish (`publish-repo.yml`) builds and signs the repo once, keeps it as
-  a workflow artifact, installs ryoku-desktop from that artifact on Arch and
-  CachyOS with the release key verified (`installation/tests/container-install.sh`
-  with `RYOKU_PREBUILT_REPO=1`), and uploads the same artifact. What was tested
-  is byte-for-byte what ships; a run that fails the gate publishes nothing.
+- The publish (`publish-copr.yml`) installs the exact RPMs COPR built, with
+  the COPR key verified, on both compositors with DNF5 and DNF4
+  (`installation/tests/fedora-rpm.sh`) before it regenerates the repository.
+  What was tested is byte-for-byte what ships; a run that fails the gate
+  publishes nothing.
 - `bin/ryoku-dev-lint-qml <config-root>...` fails on QML that cannot load. The
   publish gate (`installation/tests/container-install.sh`) runs it over the
   materialized shell and Hub trees against the installed Qt modules, the same

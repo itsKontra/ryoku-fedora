@@ -317,11 +317,12 @@ redeploy the configs without the package step. Details in
 
 ## Channels
 
-`main` is the stable channel everyone runs; it publishes the Fedora packages
-and ISO through the release workflows. `unstable-dev` is the maintainer
-preview, consumed through the dev loop and never published. A release promotes
-`unstable-dev` to `main`. See [`docs/development.md`](docs/development.md) for the
-deploy, test, and commit loop.
+Every push to `main` publishes signed packages to the COPR channel every
+installed box follows. A release is a `v<X.Y.Z>` tag on `main` that names a
+point on that stream and publishes its ISO; see
+[`docs/updates.md`](docs/updates.md). See
+[`docs/development.md`](docs/development.md) for the deploy, test, and commit
+loop.
 
 ## Credits and license
 

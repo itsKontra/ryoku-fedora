@@ -73,8 +73,8 @@ reviews:
         user-facing config must be shipped by a package or seeded by the
         installer, never hand-edited into a live path; user edits belong in the
         user_edits overlay. A removed or renamed shell.json key needs a doctor
-        reconciler. Flag a user-facing change that lacks a matching CHANGELOG.md
-        note in the area it touches.
+        reconciler. Flag a user-facing change whose commit lacks a
+        `Note: New|Fixed|Removed:` trailer.
     - path: "ryoku/hyprland/**/*.lua"
       instructions: >-
         The Hyprland config is authored as Lua modules, one concern per file.
