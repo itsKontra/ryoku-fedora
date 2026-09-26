@@ -1,0 +1,112 @@
+name: Upstream sync
+
+# Weekly start of an upstream Ryoku merge (MergeToFedora.md). When
+# bin/ryoku-dev-sync-upstream leaves nothing for a person, the merge is
+# committed with the repo hooks and opened as a draft PR. When conflicts or a
+# hook failure remain, a single tracking issue carries the report instead,
+# because a half-resolved merge cannot pass the hooks. Either way the PR that
+# lands the sync is merged with a merge commit, never squashed.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  ISSUE_TITLE: Upstream sync needs a hand merge
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Skip while a sync PR is open
+        id: open
+        run: |
+          pr=$(gh pr list --state open --json headRefName,url \
+            --jq '[.[] | select(.headRefName | startswith("merge/fedora-upstream-"))][0].url // empty')
+          echo "pr=$pr" >>"$GITHUB_OUTPUT"
+          [[ -z $pr ]] || echo "::notice::a sync PR is already open: $pr"
+
+      - name: Start the merge
+        id: merge
+        if: steps.open.outputs.pr == ''
+        run: |
+          git config user.name 'github-actions'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config core.hooksPath .githooks
+          branch="merge/fedora-upstream-$(date -u +%F)"
+          git switch -c "$branch"
+          bin/ryoku-dev-sync-upstream >"$RUNNER_TEMP/report.txt"
+          cat "$RUNNER_TEMP/report.txt"
+          echo "branch=$branch" >>"$GITHUB_OUTPUT"
+          if [[ ! -f $(git rev-parse --git-path MERGE_HEAD) ]]; then
+            echo "state=current" >>"$GITHUB_OUTPUT"
+          elif git diff --name-only --diff-filter=U | grep -q .; then
+            echo "state=conflicts" >>"$GITHUB_OUTPUT"
+          else
+            echo "state=clean" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit the merge with the hooks
+        id: commit
+        if: steps.merge.outputs.state == 'clean'
+        run: |
+          candidate=$(git rev-parse MERGE_HEAD)
+          if git commit -m "Merge upstream unstable-dev ${candidate:0:9}" >"$RUNNER_TEMP/hooks.txt" 2>&1; then
+            git push -u origin "${{ steps.merge.outputs.branch }}"
+            echo "committed=true" >>"$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/hooks.txt"
+            { echo; echo '== Hook failure'; cat "$RUNNER_TEMP/hooks.txt"; } >>"$RUNNER_TEMP/report.txt"
+            echo "committed=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Open the draft PR
+        if: steps.commit.outputs.committed == 'true'
+        run: |
+          {
+            echo 'Upstream merge started by the weekly sync. Finish the Fedora follow-through in MergeToFedora.md (RPM payloads, installer packages, doctor reconcilers, validation) before marking it ready.'
+            echo
+            echo '**Merge this PR with a merge commit, never a squash.**'
+            echo
+            echo '```text'
+            cat "$RUNNER_TEMP/report.txt"
+            echo '```'
+          } >"$RUNNER_TEMP/body.md"
+          gh pr create --draft --base main --head "${{ steps.merge.outputs.branch }}" \
+            --title "[global] Merge upstream Ryoku $(date -u +%F)" --body-file "$RUNNER_TEMP/body.md"
+          issue=$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')
+          [[ -z $issue ]] || gh issue close "$issue" --comment 'Superseded by the draft sync PR the weekly run opened.'
+
+      - name: Report a hand merge
+        if: steps.merge.outputs.state == 'conflicts' || steps.commit.outputs.committed == 'false'
+        run: |
+          {
+            echo 'The weekly sync could not commit the upstream merge on its own. On a fresh `merge/fedora-upstream-<date>` branch from `main`, run `bin/ryoku-dev-sync-upstream`, resolve what it lists, and follow MergeToFedora.md.'
+            echo
+            echo '```text'
+            cat "$RUNNER_TEMP/report.txt"
+            echo '```'
+          } >"$RUNNER_TEMP/body.md"
+          issue=$(gh issue list --state open --search "in:title \"$ISSUE_TITLE\"" --json number --jq '.[0].number // empty')
+          if [[ -n $issue ]]; then
+            gh issue edit "$issue" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body-file "$RUNNER_TEMP/body.md"
+          fi
