@@ -67,8 +67,8 @@ func prowlRepo() string {
 		cands = append(cands, repo)
 	}
 	cands = append(cands,
-		filepath.Join(home(), "Work", "ryoku-arch"),
-		filepath.Join(home(), "ryoku-arch"),
+		filepath.Join(home(), "Work", "ryoku-fedora"),
+		filepath.Join(home(), "ryoku-fedora"),
 	)
 	for _, cand := range cands {
 		if dirExists(filepath.Join(cand, ".prowl")) {
