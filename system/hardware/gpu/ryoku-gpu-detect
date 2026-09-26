@@ -311,7 +311,16 @@ gpu_mode_choice() {
   # to keep in sync. Empty when nobody ever chose: the default policy decides.
   local dest="${1:-${GPU_CONF_DEFAULT:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/gpu.lua}}"
   [[ -r $dest ]] || return 0
-  sed -n 's/^-- ryoku-gpu-mode: //p' "$dest" | head -n1
+  local mode
+  mode="$(sed -n 's/^-- ryoku-gpu-mode: //p' "$dest" | head -n1)"
+  # Before the stamp existed, `ryoku-gpu mode hybrid` wrote the bare disable
+  # placeholder, which the shipped seed never matches. Reading it as hybrid
+  # keeps that battery choice from being re-pinned at the next login.
+  if [[ -z $mode ]] && grep -qx -- '-- Managed by ryoku-gpu. Empty by default: Hyprland uses its own GPU selection.' "$dest" &&
+    ! grep -Eq '^[[:space:]]*hl\.env\("AQ_DRM_DEVICES"' "$dest"; then
+    mode=hybrid
+  fi
+  printf '%s' "$mode"
 }
 
 beneficial() {

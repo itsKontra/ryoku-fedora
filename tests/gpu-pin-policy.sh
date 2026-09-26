@@ -77,6 +77,13 @@ grep -Eq '^hl\.env\("AQ_DRM_DEVICES"' "$conf" && fail "hybrid left a pin behind"
 run persist >/dev/null   # the login autostart call must NOT re-pin over hybrid
 grep -Eq '^hl\.env\("AQ_DRM_DEVICES"' "$conf" && fail "persist overwrote an explicit hybrid choice"
 
+# --- 3b. a hybrid choice from before the stamp (bare placeholder) stays hybrid
+run mode hybrid >/dev/null
+sed -i '/ryoku-gpu-mode:/d' "$conf"
+[[ "$(verdict)" == "ok" ]] || fail "legacy hybrid placeholder must be ok, got $(verdict)"
+run persist >/dev/null
+grep -Eq '^hl\.env\("AQ_DRM_DEVICES"' "$conf" && fail "persist re-pinned a legacy hybrid choice"
+
 # --- 4. mode performance: re-pins, stamps performance, and says the MUX word
 run mode performance 2>"$tmp/err" >/dev/null
 grep -Eq '^hl\.env\("AQ_DRM_DEVICES"' "$conf" || fail "performance wrote no pin"
