@@ -1,0 +1,48 @@
+name: Snapshot boot menu
+
+# Snapshots bootable from the GRUB menu, and the Ryoku GRUB theme (issue #48).
+# snapshot-boot.sh checks that the payload, the spec, the units and the CLI
+# agree on names and paths, drives the initramfs restore and look hooks
+# against a fake btrfs top level, and runs the GRUB theme helper against a
+# scratch /etc/default/grub.
+
+on:
+  pull_request:
+    paths:
+      - 'system/bootmenu/**'
+      - 'ryoku/cli/internal/updater/bootmenu.go'
+      - 'ryoku/cli/internal/doctor/snapper-root.conf'
+      - 'release/rpm/payload/ryoku-desktop.sh'
+      - 'release/rpm/payload/ryoku.sh'
+      - 'release/rpm/ryoku-desktop.spec'
+      - 'tests/snapshot-boot.sh'
+      - '.github/workflows/snapshot-boot.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'system/bootmenu/**'
+      - 'ryoku/cli/internal/updater/bootmenu.go'
+      - 'ryoku/cli/internal/doctor/snapper-root.conf'
+      - 'release/rpm/payload/ryoku-desktop.sh'
+      - 'release/rpm/payload/ryoku.sh'
+      - 'release/rpm/ryoku-desktop.spec'
+      - 'tests/snapshot-boot.sh'
+      - '.github/workflows/snapshot-boot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootmenu:
+    name: Snapshot boot menu, initramfs hooks and GRUB theme
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Payload, units, initramfs hooks and the GRUB helper
+        shell: bash
+        run: bash tests/snapshot-boot.sh

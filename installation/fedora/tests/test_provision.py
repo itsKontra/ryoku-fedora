@@ -154,6 +154,47 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertTrue(boot_var.is_dir())
         self.assertEqual(boot_var.stat().st_mode & 0o1777, 0o1777)
 
+    def test_seed_snapshots_copies_the_shipped_config(self):
+        self.write("usr/share/ryoku/snapper/root.conf", 'SUBVOLUME="/"\nNUMBER_LIMIT="10"\n')
+        self.write("etc/sysconfig/snapper", '# Snapper configs\nSNAPPER_CONFIGS=""\n')
+        (self.root / ".snapshots").mkdir()
+
+        provision_target.seed_snapshots(self.root)
+
+        config = self.root / "etc/snapper/configs/root"
+        self.assertEqual(config.read_text(), 'SUBVOLUME="/"\nNUMBER_LIMIT="10"\n')
+        self.assertEqual(config.stat().st_mode & 0o777, 0o640)
+        self.assertEqual((self.root / ".snapshots").stat().st_mode & 0o777, 0o750)
+        self.assertIn('SNAPPER_CONFIGS="root"\n', (self.root / "etc/sysconfig/snapper").read_text())
+        self.assertTrue((self.root / "etc/systemd/system/timers.target.wants/snapper-cleanup.timer").is_symlink())
+
+    def test_seed_snapshots_keeps_other_configs_and_an_existing_root(self):
+        self.write("usr/share/ryoku/snapper/root.conf", 'SUBVOLUME="/"\n')
+        self.write("etc/sysconfig/snapper", 'SNAPPER_CONFIGS="home"\n')
+        (self.root / ".snapshots").mkdir()
+        provision_target.seed_snapshots(self.root)
+        self.assertEqual((self.root / "etc/sysconfig/snapper").read_text(), 'SNAPPER_CONFIGS="home root"\n')
+
+        self.write("etc/snapper/configs/root", "hand made\n")
+        self.write("etc/sysconfig/snapper", 'SNAPPER_CONFIGS="home"\n')
+        provision_target.seed_snapshots(self.root)
+        self.assertEqual((self.root / "etc/snapper/configs/root").read_text(), "hand made\n")
+        self.assertEqual((self.root / "etc/sysconfig/snapper").read_text(), 'SNAPPER_CONFIGS="home"\n')
+
+    def test_seed_snapshots_needs_the_snapshots_subvolume(self):
+        self.write("usr/share/ryoku/snapper/root.conf", 'SUBVOLUME="/"\n')
+        provision_target.seed_snapshots(self.root)
+        self.assertFalse((self.root / "etc/snapper/configs/root").exists())
+
+    def test_install_boot_menu_runs_the_packaged_helper_in_the_target(self):
+        calls = []
+        provision_target.install_boot_menu(self.root, runner=calls.append)
+        self.assertEqual(calls, [])
+
+        self.write("usr/bin/ryoku-grub-menu", "#!/bin/sh\n")
+        provision_target.install_boot_menu(self.root, runner=calls.append)
+        self.assertEqual(calls, [["chroot", str(self.root), "/usr/bin/ryoku-grub-menu", "install"]])
+
     def test_seed_lockscreen(self):
         provision_target.seed_lockscreen(self.root)
 

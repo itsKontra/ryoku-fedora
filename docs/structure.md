@@ -162,6 +162,11 @@ System-level definition installed into the target.
   dnf on Fedora), and `ryoku-cmd-present`.
 - `packages/` the package manifests used to define and audit the desktop and
   hardware package closure.
+- `bootmenu/` the GRUB boot menu, shipped by `ryoku-desktop`: the Ryoku theme
+  and `ryoku-grub-menu` that installs it, the `42_ryoku_snapshots` grub.d
+  snippet, the snapper plugin and units behind `ryoku boot-menu`, and the
+  `90ryoku-snapshot` dracut module that looks at or restores a snapshot from
+  the initramfs. See "Snapshots in the boot menu" in `docs/updates.md`.
 - `recovery/` the console fallback when the desktop cannot start, shipped by
   `ryoku-desktop`: the `sddm.service` drop-in, `ryoku-console-fallback.service`
   (a text login on tty1 with a recovery banner), `ryoku-console-guard.service`

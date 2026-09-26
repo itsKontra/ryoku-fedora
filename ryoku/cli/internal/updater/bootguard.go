@@ -199,7 +199,11 @@ func rematerializeUsers() {
 // entry, for the case where the packages were not what broke the boot. The
 // entry is the one limine-snapper-sync generated for that snapshot: the
 // nested entry under //Snapshots whose cmdline names the snapshot subvolume.
+// On Fedora it is the snapshot's GRUB entry instead.
 func pointBootMenuAtSnapshot(p pendingUpdate) error {
+	if sys.RPMManager() != "" {
+		return grubBootSnapshot(p)
+	}
 	if p.Snapshot == "" {
 		return writeNotice(bootNotice{Action: "revert-failed", From: p.From, To: p.To, Detail: "no pre-update snapshot to boot; restore from the Limine Snapshots menu by hand", At: now()})
 	}
@@ -223,6 +227,29 @@ func pointBootMenuAtSnapshot(p pendingUpdate) error {
 	_ = os.Remove(pendingFile)
 	return writeNotice(bootNotice{Action: "snapshot-default", From: p.From, To: p.To, Snapshot: p.Snapshot,
 		Detail: "three boots failed after the update, so the boot menu now defaults to pre-update snapshot " + p.Snapshot + ". Boot it, then run `sudo limine-snapper-restore` to make it permanent, and `sudo ryoku boot-guard --disarm` clears this.",
+		At:     now()})
+}
+
+// grubBootSnapshot sends the next boot, once, to the pre-update snapshot's
+// read-only entry. It never restores unattended: the user sees the system from
+// before the update and decides with `ryoku rollback <id>`, and a boot after
+// that one without a decision is back on the updated system.
+func grubBootSnapshot(p pendingUpdate) error {
+	fail := func(detail string) error {
+		return writeNotice(bootNotice{Action: "revert-failed", From: p.From, To: p.To, Snapshot: p.Snapshot, Detail: detail, At: now()})
+	}
+	if p.Snapshot == "" {
+		return fail("no pre-update snapshot to boot; pick one under Ryoku snapshots in the boot menu")
+	}
+	if !strings.Contains(readText(snapshotMenuCfg()), " --id ryoku-snapshot-"+p.Snapshot+"-preview ") {
+		return fail("snapshot " + p.Snapshot + " is not in the boot menu; pick another under Ryoku snapshots")
+	}
+	if err := sys.Run("grub2-reboot", snapshotEntryID(p.Snapshot, "preview")); err != nil {
+		return fail("could not set the next boot to snapshot " + p.Snapshot + ": " + err.Error())
+	}
+	_ = os.Remove(pendingFile)
+	return writeNotice(bootNotice{Action: "snapshot-default", From: p.From, To: p.To, Snapshot: p.Snapshot,
+		Detail: "three boots failed after the update, so the next boot opens pre-update snapshot " + p.Snapshot + " read-only. If it works, `ryoku rollback " + p.Snapshot + "` restores it for good.",
 		At:     now()})
 }
 

@@ -3,6 +3,7 @@ package doctor
 import (
 	"bufio"
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -452,35 +453,11 @@ func reconcileSwapSubvolume(checkOnly bool) recResult {
 // a btrfs root, warns honestly on a non-btrfs root (no snapshots there), stays
 // idempotent on a healthy box.
 //
-// Keep this canonical so a doctored box matches a healthy packaged install.
-const snapperRootConfig = `# Ryoku snapper config for the root filesystem. Written by ryoku doctor when
-# the installer's config is missing (a deploy box, an upgrade from an older
-# release, or drift). Keys not listed here fall back to snapper's built-in
-# defaults.
-SUBVOLUME="/"
-FSTYPE="btrfs"
-QGROUP=""
-SPACE_LIMIT="0.5"
-FREE_LIMIT="0.2"
-ALLOW_USERS=""
-ALLOW_GROUPS=""
-SYNC_ACL="no"
-BACKGROUND_COMPARISON="yes"
-NUMBER_CLEANUP="yes"
-NUMBER_MIN_AGE="1800"
-NUMBER_LIMIT="10"
-NUMBER_LIMIT_IMPORTANT="10"
-TIMELINE_CREATE="no"
-TIMELINE_CLEANUP="yes"
-TIMELINE_MIN_AGE="1800"
-TIMELINE_LIMIT_HOURLY="10"
-TIMELINE_LIMIT_DAILY="7"
-TIMELINE_LIMIT_WEEKLY="0"
-TIMELINE_LIMIT_MONTHLY="0"
-TIMELINE_LIMIT_YEARLY="0"
-EMPTY_PRE_POST_CLEANUP="yes"
-EMPTY_PRE_POST_MIN_AGE="1800"
-`
+// Keep this canonical so a doctored box matches a healthy packaged install;
+// the ryoku package ships the same file for the installer.
+//
+//go:embed snapper-root.conf
+var snapperRootConfig string
 
 const snapperConfdRoot = `## Path: System/Snapper
 ## Type: string

@@ -16,15 +16,18 @@ import (
 // reconcileBootGuard keeps ryoku-boot-guard.service enabled on a packaged box
 // (the ryoku package ships the unit; enabling it here is how boxes installed
 // before it get it, since doctor runs after every update) and surfaces the
-// guard's last notice: an update it reverted, or a boot menu it repointed at
-// the pre-update snapshot. The notice is a one-time report and is cleared
-// once shown, so it never nags.
+// guard's last notice: an update it reverted, a boot menu it repointed at the
+// pre-update snapshot, or a restore run from the snapshot boot menu. The
+// notice is a one-time report and is cleared once shown, so it never nags.
 func reconcileBootGuard(checkOnly bool) recResult {
 	if sys.ResolveRepo() != "" || !sys.PkgInstalled("ryoku-desktop") {
 		return okRes(i18n.T("not a packaged install; the boot guard watches package updates only"))
 	}
 	if n := updater.BootNotice(); n != nil {
 		msg := fmt.Sprintf(i18n.T("the boot guard acted on %s: %s"), n.At, n.Detail)
+		if n.Action == "snapshot-restored" {
+			msg = fmt.Sprintf(i18n.T("a snapshot was restored from the boot menu on %s: %s"), n.At, n.Detail)
+		}
 		if !checkOnly {
 			_ = sys.Sudo("rm", "-f", "/var/lib/ryoku/boot/notice.json")
 		}
