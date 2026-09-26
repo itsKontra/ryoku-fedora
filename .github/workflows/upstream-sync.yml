@@ -23,6 +23,9 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ github.token }}
+  # the sync script adds an `upstream` remote, which gh would otherwise pick
+  # as the base repository for every pr and issue call.
+  GH_REPO: ${{ github.repository }}
   ISSUE_TITLE: Upstream sync needs a hand merge
 
 jobs:
