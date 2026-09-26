@@ -16,7 +16,7 @@ desktop shell, so it works on a clean Hyprland session.
 - `sddm/setup` The install-time SDDM wiring: enable the service, default to the
   graphical target, drop `pam_gnome_keyring` from the SDDM PAM stack, and make
   sure a Hyprland wayland session exists.
-- `README.md`, `CHANGELOG.md` This file and the change log.
+- `README.md` This file.
 
 ## Two pieces, one theme
 

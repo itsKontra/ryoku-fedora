@@ -1,15 +1,13 @@
 name: Delivery check
 
 # Guards that what a dev box runs actually reaches an installed box: every
-# ryoku/apps config is shipped by a package/installer/deploy path (a hard fail),
-# and how far main (what the [ryoku] repo publishes) lags unstable-dev (a
-# warning, since main advances by a deliberate fast-forward). See docs/updates.md.
+# ryoku/apps config is shipped by a package/installer/deploy path. See
+# docs/updates.md.
 
 on:
   push:
     branches:
       - main
-      - unstable-dev
   pull_request:
   workflow_dispatch:
 
@@ -27,16 +25,4 @@ jobs:
           persist-credentials: false
 
       - name: Verify update delivery
-        run: |
-          set -euo pipefail
-          git fetch -q origin main unstable-dev 2>/dev/null || true
-          bin/ryoku-dev-verify-delivery
-
-      - name: Annotate publish lag
-        if: always()
-        run: |
-          set -euo pipefail
-          behind="$(git rev-list --count origin/main..origin/unstable-dev 2>/dev/null || echo 0)"
-          if [[ ${behind:-0} -gt 0 ]]; then
-            echo "::warning::origin/main is $behind commit(s) behind origin/unstable-dev; users get them only after main fast-forwards and publish-repo runs."
-          fi
+        run: bin/ryoku-dev-verify-delivery

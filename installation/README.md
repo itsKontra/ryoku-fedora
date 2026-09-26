@@ -11,7 +11,6 @@ Fedora ISO compose, offline provisioning, first-boot setup, and their tests.
   completes account and regional setup before graphical login.
 - `tests/`: container and VM coverage for the Fedora repository, RPM set,
   provisioning, first boot, signatures, channels, ISO staging, and ISO boot.
-- `CHANGELOG.md`: installation history.
 
 The retired Arch installer, Bubble Tea disk TUI, shell backend, and archiso
 profile are not part of the Fedora installation path.

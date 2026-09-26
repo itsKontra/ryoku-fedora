@@ -17,13 +17,12 @@ repo="$(git rev-parse --show-toplevel)"
 cd "$repo"
 
 # excluded from every scan: this gate holds the patterns, docs must name what they
-# ban, CHANGELOGs and the generated translation catalog only mirror source that is
-# scanned at its real home, .prowl is a generated cache, and a Go vendor/ tree
+# ban, the generated translation catalog only mirrors source that is scanned at
+# its real home, .prowl is a generated cache, and a Go vendor/ tree
 # carries a legitimate copy of the wm module.
 ex=(
 	':(exclude)bin/ryoku-dev-verify-wm-isolation'
 	':(exclude)*.md'
-	':(exclude)*CHANGELOG*'
 	':(exclude).prowl/'
 	':(exclude)*/vendor/*'
 	':(exclude)ryoku/i18n/catalog/'

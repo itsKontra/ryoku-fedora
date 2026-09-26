@@ -57,9 +57,8 @@ Where a change lives decides whether, and how, it reaches an installed machine.
 
 - **Desktop config and binaries (`ryoku/`)** reach users through `ryoku update`:
   config is re-laid by `ryoku materialize` (override-safe), binaries come from the
-  signed `[ryoku]` repo. They reach the testing channel on every push to
-  `unstable-dev` and stable when a release is tagged (`docs/updates.md`,
-  "Publishing: releases and channels").
+  signed COPR repository, published on every push to `main` (`docs/updates.md`,
+  "Publishing: the COPR channel").
 - **Push, or work on a branch that is not the channel.** `ryoku update` on a
   checkout reconciles the branch it is ON onto `origin/<channel>`: a clean
   fast-forward when it can, and a `git reset --hard` when the branch has diverged
@@ -110,8 +109,9 @@ Every commit passes the hooks in `.githooks/`; never use `--no-verify`.
   no filler comment lines.
 - `pre-push`: shellcheck when installed.
 
-One logical change per commit. Update the matching `CHANGELOG.md` in the area you
-touched, and keep the change documented where future readers will look.
+One logical change per commit. Give anything a user would notice a `Note:`
+trailer (the release notes are built from them, see `CONTRIBUTING.md`), and keep
+the change documented where future readers will look.
 
 ## Research
 
