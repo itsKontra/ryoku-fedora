@@ -131,28 +131,17 @@ func BootGuard(args []string) error {
 // provenAfter reports whether any session recorded a good boot other than
 // the one the update ran in.
 func provenAfter(armedBoot string) bool {
-	for id := range provenBoots() {
-		if id != armedBoot {
-			return true
-		}
-	}
-	return false
-}
-
-// provenBoots is the set of boot ids the sessions' ok-<uid> markers name.
-func provenBoots() map[string]bool {
-	ids := map[string]bool{}
 	matches, _ := filepath.Glob(filepath.Join(bootOKDir, "ok-*"))
 	for _, m := range matches {
 		b, err := os.ReadFile(m)
 		if err != nil {
 			continue
 		}
-		if id := strings.TrimSpace(string(b)); id != "" {
-			ids[id] = true
+		if id := strings.TrimSpace(string(b)); id != "" && id != armedBoot {
+			return true
 		}
 	}
-	return ids
+	return false
 }
 
 func disarmBootGuard(why string) error {

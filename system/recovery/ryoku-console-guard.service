@@ -1,9 +1,9 @@
 [Unit]
 # Pulled in by the sddm drop-in. Reads the previous boot's journal: when its
-# login screen kept restarting and no session proved itself, it holds sddm
-# back for this boot and starts the console fallback instead. The next boot
-# tries the desktop again.
-Description=Ryoku console guard (text login after a login screen crash loop)
+# login screen died and nothing replaced it (sddm leaves a black screen and
+# stays up, so OnFailure never fires), it holds sddm back for this boot and
+# starts the console fallback instead. The next boot tries the desktop again.
+Description=Ryoku console guard (text login after the login screen died)
 
 [Service]
 Type=oneshot

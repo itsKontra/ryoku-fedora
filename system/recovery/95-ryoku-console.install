@@ -6,9 +6,12 @@
 #
 # Runs after 20-grub.install has written /boot/loader/entries/<id>-<kver>.conf
 # and copies whatever that entry says, so the twin boots the same kernel,
-# initramfs and options. The ~ in the name and version sorts it just below its
-# kernel, as Fedora's own ~debug twins do, and GRUB's default is picked by entry
-# id, so the twin never becomes the default.
+# initramfs and options. Fedora's GRUB lists entries by file name, split
+# rpm-style into name-version-release at the last two dashes, name first. The
+# twin is <id>-<kver>~ryokuconsole.conf: no dash in the suffix, so it shares the
+# kernels' name, and the ~ sorts it right below its own kernel, as Fedora's
+# ~debug twins do. GRUB's default is picked by entry id, so a twin never
+# becomes the default.
 #
 #   add <kver> ...   twin that kernel's entry (kernel-install)
 #   remove <kver>    drop the twin (kernel-install)
@@ -17,14 +20,20 @@
 set -u
 
 bls_dir="${RYOKU_BLS_DIR:-/boot/loader/entries}"
-suffix="~ryoku-console"
+suffix="~ryokuconsole"
 
+# twin <machine-id> <kver>
 twin() {
-  local entry="$1" out="${1%.conf}${suffix}.conf"
+  local entry="$bls_dir/$1-$2.conf" out="$bls_dir/$1-$2$suffix.conf"
   # an entry without options would twin into a plain duplicate of the desktop
   grep -qs '^options[[:space:]]' "$entry" || return 0
   if ! awk -v sfx="$suffix" '
-    /^title[ \t]/   { sub(/^title[ \t]+/, ""); print "title Ryoku console: " $0; next }
+    /^title[ \t]/   {
+      sub(/^title[ \t]+/, "")
+      if (match($0, /\)/)) print "title " substr($0, 1, RSTART) " Ryoku console"
+      else print "title " $0 " Ryoku console"
+      next
+    }
     /^version[ \t]/ { print $0 sfx; next }
     /^options[ \t]/ { print $0 " systemd.unit=multi-user.target"; next }
     { print }
@@ -37,31 +46,28 @@ twin() {
   return 0
 }
 
-is_base() {
-  case "${1##*/}" in
-    *"$suffix".conf | *~debug.conf | *-0-rescue*.conf) return 1 ;;
-  esac
-}
-
 mid="${KERNEL_INSTALL_MACHINE_ID:-$(cat /etc/machine-id 2>/dev/null)}"
 kver="${2:-}"
 
 case "${1:-}" in
   add)
-    if [ -n "$mid" ] && [ -n "$kver" ]; then twin "$bls_dir/$mid-$kver.conf"; fi
+    if [ -n "$mid" ] && [ -n "$kver" ]; then twin "$mid" "$kver"; fi
     ;;
   remove)
     if [ -n "$mid" ] && [ -n "$kver" ]; then rm -f "$bls_dir/$mid-$kver$suffix.conf"; fi
     ;;
   sync)
-    [ -d "$bls_dir" ] || exit 0
-    for entry in "$bls_dir"/*.conf; do
+    if [ -z "$mid" ] || [ ! -d "$bls_dir" ]; then exit 0; fi
+    for entry in "$bls_dir/$mid"-*.conf; do
       [ -f "$entry" ] || continue
-      if is_base "$entry"; then
-        twin "$entry"
-      elif [[ $entry == *"$suffix".conf ]] && [ ! -f "${entry%"$suffix".conf}.conf" ]; then
-        rm -f "$entry"
-      fi
+      name="${entry##*/}"
+      name="${name%.conf}"
+      name="${name#"$mid"-}"
+      case "$name" in
+        *"$suffix") [ -f "$bls_dir/$mid-${name%"$suffix"}.conf" ] || rm -f "$entry" ;;
+        0-rescue* | *~debug) ;;
+        *) twin "$mid" "$name" ;;
+      esac
     done
     ;;
   purge)

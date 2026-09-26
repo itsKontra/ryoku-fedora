@@ -1,31 +1,52 @@
 package updater
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
-func TestGreeterStartsCountsOneBoot(t *testing.T) {
-	journal := []byte(`{"__CURSOR":"s=1","_BOOT_ID":"0123456789abcdef0123456789abcdef"}
-{"__CURSOR":"s=2","_BOOT_ID":"0123456789abcdef0123456789abcdef"}
-not json
-{"__CURSOR":"s=3"}
-{"__CURSOR":"s=4","_BOOT_ID":"0123456789abcdef0123456789abcdef"}
-`)
-	boot, starts := greeterStarts(journal)
-	if boot != "01234567-89ab-cdef-0123-456789abcdef" || starts != 3 {
-		t.Fatalf("got %q, %d", boot, starts)
+// journal renders messages as the JSON lines journalctl -o json prints.
+func journal(msgs ...string) []byte {
+	var b strings.Builder
+	for _, m := range msgs {
+		b.WriteString(`{"__CURSOR":"s=1","MESSAGE":"` + strings.ReplaceAll(m, `\`, `\\`) + `"}` + "\n")
 	}
+	return []byte(b.String())
 }
 
-func TestGreeterStartsEmptyJournal(t *testing.T) {
-	if boot, starts := greeterStarts(nil); boot != "" || starts != 0 {
-		t.Fatalf("got %q, %d", boot, starts)
-	}
-}
+const (
+	started  = "Started sddm.service - Simple Desktop Display Manager."
+	stopping = "Stopping sddm.service - Simple Desktop Display Manager..."
+	gOpen    = "pam_unix(sddm-greeter:session): session opened for user sddm(uid=985) by (uid=0)"
+	gClose   = "pam_unix(sddm-greeter:session): session closed for user sddm"
+	login    = "pam_unix(sddm:session): session opened for user matthias(uid=1000) by matthias(uid=0)"
+)
 
-func TestDashedBootIDMatchesProcForm(t *testing.T) {
-	const proc = "01234567-89ab-cdef-0123-456789abcdef"
-	for _, in := range []string{"0123456789ABCDEF0123456789ABCDEF", proc} {
-		if got := dashedBootID(in); got != proc {
-			t.Fatalf("%q -> %q", in, got)
+func TestGreeterDied(t *testing.T) {
+	cases := []struct {
+		name string
+		msgs []string
+		want bool
+	}{
+		// the shapes below were read from a Fedora 44 VM's journal
+		{"login then shutdown", []string{started, gOpen, login, stopping}, false},
+		{"shutdown at the login screen", []string{started, gOpen, stopping}, false},
+		{"greeter exits and sddm leaves a black screen", []string{started, gOpen, stopping, started, gOpen, gClose}, true},
+		{"greeter closes as sddm stops", []string{started, gOpen, stopping, gClose}, false},
+		{"a new greeter replaced the dead one", []string{started, gOpen, gClose, gOpen}, false},
+		{"a login followed the closed greeter", []string{started, gOpen, gClose, login}, false},
+		{"no sddm in that boot", nil, false},
+	}
+	for _, c := range cases {
+		if got := greeterDied(journal(c.msgs...)); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
+	}
+}
+
+func TestGreeterDiedSkipsNoise(t *testing.T) {
+	j := append(journal(started, gOpen, gClose), []byte("not json\n{}\n")...)
+	if !greeterDied(j) {
+		t.Fatal("malformed lines must not reset the verdict")
 	}
 }

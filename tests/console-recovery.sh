@@ -26,6 +26,9 @@ ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=1; }
 check() { if "${@:2}"; then ok "$1"; else bad "$1"; fi; }
 line() { grep -qxF -- "$2" "$1"; }
+lacks() { ! grep -rq -- "$@"; }
+# first <file> <a> <b>: the first line matching a or b matches a
+first() { grep -m1 -E -- "$2|$3" "$1" | grep -qE -- "$2"; }
 
 # case 1
 dropin="$rec/sddm-console-fallback.conf"
@@ -37,8 +40,12 @@ check "sddm failure starts the console fallback" line "$dropin" "OnFailure=ryoku
 check "the guard's flag holds sddm back" line "$dropin" "ConditionPathExists=!/run/ryoku/console-boot"
 check "sddm pulls the guard in" line "$dropin" "Wants=ryoku-console-guard.service"
 check "the guard decides before sddm starts" line "$dropin" "After=ryoku-console-guard.service"
-check "the fallback brings up a login on tty1" line "$fallback" "Wants=getty@tty1.service"
-check "the banner is in place before agetty prints it" line "$fallback" "Before=getty@tty1.service"
+check "only a display manager that is really down gets the console" grep -q \
+  '^ExecCondition=.*systemctl show -P ActiveState sddm.service.*failed|inactive' "$fallback"
+check "getty starts only past that check" lacks "^Wants=getty@tty1" "$fallback"
+check "the banner is in place before agetty prints it" first "$fallback" "^ExecStart=.*issue\.d" "^ExecStartPost=.*getty@tty1"
+check "the fallback brings up a login on tty1" line "$fallback" \
+  "ExecStartPost=/usr/bin/systemctl start --no-block getty@tty1.service"
 check "the fallback installs the shipped banner" grep -q \
   ' /usr/share/ryoku/recovery/console-fallback.issue /etc/issue.d/ryoku-console-fallback.issue$' "$fallback"
 check "the banner is cleared on the next boot" line "$rec/ryoku-recovery.tmpfiles.conf" \
@@ -46,8 +53,7 @@ check "the banner is cleared on the next boot" line "$rec/ryoku-recovery.tmpfile
 check "the guard runs the CLI's console check" line "$guard" "ExecStart=/usr/bin/ryoku boot-guard --console"
 check "the CLI writes the flag the drop-in checks" grep -q 'consoleBootFlag *= "/run/ryoku/console-boot"' "$cli"
 check "the CLI starts the shipped fallback unit" grep -q '"ryoku-console-fallback.service"' "$cli"
-check "no passwordless emergency shell" \
-  bash -c '! grep -rq SYSTEMD_SULOGIN_FORCE "$@"' _ "$rec" "$repo/installation" "$repo/release"
+check "no passwordless emergency shell" lacks SYSTEMD_SULOGIN_FORCE "$rec" "$repo/installation" "$repo/release"
 
 for dest in \
   usr/lib/systemd/system/sddm.service.d/50-ryoku-console-fallback.conf \
@@ -84,18 +90,18 @@ grub_users \$grub_users
 grub_arg --unrestricted
 grub_class fedora
 EOF
-printf 'title rescue\nversion 0-rescue\nlinux /vmlinuz-0-rescue\noptions root=UUID=abc ro\n' >"$bls/$mid-0-rescue-$mid.conf"
+printf 'title rescue\nversion 0-rescue-%s\nlinux /vmlinuz-0-rescue\noptions root=UUID=abc ro\n' "$mid" >"$bls/$mid-0-rescue.conf"
 printf 'title debug\nversion %s\noptions root=UUID=abc ro\n' "$kver" >"$bls/$mid-$kver~debug.conf"
 
 run() { RYOKU_BLS_DIR="$bls" KERNEL_INSTALL_MACHINE_ID="$mid" bash "$plugin" "$@"; }
-twin="$bls/$mid-$kver~ryoku-console.conf"
+twin="$bls/$mid-$kver~ryokuconsole.conf"
 absent() { [ ! -e "$1" ]; }
-no_side_twins() { absent "$bls/$mid-0-rescue-$mid~ryoku-console.conf" && absent "$bls/$mid-$kver~debug~ryoku-console.conf"; }
+no_side_twins() { test "$(find "$bls" -name "*ryokuconsole*" | grep -c "rescue\|debug")" = 0; }
 
 run add "$kver" "$work/unused" "/usr/lib/modules/$kver/vmlinuz"
 check "add twins the kernel's entry" test -f "$twin"
-check "the twin is labelled Ryoku console" line "$twin" "title Ryoku console: Fedora Linux ($kver) 44 (Forty Four)"
-check "the twin sorts just below its kernel" line "$twin" "version $kver~ryoku-console"
+check "the twin is labelled Ryoku console, sorting below its kernel" line "$twin" "title Fedora Linux ($kver) Ryoku console"
+check "the twin carries its suffix in the version too" line "$twin" "version $kver~ryokuconsole"
 check "the twin boots to a text login" line "$twin" \
   "options root=UUID=abc ro rootflags=subvol=root rhgb quiet systemd.unit=multi-user.target"
 check "the twin boots the same kernel" line "$twin" "linux /vmlinuz-$kver"
@@ -109,18 +115,18 @@ run remove "$kver"
 check "remove drops the twin" absent "$twin"
 
 sed "s/$kver/$old/g" "$bls/$mid-$kver.conf" >"$bls/$mid-$old.conf"
-printf 'title gone\noptions x\n' >"$bls/$mid-$gone~ryoku-console.conf"
+printf 'title gone\noptions x\n' >"$bls/$mid-$gone~ryokuconsole.conf"
 run sync
-check "sync twins every kernel" test -f "$twin" -a -f "$bls/$mid-$old~ryoku-console.conf"
-check "sync drops orphaned twins" absent "$bls/$mid-$gone~ryoku-console.conf"
+check "sync twins every kernel" test -f "$twin" -a -f "$bls/$mid-$old~ryokuconsole.conf"
+check "sync drops orphaned twins" absent "$bls/$mid-$gone~ryokuconsole.conf"
 check "sync leaves rescue and debug entries alone" no_side_twins
 
 printf 'title no options\nversion 9.9\nlinux /vmlinuz-9.9\n' >"$bls/$mid-9.9.conf"
 run add 9.9
-check "an entry without options is not duplicated" absent "$bls/$mid-9.9~ryoku-console.conf"
+check "an entry without options is not duplicated" absent "$bls/$mid-9.9~ryokuconsole.conf"
 
 run purge
-check "purge drops every twin" test -z "$(find "$bls" -name '*~ryoku-console.conf')"
+check "purge drops every twin" test -z "$(find "$bls" -name '*~ryokuconsole.conf')"
 check "purge keeps Fedora's entries" test -f "$bls/$mid-$kver.conf" -a -f "$bls/$mid-$old.conf"
 
 exit "$fail"
