@@ -6,6 +6,14 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # A merge that ships nothing into any package does not need a new build.
+    # Tag pushes ignore path filters, so a release always publishes.
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/CODEOWNERS'
+      - '.github/FUNDING.yml'
   workflow_dispatch:
 permissions:
   contents: read
