@@ -476,7 +476,8 @@ KEEP = [
     "Ryoku", "Wi-Fi", "Bluetooth", "GPU", "CPU", "RAM", "VPN", "SSID", "DNS",
     "IP", "MAC", "USB", "HDMI", "RGB", "PID", "OSD", "QR", "PipeWire",
     "PulseAudio", "Wayland", "Hyprland", "Niri", "Sway", "systemd",
-    "opencode", "codex", "Whisper", "gpu-screen-recorder",
+    "opencode", "codex", "Whisper", "gpu-screen-recorder", "ryoku doctor",
+    "linux-firmware", "ryoku-wifi-regdom", "pacman", "dnf",
 ]
 SENSE = {
     "Shell": "the desktop shell / Unix command-line shell software, never a seashell",
