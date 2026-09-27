@@ -129,7 +129,10 @@ func managedFiles(user, exe string) []managedFile {
 		"  release|stopped) " + shellQuote(gpuBin) + " gpu hook release \"$guest\" ;;\n" +
 		"esac\n" +
 		"exit 0\n"
-	udev := fmt.Sprintf("SUBSYSTEM==\"kvmfr\", OWNER=\"%s\", GROUP=\"kvm\", MODE=\"0660\"\n", user)
+	// QEMU runs confined as svirt_t, which SELinux denies on a plain device_t
+	// node; svirt_image_t at s0 is the label libvirt gives shared disks, which
+	// every VM may open and map. udev ignores SECLABEL where SELinux is off.
+	udev := fmt.Sprintf("SUBSYSTEM==\"kvmfr\", OWNER=\"%s\", GROUP=\"kvm\", MODE=\"0660\", SECLABEL{selinux}=\"system_u:object_r:svirt_image_t:s0\"\n", user)
 	return []managedFile{
 		{"etc/modules-load.d/ryoku-kvmfr.conf", "kvmfr\n", 0o644, true},
 		{"etc/modprobe.d/ryoku-kvmfr.conf", fmt.Sprintf("options kvmfr static_size_mb=%d\n", kvmfrStaticMB), 0o644, true},
@@ -243,6 +246,16 @@ func applyPlan(action, user, exe string, dryRun bool) error {
 				}
 			}
 		}
+		if kvmfrOK {
+			say("allow " + kvmfrDevice + " in /" + qemuConfRel + " cgroup_device_acl")
+			if !dryRun {
+				if ok, err := applyKvmfrACL(root, true); err != nil {
+					say("could not edit /" + qemuConfRel + ": " + err.Error())
+				} else if !ok {
+					say("/" + qemuConfRel + " sets its own cgroup_device_acl; add \"" + kvmfrDevice + "\" to it, or the VM cannot open Looking Glass")
+				}
+			}
+		}
 		say("add " + user + " to groups: libvirt, kvm")
 		say("enable libvirtd.socket and the default network")
 		if !dryRun {
@@ -250,6 +263,7 @@ func applyPlan(action, user, exe string, dryRun bool) error {
 			run("gpasswd", "-a", user, "kvm")
 			run("systemctl", "enable", "--now", "libvirtd.socket")
 			run("udevadm", "control", "--reload-rules")
+			run("udevadm", "trigger", "--subsystem-match=kvmfr")
 			run("virsh", "net-autostart", "default")
 		}
 		if kvmfrOK {
@@ -265,6 +279,12 @@ func applyPlan(action, user, exe string, dryRun bool) error {
 		say("remove /" + f.rel)
 		if !dryRun {
 			_ = os.Remove(filepath.Join(root, f.rel))
+		}
+	}
+	say("remove the kvmfr block from /" + qemuConfRel)
+	if !dryRun {
+		if _, err := applyKvmfrACL(root, false); err != nil {
+			say("could not edit /" + qemuConfRel + ": " + err.Error())
 		}
 	}
 	say("remove " + user + " from groups: libvirt, kvm")
