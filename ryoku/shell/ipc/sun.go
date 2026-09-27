@@ -62,12 +62,18 @@ func (s *sunState) window() (sunrise, sunset time.Time, ok bool) {
 // check ok first. Like inNocturnalWindow it reads the pair as clock times on
 // now's day: the last observation can be from yesterday (offline across
 // midnight, a failed fetch after an overnight suspend), and its dated sunset
-// would otherwise hold the whole day dark.
+// would otherwise hold the whole day dark. A sunset clock earlier than the
+// sunrise clock is a day that spans midnight (the forecast's timezone is not
+// the box's), so daytime is then everything outside sunset..sunrise.
 func isDaytime(now, sunrise, sunset time.Time) bool {
 	onToday := func(t time.Time) time.Time {
 		return time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
 	}
-	return !now.Before(onToday(sunrise)) && now.Before(onToday(sunset))
+	rise, set := onToday(sunrise), onToday(sunset)
+	if set.Before(rise) {
+		return !now.Before(rise) || now.Before(set)
+	}
+	return !now.Before(rise) && now.Before(set)
 }
 
 // inNocturnalWindow reports whether now is inside the warm-light window: from
