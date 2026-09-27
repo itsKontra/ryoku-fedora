@@ -797,7 +797,7 @@
     {
       "id": "pkg-search",
       "name": "> searches packages across sources",
-      "covers": "packages provider gpk search",
+      "covers": "packages provider dnf search",
       "steps": [
         "show",
         "type >firefox",
@@ -820,7 +820,7 @@
         "settle 40"
       ],
       "asserts": [
-        "[.results[] | select((.title | test(\"^kitty\\\\s\")) and (.subtitle | test(\"^pacman\\\\s+\\\\(installed\\\\)\")))] | length >= 1"
+        "[.results[] | select((.title | test(\"^kitty\\\\s\")) and (.subtitle | test(\"^\\\\S+\\\\s+\\\\(installed\\\\)\")))] | length >= 1"
       ],
       "screenshot": true,
       "network": true
@@ -841,7 +841,7 @@
     },
     {
       "id": "pkg-fast-lane",
-      "name": "Package search shows local pacman/aur rows within seconds",
+      "name": "Package search shows cached dnf rows within seconds",
       "covers": "packages two-phase fast lane",
       "steps": [
         "show",
@@ -853,7 +853,7 @@
       ],
       "screenshot": true,
       "teardown": [
-        "for i in $(seq 45); do pgrep -f 'gpk search' >/dev/null || break; sleep 1; done"
+        "for i in $(seq 45); do pgrep -f 'dnf repoquery' >/dev/null || break; sleep 1; done"
       ]
     },
     {

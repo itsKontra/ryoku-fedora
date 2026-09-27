@@ -3,15 +3,14 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.Ui.Singletons
 import "../../Singletons"
-import "gpk.js" as Gpk
+import "dnf.js" as Dnf
 import "../requeststate.js" as RequestState
 import ".."
 
-// Package provider backed by GPK (`gpk search --json`), which spans every package
-// manager gpk wraps. Routed by "/" is the actions panel; packages use explicit
-// "install "/"remove "/"search " queries (matching inir) so a plain search never
-// forks gpk. Search is async + cached; installs/removes spawn a terminal because
-// gpk needs a tty for the privilege prompt (see gpk-launcher-backend-notes).
+// Package provider backed by dnf (`dnf repoquery`). Routed by "/" is the actions
+// panel; packages use explicit "install "/"remove "/"search " queries (matching
+// inir) so a plain search never forks dnf. Search is async + cached; installs and
+// removes spawn a terminal because sudo needs a tty for its password prompt.
 Provider {
     id: packages
 
@@ -162,8 +161,8 @@ Provider {
                 name: verb,
                 icon: "",
                 execute: function () {
-                    var gpkOp = op === "remove" ? "remove" : "install";
-                    Spawn.run([packages.terminal, "-e", "gpk", gpkOp, pkg.name]);
+                    var dnfOp = op === "remove" ? "remove" : "install";
+                    Spawn.run([packages.terminal, "--hold", "-e", "sudo", "dnf", dnfOp, pkg.name]);
                     // the install/remove will change what a re-search should
                     // show; drop the cached rows so the next query refetches.
                     packages.invalidateSearch();
@@ -200,9 +199,9 @@ Provider {
         }
     }
 
-    // Fast lane: pacman/aur answer from gpk's scan cache in well under a
-    // second, while the full sweep hits live registries (npm, cargo, pip...)
-    // and can take tens of seconds. Local rows show immediately; the full
+    // Fast lane: dnf answers from its metadata cache (-C) in well under a
+    // second, while the full query may first refresh expired repo metadata
+    // and can take tens of seconds. Cached rows show immediately; the full
     // set replaces them when it lands. fullFor marks a term the full sweep
     // has already answered so a slow fast-lane result never regresses it.
     property string fullFor: ""
@@ -214,7 +213,7 @@ Provider {
         property bool inFlight: false
         property bool didStart: false
         property string out: ""
-        command: ["gpk", "search", term, "--json", "--limit", "30", "--manager", "pacman,aur"]
+        command: ["dnf", "repoquery", "-q", "-C", "--installed", "--available", "--qf", Dnf.QUERY_FORMAT, "*" + term + "*"]
         stdout: SplitParser {
             onRead: data => fastProc.out += data + "\n"
         }
@@ -246,7 +245,7 @@ Provider {
                 if (succeeded && !packages.fullSucceeded
                         && packages.fullFor !== key) {
                     packages.cachedQuery = key;
-                    packages.cachedRows = Gpk.parse(fastProc.out);
+                    packages.cachedRows = Dnf.parse(fastProc.out, key);
                     Dispatcher.notifyAsync();
                 }
                 packages.finishRequest(key, generation);
@@ -257,7 +256,7 @@ Provider {
 
     Process {
         id: availProc
-        command: ["sh", "-c", "command -v gpk >/dev/null 2>&1 && gpk search --help >/dev/null 2>&1"]
+        command: ["sh", "-c", "command -v dnf >/dev/null 2>&1"]
         onExited: (code) => { packages.available = (code === 0); }
     }
 
@@ -268,7 +267,7 @@ Provider {
         property bool inFlight: false
         property bool didStart: false
         property string out: ""
-        command: ["gpk", "search", term, "--json", "--limit", "30"]
+        command: ["dnf", "repoquery", "-q", "--installed", "--available", "--qf", Dnf.QUERY_FORMAT, "*" + term + "*"]
         stdout: SplitParser {
             onRead: data => searchProc.out += data + "\n"
         }
@@ -302,7 +301,7 @@ Provider {
                 if (packages.fullSucceeded) {
                     packages.fullFor = key;
                     packages.cachedQuery = key;
-                    packages.cachedRows = Gpk.parse(searchProc.out);
+                    packages.cachedRows = Dnf.parse(searchProc.out, key);
                     Dispatcher.notifyAsync();
                 }
                 packages.finishRequest(key, generation);
