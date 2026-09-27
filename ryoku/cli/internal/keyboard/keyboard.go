@@ -11,8 +11,8 @@
 // Applying pushes a chosen layout back out, so the greeter, the TTYs and the
 // boot prompt follow the desktop instead of staying on whatever was there.
 //
-// The initramfs is the one that traps people. mkinitcpio's sd-vconsole hook does
-// `add_file /etc/vconsole.conf` at BUILD time, so the passphrase prompt is
+// The initramfs is the one that traps people. dracut's i18n module copies
+// /etc/vconsole.conf and its keymap in at BUILD time, so the passphrase prompt is
 // frozen to the keymap current when the image was last generated. Editing
 // /etc/vconsole.conf afterwards, by hand or through localectl, cannot reach it.
 package keyboard
@@ -263,13 +263,13 @@ func ApplySystem(l Layout) error {
 }
 
 // RebuildBootImage regenerates the initramfs so the passphrase prompt picks up
-// the console keymap. Slow (it rebuilds every preset, and a UKI with it) and it
-// regenerates what the machine boots from, so callers decide when it runs.
+// the console keymap. Slow (it rebuilds the image of every installed kernel) and
+// it regenerates what the machine boots from, so callers decide when it runs.
 func RebuildBootImage() error {
-	if !sys.Has("mkinitcpio") {
-		return fmt.Errorf(i18n.T("mkinitcpio not installed"))
+	if !sys.Has("dracut") {
+		return fmt.Errorf(i18n.T("dracut not installed"))
 	}
-	if err := sys.Sudo("mkinitcpio", "-P"); err != nil {
+	if err := sys.Sudo("dracut", "--regenerate-all", "--force"); err != nil {
 		return fmt.Errorf(i18n.T("rebuild the boot image: %w"), err)
 	}
 	return nil

@@ -181,13 +181,13 @@ func runApply(args []string) error {
 		return fmt.Errorf(i18n.T("no layout to apply: pass one, or set it in Ryoku Settings"))
 	}
 
-	// Both writes need root: localectl for the greeter/console keymap, mkinitcpio
+	// Both writes need root: localectl for the greeter/console keymap, dracut
 	// for the boot image. In a terminal sudo/polkit can prompt for it, but the Hub
-	// runs this with no controlling tty, so `sudo mkinitcpio` failed with "a
+	// runs this with no controlling tty, so `sudo dracut` failed with "a
 	// terminal is required to read the password" and the whole apply reported
 	// FAILED (#177). With no tty, escalate once through pkexec -- it prompts via
 	// the desktop's polkit agent -- carrying the resolved layout so the root pass
-	// (localectl as root needs no polkit, mkinitcpio as root no sudo) touches no
+	// (localectl as root needs no polkit, dracut as root no sudo) touches no
 	// per-user config. In a terminal the direct path keeps its familiar prompts.
 	if os.Geteuid() != 0 && !sys.StdinIsTTY() && sys.Has("pkexec") {
 		self, err := os.Executable()
@@ -242,12 +242,12 @@ func applySystemAndBoot(l Layout, noBoot bool) error {
 	}
 	fmt.Printf(i18n.T("greeter and console set to %s\n"), l.Primary())
 	if noBoot {
-		fmt.Println(i18n.T("boot image left alone; the disk passphrase prompt keeps its old keymap until `sudo mkinitcpio -P`"))
+		fmt.Println(i18n.T("boot image left alone; the disk passphrase prompt keeps its old keymap until `sudo dracut --regenerate-all --force`"))
 		return nil
 	}
 	fmt.Println(i18n.T("rebuilding the boot image so the passphrase prompt follows..."))
 	if err := RebuildBootImage(); err != nil {
-		return fmt.Errorf(i18n.T("%w\ngreeter and console are set; rerun `sudo mkinitcpio -P` to finish"), err)
+		return fmt.Errorf(i18n.T("%w\ngreeter and console are set; rerun `sudo dracut --regenerate-all --force` to finish"), err)
 	}
 	fmt.Println(i18n.T("done: the passphrase prompt, greeter, console and desktop all use"), l.Primary())
 	return nil
