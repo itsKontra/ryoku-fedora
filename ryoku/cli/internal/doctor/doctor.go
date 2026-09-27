@@ -203,6 +203,7 @@ func reconcilers() []reconciler {
 		{i18n.T("NVIDIA Wayland autostart"), reconcileNvidiaAutostart},
 		{i18n.T("failed services"), reconcileFailedUnits},
 		{i18n.T("btrfs device health"), reconcileBtrfsHealth},
+		{i18n.T("Intel Wi-Fi firmware"), reconcileWifiFirmware},
 		{i18n.T("wireless regulatory domain"), reconcileWifiRegdom},
 		{i18n.T("ASUS Aura lighting provider"), reconcileAsusAura},
 		{i18n.T("QMK/VIA keyboard lighting provider"), reconcileQMK},

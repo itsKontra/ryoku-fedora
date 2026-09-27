@@ -882,7 +882,7 @@ Item {
                     id: scanBtn
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: wifi.wifiOn
+                    visible: wifi.wifiOn && wifi.wifiDev !== null
                     text: wifi.scanning ? I18n.tr("Scanning\u2026") : I18n.tr("Scan")
                     armed: !wifi.scanning
                     onAct: wifi.startScan()
@@ -946,12 +946,29 @@ Item {
                 anchors.top: wifiDivider.bottom
                 anchors.topMargin: Tokens.s6
                 anchors.horizontalCenter: parent.horizontalCenter
-                visible: wifi.wifiOn && wifi.netsSorted.length === 0
+                visible: wifi.wifiOn && wifi.wifiDev !== null && wifi.netsSorted.length === 0
                 text: I18n.tr("Searching networks\u2026")
                 color: Tokens.inkMuted
                 font.family: Tokens.ui
                 font.pixelSize: Tokens.fSmall
                 font.weight: Font.Medium
+            }
+
+            // NetworkManager lists no Wi-Fi device: the card is missing or its
+            // driver could not load (on Fedora, usually absent firmware).
+            Text {
+                anchors.top: wifiDivider.bottom
+                anchors.topMargin: Tokens.s6
+                anchors.left: parent.left
+                anchors.right: parent.right
+                visible: wifi.wifiOn && wifi.wifiDev === null
+                text: I18n.tr("No Wi-Fi adapter found. Run ryoku doctor to check its driver and firmware.")
+                color: Tokens.inkMuted
+                font.family: Tokens.ui
+                font.pixelSize: Tokens.fSmall
+                font.weight: Font.Medium
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
             }
 
             // live network list.

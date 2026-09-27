@@ -69,6 +69,12 @@ xorg-x11-server-Xwayland
 libva-utils
 libva-intel-media-driver
 linux-firmware
+# Intel Wi-Fi firmware: linux-firmware's weak deps pull every other Wi-Fi
+# vendor's, but Fedora ships these only through the comps hardware group.
+iwlwifi-dvm-firmware
+iwlwifi-mvm-firmware
+iwlwifi-mld-firmware
+iwlegacy-firmware
 amd-ucode-firmware
 microcode_ctl
 wireless-regdb
