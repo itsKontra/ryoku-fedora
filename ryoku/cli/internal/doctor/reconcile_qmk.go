@@ -15,7 +15,7 @@ type qmkStatus struct {
 
 var (
 	readQMKStatus = probeQMKStatus
-	installQMK    = func() error { return sys.Run("ryoku-pkg-aur-add", "qmk-hid") }
+	installQMK    = func() error { return sys.Run("ryoku-install-extra", "qmk-hid") }
 	reloadQMKUdev = func() error {
 		if err := sys.Sudo("udevadm", "control", "--reload"); err != nil {
 			return err
@@ -32,7 +32,7 @@ func probeQMKStatus() qmkStatus {
 	if !st.supported {
 		return st
 	}
-	st.installed = sys.PkgInstalled("qmk-hid")
+	st.installed = sys.Has("qmk_hid")
 	return st
 }
 
@@ -55,7 +55,7 @@ func reconcileQMK(checkOnly bool) recResult {
 	}
 	if err := installQMK(); err != nil {
 		return failRes(i18n.T("could not install the QMK lighting provider: %v"), err).
-			withFix("ryoku-pkg-aur-add qmk-hid")
+			withFix("ryoku-install-extra qmk-hid")
 	}
 	_ = reloadQMKUdev()
 	return fixedRes(i18n.T("installed qmk-hid; the QMK/VIA keyboard is available in Appearance"))

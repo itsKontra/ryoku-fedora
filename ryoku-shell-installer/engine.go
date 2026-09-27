@@ -1413,7 +1413,7 @@ EOF`); err != nil {
 }
 
 // installDesktopExtras deploys prebuilt binary and asset releases for tools
-// that are not provided by the host package manager (matugen, gpk, Bibata cursors, Space Grotesk).
+// that are not provided by the host package manager (matugen, Bibata cursors, Space Grotesk).
 // This is the default zero-compile installation method on Fedora and fromSource systems,
 // guaranteeing that no heavy Rust or C++ compiler toolchains are required on user machines.
 func (e *engine) installDesktopExtras() {
@@ -1427,7 +1427,7 @@ func (e *engine) installDesktopExtras() {
 		e.say("desktop extras require x86_64")
 		return
 	}
-	for _, name := range []string{"matugen", "gpk", "prowl-agent", "bibata", "space-grotesk", "material-symbols"} {
+	for _, name := range []string{"matugen", "prowl-agent", "bibata", "space-grotesk", "material-symbols"} {
 		if has(name) && !pathExists(filepath.Join(e.f.homeDir, ".local/state/ryoku/extras", name+".json")) {
 			continue
 		}
