@@ -1186,7 +1186,8 @@ func reconcileIconFont(checkOnly bool) recResult {
 // ~/.local/bin and QML modules into ~/.local/lib/qt6/qml; both outrank the
 // packaged copies on PATH and the QML import path, so once the box is back on
 // a package channel the leftovers pin it to whatever vintage last deployed
-// them and every later package update is silently shadowed. a checkout box
+// them and every later package update is silently shadowed; user units it
+// rewrote to ~/.local/bin shadow the packaged units the same way. a checkout box
 // (git channel) IS the dev loop: left alone.
 func reconcileDevResidue(checkOnly bool) recResult {
 	if sys.ResolveRepo() != "" {
@@ -1222,6 +1223,8 @@ func reconcileDevResidue(checkOnly bool) recResult {
 		}
 		residue = append(residue, filepath.Join(localBin, e.Name()))
 	}
+	units := checkoutUnitResidue()
+	residue = append(residue, units...)
 	if len(residue) == 0 {
 		return okRes(i18n.T("no home-deployed artifacts shadowing the packages"))
 	}
@@ -1232,8 +1235,8 @@ func reconcileDevResidue(checkOnly bool) recResult {
 	// report what could not be removed: a survivor keeps shadowing the packaged
 	// install (Hyprland's autostart relaunches it by PATH at next login), so
 	// claiming "removed" while it lives would hide the very drift this heals.
-	var kept []string
-	for _, p := range residue {
+	kept := retireCheckoutUnits(units)
+	for _, p := range residue[:len(residue)-len(units)] {
 		if err := os.RemoveAll(p); err != nil {
 			kept = append(kept, p)
 		}
