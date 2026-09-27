@@ -2,6 +2,7 @@ package updater
 
 import (
 	"bufio"
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -121,10 +122,10 @@ func installedRyokuSet(allowDowngrade bool) (set []string, skipped int, err erro
 }
 
 // repoServedSet is the names the currently pointed [ryoku] repo serves, as a
-// set. installedRyokuSet already fails the run when the repo cannot be read, so
-// an empty set here only ever means the repo genuinely lacks the name.
-func repoServedSet() map[string]bool {
-	out := map[string]bool{}
+// set. It is a second query after installedRyokuSet, so it fails on its own: a
+// failed or empty answer is an error, never "the repo serves nothing", because
+// the caller removes what is missing from it.
+func repoServedSet() (map[string]bool, error) {
 	var names string
 	var err error
 	if manager := sys.RPMManager(); manager != "" {
@@ -133,12 +134,16 @@ func repoServedSet() map[string]bool {
 		names, err = sys.RunOut("pacman", "-Slq", ryokuRepo)
 	}
 	if err != nil {
-		return out
+		return nil, err
 	}
+	out := map[string]bool{}
 	for _, n := range lines(names) {
 		out[n] = true
 	}
-	return out
+	if len(out) == 0 {
+		return nil, errors.New("the [ryoku] repository listed no packages")
+	}
+	return out, nil
 }
 
 // dropOlderServes removes every target whose [ryoku] serve is older than what

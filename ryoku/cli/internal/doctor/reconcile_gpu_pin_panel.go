@@ -103,5 +103,5 @@ func reconcileRenderPinPanel(checkOnly bool) recResult {
 	}
 	_ = checkOnly // report-only: the pin is deliberate policy, never auto-changed
 	return noteRes(i18n.T("render pin puts NVIDIA first while the panel is driven by %s (reverse PRIME); on some kernels the session's first cross-GPU commit fails once and the panel stays black until reboot (#270)"), panel).
-		withFix(i18n.T("if a boot or wake ever lands on a black panel: `ryoku-gpu disable` clears the pin (Hyprland then picks the iGPU itself); `ryoku-gpu persist` restores the pin"))
+		withFix(i18n.T("if a boot or wake ever lands on a black panel: set Graphics mode to Hybrid on the Hub's GPU page (or run `ryoku-gpu mode hybrid`) so the pin is cleared and stays cleared; Performance restores it"))
 }

@@ -675,6 +675,24 @@ for _ in {1..50}; do kill -0 "$orphan_pid" 2>/dev/null || break; sleep 0.05; don
 kill -0 "$orphan_pid" 2>/dev/null && { printf 'the leaked holder survived the reclaim\n' >&2; exit 1; }
 flock -n "$run/ryoku-clamshell.lock" -c true 2>/dev/null   || { printf 'the lock stayed pinned after the reclaim\n' >&2; exit 1; }
 
+# In the daemon the reclaim runs with fd 9 open on the lock and under the
+# ryoku-clamshell comm; its own forks carry both and must not read as a live
+# daemon, or a real orphan is never reclaimed.
+ln -sf "$(command -v bash)" "$tmp/ryoku-clamshell"
+spawn_orphan
+rm -f "$daemon_state"
+rc=0
+"$tmp/ryoku-clamshell" -c '
+  log() { printf "%s\n" "$*" >&2; }
+  source <(sed -n "/^lock_holder_pids()/,/^}/p;/^reclaim_stale_clamshell_lock()/,/^}/p" "$1")
+  DAEMON_STATE=$2
+  exec 9>"$3/ryoku-clamshell.lock"
+  reclaim_stale_clamshell_lock
+' _ "$helper" "$daemon_state" "$run" || rc=$?
+[[ $rc -eq 0 ]] || { printf 'reclaim with the lock fd open must succeed, got %s\n' "$rc" >&2; exit 1; }
+for _ in {1..50}; do kill -0 "$orphan_pid" 2>/dev/null || break; sleep 0.05; done
+kill -0 "$orphan_pid" 2>/dev/null && { printf 'the leaked holder survived a reclaim with the lock fd open\n' >&2; exit 1; }
+
 spawn_orphan
 printf '%s\n' "$orphan_pid" >"$daemon_state"
 if reclaim_stale_clamshell_lock; then

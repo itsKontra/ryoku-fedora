@@ -186,7 +186,9 @@ func Update(args []string) error {
 		// A rollback onto a release that predates the compositor split carries
 		// no ryoku-desktop-hyprland/niri; their exact pins would fail the whole
 		// downgrade transaction (#271). Drop them before building the target.
-		if dropped := dropSplitMetasNotServed(repoServedSet()); len(dropped) > 0 {
+		if served, err := repoServedSet(); err != nil {
+			progress.logf(i18n.T("Could not list what the target release serves, so no compositor package was removed: %v"), err)
+		} else if dropped := dropSplitMetasNotServed(served); len(dropped) > 0 {
 			progress.logf(i18n.T("Removed %s: the target release predates the compositor split"), strings.Join(dropped, ", "))
 		}
 	}
