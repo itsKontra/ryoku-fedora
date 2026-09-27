@@ -6,20 +6,20 @@ import (
 )
 
 // stubWifiFirmware swaps the reconciler's impure inputs for fixtures: the
-// package manager, the Intel card probe, which packages are installed, and the
-// install, reload and radio probes. installed names the packages already
-// present; the returned slice records what an install asked for.
+// package manager, the Intel card probe (a card that is present and down),
+// which packages are installed, and the install and reload. installed names
+// the packages already present; the returned slice records what an install
+// asked for.
 func stubWifiFirmware(t *testing.T, manager string, card bool, installed ...string) *[]string {
 	t.Helper()
-	origMgr, origCard, origInst, origInstall, origReload, origRadio :=
-		wifiFirmwareManager, intelWifiCardPresent, wifiFirmwareInstalled, installWifiFirmware, reloadIwlwifi, wifiRadioPresent
+	origMgr, origCards, origInst, origInstall, origReload :=
+		wifiFirmwareManager, intelWifiCards, wifiFirmwareInstalled, installWifiFirmware, reloadIwlwifi
 	t.Cleanup(func() {
 		wifiFirmwareManager = origMgr
-		intelWifiCardPresent = origCard
+		intelWifiCards = origCards
 		wifiFirmwareInstalled = origInst
 		installWifiFirmware = origInstall
 		reloadIwlwifi = origReload
-		wifiRadioPresent = origRadio
 	})
 	have := map[string]bool{}
 	for _, p := range installed {
@@ -27,7 +27,7 @@ func stubWifiFirmware(t *testing.T, manager string, card bool, installed ...stri
 	}
 	var asked []string
 	wifiFirmwareManager = func() string { return manager }
-	intelWifiCardPresent = func() bool { return card }
+	intelWifiCards = func() (bool, bool) { return card, card }
 	wifiFirmwareInstalled = func(p string) bool { return have[p] }
 	installWifiFirmware = func(_ string, pkgs []string) error {
 		asked = append(asked, pkgs...)
@@ -37,7 +37,6 @@ func stubWifiFirmware(t *testing.T, manager string, card bool, installed ...stri
 		return nil
 	}
 	reloadIwlwifi = func() bool { return true }
-	wifiRadioPresent = func() bool { return false }
 	return &asked
 }
 
@@ -58,10 +57,26 @@ func TestWifiFirmwareSkipsWithoutIntelCard(t *testing.T) {
 	}
 }
 
-func TestWifiFirmwareInstalledIsOK(t *testing.T) {
-	stubWifiFirmware(t, "dnf", true, intelWifiFirmwarePkgs...)
-	if got := reconcileWifiFirmware(true); got.status != recOK {
-		t.Errorf("installed firmware should be ok, got %v (%s)", got.status, got.detail)
+// A working card is healthy even with a firmware family missing: it needs only
+// its own, and a package the user removed is not put back.
+func TestWifiFirmwareCardUpIsOK(t *testing.T) {
+	asked := stubWifiFirmware(t, "dnf", true)
+	intelWifiCards = func() (bool, bool) { return true, false }
+	if got := reconcileWifiFirmware(false); got.status != recOK {
+		t.Errorf("a card that is up should be ok, got %v (%s)", got.status, got.detail)
+	}
+	if len(*asked) != 0 {
+		t.Errorf("nothing should install for a working card, asked for %v", *asked)
+	}
+}
+
+func TestWifiFirmwareDownWithFirmwareWarns(t *testing.T) {
+	asked := stubWifiFirmware(t, "dnf", true, intelWifiFirmwarePkgs...)
+	if got := reconcileWifiFirmware(false); got.status != recWarn {
+		t.Errorf("a down card with firmware installed should warn, got %v (%s)", got.status, got.detail)
+	}
+	if len(*asked) != 0 {
+		t.Errorf("nothing is missing to install, asked for %v", *asked)
 	}
 }
 

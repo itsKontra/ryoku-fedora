@@ -28,18 +28,25 @@ var intelWifiFirmwarePkgs = []string{
 	"iwlegacy-firmware",
 }
 
-// intelWifiCardPresent reports whether a PCI network controller (class 0x0280)
-// from Intel (vendor 0x8086) is present. A var so a test runs without /sys.
-var intelWifiCardPresent = func() bool {
+// intelWifiCards reports whether a PCI network controller (class 0x0280) from
+// Intel (vendor 0x8086) is present, and whether any such card lacks a wireless
+// interface of its own, the sign that iwlwifi could not load its firmware. Read
+// per card, so a USB dongle's interface never masks a dead built-in card. A var
+// so a test runs without /sys.
+var intelWifiCards = func() (present, down bool) {
 	devs, _ := filepath.Glob("/sys/bus/pci/devices/*")
 	for _, d := range devs {
 		class := strings.TrimSpace(readFileSafe(filepath.Join(d, "class")))
 		vendor := strings.TrimSpace(readFileSafe(filepath.Join(d, "vendor")))
-		if strings.HasPrefix(class, "0x0280") && vendor == "0x8086" {
-			return true
+		if !strings.HasPrefix(class, "0x0280") || vendor != "0x8086" {
+			continue
+		}
+		present = true
+		if m, _ := filepath.Glob(filepath.Join(d, "net", "*", "wireless")); len(m) == 0 {
+			down = true
 		}
 	}
-	return false
+	return present, down
 }
 
 var wifiFirmwareManager = sys.RPMManager
@@ -51,15 +58,15 @@ var installWifiFirmware = func(manager string, pkgs []string) error {
 }
 
 // reloadIwlwifi re-probes the driver so it picks up the new firmware in this
-// boot. Only called while no wireless interface exists, so it never drops a
-// working link.
+// boot. Only called while an Intel card has no interface; a second Intel card
+// that did come up would drop its link for the moment of the reload.
 var reloadIwlwifi = func() bool {
 	_ = sys.Sudo("modprobe", "-r", "iwlwifi")
 	if err := sys.Sudo("modprobe", "iwlwifi"); err != nil {
 		return false
 	}
 	for i := 0; i < 20; i++ {
-		if wifiRadioPresent() {
+		if _, down := intelWifiCards(); !down {
 			return true
 		}
 		time.Sleep(250 * time.Millisecond)
@@ -72,8 +79,12 @@ func reconcileWifiFirmware(checkOnly bool) recResult {
 	if manager == "" {
 		return okRes(i18n.T("Intel Wi-Fi firmware comes with linux-firmware on this system"))
 	}
-	if !intelWifiCardPresent() {
+	present, down := intelWifiCards()
+	if !present {
 		return okRes(i18n.T("this machine has no Intel wireless card"))
+	}
+	if !down {
+		return okRes(i18n.T("the Intel wireless card is up"))
 	}
 	var missing []string
 	for _, p := range intelWifiFirmwarePkgs {
@@ -82,7 +93,8 @@ func reconcileWifiFirmware(checkOnly bool) recResult {
 		}
 	}
 	if len(missing) == 0 {
-		return okRes(i18n.T("Intel Wi-Fi firmware is installed"))
+		return warnRes(i18n.T("the Intel wireless card has no interface although its firmware is installed")).
+			withFix("journalctl -k -b | grep iwlwifi")
 	}
 	fix := "sudo " + manager + " install " + strings.Join(missing, " ")
 	if checkOnly {
@@ -92,9 +104,8 @@ func reconcileWifiFirmware(checkOnly bool) recResult {
 	if err := installWifiFirmware(manager, missing); err != nil {
 		return failRes(i18n.T("could not install the Intel Wi-Fi firmware: %v"), err).withFix(fix)
 	}
-	if wifiRadioPresent() || reloadIwlwifi() {
+	if reloadIwlwifi() {
 		return fixedRes(i18n.T("installed the Intel Wi-Fi firmware (%s); Wi-Fi is up"), strings.Join(missing, ", "))
 	}
 	return fixedRes(i18n.T("installed the Intel Wi-Fi firmware (%s); restart to bring Wi-Fi up"), strings.Join(missing, ", "))
 }
-
