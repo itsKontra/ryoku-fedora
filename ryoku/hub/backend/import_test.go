@@ -507,3 +507,95 @@ func sourceWithHypr(t *testing.T, conf string) string {
 	mustWrite(t, filepath.Join(src, "hypr", "hyprland.conf"), conf)
 	return src
 }
+
+// Ryoku's own kitty.conf and config.fish end by loading the user-include; the
+// theme daemon renders conf.d/ryoku-colors.fish.
+const fxShippedKitty = `font_size 11.0
+include current-theme.conf
+globinclude user.conf
+`
+
+const fxShippedFish = `if status is-interactive
+  ryoku-fastfetch
+end
+test -f $__fish_config_dir/user.fish && source $__fish_config_dir/user.fish
+`
+
+const fxShippedColors = `# Ryoku palette for fish and fzf. Rendered by the theme daemon; do not edit.
+set -g fish_color_normal E0DEF4
+`
+
+// Dotfiles exported from a Ryoku box carry the shipped configs. Importing them
+// must not make a user-include load itself, and only what the user added on
+// top of the shipped files may land in the layer.
+func TestApplyRyokuDotfilesLayerNoSelfInclude(t *testing.T) {
+	home := importHome(t)
+	cfg := filepath.Join(home, ".config")
+	mustWrite(t, filepath.Join(cfg, "kitty", "kitty.conf"), fxShippedKitty)
+	mustWrite(t, filepath.Join(cfg, "fish", "config.fish"), fxShippedFish)
+	mustWrite(t, filepath.Join(cfg, "fish", "conf.d", "ryoku-colors.fish"), fxShippedColors)
+
+	src := t.TempDir()
+	mustWrite(t, filepath.Join(src, "kitty", "kitty.conf"), "font_size 13.0\ninclude current-theme.conf\nglobinclude user.conf\n")
+	mustWrite(t, filepath.Join(src, "fish", "config.fish"), fxShippedFish+"\n# mine\nset -gx PATH $HOME/bin $PATH\n")
+	mustWrite(t, filepath.Join(src, "fish", "conf.d", "ryoku-colors.fish"), fxShippedColors)
+	mustWrite(t, filepath.Join(src, "fish", "conf.d", "mine.fish"), "alias ll 'ls -la'\n")
+
+	apps := map[string]appDecision{"kitty": {Include: true}, "fish": {Include: true}}
+	if _, err := applyImport(decisions{Source: src, Apps: apps}); err != nil {
+		t.Fatal(err)
+	}
+
+	kitty, _ := os.ReadFile(filepath.Join(cfg, "kitty", "user.conf"))
+	k := string(kitty)
+	if !strings.Contains(k, "font_size 13.0") {
+		t.Errorf("kitty/user.conf lost the user's setting:\n%s", k)
+	}
+	if strings.Contains(k, "include") {
+		t.Errorf("kitty/user.conf re-includes shipped or user files:\n%s", k)
+	}
+
+	fish, _ := os.ReadFile(filepath.Join(cfg, "fish", "user.fish"))
+	f := string(fish)
+	for _, want := range []string{"set -gx PATH $HOME/bin $PATH", "alias ll 'ls -la'"} {
+		if !strings.Contains(f, want) {
+			t.Errorf("fish/user.fish missing %q:\n%s", want, f)
+		}
+	}
+	for _, bad := range []string{"user.fish", "ryoku-fastfetch", "fish_color_normal"} {
+		if strings.Contains(f, bad) {
+			t.Errorf("fish/user.fish carries shipped or generated %q:\n%s", bad, f)
+		}
+	}
+}
+
+// an import of files identical to the shipped ones writes no fish layer at all.
+func TestApplyShippedFishOnlyWritesNothing(t *testing.T) {
+	home := importHome(t)
+	cfg := filepath.Join(home, ".config")
+	mustWrite(t, filepath.Join(cfg, "fish", "config.fish"), fxShippedFish)
+	src := t.TempDir()
+	mustWrite(t, filepath.Join(src, "fish", "config.fish"), fxShippedFish)
+
+	if _, err := applyImport(decisions{Source: src, Apps: map[string]appDecision{"fish": {Include: true}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg, "fish", "user.fish")); !os.IsNotExist(err) {
+		t.Errorf("user.fish written for an import that adds nothing (err=%v)", err)
+	}
+}
+
+func TestLayerContentDropsSelfSource(t *testing.T) {
+	for _, line := range []string{
+		"source ~/.config/fish/user.fish",
+		". $__fish_config_dir/user.fish",
+		"test -f $__fish_config_dir/user.fish && source $__fish_config_dir/user.fish",
+	} {
+		if got := layerContent(line+"\nset -g x 1\n", "", fishDropLine); strings.Contains(got, "user.fish") {
+			t.Errorf("self-source kept for %q: %q", line, got)
+		}
+	}
+	if got := layerContent("# source user.fish is how it loads\n", "", fishDropLine); got == "" {
+		t.Error("a comment mentioning user.fish was dropped")
+	}
+}

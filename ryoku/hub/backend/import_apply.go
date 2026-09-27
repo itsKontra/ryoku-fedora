@@ -104,14 +104,19 @@ func applyImport(dec decisions) (applyResult, error) {
 	// --- layer tiers: append each app's config into its user-include ----------
 	if included(dec, "kitty") {
 		if p, ok := findConfig(dec.Source, "kitty", "kitty.conf"); ok {
-			body := headerComment("#", ts, dec.Source) + ensureTrailingNL(readFileOr(p))
-			writes = append(writes, layerWrite("kitty", "user.conf", "#", ts, body))
+			shipped := readFileOr(filepath.Join(configHome(), "kitty", "kitty.conf"))
+			if conf := layerContent(readFileOr(p), shipped, kittyDropLine(shipped)); conf != "" {
+				body := headerComment("#", ts, dec.Source) + conf
+				writes = append(writes, layerWrite("kitty", "user.conf", "#", ts, body))
+			}
 		}
 	}
 	if included(dec, "fish") {
 		if p, ok := findConfig(dec.Source, "fish", "config.fish"); ok {
-			body := headerComment("#", ts, dec.Source) + fishBody(filepath.Dir(p), p)
-			writes = append(writes, layerWrite("fish", "user.fish", "#", ts, body))
+			if fish := fishBody(filepath.Dir(p)); fish != "" {
+				body := headerComment("#", ts, dec.Source) + fish
+				writes = append(writes, layerWrite("fish", "user.fish", "#", ts, body))
+			}
 		}
 	}
 	if included(dec, "fastfetch") {
@@ -417,9 +422,18 @@ func portByHand(b importBind) string {
 
 // fishBody concatenates config.fish and every functions/ + conf.d/ file into one
 // user.fish body; fish sources it late, so the appended functions and snippets
-// take effect on top of the shipped config.
-func fishBody(dir, configPath string) string {
-	parts := []string{"# --- config.fish ---\n" + ensureTrailingNL(readFileOr(configPath))}
+// take effect on top of the shipped config. Each file is reduced to what the
+// shipped fish config does not already do, and is left out when that is
+// nothing; the body is empty when no file adds anything.
+func fishBody(dir string) string {
+	var parts []string
+	add := func(rel string) {
+		shipped := readFileOr(filepath.Join(configHome(), "fish", rel))
+		if content := layerContent(readFileOr(filepath.Join(dir, rel)), shipped, fishDropLine); content != "" {
+			parts = append(parts, fmt.Sprintf("# --- %s ---\n", rel)+content)
+		}
+	}
+	add("config.fish")
 	for _, sub := range []string{"functions", "conf.d"} {
 		entries, _ := os.ReadDir(filepath.Join(dir, sub))
 		names := []string{}
@@ -430,7 +444,7 @@ func fishBody(dir, configPath string) string {
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			parts = append(parts, fmt.Sprintf("# --- %s/%s ---\n", sub, name)+ensureTrailingNL(readFileOr(filepath.Join(dir, sub, name))))
+			add(filepath.Join(sub, name))
 		}
 	}
 	return strings.Join(parts, "")
