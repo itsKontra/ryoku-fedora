@@ -23,6 +23,7 @@
   "Removed %s: the target release predates the compositor split": "%s നീക്കം ചെയ്തു: ടാർഗെറ്റ് റിലീസ് കമ്പോസിറ്റർ വിഭജനത്തിന് മുമ്പുള്ളതാണ്",
   "Restore snapshot %s on the next boot? [y/N]": "അടുത്ത ബൂട്ടിൽ സ്നാപ്പ്ഷോട്ട് %s പുനഃസ്ഥാപിക്കണോ? [y/N]",
   "Retiring the previous source deployment": "മുമ്പത്തെ സോഴ്സ് വിന്യാസം നീക്കം ചെയ്യുന്നു",
+  "Ricelin": "Ricelin",
   "Secure Boot signed NVIDIA driver": "Secure Boot ഒപ്പിട്ട NVIDIA ഡ്രൈവർ",
   "Snapshot %s is not in the boot menu. `ryoku snapshots` lists the ones that are;": "സ്നാപ്പ്ഷോട്ട് %s ബൂട്ട് മെനുവിൽ ഇല്ല. മെനുവിലുള്ളവ `ryoku snapshots` കാണിക്കും;",
   "Spotify": "Spotify",
