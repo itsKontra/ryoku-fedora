@@ -6184,7 +6184,7 @@
   "touch:       %s": "toque:       %s",
   "touches a shell rc file (": "toca um arquivo shell rc (",
   "touches ~/.ssh; write only under stateDir (R8)": "toca ~/.ssh; escrever apenas sob stateDir (R8)",
-  "touchpad": "touchpad",
+  "touchpad": "touch pad",
   "track takes one channel, got %q and %q": "track aceita um canal, obteve %q e %q",
   "tried to set the wireless regulatory domain to %s from the system timezone but it is still unset (00)": "tentei definir o domínio regulamentar sem fios para %s no fuso horário do sistema, mas ainda não está definido (00)",
   "try a kernel parameter such as acpi_backlight=native or acpi_backlight=vendor": "tente um parâmetro de kernel como acpi_backlight=native ou acpi_backlight=vendor",

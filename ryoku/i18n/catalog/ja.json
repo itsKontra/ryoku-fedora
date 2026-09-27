@@ -6009,7 +6009,7 @@
   "sudo pacman -Syu, then log out and back in": "sudo pacman -Syu, then ログアウト後ログイン",
   "sudo ryoku doctor (or the next ryoku update)": "sudo ryoku doctor (or次ryoku更新)",
   "sudo snapper -c root set-config ALLOW_USERS=%s SYNC_ACL=yes": "sudo snapper -c root set-config ALLOW_USERS=%s SYNC_ACL=yes",
-  "sudo systemctl enable %s": "sudo systemctl enable %s",
+  "sudo systemctl enable %s": "sudo systemctl を有効にする %s",
   "sudo:        %s": "sudo:        %s",
   "sumi bar simplification": "sumi bar簡素化",
   "superseded stage settings remain after migration: %s": "移行後のstage設定が残存: %s",

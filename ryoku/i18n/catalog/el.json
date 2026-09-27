@@ -6051,7 +6051,7 @@
   "the AI usage collector timer is off, so the bar AI pill goes stale": "ο χρονοδιακόπτης συλλογής χρήσης AI είναι απενεργοποιημένος, οπότε η χάπι AI της μπάρας γίνεται παρωχημένη",
   "the GPU render pin is a deliberate RYOKU_GPU_FORCE override; kept": "το GPU render pin είναι σκόπιμη RYOKU_GPU_FORCE παράκαμψη: διατηρήθηκε",
   "the Hyprland GPU render pin matches ryoku-gpu policy": "το Hyprland GPU render pin ταιριάζει με πολιτική ryoku-gpu",
-  "the Intel wireless card has no firmware (%s missing), so Wi-Fi cannot come up": "the Intel wireless card has no firmware (%s missing), so Wi-Fi cannot come up",
+  "the Intel wireless card has no firmware (%s missing), so Wi-Fi cannot come up": "η ασύρματη κάρτα Intel δεν έχει υλικολογισμικό (%s λείπει), επομένως το Wi-Fi δεν μπορεί να εμφανιστεί",
   "the Intel wireless card has no interface although its firmware is installed": "η ασύρματη κάρτα Intel δεν έχει διεπαφή παρόλο που είναι εγκατεστημένο το υλικολογισμικό της",
   "the Intel wireless card is up": "η ασύρματη κάρτα Intel είναι ενεργοποιημένη",
   "the NVIDIA driver reports runtime D3 power management off for this card, so it can never power down. Enable fine-grained control with `NVreg_DynamicPowerManagement=0x02` in a /etc/modprobe.d/nvidia.conf `options nvidia` line, rebuild the initramfs (`sudo mkinitcpio -P`), and reboot.": "το driver NVIDIA αναφέρει D3 power management off για αυτήν την κάρτα, δεν μπορεί να κλείσει. Ενεργοποιήστε fine-grained control με `NVreg_DynamicPowerManagement=0x02` στο /etc/modprobe.d/nvidia.conf `options nvidia`, ξανακτίστε το initramfs (`sudo mkinitcpio -P`), και κάντε reboot.",
