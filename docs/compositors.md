@@ -74,7 +74,8 @@ Shared by both providers:
 Hyprland only:
 
     configReload  cursorSet  focusGrab  globalShortcuts  liveConfigEval
-    plugins  screenShader  specialWorkspace  submap  tiledLayout  windowGeometry
+    persistentScreenCapture  plugins  screenShader  specialWorkspace  submap
+    tiledLayout  windowGeometry
 
 niri only:
 
@@ -94,6 +95,13 @@ change what a user sees on niri:
 - **`liveConfigEval`** and **`configReload`** are absent because niri's config is
   file-only and niri watches it. There is nothing to evaluate and nothing to
   trigger; the Hub applies on save rather than previewing live.
+- **`persistentScreenCapture`** is absent because niri tears its outputs down
+  and recreates them on a config reload or a mode change. A one-shot capture is
+  fine; a layer-shell surface that captures the whole screen and lives for the
+  session races an output leaving under it, and the Qt client segfaults
+  resolving the vanished screen. The launcher's blurred frost is gated on this,
+  so on niri the card opens over a solid drawer instead of taking the shell
+  down.
 - **`submap`**, **`specialWorkspace`**, **`screenShader`**, **`plugins`** and
   **`cursorSet`** have no niri equivalent, so the binds and settings that need
   them are reported by `apply` rather than silently dropped.
