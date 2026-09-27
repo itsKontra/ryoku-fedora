@@ -536,6 +536,36 @@ func TestMaterializeKeepsHandEditsAsForks(t *testing.T) {
 	wantFile(t, filepath.Join(dest, "hypr/modules/window_rules.lua"), "base rules v2")
 }
 
+// A checkout deploy overwrites laid files and strips the manifest hashes
+// (deploy.sh), so moving the box back to packages takes the shipped files
+// instead of forking the checkout's copies as hand edits.
+func TestMaterializeAfterCheckoutDeployForksNothing(t *testing.T) {
+	base, dest := t.TempDir(), t.TempDir()
+	t.Setenv("RYOKU_CONFIG_BASE", base)
+	t.Setenv("XDG_CONFIG_HOME", dest)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	unit := "systemd/user/ryoku-shell.service"
+	writeFile(t, filepath.Join(base, unit), "ExecStart=/usr/bin/ryoku-shell daemon\n")
+	if err := Materialize(); err != nil {
+		t.Fatalf("packaged materialize: %v", err)
+	}
+
+	writeFile(t, filepath.Join(dest, unit), "ExecStart=/home/u/.local/bin/ryoku-shell daemon\n")
+	state := materializeStatePath()
+	if err := writeManifest(state, readManifest(state), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Materialize(); err != nil {
+		t.Fatalf("materialize after checkout deploy: %v", err)
+	}
+	wantFile(t, filepath.Join(dest, unit), "/usr/bin/ryoku-shell")
+	if _, err := os.Stat(filepath.Join(sys.UserEditsDir(), unit)); !os.IsNotExist(err) {
+		t.Fatal("a checkout-deployed file must not be forked into user_edits")
+	}
+}
+
 func TestManifestWithoutHashesStillPrunes(t *testing.T) {
 	state := filepath.Join(t.TempDir(), "manifest")
 	os.WriteFile(state, []byte("a/b.lua\nc.conf\n"), 0o644)

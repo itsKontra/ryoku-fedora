@@ -452,6 +452,12 @@ state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku"
 mkdir -p "$state_dir"
 printf '%s\n' "$repo_root" > "$state_dir/repo"
 git -C "$repo_root" rev-parse HEAD > "$state_dir/deployed" 2>/dev/null || rm -f "$state_dir/deployed"
+# This deploy just overwrote files a packaged `ryoku materialize` laid, so the
+# hashes it recorded no longer describe them; left in place, a later move back
+# to packages mistakes every file deployed here for a hand edit and forks it
+# into user_edits, pinning checkout paths over the packaged config. Drop the
+# hashes but keep the paths, so the next materialize still prunes retired files.
+[[ -f $state_dir/materialized ]] && sed -i 's/\t.*$//' "$state_dir/materialized"
 if [[ -n ${RYOKU_SHELL_REF:-} ]]; then
   git check-ref-format "refs/heads/$RYOKU_SHELL_REF"
   mkdir -p "$cfg/environment.d"
