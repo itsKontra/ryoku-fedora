@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"ryoku-cli/internal/sys"
@@ -93,36 +94,61 @@ func iwRegCountry(out string) string {
 	return "00"
 }
 
-// wifiLocaleCountry derives a candidate two-letter country from the LANG line of
-// /etc/locale.conf, "" when none can be read. A var so a test can supply a
-// locale without writing /etc.
-var wifiLocaleCountry = func() string {
-	return countryFromLocale(readFileSafe("/etc/locale.conf"))
+// wifiTimezoneCountry derives a candidate two-letter country from the system
+// timezone, "" when none can be read. The timezone, not the locale, because the
+// installer asks for it by location, while LANG only names a language: en_US is
+// the default for English speakers everywhere, and would pin a European laptop
+// to US rules. A var so a test can supply a country without /etc or tzdata.
+var wifiTimezoneCountry = func() string {
+	target, err := os.Readlink("/etc/localtime")
+	if err != nil {
+		return ""
+	}
+	zone := zoneFromLocaltime(target)
+	if zone == "" {
+		return ""
+	}
+	// zone.tab maps each zone to the one country it was created for; zone1970.tab
+	// is the fallback for a tzdata that stops shipping it, and lists that country
+	// first.
+	for _, tab := range []string{"/usr/share/zoneinfo/zone.tab", "/usr/share/zoneinfo/zone1970.tab"} {
+		if cc := countryFromZoneTab(readFileSafe(tab), zone); cc != "" {
+			return cc
+		}
+	}
+	return ""
 }
 
-// countryFromLocale pulls the region out of the LANG line of a locale.conf body
-// (en_US.UTF-8 -> US). "" when there is no LANG, it carries no region, or the
-// region is not two letters (LANG=C, a bare language). pure, so the inference is
-// unit-testable without /etc.
-func countryFromLocale(conf string) string {
-	for _, line := range strings.Split(conf, "\n") {
-		v, ok := strings.CutPrefix(strings.TrimSpace(line), "LANG=")
-		if !ok {
+// zoneFromLocaltime turns the /etc/localtime symlink target into a zone name
+// (../usr/share/zoneinfo/Europe/Vienna -> Europe/Vienna), "" when the target is
+// not under a zoneinfo directory. pure, so it is unit-testable without /etc.
+func zoneFromLocaltime(target string) string {
+	_, zone, ok := strings.Cut(target, "zoneinfo/")
+	if !ok {
+		return ""
+	}
+	zone = strings.TrimPrefix(strings.TrimPrefix(zone, "posix/"), "right/")
+	return zone
+}
+
+// countryFromZoneTab looks zone up in a zone.tab or zone1970.tab body and
+// returns its first country code, "" when the zone is not listed (UTC and the
+// Etc/ zones name no country). pure, so the lookup is unit-testable without
+// tzdata.
+func countryFromZoneTab(tab, zone string) string {
+	for _, line := range strings.Split(tab, "\n") {
+		if strings.HasPrefix(line, "#") {
 			continue
 		}
-		v = strings.Trim(v, `"'`)
-		u := strings.IndexByte(v, '_')
-		if u < 0 {
+		f := strings.Split(line, "\t")
+		if len(f) < 3 || f[2] != zone {
+			continue
+		}
+		cc, _, _ := strings.Cut(f[0], ",")
+		if len(cc) != 2 {
 			return ""
 		}
-		region := v[u+1:]
-		if d := strings.IndexAny(region, ".@"); d >= 0 {
-			region = region[:d]
-		}
-		if len(region) != 2 {
-			return ""
-		}
-		return strings.ToUpper(region)
+		return cc
 	}
 	return ""
 }
@@ -140,17 +166,17 @@ func reconcileWifiRegdom(checkOnly bool) recResult {
 	}
 	// domain 00 is the kernel's worldwide fallback: it keeps most 5 GHz channels
 	// disabled, so the radio only ever sees 2.4 GHz networks until a country is set.
-	country := wifiLocaleCountry()
+	country := wifiTimezoneCountry()
 	if country == "" {
-		return warnRes(i18n.T("the wireless regulatory domain is unset (00), so the kernel keeps 5 GHz channels disabled, and no country could be inferred from the system locale to set one")).
+		return warnRes(i18n.T("the wireless regulatory domain is unset (00), so the kernel keeps 5 GHz channels disabled, and no country could be inferred from the system timezone to set one")).
 			withFix("ryoku-wifi-regdom set <CC>")
 	}
 	if checkOnly {
-		return wouldRes(i18n.T("the wireless regulatory domain is unset (00), so the kernel keeps 5 GHz channels disabled; the system locale points at %s"), country).
+		return wouldRes(i18n.T("the wireless regulatory domain is unset (00), so the kernel keeps 5 GHz channels disabled; the system timezone points at %s"), country).
 			withFix("ryoku-wifi-regdom set " + country)
 	}
 	if !wifiRegdomHelperPresent() {
-		return warnRes(i18n.T("the wireless regulatory domain is unset (00) and ryoku-wifi-regdom is not installed to set it from the locale country %s"), country).
+		return warnRes(i18n.T("the wireless regulatory domain is unset (00) and ryoku-wifi-regdom is not installed to set it from the timezone country %s"), country).
 			withFix("ryoku-wifi-regdom set " + country)
 	}
 	if err := setWifiRegdom(country); err != nil {
@@ -158,8 +184,8 @@ func reconcileWifiRegdom(checkOnly bool) recResult {
 			withFix("sudo ryoku-wifi-regdom set " + country)
 	}
 	if again, _, ok := wifiRegdom(); ok && again != "00" {
-		return fixedRes(i18n.T("set the wireless regulatory domain to %s from the system locale, so the kernel enables 5 GHz channels again"), again)
+		return fixedRes(i18n.T("set the wireless regulatory domain to %s from the system timezone, so the kernel enables 5 GHz channels again"), again)
 	}
-	return warnRes(i18n.T("tried to set the wireless regulatory domain to %s from the system locale but it is still unset (00)"), country).
+	return warnRes(i18n.T("tried to set the wireless regulatory domain to %s from the system timezone but it is still unset (00)"), country).
 		withFix("ryoku-wifi-regdom set " + country)
 }

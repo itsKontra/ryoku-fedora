@@ -6,21 +6,21 @@ import (
 )
 
 // stubWifi swaps the impure inputs the reconciler reads (radio presence, the
-// effective domain, and the locale country) for fixtures, restoring the real
+// effective domain, and the timezone country) for fixtures, restoring the real
 // ones when the test ends. It keeps every case hermetic: no real /sys, iw, or
-// /etc/locale.conf is touched.
+// /etc/localtime or tzdata is touched.
 func stubWifi(t *testing.T, radio bool, domain, source string, ok bool, country string) {
 	t.Helper()
-	origRadio, origRegdom, origLocale, origHelper := wifiRadioPresent, wifiRegdom, wifiLocaleCountry, wifiRegdomHelperPresent
+	origRadio, origRegdom, origTZ, origHelper := wifiRadioPresent, wifiRegdom, wifiTimezoneCountry, wifiRegdomHelperPresent
 	t.Cleanup(func() {
 		wifiRadioPresent = origRadio
 		wifiRegdom = origRegdom
-		wifiLocaleCountry = origLocale
+		wifiTimezoneCountry = origTZ
 		wifiRegdomHelperPresent = origHelper
 	})
 	wifiRadioPresent = func() bool { return radio }
 	wifiRegdom = func() (string, string, bool) { return domain, source, ok }
-	wifiLocaleCountry = func() string { return country }
+	wifiTimezoneCountry = func() string { return country }
 	wifiRegdomHelperPresent = func() bool { return true }
 }
 
@@ -41,16 +41,16 @@ func TestRegdomHealthyDomainLeftAlone(t *testing.T) {
 	}
 }
 
-// Domain 00 with a country the locale reveals: check mode proposes setting it
+// Domain 00 with a country the timezone reveals: check mode proposes setting it
 // from that country and points the fix at the exact command.
-func TestRegdomWorldDomainWouldSetFromLocale(t *testing.T) {
+func TestRegdomWorldDomainWouldSetFromTimezone(t *testing.T) {
 	stubWifi(t, true, "00", "unset", true, "DE")
 	got := reconcileWifiRegdom(true)
 	if got.status != recWouldFix {
-		t.Fatalf("domain 00 with a locale country should be would-fix, got %v (%s)", got.status, got.detail)
+		t.Fatalf("domain 00 with a timezone country should be would-fix, got %v (%s)", got.status, got.detail)
 	}
 	if !strings.Contains(got.remedy, "ryoku-wifi-regdom set DE") {
-		t.Errorf("fix should name the locale country, got %q", got.remedy)
+		t.Errorf("fix should name the timezone country, got %q", got.remedy)
 	}
 }
 
@@ -71,29 +71,47 @@ func TestRegdomAppliesThroughSudo(t *testing.T) {
 
 // Domain 00 with no country to infer: warn honestly and tell the user to pass
 // their own country code, since guessing one would be wrong.
-func TestRegdomWorldDomainNoLocaleWarns(t *testing.T) {
+func TestRegdomWorldDomainNoTimezoneCountryWarns(t *testing.T) {
 	stubWifi(t, true, "00", "unset", true, "")
 	got := reconcileWifiRegdom(true)
 	if got.status != recWarn {
-		t.Fatalf("domain 00 with no locale country should warn, got %v (%s)", got.status, got.detail)
+		t.Fatalf("domain 00 with no timezone country should warn, got %v (%s)", got.status, got.detail)
 	}
 	if !strings.Contains(got.remedy, "ryoku-wifi-regdom set <CC>") {
 		t.Errorf("fix should tell the user to set a country, got %q", got.remedy)
 	}
 }
 
-func TestRegdomCountryFromLocale(t *testing.T) {
+func TestRegdomZoneFromLocaltime(t *testing.T) {
 	cases := map[string]string{
-		"LANG=en_US.UTF-8\n":                        "US",
-		"LANG=\"de_DE.UTF-8\"\nLC_TIME=en_GB.UTF-8": "DE",
-		"LANG=fr_FR@euro\n":                         "FR",
-		"LANG=C\n":                                  "",
-		"LANG=en.UTF-8\n":                           "",
-		"":                                          "",
+		"../usr/share/zoneinfo/Europe/Vienna":     "Europe/Vienna",
+		"/usr/share/zoneinfo/America/New_York":    "America/New_York",
+		"/usr/share/zoneinfo/posix/Europe/Berlin": "Europe/Berlin",
+		"/usr/share/zoneinfo/UTC":                 "UTC",
+		"/somewhere/else":                         "",
 	}
-	for conf, want := range cases {
-		if got := countryFromLocale(conf); got != want {
-			t.Errorf("countryFromLocale(%q) = %q, want %q", conf, got, want)
+	for target, want := range cases {
+		if got := zoneFromLocaltime(target); got != want {
+			t.Errorf("zoneFromLocaltime(%q) = %q, want %q", target, got, want)
+		}
+	}
+}
+
+// The timezone names the country even when the language is en_US, the case that
+// pinned a Vienna laptop to US rules.
+func TestRegdomCountryFromZoneTab(t *testing.T) {
+	zoneTab := "# comment\tEurope/Vienna\nAT\t+4813+01620\tEurope/Vienna\nDE\t+5230+01322\tEurope/Berlin\tmost of Germany\n"
+	zone1970 := "DE,DK,NO,SE,SJ\t+5230+01322\tEurope/Berlin\tmost of Germany\n"
+	cases := []struct{ tab, zone, want string }{
+		{zoneTab, "Europe/Vienna", "AT"},
+		{zoneTab, "Europe/Berlin", "DE"},
+		{zone1970, "Europe/Berlin", "DE"},
+		{zoneTab, "UTC", ""},
+		{"(open /usr/share/zoneinfo/zone.tab: no such file)", "Europe/Vienna", ""},
+	}
+	for _, c := range cases {
+		if got := countryFromZoneTab(c.tab, c.zone); got != c.want {
+			t.Errorf("countryFromZoneTab(%q, %q) = %q, want %q", c.tab, c.zone, got, c.want)
 		}
 	}
 }
