@@ -48,7 +48,8 @@ bootloader --timeout=1
 # Accounts and authentication
 # A password-protected wheel account is required in Anaconda User Creation.
 # The provisioner rejects targets without a usable administrator.
-rootpw --lock
+# No rootpw line: Anaconda locks root by default, and any rootpw here would
+# count as an administrator and stop User Creation from being mandatory.
 
 # System services
 services --enabled="sddm,NetworkManager,firewalld,bluetooth,power-profiles-daemon,ryoku-boot-guard"

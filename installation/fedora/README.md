@@ -160,7 +160,7 @@ health. Stage-only harness checks are not evidence of a booted installation.
 2. **UEFI GPT Partitioning**:
    - 600 MiB FAT32 ESP at `/boot/efi`
    - 2 GiB ext4 dedicated `/boot`
-   - Remaining disk as Btrfs with `root` and `home` subvolumes mounted at `/` and `/home`
+   - Remaining disk as Btrfs with `root`, `home` and `snapshots` subvolumes mounted at `/`, `/home` and `/.snapshots`; `conf.d/05-ryoku.conf` gives Automatic storage configuration the same layout
    - Fedora zram swap policy (no disk swap partition)
 3. **Interactive Encryption**: Supports LUKS2 encryption prompted interactively without embedded secrets.
 4. **Offline Package Repository**: Registers the staged `repo/` directory at `/run/install/repo/repo` with `--cost=10`.
