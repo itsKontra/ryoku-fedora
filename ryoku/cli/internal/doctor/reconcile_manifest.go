@@ -65,7 +65,7 @@ var (
 )
 
 func reconcileManifest(checkOnly bool) recResult {
-	if !hasPacman() {
+	if appPackager() != "pacman" {
 		return okRes(i18n.T("not a pacman box; the manifest is the installer's business"))
 	}
 	served, err := updater.FetchManifest()

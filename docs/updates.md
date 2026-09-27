@@ -327,6 +327,11 @@ same names. Best-effort: a box with no mirror or no network reports what did not
 land and the update moves on. `ryoku verify` answers the same diff read-only, so
 two machines can be compared line by line. This reconciler is the Arch build's: it
 reports `ok` on a box without pacman, where package dependencies carry the set.
+`reconcileShippedApps` runs on both builds, through pacman or dnf: it installs
+each app in `ryokumanifest.Apps()` once, ledgers it, and never puts back one the
+user removed. An app no enabled repository carries yet (Fedora's porting gaps in
+`installation/fedora/README.md`) is noted and skipped, and lands on the first
+update after a repository starts shipping it.
 
 ## Two compositors
 
