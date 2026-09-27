@@ -414,7 +414,8 @@ ble.sh, zsh-history-substring-search, SongRec, GPU Screen Recorder,
 waifu2x-ncnn-vulkan, LocalSend, Voxtype, Zen, pam-fprint-grosshack, Broadcom's
 extra Bluetooth firmware, the additional cursor themes, Fraunces, Maple Mono,
 and the Nerd Font variants of Fira Code and Hack. These remain package-porting
-gaps rather than mandatory entries that would make compose fail. Fedora's
+gaps rather than mandatory entries that would make compose fail; manual install
+steps for them are collected in [`docs/external-dependencies.md`](../../docs/external-dependencies.md). Fedora's
 existing GTK theme and FFmpeg/GStreamer choices remain in use.
 
 Provisioning sets ownership of the seeded home before running materialization
