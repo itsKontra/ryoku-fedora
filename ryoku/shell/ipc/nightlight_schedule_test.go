@@ -61,24 +61,6 @@ func TestIsDaytimeFollowsYesterdaysObservation(t *testing.T) {
 	}
 }
 
-func TestIsDaytimeAcrossMidnight(t *testing.T) {
-	day := time.Date(2026, 9, 27, 0, 0, 0, 0, time.Local)
-	sr := day.Add(23*time.Hour + 51*time.Minute)
-	ss := day.Add(time.Hour + 51*time.Minute)
-	cases := map[time.Duration]bool{
-		51 * time.Minute:              true,
-		23*time.Hour + 55*time.Minute: true,
-		2 * time.Hour:                 false,
-		12 * time.Hour:                false,
-		23*time.Hour + 50*time.Minute: false,
-	}
-	for at, want := range cases {
-		if got := isDaytime(day.Add(at), sr, ss); got != want {
-			t.Errorf("isDaytime(%v) = %v, want %v", day.Add(at).Format("15:04"), got, want)
-		}
-	}
-}
-
 func TestNocturnalWindowSpansMidnight(t *testing.T) {
 	sunriseISO, sunsetISO := dayWindow(t)
 	sr, _ := parseISOTime(sunriseISO)

@@ -113,20 +113,12 @@ request_qylock_generation_guard() {
 }
 
 ensure_qylock_generation_guard() {
-  local state waited=0
+  local state
   request_qylock_generation_guard
   while ! qylock_generation_guard_ready; do
     state="$(systemctl --user is-active "$qylock_generation_guard_unit" 2>/dev/null || true)"
     case "$state" in
-      active|activating)
-        # Bounded: the guard only takes two flocks, so 30 s of not-ready means
-        # a stale holder owns its lock. Polling forever here is how an update
-        # hung at shell-quiesce with no way out (#273).
-        (( ++waited >= 300 )) && {
-          log "qylock generation guard did not become ready in 30 s; a stale holder owns its lock (fuser -v $qylock_launch_lock)" >&2
-          return 1
-        }
-        sleep 0.1 ;;
+      active|activating) sleep 0.1 ;;
       *)
         log "qylock generation guard failed while acquiring the launch boundary" >&2
         return 1
@@ -170,7 +162,7 @@ hold_qylock_launch_guard() {
   mv -f "$tmp" "$ready"
   trap 'rm -f "$ready"' EXIT
   while :; do
-    sleep infinity 7>&- 8>&- &
+    sleep infinity &
     wait "$!" || :
   done
 }
@@ -189,23 +181,12 @@ request_qylock_launch_guard() {
 }
 
 ensure_qylock_launch_guard() {
-  local state waited=0
-  # The generation guard holds the launch lock for its whole life, on purpose:
-  # while it is up, qylock launches are already excluded. Waiting for a launch
-  # guard that can never take the lock the generation guard owns deadlocked
-  # shell-quiesce forever (#273), so the generation guard satisfying the
-  # boundary is the correct answer, not a conflict.
-  qylock_generation_guard_ready && return 0
+  local state
   request_qylock_launch_guard
   while ! qylock_launch_guard_is_ready; do
     state="$(systemctl --user is-active "$qylock_launch_guard_unit" 2>/dev/null || true)"
     case "$state" in
-      active|activating)
-        (( ++waited >= 300 )) && {
-          log "qylock launch guard did not become ready in 30 s; a stale holder owns its lock (fuser -v $qylock_launch_lock)" >&2
-          return 1
-        }
-        sleep 0.1 ;;
+      active|activating) sleep 0.1 ;;
       *)
         log "qylock launch guard failed while acquiring the launch boundary" >&2
         return 1
@@ -257,27 +238,20 @@ schedule_qylock_cutover() {
   systemctl --user reset-failed "$unit" >/dev/null 2>&1 || true
   systemd-run --user --quiet --collect --unit="$unit" \
     --property=Type=exec --property=TimeoutStopSec=5s \
+    --property=Restart=on-failure --property=RestartSec=1s \
+    --property=StartLimitIntervalSec=0 \
     "$self_path" wait-qylock
 }
 
 wait_qylock_cutover() {
-  local rc attempt=0
-  ensure_qylock_generation_guard || return 1
-  # Every attempt stops and re-reaches the session target, so a persistent
-  # failure must not become a restart loop that burns the desktop (#275):
-  # three attempts with backoff, then leave the running session untouched and
-  # say exactly what to run by hand. The unit does not restart on failure:
-  # each pass outlasts systemd's default start limit, so a restart would loop.
-  while (( ++attempt <= 3 )); do
+  local rc
+  ensure_qylock_generation_guard
+  while :; do
     rc=0
     RYOKU_QYLOCK_WAITER=1 "$self_path" user || rc=$?
     (( rc == 0 )) && return 0
-    log "qylock cutover attempt $attempt of 3 failed (exit $rc)" >&2
-    (( attempt < 3 )) && sleep $(( attempt * 2 ))
+    sleep 1
   done
-  release_qylock_guards
-  log "qylock cutover gave up after 3 attempts; the running session was left untouched. Retry by hand with: ryoku-power-cutover user" >&2
-  return 1
 }
 
 
@@ -1551,20 +1525,6 @@ start_target_session() {
   return 1
 }
 
-# start_login_session_logged is the login-autostart entry point: session-start
-# runs from the compositor's exec, where its stderr vanishes, so a silent early
-# exit at login left no evidence anywhere (#274). stderr and the exit code land
-# in a state log a maintainer can actually read. It runs as its own process:
-# called on the left of ||, the function would run with errexit off and carry on
-# past a failed step.
-start_login_session_logged() {
-  local log="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku/session-start.log" rc=0
-  mkdir -p "$(dirname "$log")" 2>/dev/null || true
-  "$self_path" session-start "$@" 2>>"$log" || rc=$?
-  printf '%s session-start exit %s\n' "$(date -Is 2>/dev/null || date)" "$rc" >>"$log" 2>/dev/null || true
-  return "$rc"
-}
-
 start_login_session() {
   (( EUID != 0 )) || { log "session startup must run as the graphical user" >&2; return 1; }
   local sid="${1:-${XDG_SESSION_ID:-}}" activity
@@ -1712,7 +1672,6 @@ if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
       ;;
     qylock-guards-stop) release_qylock_guards ;;
     shell-quiesce) quiesce_shell_for_generation ;;
-    session-start-logged) start_login_session_logged "${2:-}" ;;
     session-start) start_login_session "${2:-}" ;;
     session-bind) bind_or_secure_sessions "${2:-}" ;;
     session-check) session_still_open "${2:-}" ;;
