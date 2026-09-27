@@ -1185,7 +1185,7 @@ func reconcileIconFont(checkOnly bool) recResult {
 // deploy.sh (the dev loop, and `ryoku recovery`) installs binaries into
 // ~/.local/bin and QML modules into ~/.local/lib/qt6/qml; both outrank the
 // packaged copies on PATH and the QML import path, so once the box is back on
-// the pacman channel the leftovers pin it to whatever vintage last deployed
+// a package channel the leftovers pin it to whatever vintage last deployed
 // them and every later package update is silently shadowed. a checkout box
 // (git channel) IS the dev loop: left alone.
 func reconcileDevResidue(checkOnly bool) recResult {
@@ -1201,7 +1201,7 @@ func reconcileDevResidue(checkOnly bool) recResult {
 	}
 	// every ~/.local/bin entry that shadows a Ryoku-packaged /usr/bin binary.
 	// deploy.sh installs a wide, release-dependent set (shell, livewall, CLI,
-	// hub, rashin, hardware helpers, app bins), so pacman is the manifest: a
+	// hub, rashin, hardware helpers, app bins), so the package db is the manifest: a
 	// home copy of anything a ryoku package ships is residue. A fixed name
 	// list here once missed ryoku-livewall and the helpers, leaving a stale
 	// player and tools shadowing every later update. Anything the packages
@@ -1216,8 +1216,8 @@ func reconcileDevResidue(checkOnly bool) recResult {
 		if !sys.Exists(usr) {
 			continue
 		}
-		owner, err := sys.RunOut("pacman", "-Qoq", usr)
-		if err != nil || !strings.HasPrefix(strings.TrimSpace(owner), "ryoku") {
+		owner := sys.PkgOwner(usr)
+		if !strings.HasPrefix(owner, "ryoku") && !strings.HasPrefix(owner, "ryogami") {
 			continue
 		}
 		residue = append(residue, filepath.Join(localBin, e.Name()))
