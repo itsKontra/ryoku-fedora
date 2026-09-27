@@ -15,7 +15,7 @@ upstream_url=https://github.com/neur0map/ryoku-arch
 upstream_branch=main
 
 # Fedora owns these: a conflict keeps main and is listed for a manual port.
-fedora_owned='^(installation/fedora/|installation/tests/fedora-|installation/README\.md$|release/rpm/|\.github/workflows/(build-fedora-iso|fedora-firstboot|fedora-iso-vm|fedora-rpm|publish-copr)\.yml$|ryoku/cli/internal/sys/rpm(_test)?\.go$|ryoku-shell-installer/fedora_repo\.go$)'
+fedora_owned='^(installation/fedora/|installation/tests/fedora-|installation/README\.md$|release/rpm/|\.github/workflows/(build-fedora-iso|fedora-firstboot|fedora-iso-vm|fedora-rpm|i18n|publish-copr)\.yml$|ryoku/cli/internal/sys/rpm(_test)?\.go$|ryoku-shell-installer/fedora_repo\.go$)'
 # Arch and CachyOS delivery, plus what the port retired: never comes back.
 discard='^(installation/(backend|iso|tui)/|release/(packages|repo|gradle-offline)/|system/boot/|(.*/)?CHANGELOG\.md$|VERSION$|bin/ryoku-dev-verify-pkgbuild-deps$)'
 catalog='^ryoku/i18n/catalog/[^/]+\.json$'

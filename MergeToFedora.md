@@ -53,6 +53,7 @@ and translated for Fedora.
 | `installation/fedora/`, `installation/tests/fedora-*`, `installation/tests/fedora-*.py`, `installation/README.md` | Anaconda image composition, first boot, provisioning, signatures, and Fedora installation tests. |
 | `release/rpm/` | RPM specs, payload staging, SRPM/COPR publication, release repository layout, and RPM verification. |
 | `.github/workflows/build-fedora-iso.yml`, `fedora-firstboot.yml`, `fedora-iso-vm.yml`, `fedora-rpm.yml`, `publish-copr.yml` | The Fedora build, install, and publishing pipeline. |
+| `.github/workflows/i18n.yml` | Translations reach `main` through a pull request here, not a direct push to an Arch-era branch. |
 | `ryoku/cli/internal/sys/rpm.go` and its tests | DNF/RPM channel and repository behaviour. |
 | Fedora-specific doctor, updater, installer, recovery, and tracking code | DNF package ownership, RPM repositories, dracut/GRUB, and the Fedora migration contract differ from Arch. |
 | `ryoku-shell-installer/fedora_repo.go` and Fedora branches in the installer | Repository setup and package-mode installation on Fedora. |
