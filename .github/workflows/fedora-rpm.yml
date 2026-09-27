@@ -6,6 +6,9 @@ on:
       channel:
         type: string
         default: testing
+      sources_only:
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'release/rpm/**'
@@ -47,6 +50,9 @@ jobs:
           path: /tmp/srpms
           if-no-files-found: error
   rebuild:
+    # The publish builds the same SRPMs on COPR and install-tests that output,
+    # so a local Mock rebuild there only repeats it.
+    if: ${{ !inputs.sources_only }}
     needs: sources
     runs-on: ubuntu-latest
     container:

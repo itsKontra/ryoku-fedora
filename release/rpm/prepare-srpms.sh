@@ -57,11 +57,32 @@ VERSION=$version
 COMMIT=$commit
 DATE=$(date -u -d "@$SOURCE_DATE_EPOCH" +%Y-%m-%dT%H:%M:%SZ)
 META
-tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner -C "$work/tree" -cf - "ryoku-$version" | gzip -n > "$work/SOURCES/ryoku-$version.tar.gz"
-for spec in "$root"/release/rpm/*.spec; do
-  target="$work/SPECS/${spec##*/}"
-  sed -e "s/^Version:.*/Version:        $version/" -e "s/^Release:.*/Release:        ${RYOKU_RPM_REVISION:-1}%{?dist}/" "$spec" > "$target"
-  rpmbuild --define "_topdir $work" --define "_srcrpmdir $out" -bs "$target"
+packages=()
+for spec in "$root"/release/rpm/*.spec; do packages+=("$(basename "$spec" .spec)"); done
+while read -r path owners; do
+  [[ -z $path || $path == \#* ]] && continue
+  for owner in $owners; do
+    [[ $owner == - || " ${packages[*]} " == *" $owner "* ]] || die "source-owners names no spec: $owner"
+  done
+done < "$root/release/rpm/source-owners"
+# Each SRPM carries the tree without the heavy paths only other packages stage,
+# so COPR and the workflow artifacts do not move the wallpapers twelve times.
+source_tarball() {
+  local package=$1 path owners excludes=()
+  while read -r path owners; do
+    [[ -z $path || $path == \#* ]] && continue
+    [[ " $owners " == *" $package "* ]] || excludes+=("--exclude=ryoku-$version/$path")
+  done < "$root/release/rpm/source-owners"
+  mkdir -p "$work/SOURCES/$package"
+  tar --anchored "${excludes[@]}" --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
+    -C "$work/tree" -cf - "ryoku-$version" | gzip -n > "$work/SOURCES/$package/ryoku-$version.tar.gz"
+}
+for package in "${packages[@]}"; do
+  source_tarball "$package"
+  target="$work/SPECS/$package.spec"
+  sed -e "s/^Version:.*/Version:        $version/" -e "s/^Release:.*/Release:        ${RYOKU_RPM_REVISION:-1}%{?dist}/" \
+    "$root/release/rpm/$package.spec" > "$target"
+  rpmbuild --define "_topdir $work" --define "_sourcedir $work/SOURCES/$package" --define "_srcrpmdir $out" -bs "$target"
 done
 python3 - "$out" "$release" "$channel" "$version" "$commit" "$SOURCE_DATE_EPOCH" "$(cat "$root/CODENAME")" <<'PYMETA'
 import datetime, hashlib, json, os, pathlib, sys

@@ -11,15 +11,18 @@ permissions:
   contents: read
 concurrency:
   group: publish-fedora
-  cancel-in-progress: false
+  # A release tag republishes main's tip, so it replaces the run in flight,
+  # normally main's own run of that commit.
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/v') }}
 jobs:
-  gate:
+  sources:
     if: github.repository == 'itsKontra/ryoku-fedora' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     uses: ./.github/workflows/fedora-rpm.yml
     with:
       channel: copr
+      sources_only: true
   copr:
-    needs: gate
+    needs: sources
     runs-on: ubuntu-latest
     environment: fedora-publish
     container: fedora:44
