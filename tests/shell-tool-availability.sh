@@ -35,6 +35,17 @@ hard_depend() {
   done
   return 1
 }
+# bundled: a first-party package the umbrella requires installs the tool's
+# binary itself, like ryoku-extras shipping the pinned matugen over Fedora's.
+bundled() {
+  local spec name
+  for spec in "$ROOT"/release/rpm/*.spec; do
+    grep -qxF "%{_bindir}/$1" "$spec" || continue
+    name=$(awk '/^Name:/ { print $2; exit }' "$spec")
+    hard_depend "$name" && return 0
+  done
+  return 1
+}
 # official_repo: shipped from base/dev, not AUR or a first-party RPM.
 # [ryoku]. AUR tools reach boxes via the post-install AUR step; first-party
 # packages are depends already. Only official-repo tools must be hard depends.
@@ -123,7 +134,7 @@ for feat in "${!need[@]}"; do
   pkg=${need[$feat]}
   [[ -n ${dependExempt[$pkg]:-} ]] && continue
   official_repo "$pkg" || continue
-  hard_depend "$pkg" || shipped_app "$pkg" || notreached+=("$feat -> $pkg")
+  hard_depend "$pkg" || bundled "$pkg" || shipped_app "$pkg" || notreached+=("$feat -> $pkg")
 done
 if (( ${#notreached[@]} )); then
   echo "::error::feature tools in base.packages but NOT a ryoku-desktop hard depend (never reach 'ryoku update' or shell-installer boxes -- the ddcutil-class drift):" >&2
