@@ -556,7 +556,7 @@ Rectangle {
         if (typeof sessionModel === "undefined")
             return 0
         var want = (typeof sessionModel.desktopName === "string") ? sessionModel.desktopName : ""
-        var exact = -1, loose = -1
+        var exact = -1, loose = -1, first = -1, lastUsable = false
         for (var i = 0; i < sessionScan.count; i++) {
             var it = sessionScan.itemAt(i)
             if (!it)
@@ -565,6 +565,10 @@ Rectangle {
             // uwsm-managed is a duplicate entry Ryoku's logout path does not drive.
             if (low.indexOf("uwsm") >= 0)
                 continue
+            if (first < 0)
+                first = i
+            if (i === sessionModel.lastIndex)
+                lastUsable = true
             if (want !== "" && low === want)
                 exact = i
             else if (want !== "" && low.indexOf(want) >= 0 && loose < 0)
@@ -574,6 +578,10 @@ Rectangle {
             return exact
         if (loose >= 0)
             return loose
-        return (sessionModel.lastIndex >= 0) ? sessionModel.lastIndex : 0
+        // SDDM's own model carries no desktopName, so a first login lands here;
+        // its lastIndex may still point at the uwsm entry.
+        if (lastUsable)
+            return sessionModel.lastIndex
+        return first >= 0 ? first : Math.max(sessionModel.lastIndex, 0)
     }
 }

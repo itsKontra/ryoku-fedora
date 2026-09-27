@@ -78,11 +78,11 @@ printf 'monitor %s\n' "$*" >>"$CLAMSHELL_EVENTS"
 EOF
 cat >"$bin/systemd-inhibit" <<'EOF'
 #!/usr/bin/env bash
-if [[ ${1:-} == --list ]]; then
-  printf '%s\n' "${INHIBIT_JSON:-[]}"
-  exit 0
-fi
 exit 1
+EOF
+cat >"$bin/ryoku-inhibitors" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "${INHIBIT_JSON:-[]}"
 EOF
 cat >"$bin/pgrep" <<'EOF'
 #!/usr/bin/env bash
@@ -122,6 +122,7 @@ export RYOKU_CLAMSHELL_SUSPEND_STATE="$suspend_state"
 export RYOKU_PGREP_BIN="$bin/pgrep"
 export RYOKU_BIN="$bin/ryoku"
 export RYOKU_BUSCTL_BIN="$bin/busctl"
+export RYOKU_INHIBITORS_BIN="$bin/ryoku-inhibitors"
 export XDG_RUNTIME_DIR="$run"
 export CLAMSHELL_EVENTS="$events"
 export XDG_SESSION_ID=9

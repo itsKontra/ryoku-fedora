@@ -9,7 +9,9 @@ tmp="$(mktemp -d)"
 session_env_pid=""
 lock_client_pid=""
 stable_launcher_pid=""
+uwsm_pids=()
 cleanup() {
+  (( ${#uwsm_pids[@]} == 0 )) || kill "${uwsm_pids[@]}" 2>/dev/null || true
   [[ -z $session_env_pid ]] || kill "$session_env_pid" 2>/dev/null || true
   [[ -z $lock_client_pid ]] || kill "$lock_client_pid" 2>/dev/null || true
   [[ -z $stable_launcher_pid ]] || kill "$stable_launcher_pid" 2>/dev/null || true
@@ -222,7 +224,7 @@ if [[ $name == systemctl && ${1:-} == --user && ${2:-} == cat &&
   printf '%s %s\n' "$name" "$*" >>"$CUTOVER_LOG"
   exit 1
 fi
-if [[ $name == systemd-inhibit && ${1:-} == --list ]]; then
+if [[ $name == ryoku-inhibitors ]]; then
   if [[ -e $CUTOVER_STATE/user-guard ]]; then
     printf '[{"what":"sleep","who":"ryoku-session-cutover","why":"test","mode":"block","uid":%s,"pid":1}]\n' "$(id -u)"
   else
@@ -404,7 +406,7 @@ fi
 EOF
 chmod +x "$tmp/bin/fake" "$tmp/bin/pgrep" "$tmp/qylock-install" \
   "$tmp/qylock-lock" "$tmp/qylock-proof" "$tmp/bin/ryoku-wm-testwm"
-for name in ryoku ryoku-shell ryoku-idle ryoku-clamshell systemctl systemd-run systemd-inhibit loginctl dbus-monitor; do
+for name in ryoku ryoku-shell ryoku-idle ryoku-clamshell ryoku-inhibitors systemctl systemd-run systemd-inhibit loginctl dbus-monitor; do
   ln -s fake "$tmp/bin/$name"
 done
 mkdir -p "$tmp/cgroup/test.scope"
@@ -869,5 +871,60 @@ flock -n "$tmp/g-launch" -c true \
 flock -n "$tmp/g-generation" -c true \
   || fail "a surviving keep-alive pinned the generation lock"
 kill -9 "$keepalive" 2>/dev/null || true
+
+# uwsm runs the compositor as a user-manager unit, outside the login scope: the
+# scope holds only the launcher, so discovery must reach the wayland-wm@ unit
+# and still refuse one whose processes belong to another session.
+uid="$(id -u)"
+user_cg="$tmp/uwsm-cgroup/user.slice/user-$uid.slice"
+units_cg="$user_cg/user@$uid.service/session.slice"
+mkdir -p "$user_cg/session-9.scope" "$tmp/uwsm-bin" "$tmp/uwsm-runtime" \
+  "$units_cg/wayland-wm@a-stale.desktop.service" \
+  "$units_cg/wayland-wm@testwm.desktop.service"
+env -i XDG_SESSION_ID=9 /usr/bin/sleep 300 &
+uwsm_pids+=("$!")
+printf '%s\n' "$!" >"$user_cg/session-9.scope/cgroup.procs"
+env -i XDG_SESSION_ID=8 XDG_SESSION_TYPE=wayland WAYLAND_DISPLAY=wayland-stale \
+  /usr/bin/sleep 300 &
+uwsm_pids+=("$!")
+printf '%s\n' "$!" >"$units_cg/wayland-wm@a-stale.desktop.service/cgroup.procs"
+env -i XDG_SESSION_ID=9 XDG_SESSION_TYPE=wayland WAYLAND_DISPLAY=wayland-uwsm \
+  /usr/bin/sleep 300 &
+uwsm_pids+=("$!")
+printf '%s\n' "$!" >"$units_cg/wayland-wm@testwm.desktop.service/cgroup.procs"
+cat >"$tmp/uwsm-bin/loginctl" <<'EOF'
+#!/usr/bin/env bash
+case "${4:-}" in
+  Scope) printf 'session-9.scope\n' ;;
+  Type) printf 'wayland\n' ;;
+  Desktop) printf 'testwm\n' ;;
+  *) exit 1 ;;
+esac
+EOF
+cat >"$tmp/uwsm-bin/systemctl" <<EOF
+#!/usr/bin/env bash
+printf '/user.slice/user-$uid.slice/session-9.scope\n'
+EOF
+chmod +x "$tmp/uwsm-bin"/*
+RYOKU_CGROUP_ROOT="$tmp/uwsm-cgroup" RYOKU_CUTOVER_PROVIDER_ROOT="$tmp/bin" \
+  XDG_RUNTIME_DIR="$tmp/uwsm-runtime" PATH="$tmp/uwsm-bin:$PATH" \
+  bash -c 'source "$1"; discover_session_environment 9' _ "$helper" \
+  || fail "uwsm compositor outside the login scope was not discovered"
+tr '\0' '\n' <"$tmp/uwsm-runtime/ryoku-session.9.environment" >"$tmp/uwsm-env"
+grep -qxF 'WAYLAND_DISPLAY=wayland-uwsm' "$tmp/uwsm-env" \
+  || fail "uwsm discovery bound another session's compositor"
+
+# The lister reshapes login1's ListInhibitors reply into the objects the jq
+# filters match; a field-order slip would silently match nothing.
+mkdir -p "$tmp/inhibitors-bin"
+cat >"$tmp/inhibitors-bin/busctl" <<'EOF'
+#!/usr/bin/env bash
+printf '{"type":"a(ssssuu)","data":[[["sleep","ryoku-session-cutover","test","block",1000,42]]]}\n'
+EOF
+chmod +x "$tmp/inhibitors-bin/busctl"
+inhibitors="$(PATH="$tmp/inhibitors-bin:$PATH" \
+  "$here/../system/hardware/power/ryoku-inhibitors")"
+[[ $inhibitors == '[{"what":"sleep","who":"ryoku-session-cutover","why":"test","mode":"block","uid":1000,"pid":42}]' ]] \
+  || fail "ryoku-inhibitors reshaped login1's reply wrongly: $inhibitors"
 
 echo "power-cutover: ok"

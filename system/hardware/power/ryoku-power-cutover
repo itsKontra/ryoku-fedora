@@ -13,6 +13,7 @@ cgroup_root=${RYOKU_CGROUP_ROOT:-/sys/fs/cgroup}
 target_root=${RYOKU_CUTOVER_TARGET_ROOT:-}
 provider_root=${RYOKU_CUTOVER_PROVIDER_ROOT:-}
 runtime_helper=${RYOKU_CUTOVER_RUNTIME_HELPER:-/run/ryoku-power-cutover}
+runtime_inhibitors="${runtime_helper%/*}/ryoku-inhibitors"
 if [[ -z $qylock_installer ]]; then
   power_helper_path="$(readlink -f -- "${BASH_SOURCE[0]}")"
   if [[ $power_helper_path == /usr/bin/ryoku-power-cutover ]]; then
@@ -54,6 +55,14 @@ qylock_mutation_lock="${XDG_RUNTIME_DIR:-/tmp}/ryoku-qylock-mutation.lock"
 qylock_launch_guard_unit=ryoku-qylock-launch-guard.service
 qylock_launch_guard_ready="${XDG_RUNTIME_DIR:-/tmp}/ryoku-qylock-launch-guard.ready"
 log() { printf 'ryoku-power-cutover: %s\n' "$*"; }
+
+# The /run copy that %postun runs has no /usr/bin sibling left, so it falls back
+# to the inhibitor lister prepare-package staged beside it.
+list_inhibitors() {
+  local bin
+  bin="$(command -v ryoku-inhibitors 2>/dev/null)" || bin="${self_path%/*}/ryoku-inhibitors"
+  "$bin"
+}
 
 reload_wm_config() {
   local rc=0
@@ -313,7 +322,7 @@ start_user_guard() {
   fi
   uid="$(id -u)"
   for _ in {1..60}; do
-    json="$(systemd-inhibit --list --json=short 2>/dev/null || true)"
+    json="$(list_inhibitors 2>/dev/null || true)"
     if jq -e --argjson uid "$uid" \
       'any(.[]; .uid == $uid and .who == "ryoku-session-cutover"
         and .mode == "block" and ((.what | split(":")) | index("sleep")))' \
@@ -350,10 +359,13 @@ session_environment_path() {
 
 # Resolve compositor IPC from a process inside the selected login1 scope rather
 # than from the shared user manager, whose environment may name another
-# same-UID session after a switch.
+# same-UID session after a switch. A uwsm login runs the compositor as a
+# wayland-wm@ unit of the user manager instead, outside the scope, so its cgroup
+# is searched too; every candidate must still carry this session's id.
 discover_session_environment() {
-  local sid=$1 scope cgroup session_type desktop provider provider_bin
+  local sid=$1 scope cgroup slice procs session_type desktop provider provider_bin
   local pid entry key value tmp path
+  local -a pids=() proc_files=()
   local -a keys=(
     XDG_SESSION_ID XDG_SESSION_TYPE XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP
     XDG_SEAT XDG_VTNR WAYLAND_DISPLAY DISPLAY
@@ -369,8 +381,18 @@ discover_session_environment() {
   cgroup="$(systemctl show "$scope" -p ControlGroup --value 2>/dev/null)" || return 1
   [[ $cgroup == /* && $cgroup != *..* &&
      -r "$cgroup_root$cgroup/cgroup.procs" ]] || return 1
+  proc_files=("$cgroup_root$cgroup/cgroup.procs")
+  slice=${cgroup%/*}
+  if [[ ${slice##*/} =~ ^user-([0-9]+)\.slice$ ]]; then
+    proc_files+=("$cgroup_root$slice/user@${BASH_REMATCH[1]}.service/session.slice"/wayland-wm@*.service/cgroup.procs)
+  fi
+  for procs in "${proc_files[@]}"; do
+    if [[ -r $procs ]]; then
+      mapfile -t -O "${#pids[@]}" pids <"$procs"
+    fi
+  done
   path="$(session_environment_path "$sid")"
-  for pid in $(< "$cgroup_root$cgroup/cgroup.procs"); do
+  for pid in "${pids[@]}"; do
     [[ $pid =~ ^[0-9]+$ ]] || continue
     found=()
     while IFS= read -r -d '' entry; do
@@ -835,6 +857,7 @@ prepare_package() {
   (( EUID == 0 )) || { log "package preparation must run as root" >&2; return 1; }
   local sessions tmp
   install -Dm755 "$self_path" "$runtime_helper"
+  install -Dm755 "${self_path%/*}/ryoku-inhibitors" "$runtime_inhibitors"
   rm -f "$cutover_marker"
   if [[ ! -d /run/systemd/system ]]; then
     (umask 077; : >"$runtime_sessions")
@@ -910,7 +933,7 @@ root_cutover() {
   (( failed == 0 )) || return 1
   if ! target_policy_present; then
     rm -f "$runtime_sessions" "$cutover_marker"
-    [[ $self_path != "$runtime_helper" ]] || rm -f "$runtime_helper"
+    [[ $self_path != "$runtime_helper" ]] || rm -f "$runtime_helper" "$runtime_inhibitors"
     trap - INT TERM
     log "Ryoku base policy was removed; durable sleep block remains until reinstall or reboot"
     return 0
@@ -987,7 +1010,7 @@ stop_clamshell_owner() {
   if [[ -r $state ]]; then
     read -r pid <"$state" || return 1
     if [[ $pid =~ ^[0-9]+$ ]] && process_alive "$pid"; then
-      json="$(systemd-inhibit --list --json=short 2>/dev/null || true)"
+      json="$(list_inhibitors 2>/dev/null || true)"
       if [[ $json != *"\"pid\":$pid"* || $json != *"\"uid\":$uid"* ||
             $json != *'"who":"ryoku-clamshell"'* ]]; then
         log "cannot verify the recorded lid inhibitor" >&2
@@ -1360,7 +1383,7 @@ legacy_clamshell_inhibitor_owned() {
   uid=$(id -u)
   cgroup="$(systemctl --user show "$unit" -p ControlGroup --value 2>/dev/null)" || return 1
   [[ -n $cgroup ]] || return 1
-  json="$(systemd-inhibit --list --json=short 2>/dev/null)" || return 1
+  json="$(list_inhibitors 2>/dev/null)" || return 1
   mapfile -t pids < <(jq -r --argjson uid "$uid" '
     .[] | select(.uid == $uid and .who == "ryoku-clamshell"
       and .mode == "block"

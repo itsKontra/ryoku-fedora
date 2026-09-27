@@ -298,7 +298,11 @@ cat >"$unlock_bin/systemd-run" <<'EOF'
 EOF
 cat >"$unlock_bin/systemd-inhibit" <<'EOF'
 #!/usr/bin/env bash
-[[ ${1:-} == --list && -e $UNLOCK_GUARD ]] && printf '%s\n' "$INHIBITOR_JSON"
+exit 1
+EOF
+cat >"$unlock_bin/ryoku-inhibitors" <<'EOF'
+#!/usr/bin/env bash
+[[ -e $UNLOCK_GUARD ]] && printf '%s\n' "$INHIBITOR_JSON"
 EOF
 cat >"$unlock_bin/sleep" <<'EOF'
 #!/usr/bin/env bash

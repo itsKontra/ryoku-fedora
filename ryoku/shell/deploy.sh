@@ -69,7 +69,7 @@ start_power_cutover_guard() {
   fi
   uid="$(id -u)"
   for _ in {1..60}; do
-    json="$(systemd-inhibit --list --json=short 2>/dev/null || true)"
+    json="$("$here/../../system/hardware/power/ryoku-inhibitors" 2>/dev/null || true)"
     if jq -e --argjson uid "$uid" \
       'any(.[]; .uid == $uid and .who == "ryoku-session-cutover"
         and .mode == "block" and ((.what | split(":")) | index("sleep")))' \
