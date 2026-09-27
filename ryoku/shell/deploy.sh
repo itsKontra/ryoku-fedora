@@ -912,6 +912,8 @@ seed_once "$here/../apps/kitty/current-theme.conf" "$cfg/kitty/current-theme.con
 mkdir -p "$cfg/ghostty"
 seed_once "$here/../apps/ghostty/config" "$cfg/ghostty/config"
 seed_once "$here/../apps/ghostty/ryoku-colors" "$cfg/ghostty/ryoku-colors"
+mkdir -p "$cfg/alacritty"
+seed_once "$here/../apps/alacritty/alacritty.toml" "$cfg/alacritty/alacritty.toml"
 mkdir -p "$cfg/wireplumber"; cp -a "$here/../apps/wireplumber/." "$cfg/wireplumber/"
 mkdir -p "$cfg/systemd/user"; cp -a "$here/systemd/user/." "$cfg/systemd/user/"
 # On Wayland, nvidia-settings -l fails (NV-CONTROL is X11-only). If the

@@ -166,6 +166,8 @@ EOF
   # matugen owns ryoku-colors, which the config includes for the palette.
   install -d "$cfg/ghostty"
   cp -a "$_repo/ryoku/apps/ghostty/." "$cfg/ghostty/"
+  # alacritty: seeded once like ghostty; matugen renders colors.toml beside it.
+  install -Dm644 "$_repo/ryoku/apps/alacritty/alacritty.toml" "$cfg/alacritty/alacritty.toml"
 
   # neovim (LazyVim seed): the config only, not the repo docs.
   install -Dm644 "$_repo/ryoku/apps/nvim/init.lua"       "$cfg/nvim/init.lua"

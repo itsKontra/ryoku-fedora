@@ -8,6 +8,8 @@ maps to a place under `~/.config` (except the small helper script noted below).
 - `kitty/` The terminal. JetBrains Mono Nerd Font, a beam cursor, and fish as the
   shell. `kitty.conf` includes `current-theme.conf`, which carries the Ryoku dark
   palette (background `#171717`, foreground `#CCD0CF`, accent `#F25623`).
+- `alacritty/` The alternative terminal. `alacritty.toml` is seeded once and then
+  the user's; it imports the matugen `colors.toml` and pads the window like kitty.
 - `fastfetch/` The branded system readout. `config.jsonc` draws the 力 logo and a
   short list of facts (host, OS, kernel, WM, CPU, GPU, memory, disk, terminal,
   uptime). `ryoku-fastfetch` is a launcher that uses kitty's graphics protocol in
@@ -118,6 +120,7 @@ in `window_rules.lua` (see `float-ryostore`).
 | Folder          | Destination                               |
 | --------------- | ----------------------------------------- |
 | `kitty/`        | `~/.config/kitty/`                        |
+| `alacritty/`    | `~/.config/alacritty/alacritty.toml`      |
 | `fastfetch/`    | `~/.config/fastfetch/` (config + wrapper) |
 | `fish/`         | `~/.config/fish/config.fish`              |
 | `starship/`     | `~/.config/starship.toml`                 |
