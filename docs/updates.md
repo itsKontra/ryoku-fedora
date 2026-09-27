@@ -374,11 +374,12 @@ frozen release directory: the channel rolls, and a release is a named point on
 it.
 
 Every push to `main` runs `publish-copr.yml`, which prepares the SRPMs once,
-rebuilds them in clean Mock roots, installs the result on both compositors with
-DNF5 and DNF4, submits the same SRPMs to COPR, verifies the returned RPMs
-against the pinned COPR key, installs those unchanged RPMs again, and only then
-regenerates the repository. A run that fails any gate publishes nothing.
-Details and the publisher setup are in `release/rpm/README.md`.
+submits them to COPR, verifies the returned RPMs against the pinned COPR key,
+installs those unchanged RPMs on both compositors with DNF5 and DNF4, and only
+then regenerates the repository. A run that fails any gate publishes nothing.
+The local Mock rebuild and its install matrix (`fedora-rpm.yml`) gate pull
+requests instead, since COPR builds the same SRPMs in a clean root. Details and
+the publisher setup are in `release/rpm/README.md`.
 
 Each build carries a strictly increasing package version (`0.<commit count>`,
 with the workflow run number as the RPM Release), and the `ryoku-desktop`
@@ -424,8 +425,10 @@ It checks the tree, the tag, the version order and CI, prints the notes the
 release will carry, and pushes the tag on confirmation. The tag then runs:
 
 - `publish-copr.yml`: rebuilds the tagged commit under a higher RPM revision so
-  boxes update onto the build whose `RELEASE=` names the release. The
-  `fedora-publish` environment must allow `v*` tags to deploy.
+  boxes update onto the build whose `RELEASE=` names the release. It cancels
+  `main`'s run of that commit if one is still in flight, since the tag
+  republishes it anyway. The `fedora-publish` environment must allow `v*` tags
+  to deploy.
 - `build-fedora-iso.yml`, called by `publish-copr.yml` once that rebuild is
   published: waits for COPR to serve it, builds the ISO, and creates
   the GitHub release titled `Ryoku <CODENAME> <version>` with the notes
