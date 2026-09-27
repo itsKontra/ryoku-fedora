@@ -321,11 +321,12 @@ Item {
                 }
 
                 Group {
-                    // The edge field's own controls, shown only while it is the
-                    // look: edges, material and reach. The deep knobs live in
-                    // the Hub; these three are the ones you aim by eye.
+                    // The edge field's own controls, dimmed (never hidden: the
+                    // bar must not reflow as the catalogue is walked) while a
+                    // boxed look is in hand. The deep knobs live in the Hub;
+                    // these three are the ones you aim by eye.
                     label: I18n.tr("EDGES")
-                    visible: Config.isAura
+                    dim: !Config.isAura
                     Row {
                         spacing: Tokens.s1
                         Repeater {
@@ -336,7 +337,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: edgeBtn.modelData.charAt(0).toUpperCase()
                                 compact: true
-                                armed: Config.instance.auraEdges.indexOf(edgeBtn.modelData) >= 0
+                                // Lit edges wear the filled plate; every chip stays
+                                // clickable, since `armed` is Btn's enabled state.
+                                primary: Config.instance.auraEdges.indexOf(edgeBtn.modelData) >= 0
                                 onAct: Config.toggleAuraEdge(edgeBtn.modelData)
                             }
                         }
@@ -344,7 +347,7 @@ Item {
                 }
                 Group {
                     label: I18n.tr("MATERIAL")
-                    visible: Config.isAura
+                    dim: !Config.isAura
                     Btn {
                         anchors.verticalCenter: parent.verticalCenter
                         text: Config.instance.auraMaterial
@@ -355,7 +358,7 @@ Item {
                 }
                 Group {
                     label: I18n.tr("REACH")
-                    visible: Config.isAura
+                    dim: !Config.isAura
                     Row {
                         spacing: Tokens.s2
                         Step {
@@ -370,9 +373,6 @@ Item {
                             text: Config.instance.auraDepth + "px"
                         }
                     }
-                }
-                Rule {
-                    visible: Config.isAura
                 }
                 Rule {}
 
@@ -436,6 +436,7 @@ Item {
 
                 Group {
                     label: I18n.tr("ANGLE")
+                    dim: Config.isAura
                     Row {
                         spacing: Tokens.s2
                         Value {
@@ -455,6 +456,7 @@ Item {
                 Group {
                     // One group, two axes: a lean is one idea.
                     label: I18n.tr("LEAN")
+                    dim: Config.isAura
                     Row {
                         spacing: Tokens.s2
                         Slid {
@@ -488,6 +490,7 @@ Item {
                 }
                 Group {
                     label: I18n.tr("SIZE")
+                    dim: Config.isAura
                     Value {
                         text: Math.round(Config.w * 100) + "\u00d7" + Math.round(Config.h * 100) + "%"
                     }
@@ -520,11 +523,17 @@ Item {
                 color: Tokens.lineSoft
             }
             Text {
-                // Phrase by phrase, so each is a translatable unit.
-                text: [I18n.tr("drag to move"), I18n.tr("corner to size"),
-                       I18n.tr("dot to turn"), I18n.tr("scroll to resize"),
-                       "f " + I18n.tr("flip"), "m " + I18n.tr("mirror"),
-                       "r " + I18n.tr("square")].join("     ")
+                // Phrase by phrase, so each is a translatable unit. The edge
+                // field owns the whole screen and has no box to aim, so its
+                // hint names only the gestures that actually edit it.
+                text: (Config.isAura
+                       ? [I18n.tr("the field fills the screen: tune it here"),
+                          "f " + I18n.tr("flow"),
+                          "[ ] " + I18n.tr("walk the looks")]
+                       : [I18n.tr("drag to move"), I18n.tr("corner to size"),
+                          I18n.tr("dot to turn"), I18n.tr("scroll to resize"),
+                          "f " + I18n.tr("flip"), "m " + I18n.tr("mirror"),
+                          "r " + I18n.tr("square")]).join("     ")
                 color: Tokens.inkFaint
                 font.family: Tokens.ui
                 font.pixelSize: Tokens.fMicro

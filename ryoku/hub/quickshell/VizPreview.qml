@@ -148,6 +148,20 @@ Item {
         for (var s = 0; s < 12; s++) m = Math.max(m, root.vAuraBands[s]);
         return m;
     }
+    // The edge field's palette, the desktop's own rule: a complete pinned
+    // triad wins exactly as chosen; one pinned hue walks itself; with nothing
+    // pinned the hub draws in ink (app content carries no accent).
+    readonly property var vAuraTriad: {
+        var c2 = root.pick("auraColor2", ""), c3 = root.pick("auraColor3", "");
+        var hex = /^#[0-9a-fA-F]{6}$/;
+        if (hex.test(root.vColor) && hex.test(c2) && hex.test(c3))
+            return [root.vColor, c2, c3];
+        if (root.vHasColor) {
+            var base = Qt.color(root.vColor);
+            return [Qt.darker(base, 1.25), root.vColor, Qt.lighter(base, 1.25)];
+        }
+        return [Tokens.ink, Tokens.ink, Tokens.inkDim];
+    }
     // Colour follows the pinned choice so the preview matches the desktop: a
     // gradient sweeps colour into colour2, a single pin walks bass->treble, and
     // with neither pinned the hub draws in ink alone (app content carries no
@@ -299,9 +313,12 @@ Item {
             sensitivity: root.pick("auraSensitivity", 0.72) * root.pick("gain", 1.0)
             idleMotion: root.pick("auraIdleMotion", 0.14)
             opacity: root.pick("auraOpacity", 1.0)
-            primaryColor: /^#[0-9a-fA-F]{6}$/.test(root.vColor) ? root.vColor : Tokens.ink
-            secondaryColor: /^#[0-9a-fA-F]{6}$/.test(root.pick("auraColor2", "")) ? root.pick("auraColor2", "") : Tokens.ink
-            tertiaryColor: /^#[0-9a-fA-F]{6}$/.test(root.pick("auraColor3", "")) ? root.pick("auraColor3", "") : Tokens.inkDim
+            // Same triad rule the desktop paints with: a complete pinned triad
+            // wins exactly, one pinned hue walks itself, and ink stands in for
+            // the wallpaper only when nothing is pinned.
+            primaryColor: root.vAuraTriad[0]
+            secondaryColor: root.vAuraTriad[1]
+            tertiaryColor: root.vAuraTriad[2]
         }
 
         // a calm ring marking the polar origin the drag moves.

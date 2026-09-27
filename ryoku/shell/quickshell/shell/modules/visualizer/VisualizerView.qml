@@ -120,10 +120,16 @@ Item {
 
     // The edge field: one pass over the whole screen, lit by the same wallpaper
     // the bars are, as a triad rather than an eight-stop ramp. A complete
-    // pinned triad wins exactly as chosen.
+    // pinned triad wins exactly as chosen; one pinned colour is respected the
+    // way every other look respects it - the field walks that one hue - and
+    // only with nothing pinned does the wallpaper light it.
     readonly property var auraTriad: {
         if (root.cfg.hasAuraTriad)
             return [root.cfg.customColor, root.cfg.auraColor2, root.cfg.auraColor3];
+        if (root.cfg.hasCustomColor) {
+            var base = root.cfg.customColor;
+            return [Qt.darker(base, 1.25), base, Qt.lighter(base, 1.25)];
+        }
         var l = root.fieldLstar;
         return [Scheme.colorAt(0.12, l, root.fieldSide),
                 Scheme.colorAt(0.50, l, root.fieldSide),
