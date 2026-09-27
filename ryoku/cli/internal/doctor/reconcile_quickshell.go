@@ -150,18 +150,11 @@ func staleQmlModule(out string) string {
 }
 
 func pkgOwning(bin string) string {
-	if !sys.Has("pacman") {
-		return ""
-	}
 	path, err := exec.LookPath(bin)
 	if err != nil {
 		return ""
 	}
-	out, err := exec.Command("pacman", "-Qoq", path).Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	return sys.PkgOwner(path)
 }
 
 func pkgIsForeign(name string) bool {

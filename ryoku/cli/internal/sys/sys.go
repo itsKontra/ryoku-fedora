@@ -58,6 +58,28 @@ func PkgInstalled(name string) bool {
 	return false
 }
 
+// PkgOwner is the name of the installed package that owns path, or "" when no
+// package owns it (or the host has no known package manager).
+func PkgOwner(path string) string {
+	var out string
+	var err error
+	switch {
+	case Has("pacman"):
+		out, err = RunOut("pacman", "-Qoq", path)
+	case Has("rpm"):
+		out, err = RunOut("rpm", "-qf", "--qf", "%{NAME}\n", path)
+	case Has("dpkg-query"):
+		out, err = RunOut("dpkg-query", "-S", path)
+		out, _, _ = strings.Cut(out, ":")
+	default:
+		return ""
+	}
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.SplitN(strings.TrimSpace(out), "\n", 2)[0])
+}
+
 // UnitEnabled reports whether a systemd unit is enabled (or static/alias --
 // anything systemctl reports as will-start).
 func UnitEnabled(unit string) bool {
