@@ -7,7 +7,7 @@ import "dnf.js" as Dnf
 import "../requeststate.js" as RequestState
 import ".."
 
-// Package provider backed by dnf (`dnf repoquery`). Routed by "/" is the actions
+// Package provider backed by dnf (`dnf search`, see dnf.js). Routed by "/" is the actions
 // panel; packages use explicit "install "/"remove "/"search " queries (matching
 // inir) so a plain search never forks dnf. Search is async + cached; installs and
 // removes spawn a terminal because sudo needs a tty for its password prompt.
@@ -213,7 +213,7 @@ Provider {
         property bool inFlight: false
         property bool didStart: false
         property string out: ""
-        command: ["dnf", "repoquery", "-q", "-C", "--installed", "--available", "--qf", Dnf.QUERY_FORMAT, "*" + term + "*"]
+        command: Dnf.searchCommand(term, true)
         stdout: SplitParser {
             onRead: data => fastProc.out += data + "\n"
         }
@@ -267,7 +267,7 @@ Provider {
         property bool inFlight: false
         property bool didStart: false
         property string out: ""
-        command: ["dnf", "repoquery", "-q", "--installed", "--available", "--qf", Dnf.QUERY_FORMAT, "*" + term + "*"]
+        command: Dnf.searchCommand(term, false)
         stdout: SplitParser {
             onRead: data => searchProc.out += data + "\n"
         }

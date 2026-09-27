@@ -1,12 +1,28 @@
-// Parse `dnf repoquery --installed --available` rows into launcher rows. Each
-// line is name, evr, repoid and summary, tab-separated, as QUERY_FORMAT asks.
-// dnf lists a package once per repo that carries it, sorted by version, and the
-// installed copy comes from the "@System" repo; the rows fold into one per name.
+// Package search through dnf. `dnf search` matches every word against names and
+// summaries but prints neither versions nor what is installed, so its names (in
+// its own best-first order) feed `dnf repoquery --installed --available`. Each
+// repoquery line is name, evr, repoid and summary, tab-separated; dnf lists a
+// package once per repo that carries it, sorted by version, and the installed
+// copy comes from the "@System" repo, so the rows fold into one per name.
 // Pure logic so the provider's parsing is node-tested without dnf.
 
 var QUERY_FORMAT = "%{name}\t%{evr}\t%{repoid}\t%{summary}\n";
 var INSTALLED_REPO = "@System";
 var LIMIT = 30;
+var CANDIDATES = 200;
+
+var SEARCH_SCRIPT = 'qf=$1; cache=$2; shift 2; '
+    + 'dnf search -q $cache -- "$@" '
+    + '| awk -F"\t" \'/^ /{n=$1; sub(/^ +/,"",n); sub(/\\.[^.]*$/,"",n); if(!seen[n]++) print n}\' '
+    + '| head -n ' + CANDIDATES + ' '
+    + '| xargs -r dnf repoquery -q $cache --installed --available --qf "$qf" --';
+
+// argv for one search. cacheOnly answers from dnf's metadata cache (-C) without
+// touching the network; the words go in as arguments, never into the script.
+function searchCommand(term, cacheOnly) {
+    var words = String(term || "").trim().split(/\s+/).filter(function (w) { return w.length > 0; });
+    return ["sh", "-c", SEARCH_SCRIPT, "sh", QUERY_FORMAT, cacheOnly ? "-C" : ""].concat(words);
+}
 
 function rank(name, term) {
     var n = name.toLowerCase();
@@ -50,5 +66,5 @@ function parse(raw, term) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { parse, QUERY_FORMAT, INSTALLED_REPO, LIMIT };
+    module.exports = { parse, searchCommand, QUERY_FORMAT, INSTALLED_REPO, LIMIT };
 }

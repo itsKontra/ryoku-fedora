@@ -826,6 +826,21 @@
       "network": true
     },
     {
+      "id": "pkg-summary-search",
+      "name": "A multi-word package search matches summaries",
+      "covers": "packages dnf search across names and summaries",
+      "steps": [
+        "show",
+        "type >screenshot tool",
+        "settle 40"
+      ],
+      "asserts": [
+        "[.results[] | select(.subtitle | test(\"screenshot\"; \"i\"))] | length >= 1"
+      ],
+      "screenshot": true,
+      "network": true
+    },
+    {
       "id": "pkg-verb-incomplete",
       "name": "A bare package verb (>install ) searches nothing",
       "covers": "packages parseOp incomplete-command guard",
@@ -853,7 +868,7 @@
       ],
       "screenshot": true,
       "teardown": [
-        "for i in $(seq 45); do pgrep -f 'dnf repoquery' >/dev/null || break; sleep 1; done"
+        "for i in $(seq 45); do pgrep -f 'dnf (search|repoquery)' >/dev/null || break; sleep 1; done"
       ]
     },
     {

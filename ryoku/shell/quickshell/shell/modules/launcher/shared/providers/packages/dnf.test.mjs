@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const { parse, LIMIT } = require("./dnf.js");
+const { parse, searchCommand, QUERY_FORMAT, LIMIT } = require("./dnf.js");
 
 let failed = 0;
 function eq(actual, expected, msg) {
@@ -33,6 +33,10 @@ eq(parse("Updating and loading repositories:\nnot\ta row", "x"), [], "noise line
 
 const many = Array.from({ length: LIMIT + 5 }, (_, i) => "pkg" + i + "\t1\tfedora\ts").join("\n");
 eq(parse(many, "pkg").length, LIMIT, "results are capped");
+
+eq(searchCommand("  screenshot   tool ", true).slice(3), ["sh", QUERY_FORMAT, "-C", "screenshot", "tool"], "words become separate arguments, cache-only flagged");
+eq(searchCommand("kitty", false).slice(4), [QUERY_FORMAT, "", "kitty"], "the full pass drops -C");
+eq(searchCommand("$(rm -rf ~)", true).slice(-3), ["$(rm", "-rf", "~)"], "a hostile term stays data, never script");
 
 if (failed > 0) { console.log("\n" + failed + " test(s) FAILED"); process.exit(1); }
 console.log("\nAll tests PASSED");
