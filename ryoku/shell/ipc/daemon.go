@@ -795,6 +795,7 @@ func (d *daemon) supervise(name string) {
 			// back after a boot; record it for the boot guard (ryoku boot-guard),
 			// which reverts an update whose next boots never get here.
 			go recordBootOK(exited)
+			go nvidiaDriverHint(exited)
 		}
 
 		start := time.Now()
