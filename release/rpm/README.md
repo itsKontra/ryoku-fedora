@@ -93,8 +93,10 @@ qt6-qtmultimedia-devel qt6-qtshadertools-devel qt6-qtsvg-devel
 qt6-qt5compat-devel qt6-qtwayland-devel python3 gnupg2 git`.
 
 Use a full-history checkout. Source preparation vendors dependencies pinned by
-Go module sums into Source0. The SRPM contains that complete payload; `%build`
-does not fetch source or rely on a checkout path. Rebuild it with
+Go module sums into Source0. Each SRPM contains that payload minus the heavy
+paths `source-owners` gives only to other packages (the wallpapers, the
+translation catalog, the pinned extras); `%build` does not fetch source or rely
+on a checkout path. Rebuild it with
 `mock -r fedora-44-x86_64 --rebuild <package.src.rpm>` in a clean root.
 
 `RYOKU_SRPM_OUT=/tmp/ryoku-srpms release/rpm/prepare-srpms.sh` produces only
