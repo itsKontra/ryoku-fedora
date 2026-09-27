@@ -34,8 +34,9 @@ var ryokuDropIn = regexp.MustCompile(`^[0-9]+-ryoku-[^/]*\.conf$`)
 // are the only way to customize the readout).
 // Slash-separated paths, relative to the config base. Most are also in
 // sys.LiveOwnedConfig so the overlay never re-lays a frozen copy over a file
-// edited in place; ghostty/config is the exception -- it is a seed the user may
-// instead fork through the overlay, so it stays overlay-able (not live-owned).
+// edited in place; ghostty/config and alacritty/alacritty.toml are the
+// exception -- seeds the user may instead fork through the overlay, so they stay
+// overlay-able (not live-owned).
 var generatedSeed = generatedSeedSet()
 
 func generatedSeedSet() map[string]bool {
@@ -44,6 +45,7 @@ func generatedSeedSet() map[string]bool {
 		"kitty/current-theme.conf": true,
 		"ghostty/config":           true,
 		"ghostty/ryoku-colors":     true,
+		"alacritty/alacritty.toml": true,
 	}
 	// Every provider's per-machine files are seeded and kept regardless of which
 	// compositor is running, so an update under one never prunes another's. The
