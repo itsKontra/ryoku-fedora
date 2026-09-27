@@ -74,7 +74,7 @@ idle/dim), `upower` (battery state), `wireplumber` (`wpctl`), `pipewire-pulse`
 `libnotify`/`xdg-utils` (the LocalSend file stash and opening stashed files).
 The frame-surface tools use `grim`/`slurp`, `hyprpicker`, `curl`/`jq`, `mpv`,
 `tesseract`, `zbar`, `gpu-screen-recorder`/`wf-recorder`, and `hyprsunset`.
-The ``Super+` `` voice dictation drives `voxtype` (optional, from `voxtype-bin`)
+The ``Super+` `` voice dictation drives `voxtype` (optional, installed from the Dictation page)
 for the transcription and `wtype` to type it into the focused app; pick the
 engine and model in Ryoku Settings' Dictation page.
 The keybinds open `kitty` (terminal) and `nautilus` (files). Fonts: JetBrains

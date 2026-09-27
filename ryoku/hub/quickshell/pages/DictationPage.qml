@@ -107,21 +107,16 @@ Item {
         rmProc.running = true;
     }
 
-    // gpk (GlazePKG, the RyokuArch package manager) needs a tty for its AUR
-    // build and sudo prompts; --hold keeps any error on screen after it exits.
+    // dnf needs a tty for its sudo prompt; --hold keeps any error on screen
+    // after it exits. remove keeps the config and models for a reinstall.
     function installVoxtype() {
-        Spawn.run(["kitty", "--hold", "-e", "gpk", "install", "voxtype-bin", "--manager", "aur"]);
+        Spawn.run(["kitty", "--hold", "-e", "ryoku-hub", "voxtype", "install"]);
     }
-
-    // remove: gpk drops the package (tty for sudo), then we disable and delete
-    // the user service so no dead unit lingers; config and models stay for a
-    // reinstall.
     function removeVoxtype() {
-        Spawn.run(["kitty", "--hold", "-e", "sh", "-c",
-            "gpk remove voxtype-bin && { systemctl --user disable --now voxtype.service 2>/dev/null; rm -f ~/.config/systemd/user/voxtype.service; systemctl --user daemon-reload 2>/dev/null; }"]);
+        Spawn.run(["kitty", "--hold", "-e", "ryoku-hub", "voxtype", "remove"]);
     }
 
-    // when the gpk terminal closes and the Hub regains focus, re-probe so the
+    // when the install terminal closes and the Hub regains focus, re-probe so the
     // page flips from the install prompt to the live settings on its own.
     readonly property bool windowActive: Window.active
     onWindowActiveChanged: if (pg.windowActive) pg.reload()
@@ -246,8 +241,8 @@ Item {
             leftMargin: Tokens.s6; rightMargin: Tokens.s6; topMargin: Tokens.s5; bottomMargin: Tokens.s6
         }
 
-        // voxtype missing: a clear message, not an inert page. voxtype-bin ships
-        // with the desktop, so this is the rare hand-removed case.
+        // voxtype missing: a clear message and an install button, not an inert
+        // page. Fedora has no voxtype package, so the Hub fetches upstream's RPM.
         Column {
             id: emptyState
             visible: pg.loaded && !pg.installed
@@ -267,7 +262,7 @@ Item {
                 width: parent.width
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
-                text: I18n.tr("Voice dictation needs the voxtype-bin package. GlazePKG opens a terminal to confirm the install, and this page fills in once it finishes.")
+                text: I18n.tr("Voice dictation needs the voxtype package. A terminal opens to confirm the install, and this page fills in once it finishes.")
                 color: Tokens.inkMuted
                 font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             }
@@ -657,14 +652,14 @@ Item {
                     width: content.colWidth
                     title: I18n.tr("PACKAGE")
                     expanded: false
-                    summary: I18n.tr("VOXTYPE-BIN")
+                    summary: I18n.tr("VOXTYPE")
 
                     Text {
                         width: parent.width
                         leftPadding: Tokens.s4; rightPadding: Tokens.s4
                         topPadding: Tokens.s3; bottomPadding: Tokens.s1
                         wrapMode: Text.WordWrap
-                        text: I18n.tr("Voxtype is installed (voxtype-bin). Removing it uninstalls the package; your engine choice and downloaded models stay on disk.")
+                        text: I18n.tr("Voxtype is installed. Removing it uninstalls the package; your engine choice and downloaded models stay on disk.")
                         color: Tokens.inkMuted
                         font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
                     }
