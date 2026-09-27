@@ -41,6 +41,7 @@ SUSPEND_STATE="${RYOKU_CLAMSHELL_SUSPEND_STATE:-$RUNTIME_DIR/ryoku-clamshell-${U
 SUSPEND_LOCK="${RYOKU_CLAMSHELL_SUSPEND_LOCK:-$RUNTIME_DIR/ryoku-clamshell-${UID:-$(id -u)}.suspend.lock}"
 PGREP_BIN="${RYOKU_PGREP_BIN:-$(command -v pgrep || true)}"
 BUSCTL_BIN="${RYOKU_BUSCTL_BIN:-$(command -v busctl || true)}"
+INHIBITORS_BIN="${RYOKU_INHIBITORS_BIN:-$(command -v ryoku-inhibitors || printf '%s' "$SCRIPT_DIR/ryoku-inhibitors")}"
 # Internal panels + non-display connectors. Everything else that reports
 # "connected" is an external display (HDMI-A-*, DP-*, ...).
 INTERNAL_RE='^(eDP|LVDS|DSI|Virtual|Writeback)'
@@ -313,7 +314,7 @@ inhibitor_active() {
   fi
   command -v jq >/dev/null 2>&1 || return 1
   uid="$(id -u)"
-  json="$(systemd-inhibit --list --json=short 2>/dev/null)" || return 1
+  json="$("$INHIBITORS_BIN" 2>/dev/null)" || return 1
   jq -e --argjson pid "$pid" --argjson uid "$uid" '
     any(.[]; .pid == $pid and .uid == $uid and .who == "ryoku-clamshell"
       and .mode == "block"

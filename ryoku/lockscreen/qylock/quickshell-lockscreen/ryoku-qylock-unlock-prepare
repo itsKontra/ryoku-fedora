@@ -11,7 +11,7 @@ unit="ryoku-qylock-unlock-guard-${session_id}.service"
 who="ryoku-qylock-unlock-${session_id}"
 proof_helper="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/proof.sh"
 [[ -x $proof_helper ]] || proof_helper=/usr/share/ryoku/lockscreen/qylock/quickshell-lockscreen/proof.sh
-for command in systemctl systemd-run systemd-inhibit jq loginctl busctl; do
+for command in systemctl systemd-run systemd-inhibit ryoku-inhibitors jq loginctl busctl; do
   command -v "$command" >/dev/null 2>&1 || {
     printf 'ryoku-qylock-unlock-prepare: %s is required\n' "$command" >&2
     exit 1
@@ -30,7 +30,7 @@ fi
 
 guard_ready=0
 for _ in {1..60}; do
-  inhibitors="$(systemd-inhibit --list --json=short 2>/dev/null || true)"
+  inhibitors="$(ryoku-inhibitors 2>/dev/null || true)"
   if jq -e --arg who "$who" \
     'any(.[]; .who == $who and .mode == "block"
       and ((.what | split(":")) | index("sleep")))' \

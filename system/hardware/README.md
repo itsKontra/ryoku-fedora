@@ -98,7 +98,13 @@ in the machine, and do not waste power doing it.
     cutover. Greeter, lock-screen, stale lingering managers and unrelated
     desktops are excluded. Each live replacement must report `ryoku-shell
     sleep-ready`; a failed or partial cutover remains blocked until a successful
-    retry or reboot.
+    retry or reboot. A uwsm login runs the compositor as a user-manager
+    `wayland-wm@` unit outside the login scope, and session discovery follows it
+    there.
+  - `ryoku-inhibitors` Prints login1's inhibitor locks as JSON, read over D-Bus
+    because Fedora 44's `systemd-inhibit` has no `--json`. The cutover,
+    clamshell, qylock unlock guard and checkout deploy all verify their sleep
+    and lid blocks through it.
 - `audio/`
   - `ryoku-mic` Caps the default microphone at its Base Volume (the level the
     device reports as 0 dB hardware gain, no amplification) so a codec that runs
