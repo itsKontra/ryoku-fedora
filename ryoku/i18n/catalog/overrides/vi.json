@@ -44,6 +44,7 @@
   "Plugin": "Plugin",
   "RADIO": "RADIO",
   "RAILS": "RAILS",
+  "RYOKU ARCH": "RYOKU ARCH",
   "RYOSTORE": "RYOSTORE",
   "Removed %s: the target release predates the compositor split": "Đã gỡ %s: bản phát hành đích có trước khi tách trình tổng hợp",
   "Restore snapshot %s on the next boot? [y/N]": "Khôi phục ảnh chụp nhanh %s ở lần khởi động tới? [y/N]",

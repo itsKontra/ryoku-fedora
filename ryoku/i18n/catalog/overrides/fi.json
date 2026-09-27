@@ -27,6 +27,7 @@
   "Removed %s: the target release predates the compositor split": "%s poistettu: kohdejulkaisu on vanhempi kuin kompositorien erottaminen",
   "Retiring the previous source deployment": "Poistetaan aiempi lähdekoodiasennus käytöstä",
   "Ribbon": "Ribbon",
+  "Ricelin": "Ricelin",
   "SDDM greeter skin": "SDDM-kirjautumisnäkymän teema",
   "Snapshot %s is not in the boot menu. `ryoku snapshots` lists the ones that are;": "Tilannekuva %s ei ole käynnistysvalikossa. `ryoku snapshots` luettelee ne, jotka ovat;",
   "The Ryoku transaction failed for a reason that is not the package database; keeping the [ryoku] db so the error stays readable": "Ryoku-transaktio epäonnistui muusta syystä kuin pakettitietokannan vuoksi; [ryoku]-tietokanta säilytetään, jotta virhe pysyy luettavana",
