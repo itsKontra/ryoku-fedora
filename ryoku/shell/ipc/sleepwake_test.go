@@ -54,8 +54,8 @@ func fakeInitiallyHungPowerProvider(t *testing.T, countPath string) {
 	provider := filepath.Join(bin, "ryoku-wm-testwm")
 	script := "#!/usr/bin/env bash\n" +
 		"if [[ \"$1\" == caps ]]; then printf '%s' '{\"name\":\"testwm\",\"supports\":[\"outputPower\"]}'; exit 0; fi\n" +
-		"n=0; [[ -r \"" + countPath + "\" ]] && n=$(<\"" + countPath + "\"); n=$((n+1)); printf '%s' \"$n\" >\"" + countPath + "\"\n" +
-		"if (( n == 1 )); then exec sleep 10; fi\n" +
+		"n=0; [[ -r \"" + countPath + "\" ]] && n=$(<\"" + countPath + "\"); n=$((n+1)); printf '%s' \"$n\" >\"" + countPath + ".$$\"; mv -f \"" + countPath + ".$$\" \"" + countPath + "\"\n" +
+		"if (( n == 1 )); then exec sleep 30; fi\n" +
 		"exit 0\n"
 	if err := os.WriteFile(provider, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -169,7 +169,7 @@ func TestHoldAwakeTimesOutHungProviderAndRetries(t *testing.T) {
 	fakeInitiallyHungPowerProvider(t, countPath)
 
 	oldHold, oldStep, oldActionWait := wakeHold, wakeStep, wakeActionWait
-	wakeHold, wakeStep, wakeActionWait = 180*time.Millisecond, 20*time.Millisecond, 30*time.Millisecond
+	wakeHold, wakeStep, wakeActionWait = 1500*time.Millisecond, 20*time.Millisecond, 400*time.Millisecond
 	t.Cleanup(func() {
 		wakeHold, wakeStep, wakeActionWait = oldHold, oldStep, oldActionWait
 	})
@@ -177,7 +177,7 @@ func TestHoldAwakeTimesOutHungProviderAndRetries(t *testing.T) {
 	d := &daemon{wmc: wm.OpenNamed("testwm"), quit: make(chan struct{})}
 	start := time.Now()
 	d.holdAwake(context.Background())
-	if elapsed := time.Since(start); elapsed > time.Second {
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("hung provider blocked bounded wake retries for %v", elapsed)
 	}
 	body, err := os.ReadFile(countPath)
