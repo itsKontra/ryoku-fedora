@@ -6,6 +6,7 @@
   "Driver": "Driver",
   "Fraunces 44": "Fraunces 44",
   "Front": "Front",
+  "Intel Wi-Fi firmware comes with linux-firmware on this system": "Intel Wi-Fi-fastvaren følger med pakken linux-firmware på dette systemet",
   "JaviBOT96": "JaviBOT96",
   "NVIDIA initramfs rebuild failed: %v": "Gjenoppbygging av NVIDIA-initramfs mislyktes: %v",
   "NVIDIA initramfs rebuild is pending": "Gjenoppbygging av NVIDIA-initramfs venter",
@@ -69,6 +70,7 @@
   "no NVIDIA GPU that the signed open driver supports": "ingen NVIDIA-GPU som den signerte åpne driveren støtter",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "ingen NVIDIA-først render-pin over et panel som ikke er NVIDIA",
   "no nvidia module exists for the installed kernel(s); restored nouveau and rebuilt the initramfs so the next boot can use nouveau. Install a matching driver and run ryoku doctor again to switch back": "ingen nvidia-modul finnes for den(e) installerte kjernen(e); gjenopprettet nouveau og bygde om initramfs slik at neste oppstart kan bruke nouveau. Installer en passende driver og kjør ryoku doctor igjen for å bytte tilbake",
+  "no pacman or dnf here; shipped apps are the installer's business": "ingen pacman eller dnf her; medfølgende apper er installasjonsprogrammets sak",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "det finnes ikke noe øyeblikksbilde fra før oppdateringen (snapper var utilgjengelig), så `ryoku rollback` kan ikke tilbakestille dette; gjenopprett direkte med %s",
   "no theme master; colours follow the wallpaper by default": "ingen temamaster; fargene følger bakgrunnsbildet som standard",
   "noctalia": "noctalia",
@@ -90,6 +92,7 @@
   "ryoku doctor  (queues the key for MokManager)": "ryoku doctor  (legger nøkkelen i kø for MokManager)",
   "ryoku doctor (retries the pending initramfs rebuild)": "ryoku doctor (prøver den ventende gjenoppbyggingen av initramfs på nytt)",
   "ryoku materialize": "ryoku materialize",
+  "set the wireless regulatory domain to %s from the system timezone, so the kernel enables 5 GHz channels again": "satte det trådløse regulatoriske domenet til %s fra systemets tidssone, slik at kjernen aktiverer 5 GHz-kanaler igjen",
   "setting the next boot failed: %v": "kunne ikke angi neste oppstart: %v",
   "source artifact %s was edited; preserve or move it before switching to packages": "kildeartefakt %s ble redigert; ta vare på eller flytt den før du bytter til pakker",
   "source deployment has no ownership receipt; retain --install-mode=source until its local binaries and service overrides are migrated": "kildeinstallasjonen har ingen eierskapskvittering; behold --install-mode=source til de lokale binærfilene og tjenesteoverstyringene er migrert",
@@ -104,6 +107,7 @@
   "the NVIDIA sleep units (%s) are disabled, so VRAM is not saved across suspend the way the driver package presets them; a box with the kernel suspend notifier off wakes to a corrupted session": "NVIDIA-hvileenhetene (%s) er deaktivert, så VRAM lagres ikke i hvilemodus slik driverpakken forhåndsinnstiller; en maskin med kjernens suspend-varsler av våkner til en ødelagt økt",
   "the Ryoku module key is not enrolled, so the NVIDIA driver cannot load under Secure Boot": "Ryoku-modulnøkkelen er ikke registrert, så NVIDIA-driveren kan ikke lastes under Secure Boot",
   "the repaired volume(s): %s": "reparerte volum: %s",
+  "the wireless regulatory domain is unset (00) and ryoku-wifi-regdom is not installed to set it from the timezone country %s": "det trådløse regulatoriske domenet er ikke satt (00), og ryoku-wifi-regdom er ikke installert for å sette det fra tidssonelandet %s",
   "this NVIDIA GPU runs on nouveau; the Secure Boot signed driver is available": "denne NVIDIA-GPU-en kjører på nouveau; Secure Boot-signert driver er tilgjengelig",
   "❯ fastfetch": "❯ fastfetch"
 }
