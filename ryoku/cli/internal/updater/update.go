@@ -182,6 +182,14 @@ func Update(args []string) error {
 		progress.fail(e)
 		return e
 	}
+	if channelSwitch {
+		// A rollback onto a release that predates the compositor split carries
+		// no ryoku-desktop-hyprland/niri; their exact pins would fail the whole
+		// downgrade transaction (#271). Drop them before building the target.
+		if dropped := dropSplitMetasNotServed(repoServedSet()); len(dropped) > 0 {
+			progress.logf(i18n.T("Removed %s: the target release predates the compositor split"), strings.Join(dropped, ", "))
+		}
+	}
 	switch {
 	case len(set) == 0 && held == 0:
 		e := fmt.Errorf(i18n.T("no packages from the [ryoku] repository are installed; `ryoku doctor` checks the repo setup"))
@@ -204,7 +212,7 @@ func Update(args []string) error {
 			// new package now claims (an installer/deploy stray), or, with nothing to
 			// clear, drop a stale [ryoku] db whose signature no longer matches and
 			// refresh it clean.
-			healPackageUpgrade(conflicts)
+			healPackageUpgrade(conflicts, err)
 			if _, err = runRyokuUpgrade(set); err != nil {
 				// only advertise `ryoku rollback` when the pre snapshot it needs exists;
 				// snapperPre is best-effort and returns "" when it was skipped.
@@ -404,9 +412,12 @@ func reportSystemLane(pending []updateItem) {
 // that block the transaction and that no package owns ("exists in filesystem"
 // for an installer/deploy stray a new package now claims) are removed so the
 // package adopts them; a file another package owns is a real conflict and is
-// left untouched for the retry to surface. With nothing to clear, it assumes a
-// stale [ryoku] db whose signature no longer matches and forces a clean refresh.
-func healPackageUpgrade(conflicts []string) {
+// left untouched for the retry to surface. With nothing to clear, a stale
+// [ryoku] db whose signature no longer matches is dropped for a clean refresh,
+// but ONLY when the failure actually names the database: dropping it after a
+// dependency or conflict failure destroys the evidence and turns the next run
+// into a "target not found" storm (#271).
+func healPackageUpgrade(conflicts []string, err error) {
 	if !sys.Has("pacman") {
 		return
 	}
@@ -415,8 +426,65 @@ func healPackageUpgrade(conflicts []string) {
 		_ = sys.Sudo(append([]string{"rm", "-f"}, strays...)...)
 		return
 	}
+	if !dbRejection(err) {
+		progress.logf(i18n.T("The Ryoku transaction failed for a reason that is not the package database; keeping the [ryoku] db so the error stays readable"))
+		return
+	}
 	progress.logf(i18n.T("Package database rejected; dropping the stale [ryoku] db and retrying"))
 	_ = sys.DropRyokuSyncDB()
+}
+
+// dbRejection reports whether a pacman failure is a database/signature
+// rejection rather than a dependency, conflict or download error.
+func dbRejection(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, needle := range []string{"invalid or corrupted", "signature", "database", "could not read db"} {
+		if strings.Contains(msg, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+// splitMetapackages are the compositor-split metas the 0.73.x packaging
+// introduced. A release that predates the split does not serve them, and their
+// exact-version pins on six packages make any downgrade transaction
+// unsatisfiable, so moving across the split has to drop them first; the
+// downgrade of ryoku-desktop itself re-ties the graph afterwards (#271).
+var splitMetapackages = []string{"ryoku-desktop-hyprland", "ryoku-desktop-niri"}
+
+// Seams over the live box, replaced in tests.
+var (
+	splitMetaInstalled = func(name string) bool { return sys.PkgInstalled(name) }
+	splitMetaRemove    = func(name string) error {
+		if sys.RPMManager() != "" {
+			return sys.Sudo("rpm", "-e", "--nodeps", name)
+		}
+		return sys.Sudo("pacman", "-Rdd", "--noconfirm", name)
+	}
+)
+
+// dropSplitMetasNotServed removes installed split metapackages the currently
+// pointed [ryoku] repo does not serve, skipping dependency checks (rpm -e
+// --nodeps, pacman -Rdd): the meta's own dependencies are exactly what the
+// transaction is about to move, and the solver cannot see past the meta's
+// exact pins. Returns what it removed, for the log.
+func dropSplitMetasNotServed(served map[string]bool) []string {
+	var dropped []string
+	for _, meta := range splitMetapackages {
+		if !splitMetaInstalled(meta) || served[meta] {
+			continue
+		}
+		if err := splitMetaRemove(meta); err != nil {
+			progress.logf(i18n.T("could not remove %s, which the target release does not serve; the downgrade may fail on its exact pins (%v)"), meta, err)
+			continue
+		}
+		dropped = append(dropped, meta)
+	}
+	return dropped
 }
 
 // unownedFiles keeps only the paths no installed package owns: pacman -Qo fails
