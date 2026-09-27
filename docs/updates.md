@@ -381,7 +381,9 @@ it.
 Every push to `main` runs `publish-copr.yml`, which prepares the SRPMs once,
 submits them to COPR, verifies the returned RPMs against the pinned COPR key,
 installs those unchanged RPMs on both compositors with DNF5 and DNF4, and only
-then regenerates the repository. A run that fails any gate publishes nothing.
+then regenerates the repository. A push that only touches `docs/`, top-level
+Markdown, or GitHub metadata ships nothing and is skipped; its commits reach
+the next build. A run that fails any gate publishes nothing.
 The local Mock rebuild and its install matrix (`fedora-rpm.yml`) gate pull
 requests instead, since COPR builds the same SRPMs in a clean root. Details and
 the publisher setup are in `release/rpm/README.md`.
