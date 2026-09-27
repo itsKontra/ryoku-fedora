@@ -390,7 +390,7 @@ func spawnLocker(_ int) error {
 }
 
 // voxtypeRecord starts or stops dictation on the running Voxtype daemon (the
-// Super+` tap). Voxtype is an optional AUR app (voxtype-bin); absent, this is a
+// Super+` tap). Voxtype is optional (installed from the Hub's Dictation page); absent, this is a
 // no-op and the voice surface stays a plain mic meter. `voxtype record` drives
 // the user service in place (Voxtype's own hotkey is disabled so the shell owns
 // Super+`). verb is "start" or "stop".

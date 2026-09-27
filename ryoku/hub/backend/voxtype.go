@@ -22,6 +22,7 @@ import (
 //	ryoku-hub voxtype ensure          seed a default config + service (autostart)
 //	ryoku-hub voxtype download <key>  download a preset's model (streams progress)
 //	ryoku-hub voxtype rmmodel <key>   delete a preset's downloaded model
+//	ryoku-hub voxtype install|remove  the package itself (voxtype_package.go)
 
 // voxtypePreset is one dictation option the page offers. Lower-case fields map
 // it to config.toml and the model store; exported ones drive the UI.
@@ -86,7 +87,7 @@ func modelFilePath(p voxtypePreset) string {
 
 func runVoxtype(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("voxtype needs get|set|ensure|download|rmmodel")
+		return fmt.Errorf("voxtype needs get|set|ensure|download|rmmodel|install|remove")
 	}
 	switch args[0] {
 	case "get":
@@ -108,6 +109,10 @@ func runVoxtype(args []string) error {
 			return fmt.Errorf("voxtype rmmodel needs a preset key")
 		}
 		return voxtypeRmModel(args[1])
+	case "install":
+		return voxtypeInstall()
+	case "remove":
+		return voxtypeRemove()
 	default:
 		return fmt.Errorf("unknown voxtype command: %s", args[0])
 	}
