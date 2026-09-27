@@ -64,10 +64,10 @@ func containsFile(files []managedFile, rel, want string) bool {
 }
 
 func TestMissingPkgs(t *testing.T) {
-	have := map[string]bool{"looking-glass": true}
-	got := missingPkgs([]string{"looking-glass", "looking-glass-module-dkms"}, func(p string) bool { return have[p] })
-	if len(got) != 1 || got[0] != "looking-glass-module-dkms" {
-		t.Errorf("missingPkgs = %v, want [looking-glass-module-dkms]", got)
+	have := map[string]bool{"looking-glass-client": true}
+	got := missingPkgs(extraPassthroughPkgs, func(p string) bool { return have[p] })
+	if len(got) != 1 || got[0] != "akmod-kvmfr" {
+		t.Errorf("missingPkgs = %v, want [akmod-kvmfr]", got)
 	}
 	if none := missingPkgs([]string{"a", "b"}, func(string) bool { return true }); len(none) != 0 {
 		t.Errorf("all installed should be empty, got %v", none)

@@ -36,12 +36,6 @@ func runGpuApply(args []string) error {
 	if dryRun {
 		return applyPlan(action, invokingUser(), selfExe(), true)
 	}
-	if action == "enable" && os.Geteuid() != 0 {
-		// Looking Glass + the kvmfr module are AUR-only and build as the user
-		// (makepkg refuses root), so install them before escalating. the
-		// privileged half then finds kvmfr present and writes its module config.
-		installPassthroughAUR()
-	}
 	if os.Geteuid() != 0 {
 		return escalateApply(args)
 	}
@@ -63,36 +57,6 @@ func escalateSelf(args ...string) error {
 	cmd := exec.Command("pkexec", full...)
 	cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
 	return cmd.Run()
-}
-
-// installPassthroughAUR builds Looking Glass + the kvmfr module from the AUR as
-// the invoking user (makepkg refuses root). best-effort: a build failure leaves
-// a clear message and the rest of enable still runs, so caps honestly reports
-// what is still missing. needs a terminal for the helper's prompts.
-func installPassthroughAUR() {
-	missing := missingPkgs(extraPassthroughPkgs, pkgInstalled)
-	if len(missing) == 0 {
-		return
-	}
-	fmt.Println("Installing Looking Glass + the kvmfr module from the AUR (builds a kernel module; this can take a few minutes)...")
-	if err := aurInstall(missing); err != nil {
-		fmt.Printf("Could not build %s from the AUR: %v\n", strings.Join(missing, " "), err)
-		fmt.Println("Passthrough will stay off until they are installed; try: yay -S " + strings.Join(missing, " "))
-	}
-}
-
-// aurInstall hands packages to the Ryoku AUR wrapper, falling back to a raw
-// helper. inherits this terminal so makepkg/sudo can prompt.
-func aurInstall(pkgs []string) error {
-	if _, err := exec.LookPath("ryoku-pkg-aur-add"); err == nil {
-		return ttyRun("ryoku-pkg-aur-add", pkgs...)
-	}
-	for _, h := range []string{"yay", "paru"} {
-		if _, err := exec.LookPath(h); err == nil {
-			return ttyRun(h, append([]string{"-S", "--needed"}, pkgs...)...)
-		}
-	}
-	return fmt.Errorf("no AUR helper found (expected ryoku-pkg-aur-add, yay, or paru)")
 }
 
 func ttyRun(name string, args ...string) error {
@@ -198,15 +162,47 @@ polkit.addRule(function(action, subject) {
 const kvmfrStaticMB = 128
 
 // the passthrough stack. core packages are official, install as one
-// transaction; the Looking Glass pieces live in [ryoku] (or the AUR on plain
-// Arch) and install best-effort, so their absence never blocks the core set.
+// transaction; the Looking Glass pieces are not in Fedora and install
+// best-effort from COPR, so their absence never blocks the core set.
 func corePkgs() []string {
 	if hasCommand("dnf") && !hasCommand("pacman") {
 		return []string{"qemu-kvm", "libvirt-daemon-kvm", "edk2-ovmf", "swtpm", "dnsmasq"}
 	}
 	return []string{"qemu-desktop", "libvirt", "edk2-ovmf", "swtpm", "dnsmasq"}
 }
-var extraPassthroughPkgs = []string{"looking-glass", "looking-glass-module-dkms"}
+
+var extraPassthroughPkgs = []string{"looking-glass-client", "akmod-kvmfr"}
+
+// passthroughCOPRs carry extraPassthroughPkgs: the kvmfr akmod and the client.
+var passthroughCOPRs = []string{"hikariknight/looking-glass-kvmfr", "pgaskin/looking-glass-client"}
+
+// installPassthroughExtras enables the COPRs and installs the missing Looking
+// Glass pieces. akmod-kvmfr builds the module at boot for each new kernel;
+// akmods --force builds it for the running kernel now, so enable can write the
+// kvmfr config without a reboot.
+func installPassthroughExtras(missing []string) error {
+	if err := dnfRun("install", "-y", "dnf5-plugins"); err != nil {
+		return err
+	}
+	for _, c := range passthroughCOPRs {
+		if err := dnfRun("copr", "enable", "-y", c); err != nil {
+			return err
+		}
+	}
+	if err := dnfRun(append([]string{"install", "-y"}, missing...)...); err != nil {
+		return err
+	}
+	if out, err := exec.Command("uname", "-r").Output(); err == nil {
+		run("akmods", "--force", "--kernels", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func dnfRun(args ...string) error {
+	cmd := exec.Command("dnf", args...)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	return cmd.Run()
+}
 
 func applyPlan(action, user, exe string, dryRun bool) error {
 	files := managedFiles(user, exe)
@@ -222,16 +218,16 @@ func applyPlan(action, user, exe string, dryRun bool) error {
 				return fmt.Errorf("installing the passthrough stack failed: %w (update the system with `ryoku update`, then retry)", err)
 			}
 		}
-		// Looking Glass + the kvmfr module are AUR-only; runGpuApply builds them
-		// as the user before this privileged step, so here we only report state.
-		for _, p := range extraPassthroughPkgs {
-			switch {
-			case pkgInstalled(p):
-				say(p + ": installed")
-			case dryRun:
-				say("build from the AUR (yay): " + p)
-			default:
-				say(p + ": not installed -- AUR build skipped or failed; passthrough stays off until it is")
+		switch missing := missingPkgs(extraPassthroughPkgs, pkgInstalled); {
+		case len(missing) == 0:
+			say("Looking Glass + kvmfr: installed")
+		case dryRun:
+			say("enable COPRs: " + strings.Join(passthroughCOPRs, " "))
+			say("install from COPR: " + strings.Join(missing, " "))
+		default:
+			say("install from COPR: " + strings.Join(missing, " "))
+			if err := installPassthroughExtras(missing); err != nil {
+				say("could not install " + strings.Join(missing, " ") + ": " + err.Error() + "; passthrough stays off until they are")
 			}
 		}
 		kvmfrOK := dryRun || kvmfrModuleAvailable()

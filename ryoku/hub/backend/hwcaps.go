@@ -285,7 +285,7 @@ func buildChecks(in capInputs, host, pass *GPU) (checks []Check, hardFail bool) 
 		}
 		add(Check{ID: "tooling", Level: "warn", Label: "Virtualization stack", Value: "QEMU not installed", Hint: hint})
 	default:
-		add(Check{ID: "tooling", Level: "warn", Label: "Passthrough stack", Value: "missing: " + strings.Join(miss, ", ") + " (passthrough only)", Hint: "Only for the GPU-passthrough VM; plain VMs need none of it. Looking Glass + kvmfr are AUR: yay -S looking-glass looking-glass-module-dkms."})
+		add(Check{ID: "tooling", Level: "warn", Label: "Passthrough stack", Value: "missing: " + strings.Join(miss, ", ") + " (passthrough only)", Hint: "Only for the GPU-passthrough VM; plain VMs need none of it. Enabling passthrough in the Hub installs Looking Glass + kvmfr from COPR."})
 	}
 	if in.tooling.libvirt {
 		if in.inLibvirtGroup {
