@@ -114,22 +114,74 @@ func TestReconcileShippedAppsClaimsDependencyInstalls(t *testing.T) {
 	}
 }
 
-// withShippedAppTestState isolates the ledger and stubs every pacman seam;
+func TestReconcileShippedAppsSkipsUnpackagedApps(t *testing.T) {
+	present := map[string]bool{}
+	withShippedAppTestState(t, present)
+	appPackager = func() string { return "dnf" }
+	appsAvailable = func([]string) map[string]bool { return map[string]bool{"pavucontrol": true} }
+
+	var installs [][]string
+	installShippedApps = func(pkgs []string) {
+		installs = append(installs, pkgs)
+		for _, p := range pkgs {
+			present[p] = true
+		}
+	}
+
+	if got := reconcileShippedApps(false); got.status != recFixed {
+		t.Fatalf("first run = %+v, want fixed", got)
+	}
+	if len(installs) != 1 || strings.Join(installs[0], ",") != "pavucontrol" {
+		t.Fatalf("installs = %v, want only the packaged app", installs)
+	}
+	got := reconcileShippedApps(false)
+	if len(installs) != 1 {
+		t.Fatalf("second run installed again: %v", installs)
+	}
+	if got.status != recNote || !strings.Contains(got.detail, "songrec") {
+		t.Fatalf("second run = %+v, want a note naming the unpackaged apps", got)
+	}
+	if provisioned()["songrec"] {
+		t.Fatal("an unpackaged app was ledgered; it would never be delivered once packaged")
+	}
+}
+
+func TestInstallFixNamesThePackageManager(t *testing.T) {
+	withShippedAppTestState(t, nil)
+	appPackager = func() string { return "dnf" }
+	if got := installFix([]string{"pavucontrol"}); got != "sudo dnf install pavucontrol" {
+		t.Fatalf("dnf fix = %q", got)
+	}
+	appPackager = func() string { return "pacman" }
+	if got := installFix([]string{"pavucontrol"}); !strings.Contains(got, "pacman -S pavucontrol") {
+		t.Fatalf("pacman fix = %q", got)
+	}
+}
+
+// withShippedAppTestState isolates the ledger and stubs every package-manager
+// seam;
 // present lists the installed packages (nil = none).
 func withShippedAppTestState(t *testing.T, present map[string]bool) {
 	t.Helper()
 	isolateProvisioned(t)
 	oldInstalled, oldDep := appInstalled, appInstalledAsDep
 	oldInstall, oldExplicit := installShippedApps, markAppsExplicit
-	oldHas := hasPacman
+	oldPackager, oldAvailable := appPackager, appsAvailable
 	appInstalled = func(pkg string) bool { return present[pkg] }
 	appInstalledAsDep = func(string) bool { return false }
 	installShippedApps = func([]string) {}
 	markAppsExplicit = func([]string) {}
-	hasPacman = func() bool { return true } // the CI runner has no pacman
+	appPackager = func() string { return "pacman" } // the CI runner has neither
+	appsAvailable = func(pkgs []string) map[string]bool {
+		all := map[string]bool{}
+		for _, p := range pkgs {
+			all[p] = true
+		}
+		return all
+	}
 	t.Cleanup(func() {
 		appInstalled, appInstalledAsDep = oldInstalled, oldDep
 		installShippedApps, markAppsExplicit = oldInstall, oldExplicit
-		hasPacman = oldHas
+		appPackager, appsAvailable = oldPackager, oldAvailable
 	})
 }

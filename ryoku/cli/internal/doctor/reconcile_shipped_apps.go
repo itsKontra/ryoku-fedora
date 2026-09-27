@@ -43,7 +43,8 @@ type appPlan struct {
 	explicit []string // present and installed-as-dependency: re-mark explicit
 }
 
-// planShippedApps is the three-way rule, pure so it is tested without pacman.
+// planShippedApps is the three-way rule, pure so it is tested without a package
+// manager.
 func planShippedApps(apps []shippedApp, installed, asDep, seen map[string]bool) appPlan {
 	var p appPlan
 	for _, a := range apps {
@@ -66,10 +67,48 @@ func planShippedApps(apps []shippedApp, installed, asDep, seen map[string]bool) 
 
 // Seams: the live box's answers, replaced in tests.
 var (
-	appInstalled = func(pkg string) bool { return sys.PkgInstalled(pkg) }
-	// `pacman -Qdq <pkg>` succeeds only for a package installed as a dependency.
+	// appPackager names the package manager the lane drives: pacman on Arch, dnf
+	// on Fedora, "" on a box with neither.
+	appPackager = func() string {
+		switch {
+		case sys.Has("pacman"):
+			return "pacman"
+		case sys.Has("dnf"):
+			return "dnf"
+		}
+		return ""
+	}
+	appInstalled      = func(pkg string) bool { return sys.PkgInstalled(pkg) }
 	appInstalledAsDep = func(pkg string) bool {
+		if appPackager() == "dnf" {
+			out, err := exec.Command("dnf", "repoquery", "-q", "--installed", "--qf", "%{reason}", pkg).Output()
+			return err == nil && strings.Contains(string(out), "Dependency")
+		}
+		// `pacman -Qdq <pkg>` succeeds only for a package installed as a dependency.
 		return exec.Command("pacman", "-Qdq", pkg).Run() == nil
+	}
+	// Fedora has no RPM yet for some apps (installation/fedora/README.md lists the
+	// porting gaps). Those are skipped rather than warned about on every run, and
+	// delivered once a repository starts carrying them. A failed query answers
+	// "all available" so an offline box still gets the install attempt and its fix.
+	appsAvailable = func(pkgs []string) map[string]bool {
+		all := map[string]bool{}
+		for _, p := range pkgs {
+			all[p] = true
+		}
+		if appPackager() != "dnf" {
+			return all
+		}
+		args := append([]string{"repoquery", "-q", "--available", "--qf", "%{name}\\n"}, pkgs...)
+		out, err := exec.Command("dnf", args...).Output()
+		if err != nil {
+			return all
+		}
+		found := map[string]bool{}
+		for _, name := range strings.Fields(string(out)) {
+			found[name] = true
+		}
+		return found
 	}
 	// One transaction for the whole missing set, bounded, and best-effort: a box
 	// with no network must not fail `ryoku update` over an app.
@@ -77,20 +116,33 @@ var (
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		args := append([]string{"pacman", "-S", "--needed", "--noconfirm"}, pkgs...)
+		if appPackager() == "dnf" {
+			args = append([]string{"dnf", "install", "-y"}, pkgs...)
+		}
 		_ = exec.CommandContext(ctx, "sudo", args...).Run()
 	}
 	markAppsExplicit = func(pkgs []string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		args := append([]string{"pacman", "-D", "--asexplicit", "--quiet"}, pkgs...)
+		if appPackager() == "dnf" {
+			args = append([]string{"dnf", "-y", "mark", "user"}, pkgs...)
+		}
 		_ = exec.CommandContext(ctx, "sudo", args...).Run()
 	}
-	hasPacman = func() bool { return sys.Has("pacman") }
 )
 
+// installFix is the command a user runs to land pkgs by hand.
+func installFix(pkgs []string) string {
+	if appPackager() == "dnf" {
+		return "sudo dnf install " + strings.Join(pkgs, " ")
+	}
+	return "sudo pacman -Sy && sudo pacman -S " + strings.Join(pkgs, " ")
+}
+
 func reconcileShippedApps(checkOnly bool) recResult {
-	if !hasPacman() {
-		return okRes(i18n.T("not a pacman box; shipped apps are the installer's business"))
+	if appPackager() == "" {
+		return okRes(i18n.T("no pacman or dnf here; shipped apps are the installer's business"))
 	}
 	apps := shippedApps()
 	installed, asDep := map[string]bool{}, map[string]bool{}
@@ -101,11 +153,32 @@ func reconcileShippedApps(checkOnly bool) recResult {
 		}
 	}
 	plan := planShippedApps(apps, installed, asDep, provisioned())
+	var unavailable []string
+	if len(plan.install) > 0 {
+		avail := appsAvailable(plan.install)
+		var ready []string
+		for _, pkg := range plan.install {
+			if avail[pkg] {
+				ready = append(ready, pkg)
+			} else {
+				unavailable = append(unavailable, pkg)
+			}
+		}
+		plan.install = ready
+	}
 
 	if len(plan.install) == 0 && len(plan.adopt) == 0 && len(plan.explicit) == 0 {
+		var notes []string
 		if len(plan.removed) > 0 {
-			return noteRes(i18n.T("%s stay removed (you deleted them; Ryoku does not put them back)"),
-				strings.Join(plan.removed, ", "))
+			notes = append(notes, fmt.Sprintf(i18n.T("%s stay removed (you deleted them; Ryoku does not put them back)"),
+				strings.Join(plan.removed, ", ")))
+		}
+		if len(unavailable) > 0 {
+			notes = append(notes, fmt.Sprintf(i18n.T("%s not packaged for this system yet"),
+				strings.Join(unavailable, ", ")))
+		}
+		if len(notes) > 0 {
+			return noteRes("%s", strings.Join(notes, "; "))
 		}
 		return okRes(i18n.T("every shipped app is present and owned by you"))
 	}
@@ -150,10 +223,10 @@ func reconcileShippedApps(checkOnly bool) recResult {
 	switch {
 	case len(missed) > 0 && len(landed) > 0:
 		return warnRes(i18n.T("installed %s; %s did not land"), strings.Join(landed, ", "), strings.Join(missed, ", ")).
-			withFix("sudo pacman -S %s", strings.Join(missed, " "))
+			withFix("%s", installFix(missed))
 	case len(missed) > 0:
 		return warnRes(i18n.T("%s could not be installed"), strings.Join(missed, ", ")).
-			withFix("sudo pacman -Sy && sudo pacman -S %s", strings.Join(missed, " "))
+			withFix("%s", installFix(missed))
 	case len(landed) > 0:
 		return fixedRes(i18n.T("installed %s (delete any of them and Ryoku will not reinstall it)"),
 			strings.Join(landed, ", "))
