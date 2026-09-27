@@ -2,7 +2,7 @@ Name:           ryoku-extras
 Version:        0.1
 Release:        1%{?dist}
 Summary:        Verified desktop tools, fonts and cursor assets
-License:        GPL-3.0-or-later AND OFL-1.1
+License:        GPL-3.0-or-later AND OFL-1.1 AND BSD-3-Clause
 URL:            https://ryoku.dev
 Source0:        ryoku-%{version}.tar.gz
 BuildRequires:  python3
@@ -33,9 +33,9 @@ rm -r stage/usr/state
 cp -a stage/. %{buildroot}/
 
 %files
-%{_bindir}/gpk
 %{_bindir}/prowl-agent
 %{_bindir}/matugen
+%{_bindir}/qmk_hid
 %{_datadir}/fonts/*
 %{_datadir}/icons/Bibata-*
 %{_datadir}/ryoku/extras

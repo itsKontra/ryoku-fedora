@@ -10,7 +10,7 @@ Use COPR to build Fedora RPMs, use DNF to install released software, and retain 
 - `installation/tests/fedora-rpm.sh` re-signs all binary RPMs with a disposable key, including prebuilt input. It rebuilds only the hub SRPM in the already populated container. Neither verifies all clean-root builds nor preserves publisher signatures for a release gate.
 - Fedora has `fromSource: true` in `ryoku-shell-installer/distro.go`. `stepPackages` installs dependencies and compilers; `stepBuild` runs `ryoku/shell/deploy.sh`.
 - Installer and test independently list five dependency COPRs: `sdegler/hyprland`, `errornointernet/quickshell`, `atim/starship`, `atim/lazygit`, and `lihaohong/yazi`.
-- `ryoku-install-extra` downloads upstream binaries for `matugen`, `gpk`, and `prowl-agent`, plus Bibata, Space Grotesk, Material Symbols, JetBrains Mono Nerd Font, and SpaceMono Nerd Font assets. Those binaries are not compiled from this checkout. `ryoku-extras.spec` currently bundles all of them into an RPM.
+- `ryoku-install-extra` downloads upstream binaries for `matugen`, `prowl-agent`, and `qmk_hid`, plus Bibata, Space Grotesk, Material Symbols, JetBrains Mono Nerd Font, and SpaceMono Nerd Font assets. Those binaries are not compiled from this checkout. `ryoku-extras.spec` currently bundles all of them into an RPM.
 - `ryoku/cli/internal/sys/rpm.go` expects `/etc/yum.repos.d/RyokuCOPR.repo` and repository ID `RyokuCOPR`. A normal COPR enable operation does not satisfy that contract.
 - `reconcileDevResidue` in `ryoku/cli/internal/doctor/doctor.go` still invokes `pacman -Qoq` to identify local binary shadows. RPM migration must fix this, including packaged names such as `ryogami` that do not start with `ryoku`.
 
@@ -19,7 +19,7 @@ Use COPR to build Fedora RPMs, use DNF to install released software, and retain 
 | Project | Action | Contents and purpose |
 |---|---|---|
 | `itskontra/ryoku` | Create | The eleven existing desktop RPMs, built together from one repository commit. This is build output; supported client channels receive complete, tested sets through promotion. |
-| `itskontra/ryoku-deps` | Create | Individually versioned `matugen`, `gpk`, and `prowl-agent` packages, replacing direct executable downloads. Add other upstream dependencies only when Fedora lacks a compatible package or Ryoku needs a maintained pin. |
+| `itskontra/ryoku-deps` | Create | Individually versioned `matugen`, `prowl-agent`, and `qmk_hid` packages, replacing direct executable downloads. Add other upstream dependencies only when Fedora lacks a compatible package or Ryoku needs a maintained pin. |
 | `itskontra/ryotunes` | Reuse | Already exists for Fedora 44 x86_64. Successful builds observed: `ryotunes` 1.0.8, build 11007017, and `ryoku-ui` 0.1, build 11007006. Keep the external application's release lifecycle separate. |
 
 The public [project API](https://copr.fedorainfracloud.org/api_3/project/list?ownername=itskontra) returned only `ryotunes` at inspection time; the [build API](https://copr.fedorainfracloud.org/api_3/build/list?ownername=itskontra&projectname=ryotunes&limit=5) supplied the successful build states. These facts do not establish a working full desktop install.
@@ -28,7 +28,7 @@ Start with mutable **Fedora 44 x86_64**, matching the existing test matrix and r
 
 One project can contain many packages; do not create a project per desktop binary. Keep working third-party dependency projects initially, but query availability and compatible versions in a clean Fedora 44 container. Prefer official Fedora packages when suitable. Enable optional application repositories only when needed. In particular, inspect `awww`, Quickshell, the chosen provider's helpers, and optional starship/lazygit/yazi sources rather than assuming today's rename table proves availability.
 
-For `ryoku-deps`, build pinned upstream source releases with their required vendored dependencies. Retain `ryoku-extras` for assets and dependencies, removing its ownership of the three executable paths as the new packages take over. This avoids two packages owning `/usr/bin/matugen`, `/usr/bin/gpk`, or `/usr/bin/prowl-agent`. Preserve licenses and install the asset licenses alongside the files. Add dependency specs without making the desktop build loop accidentally rebuild every external project on every push.
+For `ryoku-deps`, build pinned upstream source releases with their required vendored dependencies. Retain `ryoku-extras` for assets and dependencies, removing its ownership of the three executable paths as the new packages take over. This avoids two packages owning `/usr/bin/matugen`, `/usr/bin/prowl-agent`, or `/usr/bin/qmk_hid`. Preserve licenses and install the asset licenses alongside the files. Add dependency specs without making the desktop build loop accidentally rebuild every external project on every push.
 
 Before enabling ryotunes with the desktop, inspect both RPM file lists: its existing `ryoku-ui` package may overlap the `Ryoku.Ui` module currently shipped by `ryoku-desktop`. Establish one RPM owner and compatible version requirements. If splitting `ryoku-ui` out, build it from this monorepo and make both consumers depend on it; coordinate removal of the older duplicate recipe. An optional application must not replace a developer's local QML module.
 
@@ -73,7 +73,7 @@ Maintainer setup: create the two projects and Fedora 44 x86_64 chroots; configur
 | `ryoku`, shell, hub, rashin, provider binaries | `dnf install ryoku-desktop ryoku-desktop-<provider>` | Keep local Go builds and `~/.local/bin` deployment. |
 | `ryogami`, `ryogami-live`, app backends/helpers including ryostore/ryovm | Install their RPM payloads | Keep checkout Go/C builds and scripts so uncommitted edits are exercised. |
 | `Ryoku.Blobs`, `Ryoku.Ui`, shell/app QML | RPM-owned modules/data and `ryoku materialize` | Keep local modules/QML and Qt-dependent rebuilds. |
-| matugen, gpk, prowl-agent | DNF packages from Fedora or `itskontra/ryoku-deps` | DNF packages too; the checkout does not build them. |
+| matugen, prowl-agent, qmk_hid | DNF packages from Fedora or `itskontra/ryoku-deps` | DNF packages too; the checkout does not build them. |
 | Bibata, Space Grotesk, Material Symbols | RPM-owned assets via `ryoku-extras` or suitable Fedora packages | DNF assets too, unless deliberately developing those assets. |
 | ryotunes | Optional `dnf install ryotunes` from existing project, after UI ownership fix | Same packaged external app; this checkout has no ryotunes source. |
 | Quickshell, compositors, portals, other system dependencies | DNF from verified repositories | DNF too, unless explicitly developing that external project. |

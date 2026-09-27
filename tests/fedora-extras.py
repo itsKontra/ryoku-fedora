@@ -14,19 +14,19 @@ class Extras(unittest.TestCase):
     def test_failed_update_preserves_binary_and_retry_works(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            target = root / 'bin/gpk'
+            target = root / 'bin/prowl-agent'
             target.parent.mkdir()
             target.write_bytes(b'old working executable')
             with patch.object(extra, 'download', side_effect=ValueError('truncated')):
                 with self.assertRaises(ValueError):
-                    extra.install('gpk', root)
+                    extra.install('prowl-agent', root)
             self.assertEqual(target.read_bytes(), b'old working executable')
-            self.assertFalse((root / 'state/ryoku/extras/gpk.json').exists())
+            self.assertFalse((root / 'state/ryoku/extras/prowl-agent.json').exists())
             with patch.object(extra, 'download', return_value=b'\x7fELFnew executable'):
-                extra.install('gpk', root)
+                extra.install('prowl-agent', root)
             self.assertEqual(target.read_bytes(), b'\x7fELFnew executable')
             with patch.object(extra, 'download', side_effect=AssertionError('should use receipt')):
-                extra.install('gpk', root)
+                extra.install('prowl-agent', root)
 
     def test_bad_content_does_not_become_skip_marker(self):
         with tempfile.TemporaryDirectory() as directory:
