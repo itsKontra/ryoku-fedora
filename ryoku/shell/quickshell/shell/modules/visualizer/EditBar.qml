@@ -10,7 +10,7 @@ import "Singletons"
 // Fixed to an edge of the screen, never to the box: a readout of the thing being
 // moved must not move with it. Controls come from Ryoku.Ui and metrics from Tokens;
 // the tray is the Hub's gallery with the Hub's painter, so one catalogue draws what
-// the eleven looks look like.
+// the twelve looks look like.
 Item {
     id: bar
 
@@ -93,7 +93,7 @@ Item {
         Gallery {
             id: gal
             anchors.centerIn: parent
-            width: 11 * 132 + 10 * 7
+            width: VizStyles.styles.length * 132 + (VizStyles.styles.length - 1) * 7
             painter: VizStyles
             options: VizStyles.styles.map(function (s) { return { key: s.key, origin: s.kind, draw: s.key }; })
             current: Config.styleId
@@ -320,6 +320,60 @@ Item {
                     }
                 }
 
+                Group {
+                    // The edge field's own controls, shown only while it is the
+                    // look: edges, material and reach. The deep knobs live in
+                    // the Hub; these three are the ones you aim by eye.
+                    label: I18n.tr("EDGES")
+                    visible: Config.isAura
+                    Row {
+                        spacing: Tokens.s1
+                        Repeater {
+                            model: ["top", "right", "bottom", "left"]
+                            Btn {
+                                id: edgeBtn
+                                required property string modelData
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: edgeBtn.modelData.charAt(0).toUpperCase()
+                                compact: true
+                                armed: Config.instance.auraEdges.indexOf(edgeBtn.modelData) >= 0
+                                onAct: Config.toggleAuraEdge(edgeBtn.modelData)
+                            }
+                        }
+                    }
+                }
+                Group {
+                    label: I18n.tr("MATERIAL")
+                    visible: Config.isAura
+                    Btn {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Config.instance.auraMaterial
+                        compact: true
+                        armed: true
+                        onAct: Config.cycleAuraMaterial()
+                    }
+                }
+                Group {
+                    label: I18n.tr("REACH")
+                    visible: Config.isAura
+                    Row {
+                        spacing: Tokens.s2
+                        Step {
+                            anchors.verticalCenter: parent.verticalCenter
+                            value: Config.instance.auraDepth
+                            from: 24
+                            to: 600
+                            onModified: (v) => Config.setAuraDepth(v)
+                        }
+                        Value {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Config.instance.auraDepth + "px"
+                        }
+                    }
+                }
+                Rule {
+                    visible: Config.isAura
+                }
                 Rule {}
 
                 Group {
