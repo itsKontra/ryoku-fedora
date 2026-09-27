@@ -28,7 +28,7 @@ boot and deliberate in how it looks and moves.
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/8KjBmUEyKA)
 [![Reddit](https://img.shields.io/badge/Reddit-r%2FRyokuArch-FF4500?style=for-the-badge&logo=reddit&logoColor=white)](https://www.reddit.com/r/RyokuArch/)
 
-<kbd>[COPR](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)</kbd> &middot; <kbd>[Fedora RPMs](release/rpm/README.md)</kbd> &middot; <kbd>[Build the ISO](installation/fedora/README.md)</kbd> &middot; <kbd>[Ryoku](docs/ryoku.md)</kbd> &middot; <kbd>[Docs](docs/)</kbd> &middot; <kbd>[Structure](docs/structure.md)</kbd> &middot; <kbd>[Discord](https://discord.gg/8KjBmUEyKA)</kbd> &middot; <kbd>[Subreddit](https://www.reddit.com/r/RyokuArch/)</kbd>
+<kbd>[COPR](https://copr.fedorainfracloud.org/coprs/itskontra/ryoku/)</kbd> &middot; <kbd>[Fedora RPMs](release/rpm/README.md)</kbd> &middot; <kbd>[Build the ISO](installation/fedora/README.md)</kbd> &middot; <kbd>[Ryoku](docs/ryoku.md)</kbd> &middot; <kbd>[Docs](docs/)</kbd> &middot; <kbd>[Structure](docs/structure.md)</kbd> &middot; <kbd>[External deps](docs/external-dependencies.md)</kbd> &middot; <kbd>[Discord](https://discord.gg/8KjBmUEyKA)</kbd> &middot; <kbd>[Subreddit](https://www.reddit.com/r/RyokuArch/)</kbd>
 
 </div>
 
