@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	wm "ryoku-wm"
 )
@@ -417,6 +418,9 @@ func touchpad(args []string) error {
 	case "off", "disable":
 		return touchpadSet(false)
 	case "toggle":
+		if wm.TouchpadToggleIsEcho(time.Now()) {
+			return nil
+		}
 		// A stored off means re-enable; otherwise lock it.
 		return touchpadSet(touchpadOff())
 	case "restore":
