@@ -89,7 +89,10 @@ Singleton {
         for (let i = 0; i < sets.length; i++) {
             const s = sets[i];
             const r = res[s.name] || ({});
+            // Windows name their workspace by the compositor's id, which differs
+            // from the name on niri (id 2 can be named "1"); carry both.
             out.push({
+                id: r.id !== undefined && r.id !== "" ? String(r.id) : s.name,
                 name: s.name,
                 active: s.active === true,
                 urgent: s.urgent === true,
@@ -103,6 +106,14 @@ Singleton {
             });
         }
         return out;
+    }
+
+    function workspaceById(id) {
+        const list = root.workspaces;
+        for (let i = 0; i < list.length; i++)
+            if (list[i].id === id)
+                return list[i];
+        return null;
     }
 
     function workspaceByName(name) {
@@ -130,7 +141,7 @@ Singleton {
         const o = root.outputByName(name);
         if (!o || !o.activeWorkspace)
             return false;
-        const ws = root.workspaceByName(o.activeWorkspace);
+        const ws = root.workspaceById(o.activeWorkspace);
         return !!ws && ws.fullscreen === true;
     }
 
