@@ -1409,17 +1409,49 @@ Rectangle {
             ? 0
             : Math.max(Tokens.s6, Math.round((parent.width - rail.width - width) / 2)))
 
-        // Two loaders crossfade the page: the incoming page loads async into the
-        // hidden loader, then fades in as the visible one fades out, so the
-        // content never blanks to bare paper mid-swap (that blank was the
-        // "flicker on section change"). The new page always loads into the
-        // non-front loader, so the visible page is never disturbed even on rapid
+        // Two loaders swap the page: the incoming page loads async into the
+        // hidden loader, then takes over with a settle slide in the direction
+        // of the navigation, so the content never blanks to bare paper
+        // mid-swap (that blank was the "flicker on section change") and never
+        // sits half-transparent over its successor (the crossfade read as the
+        // words flashing). The new page always loads into the non-front
+        // loader, so the visible page is never disturbed even on rapid
         // switches, and a stale load from a superseded switch never reveals.
         Item {
             id: pageHost
             anchors.fill: parent
+            clip: true
             readonly property string src: hub.pageFile(hub.section)
             property Item front: lb
+            // the loader parked mid-slide, waiting for its exit to finish
+            property Item parking: null
+            // the settle slide: content enters from the direction of travel and
+            // its predecessor leaves the other way, both fully opaque. A
+            // crossfade put two half-transparent pages on screen at once, which
+            // read as the words flashing.
+            property int dir: 1
+            readonly property int slide: Tokens.s6 * 2
+            // the rail/router set `section` before the async load lands, so the
+            // direction of travel is decided here, once, off the section the
+            // screen is still showing.
+            property string shown: hub.section
+            Connections {
+                target: hub
+                function onSectionChanged() {
+                    pageHost.dir = pageHost.indexOf(hub.section) >= pageHost.indexOf(pageHost.shown) ? 1 : -1;
+                }
+            }
+            function indexOf(section) {
+                var n = 0;
+                for (var gi = 0; gi < hub.groups.length; gi++)
+                    for (var ii = 0; ii < hub.groups[gi].items.length; ii++) {
+                        var it = hub.groups[gi].items[ii];
+                        if (!hub.needsMet(it)) continue;
+                        if (it.key === section) return n;
+                        n++;
+                    }
+                return -1;
+            }
             onSrcChanged: pageHost.swap()
             Component.onCompleted: pageHost.swap()
             function swap() {
@@ -1432,29 +1464,72 @@ Rectangle {
             function reveal(l) {
                 if (l.source != pageHost.src)
                     return;
+                var out = pageHost.front;
                 pageHost.front = l;
-                la.opacity = la === l ? 1 : 0; la.z = la === l ? 1 : 0;
-                lb.opacity = lb === l ? 1 : 0; lb.z = lb === l ? 1 : 0;
+                pageHost.shown = hub.section;
+                // a superseded switch still mid-slide: snap the old exit home
+                // before the new pair takes over, or a parked loader can be
+                // left slid and half-visible under the new page.
+                if (pageHost.parking && pageHost.parking !== out) {
+                    pageHost.parking.opacity = 0;
+                    pageHost.parking.x = 0;
+                    pageHost.parking = null;
+                }
+                l.z = 1;
+                l.opacity = 1;
+                inAnim.target = l; inAnim.from = pageHost.dir * pageHost.slide; inAnim.to = 0;
+                inAnim.restart();
+                if (out && out !== l && out.item) {
+                    out.z = 0;
+                    pageHost.parking = out;
+                    outAnim.target = out; outAnim.from = out.x; outAnim.to = -pageHost.dir * pageHost.slide;
+                    outAnim.restart();
+                } else if (out && out !== l) {
+                    out.opacity = 0; out.x = 0;
+                }
             }
+            NumberAnimation {
+                id: inAnim
+                property: "x"
+                duration: Tokens.move
+                easing.type: Tokens.ease
+            }
+            NumberAnimation {
+                id: outAnim
+                property: "x"
+                duration: Tokens.move
+                easing.type: Tokens.ease
+                onFinished: {
+                    if (pageHost.parking) {
+                        pageHost.parking.opacity = 0;
+                        pageHost.parking.x = 0;
+                        pageHost.parking = null;
+                    }
+                }
+            }
+            // sized, not anchors.fill: an anchor would silently win over the
+            // slide's x and pin the page back in place.
             Loader {
                 id: la
-                anchors.fill: parent
+                width: pageHost.width
+                height: pageHost.height
+                x: 0
                 asynchronous: true
                 opacity: 1
-                // hidden once fully faded, so the parked page stops taking hover
+                // hidden once parked, so the idle page stops taking hover
                 // (a stale tooltip was leaking through the overlay layer).
                 visible: opacity > 0.01
                 onLoaded: { if (item) item.hub = hub; pageHost.reveal(la); }
-                Behavior on opacity { NumberAnimation { duration: Tokens.swap; easing.type: Tokens.ease } }
             }
             Loader {
                 id: lb
-                anchors.fill: parent
+                width: pageHost.width
+                height: pageHost.height
+                x: 0
                 asynchronous: true
                 opacity: 0
                 visible: opacity > 0.01
                 onLoaded: { if (item) item.hub = hub; pageHost.reveal(lb); }
-                Behavior on opacity { NumberAnimation { duration: Tokens.swap; easing.type: Tokens.ease } }
             }
         }
 
