@@ -482,6 +482,16 @@ func updateStage2(pre string, withSystem bool) error {
 		progress.fail(err)
 		return err
 	}
+	// Every later failure used to return with the durable block still live:
+	// the leaked guard denies every suspend with logind's "Operation denied
+	// due to active block inhibitor" until logout (#282, #285). The explicit
+	// release below stays authoritative; this is the silent safety net, and
+	// Release is a no-op once the unit is stopped.
+	defer func() {
+		if rerr := cutoverGuard.Release(); rerr != nil {
+			fmt.Fprintf(os.Stderr, i18n.Tf("warning: could not release the update sleep guard: %v\n", rerr))
+		}
+	}()
 	defer cutoverGuard.Disconnect()
 	// Activate logind's sessionless fallback while every old owner and the
 	// durable block are still live. Only after that succeeds may the old

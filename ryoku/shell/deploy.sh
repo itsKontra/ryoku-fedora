@@ -1019,6 +1019,10 @@ if (( wm_live && reload )); then
       exit 1
     fi
     start_power_cutover_guard
+    # A later failure (session-bind, a reload) used to exit through errexit
+    # with the durable sleep block still live, denying every suspend until a
+    # reboot (#282). The stop is a no-op once the success path released it.
+    trap 'stop_power_cutover_guard' EXIT
     "$bindir/ryoku-power-cutover" generation-guard-start
     "$bindir/ryoku-power-cutover" shell-quiesce
     stage_qylock_user 1
