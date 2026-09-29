@@ -47,6 +47,9 @@ var capsManifest = []wm.Capability{
 	wm.CapAnimations,
 	wm.CapNativeOverview,
 	wm.CapOverviewBackdrop,
+	// Overview open/closed and tile geometry back the pause rules gated on these.
+	wm.CapOverviewState,
+	wm.CapColumnFill,
 	wm.CapOutputPower,
 	wm.CapKeyboardLayoutSwitch,
 	wm.CapMonitorConfig,

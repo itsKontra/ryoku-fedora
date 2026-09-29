@@ -34,7 +34,10 @@ const (
 	// colour. Named for what the user gets, not for a compositor: an overview
 	// that cannot place a surface in its backdrop leaves this off and the shell
 	// maps nothing there.
-	CapOverviewBackdrop     Capability = "overviewBackdrop"
+	CapOverviewBackdrop Capability = "overviewBackdrop"
+	// CapOverviewState is set when the provider reports the native overview
+	// opening and closing, so a wallpaper can play only while it is up.
+	CapOverviewState        Capability = "overviewState"
 	CapOutputPower          Capability = "outputPower"
 	CapKeyboardLayoutSwitch Capability = "keyboardLayoutSwitch"
 	CapMonitorConfig        Capability = "monitorConfig"
@@ -46,7 +49,10 @@ const (
 	CapOutputHdr    Capability = "outputHdr"
 	CapWindowFloat  Capability = "windowFloat"
 	CapTiledLayout  Capability = "tiledLayout"
-	CapSessionExit  Capability = "sessionExit"
+	// CapColumnFill is set when the provider can tell the active window spans
+	// its output's width, the full-width column a scrolling tiler makes.
+	CapColumnFill  Capability = "columnFill"
+	CapSessionExit Capability = "sessionExit"
 	// CapNightLight is set when the provider can warm the screen to a colour
 	// temperature and restore it, through the nightlight.on and nightlight.off
 	// actions. The warm gamma is held by a detached backend the provider owns
@@ -87,10 +93,10 @@ func All() []Capability {
 		CapFocusGrab,
 		CapScreenShader, CapPlugins, CapLiveConfigEval, CapConfigReload,
 		CapAnimations, CapCursorSet, CapNativeOverview, CapOverviewBackdrop,
-		CapOutputPower,
+		CapOverviewState, CapOutputPower,
 		CapKeyboardLayoutSwitch, CapMonitorConfig, CapOutputMirror,
 		CapOutputHdr, CapWindowFloat,
-		CapTiledLayout, CapSessionExit, CapNightLight, CapTouchpadToggle,
+		CapTiledLayout, CapColumnFill, CapSessionExit, CapNightLight, CapTouchpadToggle,
 		CapPaletteBorder, CapPersistentScreenCapture,
 	}
 }
