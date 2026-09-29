@@ -11,7 +11,7 @@
 # The backend is the compositor's, reached through the window-manager seam:
 # `ryoku wm act nightlight.on <K>` starts it and `nightlight.off` kills it, and
 # the compositor puts the gamma back when it goes away. Which client that is
-# (hyprsunset on Hyprland, gammastep on niri) is the provider's business; this
+# (hyprsunset on Hyprland, wlsunset on niri) is the provider's business; this
 # script only reads its process name from `ryoku wm caps` to tell on from off.
 # temp is persisted, so status prints it and the next enable reuses it.
 set -u

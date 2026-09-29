@@ -192,10 +192,13 @@ func runAct(args []string) error {
 		return perform(action("ToggleOverview", map[string]any{}))
 
 	case wm.ActionNightLightOn:
-		return nightlightStart("gammastep", "-m", "wayland", "-O", strconv.Itoa(nightlightTemp(rest)))
+		// -T must sit strictly above -t or wlsunset refuses the config; the
+		// fixed high keeps the run pinned at the user's temperature (see
+		// nightlightStart).
+		return nightlightStart("wlsunset", "-t", strconv.Itoa(nightlightTemp(rest)), "-T", "30000")
 
 	case wm.ActionNightLightOff:
-		nightlightStop("gammastep")
+		nightlightStop("wlsunset")
 		return nil
 
 	case wm.ActionInputTouchpad:
@@ -648,10 +651,12 @@ func nightlightTemp(args []string) int {
 }
 
 // nightlightStart replaces any running backend with a fresh one warmed to the
-// temperature. gammastep -m wayland -O sets the temperature over
-// wlr-gamma-control and pauses until killed, so it is detached (its own session,
-// stdio to /dev/null, released) to outlive this short-lived invocation; niri
-// restores the gamma when it goes away.
+// temperature. wlsunset with no location computes a polar-night trajectory and
+// sits at its low temperature (-t) until killed, so the night light is exactly
+// as warm as the user set, day or night; the fixed high (-T) only satisfies
+// the validation that high must exceed low. The backend is detached (its own
+// session, stdio to /dev/null, released) to outlive this short-lived
+// invocation; niri restores the gamma when it goes away.
 func nightlightStart(argv ...string) error {
 	nightlightStop(argv[0])
 	null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)

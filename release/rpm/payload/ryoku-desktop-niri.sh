@@ -16,7 +16,7 @@
 # override-redirect popups (upstream #468, fixed in add2795, no release yet).
 # The distro package is the display bridge; the popup fix is not delivered and
 # must not be claimed as ported. Screen sharing rides xdg-desktop-portal-gnome.
-# Night light rides gammastep. Both variants may be installed, so a switch is a
+# Night light rides wlsunset. Both variants may be installed, so a switch is a
 # config change, not a package swap.
 startdir=${startdir:?stage-package.sh must set startdir}
 pkgdir=${pkgdir:?stage-package.sh must set pkgdir}

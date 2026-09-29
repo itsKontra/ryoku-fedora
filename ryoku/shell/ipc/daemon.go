@@ -142,6 +142,7 @@ type daemon struct {
 	wmReady      bool
 	wmVersions   map[string]int // frame kind -> publishes since daemon start
 	wmTopic      *stateTopic
+	nightlight   *nightlightState   // night-light self-heal (nil until started)
 	gateMu       sync.Mutex               // guards gateWant / gateWake
 	gateWant     map[string]bool          // component -> may run now (absent = yes)
 	gateWake     map[string]chan struct{} // wakes a parked supervisor when its gate opens

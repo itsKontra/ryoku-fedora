@@ -3,7 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// QML view of the daemon `nightlight` topic. hyprsunset's state lives in
+// QML view of the daemon `nightlight` topic. The backend's state lives in
 // ryoku-shell (nightlight.go), so QML never pgreps or shells out to
 // ryoku-cmd-nightlight for state: `subscribe nightlight` streams
 // {on, temperature} on every change, and `call nightlight.toggle` /
