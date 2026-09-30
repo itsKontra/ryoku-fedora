@@ -34,8 +34,8 @@ const nlDefaultTemp = 4000
 var errNightlightUnavailable = errors.New("night light is not available on this desktop")
 
 // errNightlightSchedule rejects an unknown schedule mode by name so a UI bug
-// cannot silently disable the follow-the-sun window.
-var errNightlightSchedule = errors.New("night light schedule mode must be off or sun")
+// cannot silently disable the schedule the user picked.
+var errNightlightSchedule = errors.New("night light schedule mode must be off, sun or clock")
 
 type nightlightState struct {
 	topic    *stateTopic
@@ -49,13 +49,17 @@ type nightlightState struct {
 	mu      sync.Mutex
 	process string
 
-	// schedMu guards the schedule: mode ("off" | "sun") and the margin in
-	// minutes applied around each sunrise/sunset edge. schedLastDesire is the
-	// last state the schedule asked for, so a manual toggle is honoured until
-	// the next edge instead of being fought every tick.
+	// schedMu guards the schedule: mode ("off" | "sun" | "clock"), the margin
+	// in minutes applied around each sunrise/sunset edge, and the clock
+	// window's start/stop minutes from midnight (used only by the clock mode).
+	// schedLastDesire is the last state the schedule asked for, so a manual
+	// toggle is honoured until the next edge instead of being fought every
+	// tick.
 	schedMu         sync.Mutex
 	schedMode       string
 	schedMarginMin  int
+	schedStartMin   int
+	schedStopMin    int
 	schedFile       string
 	schedLastDesire bool
 }
@@ -89,6 +93,8 @@ func (d *daemon) startNightlight() {
 		schedFile:      filepath.Join(dir, "ryoku-nightlight-schedule.json"),
 		schedMode:      nlSchedOff,
 		schedMarginMin: nlDefaultMarginMin,
+		schedStartMin:  nlDefaultClockStart,
+		schedStopMin:   nlDefaultClockStop,
 	}
 	n.loadSchedule()
 
@@ -101,15 +107,24 @@ func (d *daemon) startNightlight() {
 			Temperature int     `json:"temperature"`
 			Schedule    *string `json:"schedule"`
 			MarginMin   *int    `json:"marginMin"`
+			StartAt     *int    `json:"startAt"`
+			StopAt      *int    `json:"stopAt"`
 		}
 		if err := json.Unmarshal(raw, &a); err != nil {
 			return nil, err
 		}
 		// The schedule and the manual toggle are independent writes: a UI that
 		// only flips on/off never sends schedule fields, and setting the
-		// schedule never overrides the user's current on/off choice.
-		if a.Schedule != nil {
-			if err := n.setSchedule(*a.Schedule, a.MarginMin); err != nil {
+		// schedule never overrides the user's current on/off choice. The
+		// schedule field may ride along with a time edit (the Hub sends the
+		// live mode with every clock change) or be absent (a plain margin
+		// update), so the bounds are applied through the same call.
+		if a.Schedule != nil || a.StartAt != nil || a.StopAt != nil {
+			mode := n.scheduleMode()
+			if a.Schedule != nil {
+				mode = *a.Schedule
+			}
+			if err := n.setSchedule(mode, a.MarginMin, a.StartAt, a.StopAt); err != nil {
 				return nil, err
 			}
 			n.tickSchedule()
@@ -296,13 +311,15 @@ func (n *nightlightState) publish(on bool) {
 		return
 	}
 	n.schedMu.Lock()
-	margin := n.schedMarginMin
+	margin, start, stop := n.schedMarginMin, n.schedStartMin, n.schedStopMin
 	n.schedMu.Unlock()
 	frame, err := json.Marshal(map[string]any{
 		"on":          on,
 		"temperature": n.savedTemp(),
 		"schedule":    n.scheduleMode(),
 		"marginMin":   margin,
+		"startAt":     start,
+		"stopAt":      stop,
 	})
 	if err != nil {
 		return
