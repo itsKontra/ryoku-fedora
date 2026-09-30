@@ -840,10 +840,14 @@ Item {
     // --- the settings sheet ---------------------------------------------------
     // The gear's drawer: every knob not worth a slot on the bar. A sibling of
     // the tray and picker, so the Placer's focus and mask already cover it, and
-    // positioned the same way (centred under the plate, flipping side per atTop).
+    // it opens under the gear rather than centred, beside the button that asked.
     SettingsPopup {
         id: settingsPop
-        x: Math.round((bar.width - width) / 2)
+        // Under the gear's end of the plate, not centred: the drawer opens
+        // beside the button that asked for it. Both scale about their own
+        // centre, so this matches the plate's scaled right edge exactly.
+        x: Math.round(plate.x + (plate.width - width) / 2
+                      + (plate.width * plate.scale - width * scale) / 2)
         y: bar.atTop ? plate.y + plate.height * plate.scale + Tokens.s3
                      : plate.y + plate.height * (1 - plate.scale) - height - Tokens.s3
         // Never taller than the gap the plate leaves, so the sheet stays on
