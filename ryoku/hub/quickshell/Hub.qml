@@ -520,8 +520,8 @@ Rectangle {
         "frameBars.menus.quick-settings.minWidth": 410,
         "weatherLocation": "", "weatherUnit": "auto", "formatLocale": "",
         "enabled": true, "bars": 64, "thickness": 0.58, "bloom": 0.6,
-        "reflection": 0.1, "idleWave": true, "style": "bars", "shape": "rounded",
-        "mirror": false, "segments": 10, "fps": 30,
+        "reflection": 0.1, "idleWave": true, "style": "wave", "shape": "rounded",
+        "mirror": false, "segments": 10, "fps": 60,
         "adaptive": true, "smoothing": 0.5, "gain": 1.0, "peaks": false,
         "spin": 0, "x": 0, "y": 0.58, "w": 1, "h": 0.42, "grow": "up", "angle": 0, "tiltX": 0, "tiltY": 0,
         "auraEdges": ["left", "right"], "auraDepth": 180, "auraSpan": 1.0,
@@ -860,6 +860,7 @@ Rectangle {
     FileView {
         id: vizFV
         path: hub.cfgDir + "/visualizer.json"
+        blockLoading: true
         watchChanges: true
         onFileChanged: reload()
         onLoaded: hub.rebase()
@@ -871,14 +872,14 @@ Rectangle {
             property real bloom: 0.6
             property real reflection: 0.1
             property bool idleWave: true
-            property string style: "bars"
+            property string style: "wave"
             property string shape: "rounded"
             property string color: ""
             property string color2: ""
             property bool gradient: false
             property bool mirror: false
             property real segments: 10
-            property real fps: 30
+            property real fps: 60
             property bool adaptive: true
             property real smoothing: 0.5
             property real gain: 1.0

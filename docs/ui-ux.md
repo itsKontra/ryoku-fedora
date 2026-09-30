@@ -750,12 +750,17 @@ An editing bar (`EditBar.qml`) comes with it, fixed to the bottom of the screen 
 stepping to the top when the box would be under it: a readout of the thing being
 moved is the one thing on screen that must not move with it. It carries the look
 itself, and the knobs you judge by eye rather than by number: the current look drawn
-as a silhouette (click for a tray of all twelve, or wheel the chip to walk them),
+as a silhouette (click for a tray of all thirteen, or wheel the chip to walk them),
 bands, mirror, peak caps, gain, smoothing, the live angle with a SQUARE reset, the
-two leans with a LEVEL reset, the size, FLIP and DONE. `F` flips, `M` mirrors, `P`
-toggles peak caps, `R` squares, `[` and `]` walk the looks. The point is that a look
+two leans with a LEVEL reset, the size, a gear that opens a square drawer of
+everything the bar has no room for (`SettingsPopup.qml`: playback, shape, and the
+field's deep knobs, scrollable, dimming what the current look ignores), FLIP and
+DONE. `F` flips, `M` mirrors, `P`
+toggles peak caps, `R` squares, `S` opens the drawer, `[` and `]` walk the looks.
+The point is that a look
 is tuned where you can see it,
-on the wallpaper, instead of behind the Hub's window; the Hub keeps the full board.
+on the wallpaper, instead of behind the Hub's window; the Hub keeps the look
+picker and the enable switch.
 
 The bar is built from `Ryoku.Ui`'s own controls (`Btn`, `Step`, `Sw`, `Slid`,
 `Gallery`) at the shell's own token metrics, so it is the shell's idiom at the
