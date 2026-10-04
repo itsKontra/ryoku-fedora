@@ -1,6 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
+import QtQuick
 import Quickshell
 import Ryoku.Ui.Singletons
 import "lib/screens.js" as Screens
@@ -20,9 +21,45 @@ Singleton {
     // triggers on first launch -- would otherwise fan two of every per-monitor
     // surface: two bars, two OSDs, two state slices ("the desktop tweaks out").
     // Every consumer (shell.qml, the bar's VariantRoot, the launchers) reads this
-    // one list so they agree on one surface set per output. Reactive to
-    // Quickshell.screens, so a genuine hotplug still flows through.
-    readonly property var screens: Screens.uniqueByName(Quickshell.screens)
+    // one list so they agree on one surface set per output.
+    //
+    // The list only changes when the SET of outputs changes. QtWayland inserts a
+    // nameless 0x0 placeholder while no output exists, so an unplug/replug can
+    // signal screens several times with the same real outputs underneath; each
+    // signal would hand every per-screen Variants a fresh array and rebuild all
+    // of it. Those rebuilds are what crashed the shell on monitor power-off
+    // (#312, upstream quickshell#796), so the placeholder churn is filtered out
+    // here and only a genuine output change is published.
+    // A plain property, not a binding: a binding re-evaluates on every screens
+    // signal and hands every consumer a fresh array regardless of what changed
+    // -- the churn being filtered. Only the settle timer below writes it.
+    property var screens: []
+
+    Component.onCompleted: root.screens = Screens.uniqueByName(Quickshell.screens)
+
+    Connections {
+        target: Quickshell
+        function onScreensChanged() { settleScreens.restart(); }
+    }
+
+    // Rebuild per-monitor surfaces once the screen list settles, not on every
+    // signal of a hotplug storm. QtWayland re-signals screens several times
+    // while outputs are coming and going (a nameless placeholder is added,
+    // then removed), and each signal used to rebuild every Variants inside
+    // the teardown window -- the rebuild that crashed the shell when monitors
+    // were powered off (#312, upstream quickshell#796). Settling also makes a
+    // quick off/on cancel out: the list is unchanged by the time the timer
+    // fires, so nothing rebuilds at all.
+    Timer {
+        id: settleScreens
+        interval: 350
+        onTriggered: {
+            const next = Screens.uniqueByName(Quickshell.screens);
+            if (Screens.sameOutputs(root.screens, next))
+                return;
+            root.screens = next;
+        }
+    }
 
     // State for a specific screen, or null before its per-monitor instance is
     // built (a binding can evaluate ahead of screen hotplug). Matched on output
