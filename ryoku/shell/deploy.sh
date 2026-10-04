@@ -920,6 +920,9 @@ systemctl --user try-restart ryogami.service 2>/dev/null || true
 sed -i "s|^ExecStart=-/usr/bin/|ExecStart=-$bindir/|" "$cfg/systemd/user/ryoku-ai-usage.service"
 systemctl --user daemon-reload 2>/dev/null || true
 systemctl --user enable --now ryoku-ai-usage.timer 2>/dev/null || true
+# the BlueZ pairing agent (#308): the unit rides the materialized config dir;
+# start it now so a converted dev box pairs BLE HID without a relogin.
+systemctl --user enable --now ryoku-bt-agent.service 2>/dev/null || true
 # pip (PEP 668 --user): Ryoku-owned, so a dev box tracks it the way the package
 # materializes it for an installed one.
 mkdir -p "$cfg/pip"; cp -a "$here/../apps/pip/pip.conf" "$cfg/pip/pip.conf"

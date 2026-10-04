@@ -157,7 +157,8 @@ systemd-run --quiet --collect --unit=ryoku-power-cutover-guard.service \
   /usr/bin/sleep infinity
 
 %post
-systemctl --global enable ryoku-bootstrap.service ryoku-bluetooth-reset.service >/dev/null 2>&1 || :
+systemctl --global enable ryoku-bootstrap.service ryoku-bluetooth-reset.service \
+  ryoku-bt-agent.service >/dev/null 2>&1 || :
 systemctl daemon-reload >/dev/null 2>&1 || :
 systemctl enable ryoku-wifi-regdom.service >/dev/null 2>&1 || :
 /usr/bin/ryoku-bluetooth-tune >/dev/null 2>&1 || :

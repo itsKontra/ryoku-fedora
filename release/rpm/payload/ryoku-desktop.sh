@@ -436,6 +436,13 @@ package() {
   install -Dm644 "$_repo/system/hardware/bluetooth/54-ryoku-bluetooth-a2dp.rules" \
     "$pkgdir/usr/share/polkit-1/rules.d/54-ryoku-bluetooth-a2dp.rules"
 
+  # The pairing agent (#308): a persistent user-session BlueZ agent, so BLE
+  # HID devices that confirm a passkey (gamepads, keyboards) pair from the
+  # Bluetooth panel and the Hub without the user installing anything. Enabled
+  # per-user by ryoku-desktop.spec %post (systemctl --global enable).
+  install -Dm644 "$_repo/ryoku/shell/systemd/user/ryoku-bt-agent.service" \
+    "$pkgdir/usr/lib/systemd/user/ryoku-bt-agent.service"
+
   # Wi-Fi regulatory domain: the same one-click grant for ryoku-wifi-regdom
   # (installed by the hardware glob above), so the country can be pinned without a
   # password prompt; world domain 00 disables most 5 GHz channels.
