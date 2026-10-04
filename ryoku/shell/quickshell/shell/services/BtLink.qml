@@ -174,7 +174,7 @@ reason() {
 # KeyboardDisplay, not NoInputNoOutput: BLE HID devices (gamepads, keyboards)
 # pair by numeric comparison, which asks the agent to confirm a passkey --
 # a NoInputNoOutput agent cannot answer it and bluetoothd denies the bond
-# (#308). `yes` answers the confirmation prompt bluetoothctl prints on stdin.
+# (#308). Piping yes answers the confirmation prompt bluetoothctl reads on stdin.
 btc() { local t=$1; shift; yes | bluetoothctl --agent KeyboardDisplay --timeout "$t" "$@" 2>&1; }
 
 sout=$(bluetoothctl show 2>&1)
