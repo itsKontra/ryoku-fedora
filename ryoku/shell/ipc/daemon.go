@@ -50,7 +50,10 @@ var reloadCoverOutput = func(ctx context.Context) ([]byte, error) {
 }
 
 var reloadCoverBegin = func() string {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	// The launcher polls ~4.4 s for the cover to map and close before it
+	// gives up; a shorter deadline would kill a cover that is one poll away
+	// from ready and strand the reload with no animation.
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
 	out, err := reloadCoverOutput(ctx)
 	if err != nil {
