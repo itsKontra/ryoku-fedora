@@ -126,10 +126,14 @@ QtObject {
     if (!ep) return ""
     var dir = manifest.__sourceDir || ""
     if (!dir) return ""
+    // A third-party plugin loads from its staged copy (stage_copy in rescan)
+    // so Qt 6.12's QtQuick Color cannot shadow ours; __sourceDir stays the
+    // real folder for its scripts.
+    var loadDir = (manifest.__loadDir || dir).replace(/\/$/, "")
     // Defense in depth: even after validateManifest, confirm the resolved
-    // path stays inside the plugin's sourceDir.
-    var resolved = dir.replace(/\/$/, "") + "/" + String(ep)
-    var expectedPrefix = dir.replace(/\/$/, "") + "/"
+    // path stays inside the plugin's folder.
+    var resolved = loadDir + "/" + String(ep)
+    var expectedPrefix = loadDir + "/"
     if (resolved.indexOf(expectedPrefix) !== 0) {
       console.warn("PluginRegistry: entry point escapes sourceDir: " + resolved)
       return ""
@@ -592,10 +596,19 @@ QtObject {
     var currentKind = null
     var currentJson = []
     var compatBySource = {}
+    var stageBySource = {}
 
 
     function flush() {
       if (!currentSource) return
+      if (currentKind === "stage") {
+        var stagedDir = currentJson.join("\n").trim()
+        if (stagedDir) stageBySource[currentSource] = stagedDir
+        currentSource = null
+        currentKind = null
+        currentJson = []
+        return
+      }
       if (currentKind === "compat") {
         var compatRaw = currentJson.join("\n").trim()
         try {
@@ -655,6 +668,7 @@ QtObject {
     for (var compatId in thirdParty) {
       var compatManifest = thirdParty[compatId]
       var result = compatBySource[compatManifest.__sourceDir]
+      compatManifest.__loadDir = stageBySource[compatManifest.__sourceDir] || ""
       compatManifest.__compatOk = !!(result && result.ok === true)
       compatManifest.__compatRequires = result && Array.isArray(result.requires)
         ? result.requires.slice() : []
@@ -767,24 +781,57 @@ QtObject {
       + "  [[ -d \"$dir\" ]] || return 0; "
       + "  while IFS= read -r manifest; do emit_manifest firstparty \"$manifest\"; done < <(find -H \"$dir\" -mindepth 2 -maxdepth 3 -type f \\( -name manifest.json -o -name '*.manifest.json' \\) | sort); "
       + "}; "
-      + "compat_result() { local sub=\"$1\" cache=\"$2\" key stamp cached_stamp result provider; "
+      + "plugin_stamp() { { stat -c '%Y' -- \"$1\"; find \"$1\" -type f -printf '%P:%T@:%s\\n' | sort; } | sha256sum | cut -d' ' -f1; }; "
+      + "compat_result() { local sub=\"$1\" cache=\"$2\" stamp=\"$3\" key cached_stamp result provider; "
       + "  mkdir -p -- \"$cache\"; "
       + "  provider=\"$(ryoku wm state 2>/dev/null | jq -r '.provider // \"unavailable\"' 2>/dev/null || printf unavailable)\"; "
       + "  key=\"$(printf '%s\\n%s' \"$sub\" \"$provider\" | sha256sum | cut -d' ' -f1)\"; "
-      + "  stamp=\"$( { stat -c '%Y' -- \"$sub\"; find \"$sub\" -type f -printf '%P:%T@:%s\\n' | sort; } | sha256sum | cut -d' ' -f1 )\"; "
       + "  cached_stamp=\"$(cat -- \"$cache/$key.stamp\" 2>/dev/null || true)\"; "
       + "  if [[ \"$cached_stamp\" == \"$stamp\" && -s \"$cache/$key.json\" ]]; then cat -- \"$cache/$key.json\"; return; fi; "
       + "  if result=\"$(ryoku wm compat \"$sub\" 2>/dev/null)\" && printf '%s' \"$result\" | jq -e 'type == \"object\" and (.ok | type == \"boolean\")' >/dev/null 2>&1; then "
       + "    printf '%s\\n' \"$result\" > \"$cache/$key.json\"; printf '%s\\n' \"$stamp\" > \"$cache/$key.stamp\"; printf '%s' \"$result\"; "
       + "  else printf '%s' '{\"ok\":false,\"reason\":\"compatibility check failed\"}'; fi; "
       + "}; "
-      + "scan_thirdparty() { local dir=\"$1\" cache=\"${XDG_CACHE_HOME:-$HOME/.cache}/ryoku/nomarchy-compat\" result; "
+      // Qt 6.12's QtQuick exports a Color singleton that shadows the shell's
+      // qs.Commons Color in any file importing bare QtQuick (QTBUG-151278).
+      // Third-party plugins load from a copy whose QML pins QtQuick 6.11, as
+      // Nomarchy's own files do; every other file is a symlink to the original,
+      // so assets and scripts resolve and the user's folder is never touched.
+      + "stage_copy() { local sub=\"$1\" stamp=\"$2\" root=\"$3\" name dest tmp rel old; "
+      + "  name=\"${sub##*/}\"; dest=\"$root/$name-${stamp:0:16}\"; "
+      + "  if [[ ! -d \"$dest\" ]]; then "
+      + "    tmp=\"$dest.tmp.$$\"; rm -rf -- \"$tmp\"; mkdir -p -- \"$tmp\" || return 0; "
+      + "    while IFS= read -r -d '' rel; do mkdir -p -- \"$tmp/$rel\"; done < <(cd -- \"$sub\" && find . -name .git -prune -o -type d -print0); "
+      + "    while IFS= read -r -d '' rel; do "
+      + "      if [[ \"$rel\" == *.qml && -f \"$sub/$rel\" ]]; then "
+      + "        sed -E 's/^([[:space:]]*)import QtQuick[[:space:]]*;?[[:space:]]*$/\\1import QtQuick 6.11/' \"$sub/$rel\" > \"$tmp/$rel\" || { rm -rf -- \"$tmp\"; return 0; }; "
+      + "      else ln -s -- \"$sub/${rel#./}\" \"$tmp/$rel\" || { rm -rf -- \"$tmp\"; return 0; }; fi; "
+      + "    done < <(cd -- \"$sub\" && find . -name .git -prune -o \\( -type f -o -type l \\) -print0); "
+      + "    mv -T -- \"$tmp\" \"$dest\" 2>/dev/null || rm -rf -- \"$tmp\"; "
+      + "  fi; "
+      + "  [[ -d \"$dest\" ]] || return 0; "
+      + "  for old in \"$root/$name-\"????????????????; do [[ \"$old\" == \"$dest\" || ! -e \"$old\" ]] || rm -rf -- \"$old\"; done; "
+      + "  emit_record stage \"$sub\" \"$dest\"; "
+      + "}; "
+      + "sweep_stages() { local dir=\"$1\" root=\"$2\" stage name; "
+      + "  [[ -d \"$root\" ]] || return 0; "
+      + "  for stage in \"$root\"/*; do "
+      + "    [[ -e \"$stage\" ]] || continue; "
+      + "    if [[ \"$stage\" == *.tmp.* ]]; then rm -rf -- \"$stage\"; continue; fi; "
+      + "    name=\"${stage##*/}\"; name=\"${name%-*}\"; "
+      + "    [[ -f \"$dir/$name/manifest.json\" ]] || rm -rf -- \"$stage\"; "
+      + "  done; "
+      + "}; "
+      + "scan_thirdparty() { local dir=\"$1\" cache=\"${XDG_CACHE_HOME:-$HOME/.cache}/ryoku/nomarchy-compat\" stages=\"${XDG_CACHE_HOME:-$HOME/.cache}/ryoku/nomarchy-plugins\" result stamp; "
       + "  [[ -d \"$dir\" ]] || return 0; "
       + "  for sub in \"$dir\"/*/; do "
       + "    [[ -f \"$sub/manifest.json\" ]] || continue; sub=\"${sub%/}\"; "
-      + "    result=\"$(compat_result \"$sub\" \"$cache\")\"; emit_record compat \"$sub\" \"$result\"; "
+      + "    stamp=\"$(plugin_stamp \"$sub\")\"; "
+      + "    result=\"$(compat_result \"$sub\" \"$cache\" \"$stamp\")\"; emit_record compat \"$sub\" \"$result\"; "
+      + "    stage_copy \"$sub\" \"$stamp\" \"$stages\"; "
       + "    emit_manifest thirdparty \"$sub/manifest.json\"; "
       + "  done; "
+      + "  sweep_stages \"$dir\" \"$stages\"; "
       + "}; "
       + "scan_firstparty \"$0\"; "
       + "scan_thirdparty \"$1\""
