@@ -222,8 +222,6 @@ PanelWindow {
             tk: tk
             current: cc.route
             onChose: (id) => cc.show(id)
-            onSearchRequested: searchOverlay.shown = true
-            onHubRequested: { Spawn.run(["sh", "-c", "flock -n -o /tmp/ryoku-hub.lock qs -c hub"]); cc.close(); }
         }
 
         Item {
@@ -282,7 +280,7 @@ PanelWindow {
         }
 
         // Search is a feature, not a permanent band across the top: it opens over
-        // the body on Ctrl K or from the rail's foot, and closes on Escape.
+        // the body on Ctrl K, and closes on Escape.
         Item {
             id: searchOverlay
             property bool shown: false
