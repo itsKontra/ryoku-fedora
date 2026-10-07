@@ -325,6 +325,10 @@ say "installed $bindir/ryogami"
 # quickshell over ryogami.sock. Pure QML; the unit rewrite below points the
 # daemon at this copy (the package resolver default is /usr/share/ryogami).
 datadir="${XDG_DATA_HOME:-$HOME/.local/share}"
+nomarchy_source="$datadir/ryoku/nomarchy-package"
+rm -rf "$nomarchy_source"
+mkdir -p "$nomarchy_source"
+cp -a "$here/nomarchy/." "$nomarchy_source/"
 rm -rf "$datadir/ryogami/wall-ui"
 mkdir -p "$datadir/ryogami/wall-ui"
 cp -a "$here/ryogami/wall-ui/." "$datadir/ryogami/wall-ui/"

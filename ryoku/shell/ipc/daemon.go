@@ -703,7 +703,7 @@ const jemallocConf = "narenas:2,background_thread:true,dirty_decay_ms:5000,muzzy
 // env (which carries the QML import path setupQmlImportPath exports) plus the
 // jemalloc tuning, unless the user already pinned MALLOC_CONF.
 func qsEnv() []string {
-	env := os.Environ()
+	env := nomarchyEnv()
 	if os.Getenv("MALLOC_CONF") == "" {
 		env = append(env, "MALLOC_CONF="+jemallocConf)
 	}

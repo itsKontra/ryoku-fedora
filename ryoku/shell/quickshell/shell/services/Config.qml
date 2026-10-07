@@ -49,6 +49,18 @@ Singleton {
     property alias qsbar: adapter.qsbar
     property alias kairos: adapter.kairos
 
+    // nomarchy: the Omarchy shell port's settings namespace (shell.json
+    // "nomarchy").
+    property alias nomarchy: adapter.nomarchy
+
+    // A folder style may draw its own notification banners and its own volume/
+    // brightness OSD. While it is active and does not opt out, the shell's
+    // resident banners and OSD windows hold back so exactly one of each paints.
+    readonly property bool styleOwnsBanners: barStyle === "nomarchy"
+        && !(root.nomarchy && root.nomarchy.notifications === false)
+    readonly property bool styleOwnsFeedback: barStyle === "nomarchy"
+        && !(root.nomarchy && root.nomarchy.osd === false)
+
     // dock: the first-class app dock surface (modules/dock). A top-level store,
     // not a bar-style key, because the dock is now style-agnostic -- neither qsbar
     // nor Sumi owns it. Off until the user turns it on (Hub -> Bar Studio -> Dock).
@@ -198,6 +210,10 @@ Singleton {
             property var nacre: NacreConfig.defaultConfig()
             property var qsbar: ({})
             property var kairos: ({})
+            property var nomarchy: ({
+                "notifications": true,
+                "osd": true
+            })
             property var dock: ({
                 "enabled": false,
                 "edge": "auto",

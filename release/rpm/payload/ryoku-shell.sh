@@ -51,6 +51,8 @@ package() {
     [[ -f $s ]] || continue
     install -Dm755 "$s" "$pkgdir/usr/bin/${s##*/}"
   done
+  install -d "$pkgdir/usr/share/ryoku/nomarchy"
+  cp -a "$_repo/ryoku/shell/nomarchy/." "$pkgdir/usr/share/ryoku/nomarchy/"
   install -d "$pkgdir/usr/share/ryoku/reload-cover"
   cp -a "$_repo/ryoku/shell/quickshell/reload-cover/." "$pkgdir/usr/share/ryoku/reload-cover/"
 }

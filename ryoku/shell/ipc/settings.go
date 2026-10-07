@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -760,6 +761,7 @@ type settingsStore struct {
 	// in the frame beside caps/deadKeys so the Hub's window-rules editor offers
 	// only ids this compositor can apply. Empty when no provider answers.
 	windowRuleActions []string
+	nomarchyLifecycle func(bool) error
 }
 
 func newSettingsStore(path string) *settingsStore {
@@ -767,6 +769,22 @@ func newSettingsStore(path string) *settingsStore {
 	raw, cur, mtime := loadSettingsFile(path)
 	s.raw, s.cur, s.mtime = raw, cur, mtime
 	return s
+}
+
+func nomarchySelectedIn(raw map[string]any) bool {
+	style, _ := raw["barStyle"].(string)
+	return style == "nomarchy"
+}
+
+func (s *settingsStore) reconcileNomarchyStartup() error {
+	s.mu.Lock()
+	active := nomarchySelectedIn(s.raw)
+	lifecycle := s.nomarchyLifecycle
+	s.mu.Unlock()
+	if lifecycle == nil {
+		return nil
+	}
+	return lifecycle(active)
 }
 
 // loadSettingsFile reads the file into the in-memory pair. A missing file yields
@@ -942,6 +960,14 @@ func (s *settingsStore) patch(path string, value json.RawMessage) error {
 	if len(segs) == 1 && segs[0] == "barStyle" {
 		delete(full, barStyleTransactionKey)
 	}
+	wasNomarchy := nomarchySelectedIn(diskRaw)
+	isNomarchy := nomarchySelectedIn(full)
+	barStyleChanged := len(segs) == 1 && segs[0] == "barStyle" && wasNomarchy != isNomarchy
+	if barStyleChanged && isNomarchy && s.nomarchyLifecycle != nil {
+		if err := s.nomarchyLifecycle(true); err != nil {
+			return err
+		}
+	}
 	newCur := diskCur
 	if contract {
 		ns, err := buildSettings(full, true)
@@ -953,11 +979,21 @@ func (s *settingsStore) patch(path string, value json.RawMessage) error {
 		newCur = ns
 	}
 	if err := s.persistLocked(full); err != nil {
+		if barStyleChanged && isNomarchy && s.nomarchyLifecycle != nil {
+			if rollbackErr := s.nomarchyLifecycle(wasNomarchy); rollbackErr != nil {
+				log.Printf("ryoku-shell: roll back Nomarchy activation: %v", rollbackErr)
+			}
+		}
 		return err
 	}
 	s.raw = full
 	s.cur = newCur
 	s.notify(s.frameLocked())
+	if barStyleChanged && !isNomarchy && s.nomarchyLifecycle != nil {
+		if err := s.nomarchyLifecycle(false); err != nil {
+			log.Printf("ryoku-shell: Nomarchy deactivation after bar-style change: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -1029,20 +1065,40 @@ func (s *settingsStore) reload() {
 			badFile = true
 		}
 	}
-	s.mu.Lock()
-	if fi, e := os.Stat(s.path); e == nil {
-		s.mtime = fi.ModTime()
+	if !badFile {
+		writeContract(raw, cur)
+		resolveThemePalette(raw, cur.Theme.Theme)
 	}
+	s.mu.Lock()
 	if badFile {
+		if fi, e := os.Stat(s.path); e == nil {
+			s.mtime = fi.ModTime()
+		}
 		s.mu.Unlock()
 		return
 	}
-	writeContract(raw, cur)
-	resolveThemePalette(raw, cur.Theme.Theme)
+	wasNomarchy := nomarchySelectedIn(s.raw)
+	isNomarchy := nomarchySelectedIn(raw)
+	barStyleChanged := wasNomarchy != isNomarchy
+	if barStyleChanged && isNomarchy && s.nomarchyLifecycle != nil {
+		if err := s.nomarchyLifecycle(true); err != nil {
+			s.mu.Unlock()
+			log.Printf("ryoku-shell: activate Nomarchy after settings reload: %v", err)
+			return
+		}
+	}
+	if fi, e := os.Stat(s.path); e == nil {
+		s.mtime = fi.ModTime()
+	}
 	s.raw, s.cur = raw, cur
 	frame := s.frameLocked()
 	s.mu.Unlock()
 	s.notify(frame)
+	if barStyleChanged && !isNomarchy && s.nomarchyLifecycle != nil {
+		if err := s.nomarchyLifecycle(false); err != nil {
+			log.Printf("ryoku-shell: deactivate Nomarchy after settings reload: %v", err)
+		}
+	}
 }
 
 // settingsPollInterval is how often the watcher checks the file's mtime. The file
@@ -1079,6 +1135,10 @@ func (s *settingsStore) watch(quit <-chan struct{}) {
 // every patch, reset, or external edit.
 func (d *daemon) startSettings() {
 	store := newSettingsStore(filepath.Join(ryokuConfigDir(), "shell.json"))
+	store.nomarchyLifecycle = setNomarchyActive
+	if err := store.reconcileNomarchyStartup(); err != nil {
+		log.Printf("ryoku-shell: reconcile Nomarchy at startup: %v", err)
+	}
 	d.settings = store
 	t := d.registerTopic("settings")
 

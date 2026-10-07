@@ -41,10 +41,14 @@ Scope {
     readonly property real uiScale: Tokens.uiScaleFor(root.modelData ? root.modelData.name : "")
     readonly property bool barEnabled: Tokens.barEnabledFor(
         root.modelData ? root.modelData.name : "")
-    readonly property bool qsbarPrimaryHost: Config.barStyle === "qsbar"
-        && root.modelData
+    // The screen that hosts whole-desktop surfaces: the primary output. QS Bar
+    // needs it even when its bar is hidden (its popups live there), and so does
+    // a frame-family style (Nomarchy), whose scene is one shell for the desktop,
+    // so hiding a monitor's bar must not blank the whole shell.
+    readonly property bool primaryHost: root.modelData
         && ShellState.screens.length > 0
         && ShellState.screens[0].name === root.modelData.name
+        && (Config.barStyle === "qsbar" || BarProducts.isFrameFamily(Config.barStyle))
 
     // The built-in Sumi frame scene draws only while the active bar style is the
     // built-in one; a receipt-owned style would load its own scene without rails.
@@ -463,7 +467,7 @@ Scope {
     // host still map (topBar mode) so menus and surfaces stay style-agnostic.
     Loader {
         id: barStyleLoader
-        active: !root.sumiActive && (root.barEnabled || root.qsbarPrimaryHost)
+        active: !root.sumiActive && (root.barEnabled || root.primaryHost)
         source: BarProducts.sceneUrl(Config.barStyle)
         onLoaded: {
             root.barStyleRetries = 0
@@ -490,7 +494,7 @@ Scope {
         onTriggered: {
             barStyleLoader.active = false;
             barStyleLoader.active = Qt.binding(
-                () => !root.sumiActive && (root.barEnabled || root.qsbarPrimaryHost));
+                () => !root.sumiActive && (root.barEnabled || root.primaryHost));
         }
     }
     Connections {

@@ -231,6 +231,16 @@ Item {
         Quickshell.execDetached(["ryoku-shell", "bar", "settings"]);
     }
 
+    function openNomarchyPlugins() {
+        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "nomarchy",
+            "summon", "omarchy.menu", "{\"menu\":\"setup.plugins\"}"]);
+    }
+
+    function openNomarchyThemes() {
+        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "nomarchy",
+            "summon", "omarchy.image-picker", "{\"source\":\"themes\"}"]);
+    }
+
     CatalogLabels { id: labels }
 
     // ── head: the eyebrow band, the title, the blurb ─────────────────────────
@@ -513,12 +523,50 @@ Item {
                 }
             }
 
+            SettingCard {
+                id: nomarchySect
+                width: col.colWidth
+                visible: page.activeStyle === "nomarchy"
+                title: I18n.tr("NOMARCHY")
+                kana: "野"
+
+                Item {
+                    width: parent.width
+                    height: nomarchyBody.height + Tokens.s3 + Tokens.s4
+                    Column {
+                        id: nomarchyBody
+                        anchors { left: parent.left; right: parent.right; top: parent.top }
+                        anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4; anchors.topMargin: Tokens.s3
+                        spacing: Tokens.s3
+                        Text {
+                            width: parent.width
+                            text: I18n.tr("Nomarchy keeps Omarchy's configurable bar, panels and plugin menus while routing desktop actions through Ryoku.")
+                            color: Tokens.inkMuted
+                            font.family: Tokens.ui
+                            font.pixelSize: Tokens.fBody
+                            wrapMode: Text.WordWrap
+                        }
+                        Row {
+                            spacing: Tokens.s2
+                            Btn {
+                                text: I18n.tr("CHOOSE THEME")
+                                onAct: page.openNomarchyThemes()
+                            }
+                            Btn {
+                                text: I18n.tr("OPEN PLUGINS")
+                                onAct: page.openNomarchyPlugins()
+                            }
+                        }
+                    }
+                }
+            }
+
             // A folder style owns its own frame, rails and widgets inside its
             // barstyles/<id>/ folder, so the Sumi editors below stand down.
             SettingCard {
                 id: folderNote
                 width: col.colWidth
-                visible: !page.sumiActive && page.activeStyle !== "qsbar"
+                visible: !page.sumiActive && ["qsbar", "nomarchy"].indexOf(page.activeStyle) === -1
                 title: I18n.tr("LAYOUT")
 
                 Text {
