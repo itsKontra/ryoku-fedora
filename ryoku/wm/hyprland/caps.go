@@ -14,6 +14,10 @@ import (
 //
 // CapNativeOverview is absent because Hyprland ships no overview, so the shell
 // draws its own.
+//
+// CapKeyboardGrabSharesPointer is absent because a layer surface holding
+// exclusive keyboard focus also takes every pointer event, wherever the pointer
+// is, so no other surface can be clicked until the grab ends.
 var capsManifest = []wm.Capability{
 	wm.CapWorkspaces,
 	wm.CapSpecialWorkspace,

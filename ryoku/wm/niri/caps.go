@@ -58,6 +58,9 @@ var capsManifest = []wm.Capability{
 	wm.CapNightLight,
 	wm.CapTouchpadToggle,
 	wm.CapPaletteBorder,
+	// niri routes the pointer by input region whatever holds the keyboard, so
+	// an exclusive grab leaves every other surface clickable.
+	wm.CapKeyboardGrabSharesPointer,
 }
 
 // windowRuleActions are the neutral window-rule action ids niri's config writer

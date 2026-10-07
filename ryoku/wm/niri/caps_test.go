@@ -68,3 +68,14 @@ func TestDeniesPersistentScreenCapture(t *testing.T) {
 		t.Error("niri must not claim persistent screen capture")
 	}
 }
+
+// The Stage Editor's canvas holds the keyboard exclusively only where this is
+// claimed, so Escape and the arrows reach it from the moment it opens. On
+// demand, niri hands the keyboard over only on a click and takes it back on
+// every click in the editor's toolbar.
+func TestClaimsKeyboardGrabSharesPointer(t *testing.T) {
+	c := wm.Caps{Supports: capsManifest}
+	if !c.Has(wm.CapKeyboardGrabSharesPointer) {
+		t.Error("niri routes the pointer by input region under a keyboard grab; the manifest must say so")
+	}
+}

@@ -74,3 +74,13 @@ func TestClaimsPersistentScreenCapture(t *testing.T) {
 		t.Error("Hyprland hosts long-lived capturing layer surfaces; the manifest must say so")
 	}
 }
+
+// The Stage Editor's canvas holds the keyboard exclusively wherever this is
+// claimed. Hyprland then hands it every click as well, and the editor's toolbar
+// and catalogue stop answering, so the manifest must keep denying it.
+func TestDeniesKeyboardGrabSharesPointer(t *testing.T) {
+	c := wm.Caps{Supports: capsManifest}
+	if c.Has(wm.CapKeyboardGrabSharesPointer) {
+		t.Error("Hyprland gives an exclusive keyboard grab the pointer too; the manifest must not claim it shares")
+	}
+}

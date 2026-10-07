@@ -81,6 +81,14 @@ const (
 	// wants a live blurred backdrop behind a transient panel asks for this and
 	// falls back to a solid panel when it is absent.
 	CapPersistentScreenCapture Capability = "persistentScreenCapture"
+	// CapKeyboardGrabSharesPointer is set when a layer-shell surface can hold
+	// exclusive keyboard focus while the pointer still reaches every other
+	// surface through its own input region. A compositor without it gives the
+	// surface holding the grab every pointer event too, so a surface that wants
+	// keys beside other clickable surfaces (the Stage Editor's canvas under its
+	// toolbar and catalogue) asks for on-demand focus there instead, and takes
+	// the keyboard as the pointer crosses it.
+	CapKeyboardGrabSharesPointer Capability = "keyboardGrabSharesPointer"
 )
 
 // All is every capability, so a caps payload can carry an explicit boolean for
@@ -97,7 +105,7 @@ func All() []Capability {
 		CapKeyboardLayoutSwitch, CapMonitorConfig, CapOutputMirror,
 		CapOutputHdr, CapWindowFloat,
 		CapTiledLayout, CapColumnFill, CapSessionExit, CapNightLight, CapTouchpadToggle,
-		CapPaletteBorder, CapPersistentScreenCapture,
+		CapPaletteBorder, CapPersistentScreenCapture, CapKeyboardGrabSharesPointer,
 	}
 }
 
