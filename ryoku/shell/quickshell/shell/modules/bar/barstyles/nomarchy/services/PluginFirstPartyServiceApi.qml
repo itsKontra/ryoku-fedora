@@ -1,4 +1,4 @@
-import QtQuick
+import QtQuick 6.11
 
 // Narrow proxy for the non-authentication first-party services used by the
 // built-in bar. It intentionally has no generic property or method forwarding.

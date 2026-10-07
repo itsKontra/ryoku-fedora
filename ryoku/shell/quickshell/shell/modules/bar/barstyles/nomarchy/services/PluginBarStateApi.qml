@@ -1,4 +1,4 @@
-import QtQuick
+import QtQuick 6.11
 
 // Scalar-only view of the active bar for plugins that position independent
 // windows. The active Bar QObject is never retained here.

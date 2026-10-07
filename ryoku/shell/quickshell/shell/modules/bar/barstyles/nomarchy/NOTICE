@@ -27,7 +27,9 @@ Ryoku adaptations include:
   surface is omitted;
 - third-party plugins are fail-closed behind `ryoku wm compat <plugin-dir>`;
 - state and data paths honor XDG_STATE_HOME and XDG_DATA_HOME;
-- Bar Studio exposes Nomarchy themes and plugin controls.
+- Bar Studio exposes Nomarchy themes and plugin controls;
+- every QML file imports `QtQuick 6.11`, because Qt 6.12's new QtQuick `Color`
+  singleton shadows the shell's own `Color` (QTBUG-151278).
 
 No Omarchy trademark, logo or endorsement is claimed. Omarchy is not responsible
 for this modified port.

@@ -1,4 +1,4 @@
-import QtQuick
+import QtQuick 6.11
 
 // Detached application-library capability for third-party menus. Callbacks
 // expose the supported app-list operations without retaining AppLibrary or its

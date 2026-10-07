@@ -1,4 +1,4 @@
-import QtQuick
+import QtQuick 6.11
 import Quickshell.Io
 
 // An IpcHandler the shell can also answer over its own socket (see

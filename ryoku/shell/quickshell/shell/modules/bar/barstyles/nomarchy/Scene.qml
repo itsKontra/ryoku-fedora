@@ -4,7 +4,7 @@
 
 pragma ComponentBehavior: Bound
 
-import QtQuick
+import QtQuick 6.11
 import Quickshell
 import Quickshell.Io
 import qs.Commons

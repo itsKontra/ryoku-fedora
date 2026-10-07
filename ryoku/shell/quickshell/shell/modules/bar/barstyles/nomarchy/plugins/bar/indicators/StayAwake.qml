@@ -1,4 +1,4 @@
-import QtQuick
+import QtQuick 6.11
 import shell.services
 import qs.Ui
 import Ryoku.Ui.Singletons

@@ -1,4 +1,4 @@
-import QtQuick
+import QtQuick 6.11
 
 // Read-only, self-scoped registry view for an installed third-party plugin.
 // The host updates manifest/enabled when it rescans; no host registry object is

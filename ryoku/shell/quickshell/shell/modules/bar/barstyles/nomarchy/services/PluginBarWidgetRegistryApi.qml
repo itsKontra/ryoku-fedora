@@ -1,4 +1,4 @@
-import QtQuick
+import QtQuick 6.11
 
 // Detached widget-catalogue snapshot for third-party full-bar implementations.
 // Plugins can render the referenced components, but mutating this local view

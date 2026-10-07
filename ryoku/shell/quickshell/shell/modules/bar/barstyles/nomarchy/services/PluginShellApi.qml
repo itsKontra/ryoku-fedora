@@ -1,4 +1,4 @@
-import QtQuick
+import QtQuick 6.11
 
 // Capability-scoped shell surface for installed third-party plugins.
 //
