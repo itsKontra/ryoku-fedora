@@ -66,3 +66,19 @@ func TestFoldOverviewSkippedWhenNotWanted(t *testing.T) {
 		t.Error("the session still tracks overview state even when the frame is skipped")
 	}
 }
+
+func TestWindowEventCarriesProcessID(t *testing.T) {
+	s := &session{}
+	frames := foldEvents(t, s, allKinds, map[string]any{
+		"WindowOpenedOrChanged": map[string]any{
+			"window": map[string]any{
+				"id":    7,
+				"pid":   4242,
+				"title": "Terminal",
+			},
+		},
+	})
+	if len(frames) == 0 || len(frames[0].Windows) != 1 || frames[0].Windows[0].Pid != 4242 {
+		t.Fatalf("window frames = %+v, want pid 4242", frames)
+	}
+}
