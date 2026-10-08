@@ -74,7 +74,9 @@ case $name in
     ;;
   omarchy-bluetooth-device) action=${1:-}; address=${2:-}; [[ $action =~ ^(pair|connect|disconnect|forget)$ && $address =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]] || { echo 'Usage: omarchy-bluetooth-device <pair|connect|disconnect|forget> <address>' >&2; exit 2; }; [[ $action != forget ]] || action=remove; exec bluetoothctl "$action" "$address" ;;
   omarchy-network-status) nmcli -t -f TYPE,STATE connection show --active | awk -F: '$2=="activated"{print $1; exit}' ;;
-  omarchy-powerprofiles-list) powerprofilesctl list | awk -v state="${1:+1}" '/^[[:space:]]*[* ]?[[:space:]]*[[:alnum:]-]+:/{active=($1=="*"); gsub(/^[*[:space:]]+|:$/,""); print $0 (state?"\t" active:"")}' ;;
+  # A profile is a heading line ("* performance:"); its indented detail lines
+  # (CpuDriver:, PlatformDriver:, Degraded:) carry a value after the colon.
+  omarchy-powerprofiles-list) powerprofilesctl list | awk -v state="${1:+1}" '/^[*[:space:]]*[[:alnum:]-]+:[[:space:]]*$/{active=($1=="*"); gsub(/^[*[:space:]]+|:[[:space:]]*$/,""); print $0 (state?"\t" active:"")}' ;;
   omarchy-powerprofiles-set) profile=${2:-${1:-balanced}}; [[ $profile != autodetect && $profile != ac && $profile != battery ]] || profile=balanced; exec powerprofilesctl set "$profile" ;;
   omarchy-bar-text-color)
     position=${1:-top}; text=${3:-}; contrast=${4:-}; tone=${XDG_CACHE_HOME:-$HOME/.cache}/ryoku/wallpaper-tone.json
