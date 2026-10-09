@@ -578,21 +578,23 @@ A style with no settings omits all of this.
 ## QS Bar Settings
 
 QS Bar carries its own settings panel, **QS Bar Settings** (`controlcenter/`), the
-plate the bar's 力 logo opens. It is a quick panel, not a second Hub: four routes
+plate the bar's 力 logo opens. It is a quick panel, not a second Hub: six routes
 over the same `Ryoku.Ui` form kit the rest of Ryoku Settings uses.
 
 | Route | Gloss | Holds |
 |---|---|---|
-| Bar | 帯 | position, form, surface, gaps, scale, accent, gap animation, auto-hide |
+| Bar | 帯 | position, form, surface, gaps, scale, accent, gap animation, auto-hide, picker style |
+| Identity | 印 | launcher mark and workspace count and marker style |
 | Layout | 配置 | the three lanes: move, hide, add and reset the bar's widgets |
 | Widgets | 部品 | every widget as a row: on/off, density, colour and its own settings |
 | Dock | 台 | a hand-off: opens the Stage Editor's Dock section, where every bar style's shared dock is edited |
+| Community | 有志 | installed third-party bar widgets and adding from git or Ryostore |
 
 Open it from the bar logo, or from a terminal or a keybind with `ryoku-shell bar
-settings [route]`. The picker style it used to carry now lives on the Hub's
-Desktop page, and desktop widgets are arranged in the Stage Editor (right-click
-the desktop, then Edit desktop); session and mid-work toggles live in the
-Super+Escape quick settings.
+settings [route]`. Picker style lives on the Bar route (the Hub's Desktop page
+offers the same choice), and desktop widgets are arranged in the Stage Editor
+(right-click the desktop, then Edit desktop); session and mid-work toggles live
+in the Super+Escape quick settings.
 
 ## Kairos Settings
 
