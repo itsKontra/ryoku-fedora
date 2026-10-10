@@ -1,0 +1,33 @@
+Updating and loading repositories:
+Repositories loaded.
+Package                             Arch   Version          Repository      Size
+Upgrading:
+ ryogami                            x86_64 0:0.4057-73.fc44 RyokuCOPR    5.3 MiB
+   replacing ryogami                x86_64 0:0.4046-63.fc44 RyokuCOPR    5.3 MiB
+ ryoku                              x86_64 0:0.4057-73.fc44 RyokuCOPR    9.4 MiB
+   replacing ryoku                  x86_64 0:0.4046-63.fc44 RyokuCOPR    9.4 MiB
+ ryoku-blobs                        x86_64 0:0.4057-73.fc44 RyokuCOPR  222.6 KiB
+   replacing ryoku-blobs            x86_64 0:0.4046-63.fc44 RyokuCOPR  222.6 KiB
+ ryoku-desktop                      x86_64 0:0.4057-73.fc44 RyokuCOPR  295.2 MiB
+   replacing ryoku-desktop          x86_64 0:0.4046-63.fc44 RyokuCOPR  295.1 MiB
+ ryoku-desktop-hyprland             x86_64 0:0.4057-73.fc44 RyokuCOPR    4.3 MiB
+   replacing ryoku-desktop-hyprland x86_64 0:0.4046-63.fc44 RyokuCOPR    4.3 MiB
+ ryoku-extras                       x86_64 0:0.4057-73.fc44 RyokuCOPR  656.4 MiB
+   replacing ryoku-extras           x86_64 0:0.4046-63.fc44 RyokuCOPR  655.7 MiB
+ ryoku-hub                          x86_64 0:0.4057-73.fc44 RyokuCOPR    8.8 MiB
+   replacing ryoku-hub              x86_64 0:0.4046-63.fc44 RyokuCOPR    8.8 MiB
+ ryoku-palette-bridge               x86_64 0:0.4057-73.fc44 RyokuCOPR    6.6 MiB
+   replacing ryoku-palette-bridge   x86_64 0:0.4046-63.fc44 RyokuCOPR    6.6 MiB
+ ryoku-rashin                       x86_64 0:0.4057-73.fc44 RyokuCOPR    9.1 MiB
+   replacing ryoku-rashin           x86_64 0:0.4046-63.fc44 RyokuCOPR    9.1 MiB
+ ryoku-shell                        x86_64 0:0.4057-73.fc44 RyokuCOPR   10.3 MiB
+   replacing ryoku-shell            x86_64 0:0.4046-63.fc44 RyokuCOPR   10.3 MiB
+ sddm-theme-ryoku                   noarch 0:0.4057-73.fc44 RyokuCOPR  210.3 KiB
+   replacing sddm-theme-ryoku       noarch 0:0.4046-63.fc44 RyokuCOPR  210.3 KiB
+
+Transaction Summary:
+ Upgrading:         11 packages
+ Replacing:         11 packages
+
+Total size of inbound packages is 331 MiB. Need to download 331 MiB.
+After this operation, 822 KiB extra will be used (install 1 GiB, remove 1 GiB).

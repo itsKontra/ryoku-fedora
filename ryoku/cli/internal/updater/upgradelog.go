@@ -17,9 +17,9 @@ import (
 	i18n "ryoku-i18n"
 )
 
-// The package manager firehose (metadata sync "up to date" lines, the
-// resolving/conflict-check chatter, per-file progress
-// bars, and the full wrapped package dump) buries the handful of lines a person
+// The dnf5 firehose (repository loading bars, the package table, one line per
+// downloaded and installed package, scriptlet chatter) buries the handful of
+// lines a person
 // running `ryoku update` actually cares about: what is upgrading, how far along
 // it is, and any real warning or error. renderUpgrade runs an upgrade command
 // with its output piped and rebuilds it as a curated, styled view -- a phase
@@ -32,12 +32,26 @@ import (
 // from `ryoku update --verbose` / `-v` for debugging a transaction.
 var verboseLog bool
 
+// dnf5 shapes, read from what it prints to a pipe (no live redraws: each bar
+// is printed once, finished). testdata/dnf-*.txt are captured transcripts.
 var (
-	pkgHeaderRe = regexp.MustCompile(`^Packages \((\d+)\)\s*(.*)$`)
-	stepRe      = regexp.MustCompile(`^\((\d+)/(\d+)\)\s+(.*)$`)
-	verStripRe  = regexp.MustCompile(`-[0-9][^-]*(-[^-\s]+)?$`)
-	spinFrames  = []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+	// "[ 4/83] Upgrading libgcc-0:16.2.1-2.fc4 100% | ..." (run phase) or
+	// "[ 3/42] audit-libs-0:4.2.1-1.fc44.x86_6 100% | ..." (download).
+	stepRe = regexp.MustCompile(`^\[\s*(\d+)/(\d+)\]\s+(.*)$`)
+	// the finished bar after a label: " 100% |  24.2 MiB/s |   1.5 MiB |  00m00s"
+	barTailRe = regexp.MustCompile(`\s+\d+%\s+\|.*$`)
+	// "Package   Arch   Version   Repository   Size" opens the package table.
+	tableHeadRe = regexp.MustCompile(`^Package\s+Arch\s+Version\s+Repository\s+Size$`)
+	// " Upgrading:         11 packages" under "Transaction Summary:".
+	summaryRe = regexp.MustCompile(`^(\w+):\s+(\d+) packages?$`)
+	// "After this operation, 822 KiB extra will be used (...)" or "... will be freed (...)".
+	netSizeRe  = regexp.MustCompile(`^After this operation, (.+?) (extra will be used|will be freed)`)
+	spinFrames = []rune("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
 )
+
+// appliedVerbs are the run-phase actions that put a package on the box; the
+// "Removing" steps of an upgrade drop the versions it replaced.
+var appliedVerbs = map[string]bool{"Installing": true, "Upgrading": true, "Downgrading": true, "Reinstalling": true}
 
 // renderUpgrade runs argv, rendering a curated view of its output. phase is the
 // short label for the header ("System", "Flatpak").
@@ -323,18 +337,34 @@ func scanLinesCR(data []byte, atEOF bool) (int, []byte, error) {
 	return 0, nil, nil
 }
 
+// dnfSection is the part of a dnf5 run a line falls in. dnf prints the plan
+// (package table, summary, sizes) before it downloads, then "Running
+// transaction" before rpm applies it.
+type dnfSection int
+
+const (
+	secLoad    dnfSection = iota // repository loading
+	secTable                     // the package table
+	secSummary                   // "Transaction Summary:" and the size lines
+	secFetch                     // package downloads
+	secRun                       // the rpm transaction
+)
+
 type upgradeRenderer struct {
-	w        io.Writer
-	phase    string
-	animate  bool
-	frame    int
-	status   bool // an in-place status line is currently on screen
-	inPkgs   bool // collecting the wrapped "Packages (N) ..." block
-	pending  bool // package summary parsed, not yet printed (waiting for sizes)
-	count    int
-	size     string
-	ryoku    []string
-	upgraded int
+	w         io.Writer
+	phase     string
+	animate   bool
+	frame     int
+	status    bool // an in-place status line is currently on screen
+	section   dnfSection
+	heading   string // the table heading rows fall under ("Upgrading", "Removing")
+	pending   bool   // package summary parsed, not yet printed (waiting for sizes)
+	scriptlet bool   // inside a ">>> Scriptlet output:" block
+	detail    bool   // after an error header: its "- ..." lines are the reasons
+	count     int
+	size      string
+	ryoku     []string
+	applied   int
 }
 
 func newUpgradeRenderer(w io.Writer, phase string, animate bool) *upgradeRenderer {
@@ -347,52 +377,140 @@ func (r *upgradeRenderer) feed(raw string) {
 	line := strings.TrimRight(raw, " \t")
 	trimmed := strings.TrimSpace(line)
 
-	// The wrapped package list runs from "Packages (N) ..." to the next blank
-	// line; collect names for the count highlight, print nothing inline.
-	if r.inPkgs {
-		if trimmed == "" {
-			// The size lines follow this blank line; defer the summary until the
-			// first real activity so it can include the net size.
-			r.inPkgs = false
+	switch {
+	case tableHeadRe.MatchString(trimmed):
+		r.section = secTable
+		return
+	case trimmed == "Transaction Summary:":
+		r.section = secSummary
+		r.pending = true
+		return
+	case trimmed == "Running transaction":
+		r.section = secRun
+		r.flush()
+		r.spin(i18n.T("working…"))
+		return
+	}
+	switch r.section {
+	case secTable:
+		r.collectRow(line)
+		return
+	case secSummary:
+		if r.summaryLine(trimmed) {
 			return
 		}
-		r.collectPkgs(trimmed)
+	}
+	if strings.HasPrefix(trimmed, ">>> ") {
+		r.feedRPM(strings.TrimPrefix(trimmed, ">>> "))
 		return
 	}
-	if m := pkgHeaderRe.FindStringSubmatch(line); m != nil {
-		fmt.Sscanf(m[1], "%d", &r.count)
-		r.inPkgs = true
-		r.pending = true
-		r.collectPkgs(m[2])
-		return
-	}
-	if v := sizeValue(line); v != "" {
-		r.size = v
-		return
-	}
+	r.scriptlet = false
 
-	c := classify(line, trimmed)
+	c := classify(trimmed)
 	if c == clDrop {
 		return
 	}
 	r.flush() // print the deferred package summary before the first real activity
 	switch c {
-	case clDrop:
-		return
 	case clProgress:
-		if m := stepRe.FindStringSubmatch(trimmed); m != nil {
-			r.upgraded = countUpgrade(trimmed, r.upgraded)
-			r.spin(stepLabel(m[1], m[2], m[3]))
-		} else {
-			r.spin(i18n.T("working…"))
+		r.detail = false
+		r.progress(trimmed)
+		return
+	case clDetail:
+		if r.detail {
+			r.perm("  " + sys.Red("  · ") + strings.TrimSpace(strings.TrimPrefix(trimmed, "-")))
+			return
 		}
+		r.progress(trimmed)
+		return
 	case clWarn:
-		r.perm("  " + sys.Amber("! ") + sys.Dim(stripPrefix(trimmed, "warning:")))
+		r.perm("  " + sys.Amber("! ") + sys.Dim(stripPrefix(stripPrefix(trimmed, "Warning:"), "warning:")))
 	case clError:
-		r.perm("  " + sys.Red("✗ ") + stripPrefix(trimmed, "error:"))
+		r.perm("  " + sys.Red("✗ ") + stripPrefix(stripPrefix(trimmed, "Error:"), "error:"))
+		r.detail = true
+		return
 	case clConflict:
-		r.perm("  " + sys.Red("  · ") + trimmed)
+		r.perm("  " + sys.Red("  · ") + strings.TrimSpace(strings.TrimPrefix(trimmed, "-")))
+		return
 	}
+	r.detail = false
+}
+
+// summaryLine consumes the transaction summary and the size lines after it.
+// "Replacing" counts the old side of each upgrade, so it is not added.
+func (r *upgradeRenderer) summaryLine(trimmed string) bool {
+	if m := summaryRe.FindStringSubmatch(trimmed); m != nil {
+		if m[1] != "Replacing" {
+			n := 0
+			fmt.Sscanf(m[2], "%d", &n)
+			r.count += n
+		}
+		return true
+	}
+	if m := netSizeRe.FindStringSubmatch(trimmed); m != nil {
+		if strings.HasPrefix(m[2], "extra") {
+			r.size = "+" + m[1]
+		} else {
+			r.size = "-" + m[1]
+		}
+		return true
+	}
+	return trimmed == "" || strings.HasPrefix(trimmed, "Total size of inbound packages")
+}
+
+// feedRPM handles dnf's ">>> " lines: scriptlet start/finish and output, and
+// messages rpm itself raised ("[RPM] ..."). Scriptlet output is chatter for
+// the raw log; rpm's config-file notices, unpack errors and failed installs are
+// what a person must see.
+func (r *upgradeRenderer) feedRPM(msg string) {
+	switch {
+	case msg == "Scriptlet output:":
+		r.scriptlet = true
+		return
+	case strings.HasPrefix(msg, "Running ") || strings.HasPrefix(msg, "Finished "):
+		r.scriptlet = false
+		r.flush()
+		r.spin(barTailRe.ReplaceAllString(msg, ""))
+		return
+	case strings.Contains(msg, ".rpmnew"), strings.Contains(msg, ".rpmsave"):
+		r.flush()
+		r.perm("  " + sys.Amber("! ") + sys.Dim(stripPrefix(stripPrefix(msg, "[RPM]"), "warning:")))
+		return
+	case r.scriptlet:
+		return
+	}
+	l := strings.ToLower(msg)
+	switch {
+	// a failed scriptlet is reported, but rpm keeps the package and goes on.
+	case strings.Contains(l, "scriptlet") && (strings.Contains(l, "error") || strings.Contains(l, "failed")):
+		r.flush()
+		r.perm("  " + sys.Amber("! ") + sys.Dim(stripPrefix(msg, "[RPM]")))
+	case strings.HasPrefix(msg, "Unpack error"), strings.Contains(l, "failed"), strings.Contains(l, "error:"):
+		r.flush()
+		r.perm("  " + sys.Red("✗ ") + stripPrefix(msg, "[RPM]"))
+	}
+}
+
+// progress spins the label for a step line: what dnf is applying in the run
+// phase, a download count before it, or the line itself.
+func (r *upgradeRenderer) progress(trimmed string) {
+	m := stepRe.FindStringSubmatch(trimmed)
+	if m == nil {
+		r.spin(barTailRe.ReplaceAllString(trimmed, ""))
+		return
+	}
+	if r.section == secSummary {
+		r.section = secFetch
+	}
+	if r.section != secRun {
+		r.spin(fmt.Sprintf(i18n.T("downloading (%s/%s)"), m[1], m[2]))
+		return
+	}
+	label := barTailRe.ReplaceAllString(m[3], "")
+	if verb, _, _ := strings.Cut(label, " "); appliedVerbs[verb] {
+		r.applied++
+	}
+	r.spin(fmt.Sprintf("%s (%s/%s)", label, m[1], m[2]))
 }
 
 func (r *upgradeRenderer) finish(ok bool) {
@@ -400,8 +518,8 @@ func (r *upgradeRenderer) finish(ok bool) {
 	r.flush()
 	if ok {
 		tail := ""
-		if r.upgraded > 0 {
-			tail = fmt.Sprintf(i18n.T(" · %d upgraded"), r.upgraded)
+		if r.applied > 0 {
+			tail = fmt.Sprintf(i18n.T(" · %d upgraded"), r.applied)
 		} else if r.count > 0 {
 			tail = fmt.Sprintf(i18n.T(" · %d upgraded"), r.count)
 		}
@@ -442,19 +560,29 @@ func (r *upgradeRenderer) clear() {
 	}
 }
 
-func (r *upgradeRenderer) collectPkgs(s string) {
-	for _, f := range strings.Fields(s) {
-		if strings.HasPrefix(f, "ryoku") {
-			if name := verStripRe.ReplaceAllString(f, ""); name != "" {
-				r.ryoku = append(r.ryoku, name)
-			}
-		}
+// collectRow reads one line of the package table: a heading ("Upgrading:"),
+// a package row (" name  arch  version  repo  size") or the old side of an
+// upgrade ("   replacing name ..."). Ryoku packages that land on the box are
+// kept for the summary's highlight.
+func (r *upgradeRenderer) collectRow(line string) {
+	if line == "" {
+		return
+	}
+	if !strings.HasPrefix(line, " ") {
+		r.heading = strings.TrimSuffix(strings.Fields(line)[0], ":")
+		return
+	}
+	if strings.HasPrefix(line, "  ") || !appliedVerbs[r.heading] {
+		return
+	}
+	if name := strings.Fields(line)[0]; strings.HasPrefix(name, "ryoku") {
+		r.ryoku = append(r.ryoku, name)
 	}
 }
 
 // flush prints the deferred one-line package summary once, after the sizes have
-// been parsed and before the first activity. A no-op until a package block was
-// seen, and only once.
+// been parsed and before the first activity. A no-op until a summary was seen,
+// and only once.
 func (r *upgradeRenderer) flush() {
 	if !r.pending {
 		return
@@ -483,79 +611,53 @@ const (
 	clWarn
 	clError
 	clConflict
+	clDetail
 )
 
-func classify(line, trimmed string) lineClass {
+func classify(trimmed string) lineClass {
 	switch {
-	case trimmed == "":
+	case trimmed == "", isNoise(trimmed):
 		return clDrop
-	case strings.HasPrefix(trimmed, "error:"),
-		strings.Contains(trimmed, "failed to commit"),
-		strings.Contains(trimmed, "Errors occurred"):
-		return clError
-	// rpm's file conflict: "file X from install of A conflicts with file from package B".
-	case strings.Contains(trimmed, "conflicts with file from package"):
+	// rpm's file conflicts, listed under "Transaction failed": "- file X from
+	// install of A conflicts with file from package B", or between two installs.
+	case strings.Contains(trimmed, "conflicts with file from package"),
+		strings.Contains(trimmed, "conflicts between attempted installs of"):
 		return clConflict
+	case strings.HasPrefix(trimmed, "Transaction failed"),
+		strings.HasPrefix(trimmed, "Failed to resolve the transaction"),
+		strings.HasPrefix(trimmed, "Problem"),
+		strings.HasPrefix(trimmed, "Error:"),
+		strings.HasPrefix(trimmed, "error:"),
+		strings.HasPrefix(trimmed, "Cannot download"):
+		return clError
 	// .rpmnew/.rpmsave notices are the one warning class a user must act on.
 	case strings.Contains(trimmed, ".rpmnew"), strings.Contains(trimmed, ".rpmsave"):
 		return clWarn
-	case strings.HasPrefix(trimmed, "warning:"):
+	case strings.HasPrefix(trimmed, "Warning:"), strings.HasPrefix(trimmed, "warning:"):
 		return clWarn
-	case stepRe.MatchString(trimmed),
-		strings.HasPrefix(trimmed, ":: "),
-		hasBar(trimmed),
-		strings.HasPrefix(trimmed, "resolving dependencies"),
-		strings.HasPrefix(trimmed, "looking for conflicting"):
-		return clProgress
-	case isUpToDate(trimmed):
-		return clDrop
+	case strings.HasPrefix(trimmed, "- "):
+		return clDetail
 	}
-	// Unknown, non-empty, non-noise: fold into the spinner rather than let an
-	// unrecognised line break the curated view or leak the firehose.
+	// Steps, repository bars, and anything unrecognised fold into the spinner
+	// rather than break the curated view or leak the firehose.
 	return clProgress
 }
 
-func isUpToDate(s string) bool { return strings.HasSuffix(s, " is up to date") }
-
-func hasBar(s string) bool {
-	return strings.Contains(s, "[") && (strings.Contains(s, "#") || strings.Contains(s, "-")) &&
-		strings.Contains(s, "]") || strings.HasSuffix(s, "%")
-}
-
-func sizeValue(line string) string {
-	for _, k := range []string{"Net Upgrade Size:", "Total Download Size:", "Total Installed Size:"} {
-		if i := strings.Index(line, k); i >= 0 {
-			return strings.TrimSpace(line[i+len(k):])
-		}
+// isNoise is dnf's framing: the loading banner, the download total and its
+// rule, and the closing words.
+func isNoise(s string) bool {
+	switch s {
+	case "Updating and loading repositories:", "Repositories loaded.", "Nothing to do.",
+		"Complete!", "Dependencies resolved.":
+		return true
 	}
-	return ""
-}
-
-func stepLabel(x, y, rest string) string {
-	verb := strings.Fields(rest)
-	if len(verb) == 0 {
-		return fmt.Sprintf("%s/%s", x, y)
+	if strings.Trim(s, "-") == "" {
+		return true
 	}
-	return fmt.Sprintf("%s (%s/%s)", strings.TrimSuffix(strings.Join(verb, " "), "..."), x, y)
-}
-
-// countUpgrade tracks the highest "(x/y) upgrading/installing" index seen, the
-// closest cheap proxy for how many packages were applied.
-func countUpgrade(step string, cur int) int {
-	if !strings.Contains(step, "upgrading") && !strings.Contains(step, "installing") &&
-		!strings.Contains(step, "reinstalling") {
-		return cur
+	if m := stepRe.FindStringSubmatch(s); m != nil && strings.HasPrefix(m[3], "Total ") {
+		return true
 	}
-	m := stepRe.FindStringSubmatch(step)
-	if m == nil {
-		return cur
-	}
-	n := 0
-	fmt.Sscanf(m[1], "%d", &n)
-	if n > cur {
-		return n
-	}
-	return cur
+	return false
 }
 
 func stripPrefix(s, prefix string) string {
