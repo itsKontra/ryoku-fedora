@@ -227,7 +227,8 @@ raw.githubusercontent.com serves them with no release infrastructure.
   `ryoku-dev-audit-shell-binds`), `ryoku-dev-sync-upstream` (starts an upstream
   Ryoku merge, see `MergeToFedora.md`), and `art/` for art authoring (`ryodither` bakes
   an image or gif into a 1-bit bone-on-transparent decor; `tiling-demos`
-  generates the Appearance tiling-layout preview loops).
+  generates the Appearance tiling-layout preview loops). `bin/README.md`
+  lists every script and where it runs.
 - `tests/` standalone CI check scripts (install chroot-safety, shell tool
   availability).
 - `.github/` the workflows and issue/PR templates; `.githooks/` the commit gates.
