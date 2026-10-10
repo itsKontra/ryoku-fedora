@@ -219,9 +219,12 @@ func nvidiaDriverActiveFor(kepler, packagePresent bool, loaded []string) bool {
 }
 
 // nvidiaDriverPackagePresent: a kernel-module package is installed, Ryoku's
-// signed modules or RPM Fusion's akmod.
+// signed modules or any RPM Fusion akmod/kmod build (open, legacy branches,
+// prebuilt per-kernel kmods).
 func nvidiaDriverPackagePresent() bool {
-	return anyPkgInstalled("ryoku-nvidia", "akmod-nvidia")
+	out, err := exec.Command("rpm", "-qa", "--qf", "%{NAME}\n",
+		"ryoku-nvidia", "akmod-nvidia*", "kmod-nvidia*").Output()
+	return err == nil && strings.TrimSpace(string(out)) != ""
 }
 
 // ---- reconciler: NVIDIA Wayland autostart ------------------------------------
