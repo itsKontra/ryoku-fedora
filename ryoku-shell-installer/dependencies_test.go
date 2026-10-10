@@ -110,3 +110,36 @@ func TestSourceDependenciesSnapperOnBtrfs(t *testing.T) {
 		}
 	}
 }
+
+func TestReadSpecTags(t *testing.T) {
+	write := func(body string) string {
+		path := filepath.Join(t.TempDir(), "x.spec")
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	tags, err := readSpecTags(write("Name:           ryoku-x\n" +
+		"Requires:       a, b >= 1.2 c\n" +
+		"Requires:       %{name}-common = %{version}-%{release}\n" +
+		"Requires(post): d\n" +
+		"BuildRequires:  (e or f)\n" +
+		"%if 0%{?fedora}\n%global x 1\n%endif\n" +
+		"%description\nnot a Requires: tag\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.Join(tags["Requires"], " "), "a b c ryoku-x-common d"; got != want {
+		t.Fatalf("Requires = %q, want %q", got, want)
+	}
+	for name, body := range map[string]string{
+		"rich dependency":     "Requires: (pipewire-pulseaudio or pulseaudio)\n",
+		"unknown macro":       "Requires: %{python3_pkgversion}-foo\n",
+		"conditional require": "%if 0%{?fedora} >= 45\nRequires: foo\n%endif\n",
+		"sub-package":         "Name: x\n%package common\nRequires: foo\n",
+	} {
+		if _, err := readSpecTags(write(body)); err == nil {
+			t.Errorf("%s: must fail, not install a guessed set", name)
+		}
+	}
+}

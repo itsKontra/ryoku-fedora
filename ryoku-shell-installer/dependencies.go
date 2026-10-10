@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
 
 	wm "ryoku-wm"
 )
@@ -102,8 +103,11 @@ func fedoraPackages(payload, compositor string) ([]string, error) {
 	return uniq(pkgs), nil
 }
 
-// readSpecTags collects the package name of every Name, Provides and Requires
-// line in an RPM spec, dropping version constraints.
+// readSpecTags collects the package names of every Name, Provides and Requires
+// line in an RPM spec, dropping version constraints. It reads plain dependency
+// lists only and refuses what it cannot evaluate (rich dependencies, macros
+// other than %{name}, conditionals, sub-packages) rather than hand dnf a
+// mangled name or silently install the wrong set.
 func readSpecTags(path string) (map[string][]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -111,20 +115,68 @@ func readSpecTags(path string) (map[string][]string, error) {
 	}
 	defer f.Close()
 	tags := map[string][]string{}
+	name := ""
+	depth := 0
 	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		tag, value, ok := strings.Cut(sc.Text(), ":")
+	for n := 1; sc.Scan(); n++ {
+		line := sc.Text()
+		fail := func(format string, a ...any) error {
+			return fmt.Errorf("%s:%d: %s", path, n, fmt.Sprintf(format, a...))
+		}
+		switch directive := strings.TrimSpace(line); {
+		case strings.HasPrefix(directive, "%if"):
+			depth++
+			continue
+		case strings.HasPrefix(directive, "%endif"):
+			depth--
+			continue
+		case strings.HasPrefix(directive, "%package"):
+			return nil, fail("sub-packages are not supported")
+		}
+		tag, value, ok := strings.Cut(line, ":")
 		if !ok {
 			continue
 		}
+		tag, _, _ = strings.Cut(tag, "(") // Requires(post) is still a Requires
 		switch tag {
 		case "Name", "Provides", "Requires":
-			if fields := strings.Fields(value); len(fields) > 0 {
-				tags[tag] = append(tags[tag], fields[0])
-			}
+		default:
+			continue
 		}
+		if depth > 0 {
+			return nil, fail("%s inside a conditional cannot be evaluated", tag)
+		}
+		names, err := depNames(value, name)
+		if err != nil {
+			return nil, fail("%v", err)
+		}
+		if tag == "Name" && len(names) > 0 {
+			name = names[0]
+		}
+		tags[tag] = append(tags[tag], names...)
 	}
 	return tags, sc.Err()
+}
+
+// depNames splits a dependency list ("a, b >= 1.2 c") into its package names.
+func depNames(value, name string) ([]string, error) {
+	if strings.HasPrefix(strings.TrimSpace(value), "(") {
+		return nil, fmt.Errorf("rich dependency %q is not supported", strings.TrimSpace(value))
+	}
+	value = strings.ReplaceAll(value, "%{name}", name)
+	fields := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+	var names []string
+	for i := 0; i < len(fields); i++ {
+		switch f := fields[i]; {
+		case slices.Contains([]string{"=", "<", ">", "<=", ">="}, f):
+			i++ // the version it constrains
+		case strings.ContainsAny(f, "%(){}<>="):
+			return nil, fmt.Errorf("cannot evaluate %q", f)
+		default:
+			names = append(names, f)
+		}
+	}
+	return names, nil
 }
 
 func uniq(pkgs []string) []string {
