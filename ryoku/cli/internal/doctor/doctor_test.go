@@ -432,6 +432,8 @@ func TestPlanSnapper(t *testing.T) {
 		{"sysconfig missing root warns inconsistent", withConfdPath("/etc/sysconfig/snapper", "SNAPPER_CONFIGS=\"\"\n"), snapperWarnInconsistent, "/etc/sysconfig/snapper does not list the root config"},
 		{"/.snapshots is plain dir warns inconsistent", plainSnapshotsDir(), snapperWarnInconsistent, "plain directory"},
 		{"config present but snapper missing recommends it", func() snapperState { s := consistent; s.snapperInstalled = false; return s }(), snapperWarnInconsistent, "snapper is not installed"},
+		{"dnf box without the snapshot hook warns", func() snapperState { s := consistent; s.dnfInstalled = true; return s }(), snapperWarnInconsistent, "dnf snapshot hook is missing"},
+		{"dnf box with the snapshot hook reads ok", func() snapperState { s := consistent; s.dnfInstalled, s.dnfHookInstalled = true, true; return s }(), snapperOK, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

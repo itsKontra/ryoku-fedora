@@ -491,6 +491,8 @@ type snapperState struct {
 	confdExists       bool
 	confdContents     string
 	snapperInstalled  bool
+	dnfInstalled      bool
+	dnfHookInstalled  bool
 }
 
 // planSnapper picks the branch from observed state. pure, no IO. the
@@ -530,11 +532,18 @@ func planSnapper(s snapperState) (snapperOutcome, []string) {
 	if !s.snapperInstalled {
 		problems = append(problems, i18n.T("snapper is not installed; the root config exists but cannot be used (sudo dnf install snapper)"))
 	}
+	if s.dnfInstalled && !s.dnfHookInstalled {
+		problems = append(problems, i18n.T("the dnf snapshot hook is missing, so dnf transactions outside `ryoku update` are not auto-snapshotted (sudo dnf install libdnf5-plugin-actions && sudo dnf reinstall ryoku)"))
+	}
 	if len(problems) == 0 {
 		return snapperOK, nil
 	}
 	return snapperWarnInconsistent, problems
 }
+
+// dnfSnapshotActions is the ryoku package's libdnf5 actions file that wraps
+// every dnf transaction in a snapper pair (system/snapshots).
+const dnfSnapshotActions = "/etc/dnf/libdnf5-plugins/actions.d/ryoku-snapper.actions"
 
 // gatherSnapperState reads /etc + /.snapshots into a snapperState. all
 // non-privileged stats and world-readable files; privileged writes happen
@@ -545,6 +554,8 @@ func gatherSnapperState() snapperState {
 		configExists:     sys.Exists("/etc/snapper/configs/root"),
 		optedOut:         sys.Exists("/etc/ryoku/snapshots-disabled"),
 		snapperInstalled: sys.Has("snapper"),
+		dnfInstalled:     sys.Has("dnf"),
+		dnfHookInstalled: sys.PkgInstalled("libdnf5-plugin-actions") && sys.Exists(dnfSnapshotActions),
 		confdPath:        snapperGlobalConfPath(),
 	}
 	if fi, err := os.Stat("/.snapshots"); err == nil {

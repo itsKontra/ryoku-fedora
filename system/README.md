@@ -13,6 +13,8 @@ How an installed Ryoku machine is put together, separate from the desktop in
   look at read-only or restore from the "Ryoku snapshots" submenu, encrypted
   disks included, with shim, GRUB and the kernels left as Fedora signs them.
   See "Snapshots in the boot menu" in `docs/updates.md`.
+- `snapshots/` The dnf hook that takes a snapper pre/post pair around every dnf
+  transaction outside `ryoku update`, through the libdnf5 actions plugin.
 - `hardware/` Hardware setup. `gpu/` picks the most capable GPU and pins it for
   Hyprland, `display/` scales high-resolution screens, and `drivers/` installs the
   right packages per vendor. The GPU and monitor settings are written as Hyprland

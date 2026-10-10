@@ -1835,6 +1835,12 @@ func Deploy(_ []string) error {
 
 // --- snapper pre/post (best-effort) ----------------------------------------
 
+// updateSnapshotMarker holds the pid of an update that owns the open snapper
+// pair, so the dnf hook (system/snapshots/ryoku-dnf-snapshot) does not nest a
+// second pair inside it. The pid survives the stage2 exec, and a dead pid
+// frees the hook again.
+const updateSnapshotMarker = "/run/ryoku/update-snapshot"
+
 func snapperPre(desc string) string {
 	if !sys.Has("snapper") {
 		fmt.Fprintln(os.Stderr, i18n.T("note: snapper not installed; skipping pre-update snapshot"))
@@ -1852,6 +1858,7 @@ func snapperPre(desc string) string {
 		fmt.Fprintf(os.Stderr, i18n.T("note: pre-update snapshot skipped: %v\n"), err)
 		return ""
 	}
+	_ = sys.WriteRootFile(updateSnapshotMarker, strconv.Itoa(os.Getpid())+"\n", "0644")
 	return strings.TrimSpace(out)
 }
 
@@ -1861,6 +1868,7 @@ func snapperPost(pre, desc string) {
 	}
 	_ = sys.Sudo("snapper", "-c", snapperConfig, "create",
 		"-t", "post", "--pre-number", pre, "-c", "number", "-d", desc)
+	_ = sys.Sudo("rm", "-f", updateSnapshotMarker)
 	// Prune here, on the path every update takes: snapper-cleanup.timer is
 	// unreliable (its service is coupled to limine-snapper-sync), so without
 	// this the pile grows unbounded. best-effort.
