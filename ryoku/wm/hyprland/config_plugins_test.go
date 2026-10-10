@@ -223,3 +223,19 @@ func TestRepoSlug(t *testing.T) {
 		}
 	}
 }
+
+// rpm prints one version-release per installed copy, oldest first; the tier
+// shows the newest, and nothing when rpm printed nothing.
+func TestLastVersionLine(t *testing.T) {
+	cases := map[string]string{
+		"0.56.2-2.fc44\n":                "0.56.2-2.fc44",
+		"0.56.1-1.fc44\n0.56.2-2.fc44\n": "0.56.2-2.fc44",
+		"":                               "",
+		"\n":                             "",
+	}
+	for in, want := range cases {
+		if got := lastVersionLine(in); got != want {
+			t.Errorf("lastVersionLine(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

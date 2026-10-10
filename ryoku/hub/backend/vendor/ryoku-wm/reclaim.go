@@ -1,11 +1,9 @@
 package wm
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,15 +20,15 @@ import (
 //   - a package the incoming compositor also declares is shared, so it stays;
 //   - a package another installed package still needs is kept.
 //
-// The set is pacman's own answer to `pacman -Rs` for the outgoing-only,
-// installed packages: the compositor package, its satellites, and the private
-// dependencies that orphan with them. pacman is the authority because it, not a
-// re-derived graph, knows how a provides-satisfied dependency resolves; this
-// seam layers the two exclusions on top and pins the orchestration with tests.
+// The set is dnf's own answer for removing the outgoing-only, installed
+// packages: the compositor package, its satellites, and the libraries nothing
+// else needs once they go. dnf is the authority because it, not a re-derived
+// graph, knows how a provides-satisfied dependency resolves; this seam layers
+// the two exclusions on top and pins the orchestration with tests.
 
 // ReclaimSet is what leaving Outgoing for Incoming would remove. Targets are the
 // declared compositor packages the removal names; Packages is the full
-// transaction, those plus the private dependencies that orphan with them.
+// transaction, those plus the unused dependencies that go with them.
 // Removable is false when nothing is installed to remove, so the switch UI can
 // say so honestly rather than hide the keep-or-remove choice.
 type ReclaimSet struct {
@@ -43,14 +41,21 @@ type ReclaimSet struct {
 	Removable bool     `json:"removable"`
 }
 
+// planner answers what removing targets would take, with the incoming
+// provider's variant package assumed installed: the packages removed, or the
+// targets a surviving package still needs (blocked), which the caller drops.
+type planner func(incoming string, targets []string) (set, blocked []string, err error)
+
 // Package-manager seams, replaced in tests so the orchestration runs without a
-// live pacman or rpm. pacman wins when both are installed, so an Arch box is
-// unchanged; Fedora (rpm, no pacman) uses the rpm planner.
+// live dnf or rpm.
 var (
-	pkgInstalled     = hostPkgInstalled
-	removalOnce      = hostRemovalOnce
-	installedSizes   = hostInstalledSizes
-	providerPackages = capsPackages
+	pkgInstalled             = hostPkgInstalled
+	removalOnce      planner = hostRemovalOnce
+	installedSizes           = hostInstalledSizes
+	providerPackages         = capsPackages
+	runPlan                  = hostRunPlan
+	targetProvides           = hostTargetProvides
+	packageRequires          = hostPackageRequires
 )
 
 // Reclaim computes the removal set for leaving outgoing to run incoming. Both
@@ -70,7 +75,7 @@ func Reclaim(outgoing, incoming string) (ReclaimSet, error) {
 	if len(targets) == 0 {
 		return rs, nil // nothing installed to remove: honest empty set
 	}
-	set, kept, err := removalSet(targets, removalOnce)
+	set, kept, err := removalSet(incoming, targets, removalOnce)
 	if err != nil {
 		return rs, err
 	}
@@ -113,15 +118,15 @@ func reclaimTargets(outgoing, incoming []string, installed func(string) bool) []
 	return out
 }
 
-// removalSet drives pacman to a stable removal transaction. pacman refuses the
-// whole transaction when a named target is still required by a surviving
-// package; that target is then dropped (kept installed) and the plan asked
-// again, so the final set removes everything safe and keeps everything needed.
-// It returns the packages removed and the named targets that survived the drops.
-func removalSet(targets []string, plan func([]string) (set, blocked []string, err error)) (removed, kept []string, err error) {
+// removalSet drives the planner to a stable removal transaction. A target a
+// surviving package still requires comes back blocked; it is then dropped (kept
+// installed) and the plan asked again, so the final set removes everything safe
+// and keeps everything needed. It returns the packages removed and the named
+// targets that survived the drops.
+func removalSet(incoming string, targets []string, plan planner) (removed, kept []string, err error) {
 	cur := append([]string(nil), targets...)
 	for len(cur) > 0 {
-		set, blocked, err := plan(cur)
+		set, blocked, err := plan(incoming, cur)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -134,10 +139,10 @@ func removalSet(targets []string, plan func([]string) (set, blocked []string, er
 	return nil, []string{}, nil
 }
 
-// VerifyRemoval refuses a removal whose real pacman transaction would differ
-// from the reviewed set. Run immediately before the destructive removal, it asks
-// pacman what `-Rs` would take for the surviving targets and compares that to the
-// reviewed set: if pacman would pull in a package the review never showed, or a
+// VerifyRemoval refuses a removal whose real transaction would differ from the
+// reviewed set. Run immediately before the destructive removal, it asks dnf
+// again what removing the surviving targets would take and compares that to the
+// reviewed set: if dnf would pull in a package the review never showed, or a
 // target has since become one a surviving package needs, the switch's cleanup is
 // refused rather than run, so a removal can never quietly cascade past what the
 // user saw.
@@ -145,7 +150,7 @@ func VerifyRemoval(rs ReclaimSet) error {
 	if !rs.Removable {
 		return nil
 	}
-	set, blocked, err := removalOnce(rs.Targets)
+	set, blocked, err := removalOnce(rs.Incoming, rs.Targets)
 	if err != nil {
 		return fmt.Errorf("refusing to remove %s: the package manager could not plan the removal: %w", rs.Outgoing, err)
 	}
@@ -201,97 +206,180 @@ func capsPackages(name string) ([]string, error) {
 	return caps.Packages, nil
 }
 
-func hostPkgInstalled(name string) bool {
-	if hasCmd("pacman") {
-		return pacmanInstalled(name)
-	}
-	if hasCmd("rpm") {
-		return exec.Command("rpm", "-q", "--quiet", name).Run() == nil
-	}
-	return false
-}
-
-func hostRemovalOnce(targets []string) (set, blocked []string, err error) {
-	if hasCmd("pacman") {
-		return pacmanRemovalOnce(targets)
-	}
-	if hasCmd("rpm") {
-		return rpmRemovalOnce(targets)
-	}
-	return nil, nil, fmt.Errorf("no package manager")
-}
-
-func hostInstalledSizes(names []string) (int64, error) {
-	if hasCmd("pacman") {
-		return pacmanInstalledSizes(names)
-	}
-	if hasCmd("rpm") {
-		return rpmInstalledSizes(names)
-	}
-	return 0, fmt.Errorf("no package manager")
-}
-
-func hasCmd(name string) bool {
-	_, err := exec.LookPath(name)
-	return err == nil
-}
-
-// pacmanInstalled reports whether a package is installed.
-func pacmanInstalled(name string) bool {
-	return exec.Command("pacman", "-Q", name).Run() == nil
-}
-
-// rpmRemovalOnce plans a removal of exactly the named targets. A target that an
-// installed package outside the set still requires is blocked, so the caller
-// keeps it. Unlike pacman -Rs this does not pull orphaned dependencies into the
-// transaction: Fedora's switch removes the reviewed set and nothing past it.
-func rpmRemovalOnce(targets []string) (set, blocked []string, err error) {
+// hostRemovalOnce asks dnf for the transaction that removing targets would run
+// and reads every package it removes, unused dependencies included. A package
+// outside the targets that dnf would remove because it needs one of them (a
+// plugin, a -devel package) is a survivor the user never chose to lose, so the
+// targets it requires come back blocked rather than cascading.
+func hostRemovalOnce(incoming string, targets []string) (set, blocked []string, err error) {
 	if len(targets) == 0 {
 		return nil, nil, nil
 	}
-	want := make(map[string]bool, len(targets))
-	for _, t := range targets {
-		want[t] = true
+	out, err := runPlan(incoming, targets)
+	if err != nil {
+		return nil, nil, err
 	}
-	for _, t := range targets {
-		reqs, reqErr := rpmWhatRequires(t)
-		if reqErr != nil {
-			return nil, nil, reqErr
+	plan := parseRemovalPlan(out)
+	dependents := plan.dependents(targets)
+	if len(dependents) == 0 {
+		return plan.removed, nil, nil
+	}
+	provides, err := targetProvides(targets)
+	if err != nil {
+		return nil, nil, err
+	}
+	requires, err := packageRequires(dependents)
+	if err != nil {
+		return nil, nil, err
+	}
+	blocked = blockedTargets(targets, provides, requires)
+	if len(blocked) == 0 {
+		return nil, nil, fmt.Errorf("removing %s would also remove %s", strings.Join(targets, " "), strings.Join(dependents, " "))
+	}
+	return nil, blocked, nil
+}
+
+// hostRunPlan runs dnf's own planner with --assumeno, which resolves the full
+// transaction, prints it, and aborts before touching anything. dnf exits 1 on
+// that abort, so a plan is recognised by its summary rather than the status.
+//
+// A switch installs the incoming variant before it removes anything, and that
+// variant provides the compositor virtual the ryoku-desktop umbrella requires.
+// Planning the removal alone would read the umbrella, and the whole desktop with
+// it, as dependents. So when the variant is not installed yet, the plan is one
+// `dnf do` transaction that installs it and removes the targets, the state the
+// real removal will run in. --allowerasing lets that transaction list dependents
+// instead of refusing; nothing is erased because --assumeno aborts it. A variant
+// the cache cannot supply (a checkout box) falls back to the removal alone,
+// where the umbrella then blocks the variant and the plan keeps it.
+func hostRunPlan(incoming string, targets []string) (string, error) {
+	if v := VariantPackage(incoming); incoming != "" && !pkgInstalled(v) {
+		args := append([]string{"-C", "--assumeno", "do", "--allowerasing", "--action=install", v, "--action=remove"}, targets...)
+		if out, err := dnfPlan(args); err == nil {
+			return out, nil
 		}
-		for _, name := range reqs {
-			if name != "" && name != t && !want[name] {
+	}
+	return dnfPlan(append([]string{"-C", "--assumeno", "remove"}, targets...))
+}
+
+func dnfPlan(args []string) (string, error) {
+	cmd := dnfCommand(args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	text := string(out)
+	if err == nil || strings.Contains(text, "Transaction Summary:") {
+		return text, nil
+	}
+	return "", fmt.Errorf("dnf %s: %w: %s", args[2], err, strings.TrimSpace(stderr.String()))
+}
+
+// removalPlan is a dnf transaction table read back by section.
+type removalPlan struct {
+	removed   []string // every package the transaction removes
+	dependent []string // removed because it needs a removed package
+}
+
+// dependents is every removed package the user did not target and dnf did not
+// call an unused dependency: something that needs a target and would go with it.
+func (p removalPlan) dependents(targets []string) []string {
+	return difference(p.dependent, targets)
+}
+
+// parseRemovalPlan reads the transaction table dnf5 prints in the C locale. A
+// section header starts in column 0 and ends in a colon; a package row is
+// indented one space with the name first; a "replacing" line under an upgrade
+// is indented further and names an old version, not a removal. Rows under the
+// "Removing" headers are removed: "Removing:" holds the named targets (and any
+// package a conflict would erase), "Removing dependent packages:" the packages
+// that need them, and "Removing unused dependencies:" the libraries nothing
+// needs any more. The summary block ends the table.
+func parseRemovalPlan(text string) removalPlan {
+	var plan removalPlan
+	section := ""
+	seen := map[string]bool{}
+	for _, line := range strings.Split(text, "\n") {
+		if line == "" {
+			continue
+		}
+		if line[0] != ' ' {
+			if strings.HasPrefix(line, "Transaction Summary") {
+				break
+			}
+			section = strings.TrimSuffix(strings.TrimSpace(line), ":")
+			continue
+		}
+		if len(line) < 2 || line[1] == ' ' || !strings.HasPrefix(section, "Removing") {
+			continue
+		}
+		name := strings.Fields(line)[0]
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		plan.removed = append(plan.removed, name)
+		if section != "Removing unused dependencies" {
+			plan.dependent = append(plan.dependent, name)
+		}
+	}
+	return plan
+}
+
+// blockedTargets names the targets a dependent requires: a requirement matched
+// by a capability or file the target provides.
+func blockedTargets(targets []string, provides map[string][]string, requires []string) []string {
+	need := make(map[string]bool, len(requires))
+	for _, r := range requires {
+		need[r] = true
+	}
+	var blocked []string
+	for _, t := range targets {
+		if need[t] {
+			blocked = append(blocked, t)
+			continue
+		}
+		for _, c := range provides[t] {
+			if need[c] {
 				blocked = append(blocked, t)
 				break
 			}
 		}
 	}
-	if len(blocked) > 0 {
-		return nil, blocked, nil
-	}
-	return append([]string(nil), targets...), nil, nil
+	return blocked
 }
 
-func rpmWhatRequires(name string) ([]string, error) {
-	out, err := exec.Command("rpm", "-q", "--qf", "%{NAME}\n", "--whatrequires", name).Output()
-	text := string(out)
+// hostTargetProvides maps each target to the capabilities and files it
+// provides, read from one rpm query.
+func hostTargetProvides(targets []string) (map[string][]string, error) {
+	args := append([]string{"-q", "--qf", "[%{=NAME}\t%{PROVIDENAME}\n][%{=NAME}\t%{FILENAMES}\n]"}, targets...)
+	out, err := exec.Command("rpm", args...).Output()
 	if err != nil {
-		if strings.Contains(text, "no package requires") {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("rpm -q --whatrequires %s: %w", name, err)
+		return nil, fmt.Errorf("rpm -q provides: %w", err)
 	}
-	var names []string
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.Contains(line, "no package requires") {
-			continue
+	provides := map[string][]string{}
+	for _, line := range strings.Split(string(out), "\n") {
+		name, c, ok := strings.Cut(line, "\t")
+		if ok && c != "" {
+			provides[name] = append(provides[name], c)
 		}
-		names = append(names, line)
 	}
-	return names, nil
+	return provides, nil
 }
 
-func rpmInstalledSizes(names []string) (int64, error) {
+// hostPackageRequires lists the capabilities the named packages require, read
+// from one rpm query.
+func hostPackageRequires(names []string) ([]string, error) {
+	args := append([]string{"-q", "--qf", "[%{REQUIRENAME}\n]"}, names...)
+	out, err := exec.Command("rpm", args...).Output()
+	if err != nil {
+		return nil, fmt.Errorf("rpm -q requires: %w", err)
+	}
+	return strings.Fields(string(out)), nil
+}
+
+// hostInstalledSizes sums the installed size in bytes of the named packages,
+// read from one rpm query.
+func hostInstalledSizes(names []string) (int64, error) {
 	if len(names) == 0 {
 		return 0, nil
 	}
@@ -300,8 +388,13 @@ func rpmInstalledSizes(names []string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("rpm -q: %w", err)
 	}
+	return sumSizes(string(out))
+}
+
+// sumSizes totals rpm's %{SIZE} output, one byte count per line.
+func sumSizes(text string) (int64, error) {
 	var total int64
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
@@ -313,123 +406,4 @@ func rpmInstalledSizes(names []string) (int64, error) {
 		total += n
 	}
 	return total, nil
-}
-
-// compositorVirtual is the package every compositor variant provides and the
-// ryoku-desktop umbrella depends on. A switch installs the incoming variant
-// before removing the outgoing one, so the plan is measured with this virtual
-// assumed present: without that, pacman refuses to drop the outgoing variant
-// (the umbrella still needs the virtual) and every satellite it owns with it.
-const compositorVirtual = "ryoku-desktop-compositor"
-
-// breaksDep matches pacman's "cannot remove, a survivor needs it" line, whose
-// first name is the target that has to stay: "removing X breaks dependency ...".
-var breaksDep = regexp.MustCompile(`removing (\S+) breaks dependency`)
-
-// parseRemovalPlan reads a `pacman -Rs --print` transcript. pacman writes the
-// refusal lines to STDOUT, not stderr, so the scan covers both streams: the
-// targets it refuses to remove come back as blocked (the caller drops them and
-// re-plans), and a clean plan's package list is returned as the set.
-func parseRemovalPlan(stdout, stderr string, targets []string) (set, blocked []string) {
-	want := make(map[string]bool, len(targets))
-	for _, t := range targets {
-		want[t] = true
-	}
-	for _, m := range breaksDep.FindAllStringSubmatch(stdout+stderr, -1) {
-		if want[m[1]] {
-			blocked = append(blocked, m[1])
-		}
-	}
-	if len(blocked) > 0 {
-		return nil, blocked
-	}
-	return nonEmptyLines([]byte(stdout)), nil
-}
-
-// pacmanRemovalOnce asks pacman what `-Rs` would remove for the targets, with
-// the compositor virtual assumed present so the plan matches the transaction
-// the switch will actually run after the incoming variant is installed. On a
-// clean plan it returns the packages removed; when pacman still refuses a
-// target a survivor needs, that target comes back blocked (nil error) so the
-// caller can drop it and ask again. --print touches nothing, and -n (nosave) is
-// illegal with --print and removes the same packages, so it is left to the real
-// removal.
-func pacmanRemovalOnce(targets []string) (set, blocked []string, err error) {
-	if len(targets) == 0 {
-		return nil, nil, nil
-	}
-	args := append([]string{
-		"-Rs", "--print", "--print-format", "%n",
-		"--assume-installed", compositorVirtual + ",1",
-	}, targets...)
-	cmd := exec.Command("pacman", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, runErr := cmd.Output()
-	set, blocked = parseRemovalPlan(string(out), stderr.String(), targets)
-	if len(blocked) > 0 {
-		return nil, blocked, nil
-	}
-	if runErr != nil {
-		return nil, nil, fmt.Errorf("pacman -Rs --print: %w: %s", runErr, strings.TrimSpace(string(out)+stderr.String()))
-	}
-	return set, nil, nil
-}
-
-// pacmanInstalledSizes sums the installed size in bytes of the named packages,
-// read from one `pacman -Qi`.
-func pacmanInstalledSizes(names []string) (int64, error) {
-	if len(names) == 0 {
-		return 0, nil
-	}
-	args := append([]string{"-Qi"}, names...)
-	out, err := exec.Command("pacman", args...).Output()
-	if err != nil {
-		return 0, fmt.Errorf("pacman -Qi: %w", err)
-	}
-	var total int64
-	sc := bufio.NewScanner(bytes.NewReader(out))
-	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for sc.Scan() {
-		line := sc.Text()
-		if strings.HasPrefix(line, "Installed Size") {
-			if i := strings.Index(line, ":"); i >= 0 {
-				total += parseSize(strings.TrimSpace(line[i+1:]))
-			}
-		}
-	}
-	return total, sc.Err()
-}
-
-// nonEmptyLines splits pacman's --print output, one package name per line.
-func nonEmptyLines(out []byte) []string {
-	var lines []string
-	sc := bufio.NewScanner(bytes.NewReader(out))
-	for sc.Scan() {
-		if p := strings.TrimSpace(sc.Text()); p != "" {
-			lines = append(lines, p)
-		}
-	}
-	return lines
-}
-
-// parseSize converts a pacman "Installed Size" value ("1234.56 KiB") to bytes.
-func parseSize(val string) int64 {
-	fields := strings.Fields(val)
-	if len(fields) < 2 {
-		return 0
-	}
-	n, err := strconv.ParseFloat(fields[0], 64)
-	if err != nil {
-		return 0
-	}
-	switch fields[1] {
-	case "GiB":
-		n *= 1024 * 1024 * 1024
-	case "MiB":
-		n *= 1024 * 1024
-	case "KiB":
-		n *= 1024
-	}
-	return int64(n)
 }

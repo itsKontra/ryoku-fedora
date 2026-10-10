@@ -1,0 +1,43 @@
+Package                  Arch   Version                             Repository         Size
+Removing:
+ hyprpicker              x86_64 0:0.4.7-2.fc44                      HyprlandCOPR  241.8 KiB
+Removing dependent packages:
+ ryoku-desktop           x86_64 0:0.4046-63.fc44                    RyokuCOPR     295.1 MiB
+ ryoku-desktop-hyprland  x86_64 0:0.4046-63.fc44                    RyokuCOPR       4.3 MiB
+ ryotunes                x86_64 0:1.1.6-1.fc44                      RyotunesCOPR   38.7 MiB
+Removing unused dependencies:
+ assimp                  x86_64 0:6.0.5-2.fc44                      FedoraUpdates   7.5 MiB
+ dbus-tools              x86_64 1:1.16.2-1.fc44                     anaconda       98.7 KiB
+ dejavu-sans-fonts       noarch 0:2.37-29.fc44                      fedora          5.5 MiB
+ dejavu-sans-mono-fonts  noarch 0:2.37-29.fc44                      fedora          1.2 MiB
+ enchant2                x86_64 0:2.8.19-2.fc44                     updates       218.1 KiB
+ harfbuzz-icu            x86_64 0:14.1.0-2.fc44                     updates        15.2 KiB
+ hyphen                  x86_64 0:2.8.8-28.fc44                     fedora         51.5 KiB
+ javascriptcoregtk4.1    x86_64 0:2.54.0-2.fc44                     updates        33.6 MiB
+ kf6-syntax-highlighting x86_64 0:6.30.0-1.fc44                     FedoraUpdates   2.7 MiB
+ libmanette              x86_64 0:0.2.13-2.fc44                     fedora        367.2 KiB
+ mpv-libs                x86_64 0:0.41.0-5.fc44                     fedora          3.0 MiB
+ openxr-libs             x86_64 0:1.1.63-1.fc44                     FedoraUpdates 280.7 KiB
+ pam-u2f                 x86_64 0:1.4.0-3.fc44                      anaconda       87.9 KiB
+ pamixer                 x86_64 0:1.6-7.fc44                        anaconda      330.0 KiB
+ poly2tri                x86_64 0:0.0^20130501hg26242d0aa7b8-7.fc44 anaconda       55.8 KiB
+ pugixml                 x86_64 0:1.16-1.fc44                       FedoraUpdates 286.6 KiB
+ qt6-qtmultimedia        x86_64 0:6.11.2-1.fc44                     FedoraUpdates   4.4 MiB
+ qt6-qtquick3d           x86_64 0:6.11.2-1.fc44                     FedoraUpdates  15.6 MiB
+ qt6-qtquicktimeline     x86_64 0:6.11.2-1.fc44                     FedoraUpdates 308.2 KiB
+ ryogami                 x86_64 0:0.4046-63.fc44                    RyokuCOPR       5.3 MiB
+ ryoku                   x86_64 0:0.4046-63.fc44                    RyokuCOPR       9.4 MiB
+ ryoku-blobs             x86_64 0:0.4046-63.fc44                    RyokuCOPR     222.6 KiB
+ ryoku-extras            x86_64 0:0.4046-63.fc44                    RyokuCOPR     655.7 MiB
+ ryoku-hub               x86_64 0:0.4046-63.fc44                    RyokuCOPR       8.8 MiB
+ ryoku-palette-bridge    x86_64 0:0.4046-63.fc44                    RyokuCOPR       6.6 MiB
+ ryoku-rashin            x86_64 0:0.4046-63.fc44                    RyokuCOPR       9.1 MiB
+ ryoku-shell             x86_64 0:0.4046-63.fc44                    RyokuCOPR      10.3 MiB
+ sddm-theme-ryoku        noarch 0:0.4046-63.fc44                    RyokuCOPR     210.3 KiB
+ uv                      x86_64 0:0.12.15-1.fc44                    FedoraUpdates  43.8 MiB
+ webkit2gtk4.1           x86_64 0:2.54.0-2.fc44                     updates        95.6 MiB
+ zenity                  x86_64 0:4.2.2-1.fc44                      anaconda        5.1 MiB
+
+Transaction Summary:
+ Removing:          35 packages
+

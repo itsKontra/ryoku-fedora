@@ -267,14 +267,15 @@ the cost of its packages staying on disk. Removing it reclaims those, which
 `wm.Reclaim` (`ryoku/wm/reclaim.go`) computes from the outgoing provider's
 package list: the compositor package and the satellites `ryoku-desktop-<name>`
 installs (the provider declares them in `caps`, so nothing outside the seam
-names one), plus the private dependencies that orphan with them. The switch
+names one), plus the libraries nothing else needs once they go, as dnf's own
+removal plan reports them. The switch
 names how many packages and how much space that is, from the outgoing
 compositor's own installed packages, so the choice is offered even on a checkout
 box where the meta-package was never installed. A package the incoming
 compositor also needs, or one another installed package still depends on, is
-kept; and the removal is cross-checked against the rpm removal plan and refused if
-it would touch anything outside the reviewed set, so a switch can never break
-the machine. Either way the settings survive, which is what makes removal safe.
+kept; and the removal is cross-checked against dnf's removal plan right before
+it runs and refused if it would touch anything outside the reviewed set, so a
+switch can never break the machine. Either way the settings survive, which is what makes removal safe.
 Keeping is the default because it is the reversible choice.
 
 Every `desktop.*` setting is compositor-neutral and carries over. Only
