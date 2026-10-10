@@ -109,6 +109,7 @@ Requires:       hyprsunset
 Requires:       wtype
 Requires:       libqalculate
 Requires:       upower
+Requires:       libnotify
 Requires:       power-profiles-daemon
 Requires:       ddcutil
 Requires:       uv

@@ -50,6 +50,7 @@ var contractKeys = map[string]bool{
 	"menus":         true,
 	"notifications": true,
 	"wallpaper":     true,
+	"batteryAlerts": true,
 }
 
 // Value domains, in the display order of contract 14 section 8. Stored as stable
@@ -108,6 +109,7 @@ type settings struct {
 	Menus         menusSettings         `json:"menus"`
 	Notifications notificationsSettings `json:"notifications"`
 	Wallpaper     wallpaperSettings     `json:"wallpaper"`
+	BatteryAlerts batteryAlertsSettings `json:"batteryAlerts"`
 }
 
 type generalSettings struct {
@@ -318,6 +320,7 @@ func defaultSettings() *settings {
 		},
 		Notifications: notificationsSettings{NotificationPosition: "Right", PopupWindowMargins: 0},
 		Wallpaper:     wallpaperSettings{ContentFit: "Cover", TransitionPreset: "random", VideoEngine: "ryogami", VideoEnabled: true, VideoTranscodeFps: 24, VideoTranscodeWidth: 1920},
+		BatteryAlerts: batteryAlertsSettings{Enabled: true, WarningEnabled: true, CriticalEnabled: true, WarningPercent: 25, CriticalPercent: 10},
 	}
 }
 
@@ -399,6 +402,7 @@ func (s *settings) normalize(strict bool) error {
 	s.Menus.normalize(v)
 	s.Notifications.normalize(v)
 	s.Wallpaper.normalize(v)
+	s.BatteryAlerts.normalize(v)
 	return v.err
 }
 
@@ -712,6 +716,7 @@ func buildSettings(raw map[string]any, strict bool) (*settings, error) {
 		"menus":         &s.Menus,
 		"notifications": &s.Notifications,
 		"wallpaper":     &s.Wallpaper,
+		"batteryAlerts": &s.BatteryAlerts,
 	}
 	for k, ptr := range dst {
 		raw, ok := raw[k]
@@ -1113,6 +1118,7 @@ func (d *daemon) startSettings() {
 	// hardcode). Off the hot path, best-effort.
 	go applyFont(frame)
 
+	d.registerBatteryAlertsCalls()
 	d.registerCall("settings.patch", func(raw json.RawMessage) (any, error) {
 		var a struct {
 			Path  string          `json:"path"`
