@@ -5,24 +5,17 @@
 # files and prints results, so it has no runtime dependencies of its own.
 #
 # Built from the in-repo source at ryoku/hub/backend; no tarball is fetched.
-# go build reads the committed vendor/ tree (-mod=vendor), so the signed-repo CI
-# builds with no network regardless of the GOFLAGS in the caller's environment.
-pkgname=ryoku-hub
-pkgver=${RYOKU_PKGVER:-0.1.0}
-pkgrel=1
-pkgdesc="Ryoku Hub backend: keybind legend and config service"
-arch=('x86_64')
-url="https://ryoku.dev"
-license=('GPL-3.0-or-later')
-depends=()
-makedepends=('go')
-source=()
-
+# stage-package.sh exports GOFLAGS (-mod=vendor -trimpath) and CGO_ENABLED=0, so
+# go build reads the committed vendor/ tree and the signed-repo CI builds with no
+# network. RPM metadata lives in ryoku-hub.spec.
+startdir=${startdir:?stage-package.sh must set startdir}
+srcdir=${srcdir:?stage-package.sh must set srcdir}
+pkgdir=${pkgdir:?stage-package.sh must set pkgdir}
 _repo="$startdir/../../.."
 
 build() {
-  cd "$_repo/ryoku/hub/backend"
-  CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryoku-hub" .
+  cd "$_repo/ryoku/hub/backend" || exit
+  go build -o "$srcdir/ryoku-hub" .
 }
 
 package() {

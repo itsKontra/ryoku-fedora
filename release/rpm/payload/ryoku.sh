@@ -14,7 +14,7 @@ _repo="$startdir/../../.."
 
 build() {
   cd "$_repo/ryoku/cli" || return
-  CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryoku" .
+  go build -o "$srcdir/ryoku" .
 }
 
 package() {

@@ -10,34 +10,26 @@
 # fetched. stage-package.sh sources this recipe from release/rpm/payload, so
 # the repo root is three levels up; go builds into $srcdir so the source tree
 # stays untouched.
-pkgname=ryogami
-pkgver=${RYOKU_PKGVER:-0.2.0}
-pkgrel=1
-pkgdesc="Ryogami: the Ryoku wallpaper daemon (catalog, thumbnails, applies, depth)"
-arch=('x86_64')
-url="https://ryoku.dev"
-license=('MIT')
-# runtime tools the daemon shells out to: imagemagick + ffmpeg (thumbnails,
-# colour extraction, the livewall transcode), matugen (palette on apply),
-# quickshell (the wall-ui). Video wallpapers play through the bundled
-# ryogami-live, built here from ryoku/shell/livewall. The wall-ui source
-# browser fetches remote wallpapers (Wallhaven, MoeWalls, MotionBGs, GitHub,
-# Steam) with curl, so it is a hard runtime need too. The wall-ui's wallpaper
-# folder watcher execs inotifywait (inotify-tools); without it a wallpaper that
-# lands while the picker is open (a store install, a download) never shows
-# until the picker is reopened.
-depends=('imagemagick' 'ffmpeg' 'quickshell' 'curl' 'inotify-tools')
-makedepends=('go' 'wayland' 'wayland-protocols')
-source=()
-
+#
+# RPM metadata and Requires live in ryogami.spec. The daemon shells out to
+# ImageMagick and ffmpeg (thumbnails, colour extraction, the livewall
+# transcode), matugen (palette on apply) and quickshell (the wall-ui). Video
+# wallpapers play through the bundled ryogami-live, built here from
+# ryoku/shell/livewall. The wall-ui source browser fetches remote wallpapers
+# (Wallhaven, MoeWalls, MotionBGs, GitHub, Steam) with curl, and its folder
+# watcher execs inotifywait (inotify-tools); without it a wallpaper that lands
+# while the picker is open never shows until the picker is reopened.
+startdir=${startdir:?stage-package.sh must set startdir}
+srcdir=${srcdir:?stage-package.sh must set srcdir}
+pkgdir=${pkgdir:?stage-package.sh must set pkgdir}
 _repo="$startdir/../../.."
 
 build() {
-  cd "$_repo/ryoku/shell/ryogami/daemon"
-  # -mod=vendor keeps the build off proxy.golang.org so it is reproducible and
-  # works in the offline publish container (the module is stdlib-only, so there
-  # is no vendor/ tree to carry). Matches every other [ryoku] Go package.
-  CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryogami" .
+  cd "$_repo/ryoku/shell/ryogami/daemon" || exit
+  # the GOFLAGS stage-package.sh exports (-mod=vendor) keep the build off
+  # proxy.golang.org, so it is reproducible and works in the offline publish
+  # container; the module is stdlib-only, so there is no vendor/ tree to carry.
+  go build -o "$srcdir/ryogami" .
   "$_repo/ryoku/shell/livewall/build.sh" "$srcdir/ryogami-live"
 }
 
