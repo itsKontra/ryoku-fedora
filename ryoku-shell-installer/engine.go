@@ -681,7 +681,7 @@ func stepPackages(e *engine) error {
 	if e.p.devtools {
 		pkgs = append(pkgs, devPkgs...)
 	}
-	pkgs = e.dropSatisfied(pkgs)
+	pkgs = e.dropSatisfied(uniq(pkgs))
 	if len(pkgs) == 0 {
 		return nil
 	}
@@ -695,24 +695,20 @@ func (e *engine) dropSatisfied(pkgs []string) []string {
 	if e.dry || len(pkgs) == 0 {
 		return pkgs
 	}
+	provided, err := installedCapabilities()
+	if err != nil {
+		e.say(i18n.Tf("cannot list installed packages (%v); dnf will sort out what is already there", err))
+		return pkgs
+	}
 	var keep []string
 	for _, p := range pkgs {
-		if p == "" {
-			continue
+		switch {
+		case p == "", provided(p):
+		case p == "power-profiles-daemon" && (provided("tuned-ppd") || provided("ppd-service")):
+		case (p == "ffmpeg" || p == "ffmpeg-free") && (provided("ffmpeg-free") || pathExists("/usr/bin/ffmpeg")):
+		default:
+			keep = append(keep, p)
 		}
-		if e.d().installedPkg(p) {
-			continue
-		}
-		if p == "power-profiles-daemon" && (e.d().installedPkg("tuned-ppd") || rpmProvides("ppd-service")) {
-			continue
-		}
-		if (p == "ffmpeg" || p == "ffmpeg-free") && (e.d().installedPkg("ffmpeg-free") || pathExists("/usr/bin/ffmpeg")) {
-			continue
-		}
-		if rpmProvides(p) {
-			continue
-		}
-		keep = append(keep, p)
 	}
 	if len(keep) < len(pkgs) {
 		e.say(i18n.Tf("%d of %d packages already satisfied by installed providers", len(pkgs)-len(keep), len(pkgs)))
@@ -720,8 +716,19 @@ func (e *engine) dropSatisfied(pkgs []string) []string {
 	return keep
 }
 
-func rpmProvides(cap string) bool {
-	return exec.Command("rpm", "-q", "--quiet", "--whatprovides", cap).Run() == nil
+// installedCapabilities reads every installed package name and capability in
+// one rpm call, so checking a hundred dependencies costs one process, not two
+// hundred. A var so a test can stand in for the rpm database.
+var installedCapabilities = func() (func(string) bool, error) {
+	out, err := exec.Command("rpm", "-qa", "--qf", "%{NAME}\\n[%{PROVIDES}\\n]").Output()
+	if err != nil {
+		return nil, err
+	}
+	set := map[string]bool{}
+	for _, line := range strings.Split(string(out), "\n") {
+		set[line] = true
+	}
+	return func(c string) bool { return set[c] }, nil
 }
 
 // stepBuild is the source-mode replacement for installing ryoku-desktop: the
