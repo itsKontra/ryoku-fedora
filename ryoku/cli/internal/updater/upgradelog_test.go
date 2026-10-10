@@ -4,34 +4,22 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// a transcript shaped like a real upgrade, including an rpm file-conflict
-// failure like the plymouth one.
-const pacmanTranscript = `:: Synchronizing package databases...
- cachyos-v3 is up to date
- core is up to date
- ryoku is up to date
-:: Starting full system upgrade...
-resolving dependencies...
-looking for conflicting packages...
-
-Packages (37) blesh-0.4.0_devel3-1  colord-1.4.8-1  ryoku-desktop-0.49.9.r2972.gdc7b811-2
-              ryoku-shell-0.49.9.r2972.gdc7b811-1  wine-11.16-2.1  zsh-5.9.2-1
-
-Total Installed Size:  1903.15 MiB
-Net Upgrade Size:      64.09 MiB
-
-(37/37) checking keys in keyring
-(37/37) checking package integrity
-(1/37) upgrading blesh
-(2/37) upgrading colord
-(37/37) upgrading zsh
-error: failed to commit transaction (conflicting files)
-file /usr/share/plymouth/themes/ryoku/bullet.png from install of ryoku-desktop-2-2.noarch conflicts with file from package plymouth-1-1.x86_64
-Errors occurred, no packages were upgraded.`
+// The fixtures are dnf5 output captured through a pipe, the way runUpgrade
+// reads it: the Ryoku lane's plan (distro-sync --assumeno), a successful
+// install, and an upgrade whose rpm transaction failed on an unpack error.
+func transcript(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimRight(string(b), "\n")
+}
 
 func renderTranscript(t *testing.T, transcript string, ok bool) string {
 	t.Helper()
@@ -44,12 +32,37 @@ func renderTranscript(t *testing.T, transcript string, ok bool) string {
 	return buf.String()
 }
 
+func TestRendererSummarisesPlan(t *testing.T) {
+	out := renderTranscript(t, transcript(t, "dnf-ryoku-plan.txt"), true)
+	for _, want := range []string{
+		"System packages", // header
+		"11 packages",     // Upgrading only; Replacing is the old side
+		"+822 KiB",        // net size
+		"ryoku-desktop",   // ryoku highlight
+		"ryoku-shell",
+		"11 upgraded",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("curated output missing %q:\n%s", want, out)
+		}
+	}
+	for _, noise := range []string{"Repositories loaded", "replacing", "RyokuCOPR", "Transaction Summary", "inbound"} {
+		if strings.Contains(out, noise) {
+			t.Errorf("curated output leaked %q:\n%s", noise, out)
+		}
+	}
+	if strings.Contains(out, "ryogami") || strings.Contains(out, "sddm-theme-ryoku") {
+		t.Errorf("highlight should list only ryoku* packages:\n%s", out)
+	}
+}
+
 func TestRendererHidesNoise(t *testing.T) {
-	out := renderTranscript(t, pacmanTranscript, false)
+	out := renderTranscript(t, transcript(t, "dnf-upgrade-failed.txt"), false)
 	for _, noise := range []string{
-		"Synchronizing", "is up to date",
-		"resolving dependencies", "looking for conflicting",
-		"checking keys", "checking package integrity", "upgrading blesh",
+		"Updating and loading", "Package ", "Upgrading:", "replacing",
+		"Already downloaded", "Total", "-----", "Verify package files",
+		"Upgrading libgcc", "Removing", "Scriptlet output", "/dev/null",
+		"%pretrans", "NOKEY",
 	} {
 		if strings.Contains(out, noise) {
 			t.Errorf("curated output leaked noise %q:\n%s", noise, out)
@@ -58,30 +71,84 @@ func TestRendererHidesNoise(t *testing.T) {
 }
 
 func TestRendererKeepsSignal(t *testing.T) {
-	out := renderTranscript(t, pacmanTranscript, false)
+	out := renderTranscript(t, transcript(t, "dnf-upgrade-failed.txt"), false)
 	for _, want := range []string{
-		"System packages",       // header
-		"37 packages",           // collapsed summary
-		"64.09 MiB",             // net size in the summary
-		"ryoku-desktop",         // ryoku highlight (version stripped)
-		"ryoku-shell",           // ryoku highlight
-		"conflicts with file",   // conflict detail is surfaced
-		"failed to commit",      // real error is surfaced
-		"System upgrade failed", // failure cap
+		"42 packages",                 // 3 installed + 39 upgraded
+		"+3 MiB",                      // net size
+		"unpacking of archive failed", // rpm's own error
+		"Unpack error: filesystem",    // dnf's error for it
+		"install failed",              // rpm's verdict on the package
+		"Transaction failed",          // dnf's verdict
+		"skipped OpenPGP checks",      // a warning
+		"System upgrade failed",       // failure cap
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("curated output missing %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "ryoku-desktop-0.49") {
-		t.Errorf("version not stripped from ryoku highlight:\n%s", out)
+}
+
+// A blank line inside a scriptlet's output does not end it, and rpm's own
+// errors right after the output are still shown.
+func TestRendererScriptletOutput(t *testing.T) {
+	out := renderTranscript(t, strings.Join([]string{
+		"Running transaction",
+		">>> Scriptlet output:",
+		">>> ",
+		">>> output after a blank line: mkdir failed",
+		">>> [RPM] unpacking of archive failed on file /var/spool/mail",
+		">>> Unpack error: filesystem-0:3.18-52.fc44.x86_64",
+		">>> Scriptlet output:",
+		">>> more output",
+		">>> [RPM] crypto-policies-0:20251128-3.noarch: install failed",
+	}, "\n"), false)
+	for _, noise := range []string{"after a blank", ">>>"} {
+		if strings.Contains(out, noise) {
+			t.Errorf("curated output leaked %q:\n%s", noise, out)
+		}
+	}
+	for _, want := range []string{"unpacking of archive failed", "Unpack error: filesystem", "crypto-policies-0:20251128-3.noarch: install failed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("curated output missing %q:\n%s", want, out)
+		}
 	}
 }
 
 func TestRendererSuccessCap(t *testing.T) {
-	out := renderTranscript(t, pacmanTranscript, true)
-	if !strings.Contains(out, "✓") || !strings.Contains(out, "37 upgraded") {
+	out := renderTranscript(t, transcript(t, "dnf-install.txt"), true)
+	if !strings.Contains(out, "✓") || !strings.Contains(out, "2 upgraded") || !strings.Contains(out, "2 packages") {
 		t.Errorf("expected success cap with count, got:\n%s", out)
+	}
+	if strings.Contains(out, "Complete!") {
+		t.Errorf("closing words leaked:\n%s", out)
+	}
+}
+
+// The run phase counts what it put on the box, not its verify, prepare and
+// removal steps.
+func TestRendererCountsAppliedPackages(t *testing.T) {
+	var buf bytes.Buffer
+	r := newUpgradeRenderer(&buf, "System", false)
+	for _, ln := range strings.Split(transcript(t, "dnf-upgrade-failed.txt"), "\n") {
+		r.feed(ln)
+	}
+	if r.applied != 42 {
+		t.Errorf("applied = %d, want 42 (the Installing and Upgrading steps)", r.applied)
+	}
+}
+
+func TestRendererSurfacesResolveProblems(t *testing.T) {
+	out := renderTranscript(t, `Updating and loading repositories:
+Repositories loaded.
+Failed to resolve the transaction:
+Problem: cannot install the best update candidate for package ryoku-shell-0:0.4046-63.fc44.x86_64
+  - nothing provides quickshell >= 0.3 needed by ryoku-shell-0:0.4057-73.fc44.x86_64 from RyokuCOPR
+You can try to add to command line:
+  --skip-broken to skip uninstallable packages`, false)
+	for _, want := range []string{"Failed to resolve", "Problem: cannot install", "nothing provides quickshell"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("curated output missing %q:\n%s", want, out)
+		}
 	}
 }
 
@@ -90,29 +157,21 @@ func TestClassify(t *testing.T) {
 		line string
 		want lineClass
 	}{
-		{" core is up to date", clDrop},
+		{"Repositories loaded.", clDrop},
+		{"[42/42] Total                           100% |  10.6 MiB/s |  15.6 MiB |  00m01s", clDrop},
+		{"--------------------------------------------------------------------------------", clDrop},
+		{"Complete!", clDrop},
 		{"warning: /etc/foo.conf created as /etc/foo.conf.rpmnew", clWarn},
-		{"error: failed to commit transaction (conflicting files)", clError},
-		{"file /usr/share/plymouth/themes/ryoku/logo.png from install of ryoku-desktop-2-2.noarch conflicts with file from package plymouth-1-1.x86_64", clConflict},
-		{"(12/37) upgrading wine", clProgress},
-		{":: Running post-transaction hooks...", clProgress},
+		{"Warning: skipped OpenPGP checks for 2 packages from repositories: fedora, updates", clWarn},
+		{"Transaction failed: Rpm transaction failed.", clError},
+		{"- file /usr/share/plymouth/themes/ryoku/logo.png from install of ryoku-desktop-2-2.noarch conflicts with file from package plymouth-1-1.x86_64", clConflict},
+		{"[ 4/83] Upgrading libgcc-0:16.2.1-2.fc4 100% | 133.0 MiB/s | 272.3 KiB |  00m00s", clProgress},
+		{" Fedora 44 - x86_64                     100% |   7.1 MiB/s |  37.8 MiB |  00m05s", clProgress},
 	}
 	for _, c := range cases {
-		if got := classify(c.line, strings.TrimSpace(c.line)); got != c.want {
+		if got := classify(strings.TrimSpace(c.line)); got != c.want {
 			t.Errorf("classify(%q) = %d, want %d", c.line, got, c.want)
 		}
-	}
-}
-
-func TestSizeValueAndCount(t *testing.T) {
-	if got := sizeValue("Net Upgrade Size:      64.09 MiB"); got != "64.09 MiB" {
-		t.Errorf("sizeValue = %q, want 64.09 MiB", got)
-	}
-	if got := countUpgrade("(9/37) upgrading wine", 3); got != 9 {
-		t.Errorf("countUpgrade = %d, want 9", got)
-	}
-	if got := countUpgrade("(2/37) checking integrity", 9); got != 9 {
-		t.Errorf("countUpgrade should ignore non-upgrade step, got %d", got)
 	}
 }
 
@@ -130,7 +189,7 @@ func TestPipedRunIsCurated(t *testing.T) {
 	}
 	keep := os.Stdout
 	os.Stdout = capW
-	script := `printf '%s\n' ':: Synchronizing package databases...' ' core is up to date' 'Packages (2) ryoku-1-1 ryoku-desktop-2-2' '' 'Net Upgrade Size: 1.00 MiB' '(1/2) upgrading ryoku' 'warning: /etc/foo.conf created as /etc/foo.conf.rpmnew' 'file /usr/share/plymouth/themes/ryoku/bullet.png from install of ryoku-desktop-2-2.noarch conflicts with file from package plymouth-1-1.x86_64'`
+	script := `printf '%s\n' 'Updating and loading repositories:' 'Repositories loaded.' 'Transaction Summary:' ' Upgrading:          2 packages' '' '[1/2] ryoku-0:2-1.fc44.x86_64       100% |   1.0 MiB/s |   1.0 MiB |  00m00s' 'Running transaction' '[1/4] Upgrading ryoku-0:2-1.fc44.x86 100% |   1.0 MiB/s |   1.0 MiB |  00m00s' '>>> [RPM] warning: /etc/foo.conf created as /etc/foo.conf.rpmnew' '  - file /usr/share/plymouth/themes/ryoku/bullet.png from install of ryoku-desktop-2-2.noarch conflicts with file from package plymouth-1-1.x86_64'`
 	_ = runUpgrade("System", "test", []string{"bash", "-c", script})
 	capW.Close()
 	os.Stdout = keep
@@ -138,7 +197,7 @@ func TestPipedRunIsCurated(t *testing.T) {
 	capR.Close()
 	got := string(out)
 
-	for _, noise := range []string{"Synchronizing", "is up to date", "upgrading ryoku"} {
+	for _, noise := range []string{"Repositories loaded", "Upgrading ryoku", "100%"} {
 		if strings.Contains(got, noise) {
 			t.Errorf("piped output leaked firehose line %q:\n%s", noise, got)
 		}

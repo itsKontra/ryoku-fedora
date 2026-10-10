@@ -20,7 +20,7 @@ func Track(channel string) error {
 		return fmt.Errorf(i18n.T("Fedora uses one rolling COPR repository; use ryoku track copr. Stable/testing channels and tag rollback are unavailable"))
 	}
 	source := sys.SourceTracked()
-	install := !sys.PkgInstalled("ryoku-desktop")
+	install := !pkgInstalled("ryoku-desktop")
 	// A pure source box with no ryoku-desktop and no repo to install it from
 	// cannot be moved onto packages here.
 	if install && sys.RyokuServer() == "" {
@@ -57,6 +57,9 @@ func Track(channel string) error {
 	fmt.Println(i18n.T("==> Updates now come from packages: `ryoku update` runs dnf."))
 	return runChannelUpdate()
 }
+
+// pkgInstalled reads the rpm database; a var so a test sets what is installed.
+var pkgInstalled = sys.PkgInstalled
 
 // installRyokuDesktop installs the umbrella package, which pulls the rest of
 // the Ryoku set. Not limited to RyokuCOPR: its dependencies come from Fedora.

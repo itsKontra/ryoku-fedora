@@ -1,0 +1,24 @@
+Updating and loading repositories:
+Repositories loaded.
+Package             Arch   Version        Repository      Size
+Installing:
+ filesystem-content x86_64 0:3.18-52.fc44 fedora     423.0 KiB
+ tzdata             noarch 0:2026e-1.fc44 updates      1.3 MiB
+
+Transaction Summary:
+ Installing:         2 packages
+
+Total size of inbound packages is 749 KiB. Need to download 714 KiB.
+After this operation, 2 MiB extra will be used (install 2 MiB, remove 0 B).
+[1/2] filesystem-content-0:3.18-52.fc44 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[2/2] tzdata-0:2026e-1.fc44.noarch      100% |   4.2 MiB/s | 713.6 KiB |  00m00s
+--------------------------------------------------------------------------------
+[2/2] Total                             100% |   1.0 MiB/s | 713.6 KiB |  00m01s
+Running transaction
+[1/4] Verify package files              100% |   1.0 KiB/s |   2.0   B |  00m00s
+[2/4] Prepare transaction               100% | 285.0   B/s |   2.0   B |  00m00s
+[3/4] Installing tzdata-0:2026e-1.fc44. 100% |  24.2 MiB/s |   1.5 MiB |  00m00s
+[4/4] Installing filesystem-content-0:3 100% |   2.5 MiB/s | 423.4 KiB |  00m00s
+Warning: skipped OpenPGP checks for 2 packages from repositories: fedora, updates
+Complete!

@@ -1,0 +1,238 @@
+Updating and loading repositories:
+Repositories loaded.
+Package                                    Arch   Version                      Repository      Size
+Upgrading:
+ audit-libs                                x86_64 0:4.2.1-1.fc44               updates    390.5 KiB
+   replacing audit-libs                    x86_64 0:4.1.4-1.fc44               <unknown>  390.5 KiB
+ coreutils                                 x86_64 0:9.10-5.fc44                updates      5.7 MiB
+   replacing coreutils                     x86_64 0:9.10-3.fc44                <unknown>    5.6 MiB
+ coreutils-common                          x86_64 0:9.10-5.fc44                updates     10.7 MiB
+   replacing coreutils-common              x86_64 0:9.10-3.fc44                <unknown>   10.7 MiB
+ curl                                      x86_64 0:8.18.0-12.fc44             updates    480.0 KiB
+   replacing curl                          x86_64 0:8.18.0-4.fc44              <unknown>  480.0 KiB
+ expat                                     x86_64 0:2.8.5-1.fc44               updates    342.2 KiB
+   replacing expat                         x86_64 0:2.7.3-2.fc44               <unknown>  316.8 KiB
+ fedora-gpg-keys                           noarch 0:44-2                       updates    257.6 KiB
+   replacing fedora-gpg-keys               noarch 0:44-1                       <unknown>  133.4 KiB
+ fedora-release                            noarch 0:44-18                      updates      0.0   B
+   replacing fedora-release                noarch 0:44-17                      <unknown>    0.0   B
+ fedora-release-common                     noarch 0:44-18                      updates     20.6 KiB
+   replacing fedora-release-common         noarch 0:44-17                      <unknown>   20.6 KiB
+ fedora-release-identity-basic             noarch 0:44-18                      updates    629.0   B
+   replacing fedora-release-identity-basic noarch 0:44-17                      <unknown>  629.0   B
+ fedora-repos                              noarch 0:44-2                       updates      4.9 KiB
+   replacing fedora-repos                  noarch 0:44-1                       <unknown>    4.9 KiB
+ fuse-common                               x86_64 0:3.18.3-1.fc44              updates     38.0   B
+   replacing fuse-common                   x86_64 0:3.18.2-1.fc44              <unknown>   38.0   B
+ fuse3                                     x86_64 0:3.18.3-1.fc44              updates    139.1 KiB
+   replacing fuse3                         x86_64 0:3.18.2-1.fc44              <unknown>  132.4 KiB
+ fuse3-libs                                x86_64 0:3.18.3-1.fc44              updates    297.8 KiB
+   replacing fuse3-libs                    x86_64 0:3.18.2-1.fc44              <unknown>  297.8 KiB
+ glibc                                     x86_64 0:2.43-9.fc44                updates      6.9 MiB
+   replacing glibc                         x86_64 0:2.43-2.fc44                <unknown>    6.9 MiB
+ glibc-common                              x86_64 0:2.43-9.fc44                updates      1.0 MiB
+   replacing glibc-common                  x86_64 0:2.43-2.fc44                <unknown>    1.0 MiB
+ glibc-minimal-langpack                    x86_64 0:2.43-9.fc44                updates      0.0   B
+   replacing glibc-minimal-langpack        x86_64 0:2.43-2.fc44                <unknown>    0.0   B
+ krb5-libs                                 x86_64 0:1.22.2-4.fc44              updates      2.4 MiB
+   replacing krb5-libs                     x86_64 0:1.22.2-2.fc44              <unknown>    2.4 MiB
+ libacl                                    x86_64 0:2.4.0-1.fc44               updates     39.9 KiB
+   replacing libacl                        x86_64 0:2.3.2-6.fc44               <unknown>   35.8 KiB
+ libattr                                   x86_64 0:2.6.0-1.fc44               updates     24.3 KiB
+   replacing libattr                       x86_64 0:2.5.2-8.fc44               <unknown>   24.3 KiB
+ libcap                                    x86_64 0:2.78-1.fc44                updates    212.1 KiB
+   replacing libcap                        x86_64 0:2.77-2.fc44                <unknown>  212.1 KiB
+ libcap-ng                                 x86_64 0:0.9.6-1.fc44               updates     68.8 KiB
+   replacing libcap-ng                     x86_64 0:0.9.2-1.fc44               <unknown>   68.7 KiB
+ libcurl                                   x86_64 0:8.18.0-12.fc44             updates      1.0 MiB
+   replacing libcurl                       x86_64 0:8.18.0-4.fc44              <unknown>    1.0 MiB
+ libevent                                  x86_64 0:2.1.13-1.fc44              updates    980.7 KiB
+   replacing libevent                      x86_64 0:2.1.12-17.fc44             <unknown>  978.7 KiB
+ libgcc                                    x86_64 0:16.2.1-2.fc44              updates    270.6 KiB
+   replacing libgcc                        x86_64 0:16.0.1-0.10.fc44           <unknown>  270.7 KiB
+ libnghttp2                                x86_64 0:1.68.0-5.fc44              updates    166.1 KiB
+   replacing libnghttp2                    x86_64 0:1.68.0-3.fc44              <unknown>  166.1 KiB
+ libnghttp3                                x86_64 0:1.18.0-1.fc44              updates    163.4 KiB
+   replacing libnghttp3                    x86_64 0:1.15.0-1.fc44              <unknown>  159.2 KiB
+ libselinux                                x86_64 0:3.11-2.fc44                updates    205.2 KiB
+   replacing libselinux                    x86_64 0:3.10-1.fc44                <unknown>  201.0 KiB
+ libsepol                                  x86_64 0:3.11-1.fc44                updates    862.1 KiB
+   replacing libsepol                      x86_64 0:3.10-1.fc44                <unknown>  870.0 KiB
+ libssh                                    x86_64 0:0.12.2-1.fc44              updates    725.5 KiB
+   replacing libssh                        x86_64 0:0.12.0-1.fc44              <unknown>  719.1 KiB
+ libssh-config                             noarch 0:0.12.2-1.fc44              updates    277.0   B
+   replacing libssh-config                 noarch 0:0.12.0-1.fc44              <unknown>  277.0   B
+ ngtcp2                                    x86_64 0:1.22.1-1.fc44              updates    338.2 KiB
+   replacing ngtcp2                        x86_64 0:1.21.0-1.fc44              <unknown>  330.2 KiB
+ ngtcp2-crypto-ossl                        x86_64 0:1.22.1-1.fc44              updates     51.6 KiB
+   replacing ngtcp2-crypto-ossl            x86_64 0:1.21.0-1.fc44              <unknown>   51.6 KiB
+ openldap                                  x86_64 0:2.6.14-1.fc44              updates    670.9 KiB
+   replacing openldap                      x86_64 0:2.6.13-1.fc44              <unknown>  669.9 KiB
+ openssl-libs                              x86_64 1:3.5.9-1.fc44               updates      9.2 MiB
+   replacing openssl-libs                  x86_64 1:3.5.5-1.fc44               <unknown>    9.2 MiB
+ p11-kit                                   x86_64 0:0.26.5-1.fc44              updates      2.6 MiB
+   replacing p11-kit                       x86_64 0:0.26.2-1.fc44              <unknown>    2.6 MiB
+ p11-kit-trust                             x86_64 0:0.26.5-1.fc44              updates    478.3 KiB
+   replacing p11-kit-trust                 x86_64 0:0.26.2-1.fc44              <unknown>  478.3 KiB
+ pam-libs                                  x86_64 0:1.7.2-2.fc44               updates    130.5 KiB
+   replacing pam-libs                      x86_64 0:1.7.2-1.fc44               <unknown>  130.5 KiB
+ systemd-libs                              x86_64 0:259.9-1.fc44               updates      2.4 MiB
+   replacing systemd-libs                  x86_64 0:259.5-1.fc44               <unknown>    2.4 MiB
+ xxhash-libs                               x86_64 0:0.8.4-1.fc44               updates     94.0 KiB
+   replacing xxhash-libs                   x86_64 0:0.8.3-4.fc44               <unknown>   94.0 KiB
+Installing dependencies:
+ ca-certificates                           noarch 0:2026.2.90_v9.0.317-1.fc44  updates      2.7 MiB
+ crypto-policies                           noarch 0:20251128-3.git19878fe.fc44 fedora     132.6 KiB
+ filesystem                                x86_64 0:3.18-52.fc44               fedora     112.0   B
+
+Transaction Summary:
+ Installing:         3 packages
+ Upgrading:         39 packages
+ Replacing:         39 packages
+
+Total size of inbound packages is 17 MiB. Need to download 16 MiB.
+After this operation, 3 MiB extra will be used (install 52 MiB, remove 49 MiB).
+[ 1/42] filesystem-0:3.18-52.fc44.x86_6 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 2/42] crypto-policies-0:20251128-3.gi 100% |   0.0   B/s |   0.0   B |  00m00s
+>>> Already downloaded
+[ 3/42] audit-libs-0:4.2.1-1.fc44.x86_6 100% |   1.2 MiB/s | 143.6 KiB |  00m00s
+[ 4/42] ca-certificates-0:2026.2.90_v9. 100% |   5.7 MiB/s | 973.3 KiB |  00m00s
+[ 5/42] coreutils-0:9.10-5.fc44.x86_64  100% |   6.7 MiB/s |   1.2 MiB |  00m00s
+[ 6/42] curl-0:8.18.0-12.fc44.x86_64    100% |  10.2 MiB/s | 240.2 KiB |  00m00s
+[ 7/42] libnghttp3-0:1.18.0-1.fc44.x86_ 100% |   3.2 MiB/s |  75.3 KiB |  00m00s
+[ 8/42] coreutils-common-0:9.10-5.fc44. 100% |  16.7 MiB/s |   2.1 MiB |  00m00s
+[ 9/42] libssh-0:0.12.2-1.fc44.x86_64   100% |   9.6 MiB/s | 295.9 KiB |  00m00s
+[10/42] ngtcp2-0:1.22.1-1.fc44.x86_64   100% |   7.0 MiB/s | 157.4 KiB |  00m00s
+[11/42] libssh-config-0:0.12.2-1.fc44.n 100% | 447.0 KiB/s |   8.9 KiB |  00m00s
+[12/42] ngtcp2-crypto-ossl-0:1.22.1-1.f 100% |   1.4 MiB/s |  27.8 KiB |  00m00s
+[13/42] libcurl-0:8.18.0-12.fc44.x86_64 100% |   2.7 MiB/s | 455.4 KiB |  00m00s
+[14/42] fedora-gpg-keys-0:44-2.noarch   100% |   5.9 MiB/s | 187.6 KiB |  00m00s
+[15/42] openssl-libs-1:3.5.9-1.fc44.x86 100% |  18.0 MiB/s |   2.8 MiB |  00m00s
+[16/42] expat-0:2.8.5-1.fc44.x86_64     100% |   1.2 MiB/s | 134.4 KiB |  00m00s
+[17/42] fedora-release-common-0:44-18.n 100% |   1.3 MiB/s |  23.6 KiB |  00m00s
+[18/42] fedora-release-0:44-18.noarch   100% | 289.8 KiB/s |  12.5 KiB |  00m00s
+[19/42] fedora-repos-0:44-2.noarch      100% | 504.6 KiB/s |   9.1 KiB |  00m00s
+[20/42] fuse-common-0:3.18.3-1.fc44.x86 100% | 473.8 KiB/s |   8.1 KiB |  00m00s
+[21/42] fedora-release-identity-basic-0 100% | 601.1 KiB/s |  13.2 KiB |  00m00s
+[22/42] fuse3-0:3.18.3-1.fc44.x86_64    100% |   3.2 MiB/s |  63.2 KiB |  00m00s
+[23/42] fuse3-libs-0:3.18.3-1.fc44.x86_ 100% |   5.0 MiB/s | 102.2 KiB |  00m00s
+[24/42] glibc-minimal-langpack-0:2.43-9 100% |   4.2 MiB/s |  85.4 KiB |  00m00s
+[25/42] glibc-common-0:2.43-9.fc44.x86_ 100% |  10.2 MiB/s | 375.6 KiB |  00m00s
+[26/42] libacl-0:2.4.0-1.fc44.x86_64    100% |   1.3 MiB/s |  27.3 KiB |  00m00s
+[27/42] libattr-0:2.6.0-1.fc44.x86_64   100% | 988.2 KiB/s |  17.8 KiB |  00m00s
+[28/42] glibc-0:2.43-9.fc44.x86_64      100% |  21.8 MiB/s |   2.4 MiB |  00m00s
+[29/42] libcap-0:2.78-1.fc44.x86_64     100% |   4.5 MiB/s |  88.1 KiB |  00m00s
+[30/42] libcap-ng-0:0.9.6-1.fc44.x86_64 100% |   1.9 MiB/s |  34.8 KiB |  00m00s
+[31/42] libevent-0:2.1.13-1.fc44.x86_64 100% |  12.8 MiB/s | 289.2 KiB |  00m00s
+[32/42] libgcc-0:16.2.1-2.fc44.x86_64   100% |   6.7 MiB/s | 136.3 KiB |  00m00s
+[33/42] libnghttp2-0:1.68.0-5.fc44.x86_ 100% |   3.7 MiB/s |  76.6 KiB |  00m00s
+[34/42] libselinux-0:3.11-2.fc44.x86_64 100% |   5.4 MiB/s | 104.3 KiB |  00m00s
+[35/42] libsepol-0:3.11-1.fc44.x86_64   100% |   9.9 MiB/s | 365.3 KiB |  00m00s
+[36/42] openldap-0:2.6.14-1.fc44.x86_64 100% |  11.5 MiB/s | 271.5 KiB |  00m00s
+[37/42] p11-kit-trust-0:0.26.5-1.fc44.x 100% |   6.8 MiB/s | 146.5 KiB |  00m00s
+[38/42] p11-kit-0:0.26.5-1.fc44.x86_64  100% |  13.0 MiB/s | 560.6 KiB |  00m00s
+[39/42] pam-libs-0:1.7.2-2.fc44.x86_64  100% |   2.9 MiB/s |  58.6 KiB |  00m00s
+[40/42] xxhash-libs-0:0.8.4-1.fc44.x86_ 100% |   2.2 MiB/s |  41.2 KiB |  00m00s
+[41/42] krb5-libs-0:1.22.2-4.fc44.x86_6 100% |   3.1 MiB/s | 802.6 KiB |  00m00s
+[42/42] systemd-libs-0:259.9-1.fc44.x86 100% |  14.6 MiB/s | 868.8 KiB |  00m00s
+--------------------------------------------------------------------------------
+[42/42] Total                           100% |  10.6 MiB/s |  15.6 MiB |  00m01s
+Running transaction
+[ 1/83] Verify package files            100% | 840.0   B/s |  42.0   B |  00m00s
+>>> Running %pretrans scriptlet: filesystem-0:3.18-52.fc44.x86_64
+>>> Finished %pretrans scriptlet: filesystem-0:3.18-52.fc44.x86_64
+>>> [RPM] /var/cache/libdnf5/fedora-cff72538bc9825a4/packages/filesystem-3.18-52.fc44.x86_64.rpm: Header OpenPGP V4 RSA/SHA256 signature, key ID dbfcf71c6d9f90a6: NOKEY
+[ 2/83] Prepare transaction             100% |   1.9 KiB/s |  81.0   B |  00m00s
+[ 3/83] Installing filesystem-0:3.18-52 100% | 782.2 KiB/s | 212.8 KiB |  00m00s
+>>> [RPM] unpacking of archive failed on file /var/spool/mail: cpio: chown failed - Device or resource busy
+>>> Unpack error: filesystem-0:3.18-52.fc44.x86_64
+[ 4/83] Upgrading libgcc-0:16.2.1-2.fc4 100% | 133.0 MiB/s | 272.3 KiB |  00m00s
+>>> [RPM] filesystem-3.18-52.fc44.x86_64: install failed
+[ 5/83] Upgrading glibc-common-0:2.43-9 100% | 170.7 MiB/s |   1.0 MiB |  00m00s
+[ 6/83] Upgrading glibc-minimal-langpac 100% |   0.0   B/s | 124.0   B |  00m00s
+[ 7/83] Upgrading glibc-0:2.43-9.fc44.x 100% |  23.0 MiB/s |   6.9 MiB |  00m00s
+[ 8/83] Upgrading ngtcp2-0:1.22.1-1.fc4 100% | 331.8 MiB/s | 339.8 KiB |  00m00s
+[ 9/83] Upgrading p11-kit-0:0.26.5-1.fc 100% |  17.1 MiB/s |   2.6 MiB |  00m00s
+>>> Running %pre scriptlet: crypto-policies-0:20251128-3.git19878fe.fc44.noarch
+>>> Finished %pre scriptlet: crypto-policies-0:20251128-3.git19878fe.fc44.noarch
+>>> Scriptlet output:
+>>> /var/tmp/rpm-tmp.bdxbmf: line 2: /dev/null: No such file or directory
+>>> /var/tmp/rpm-tmp.bdxbmf: line 4: /dev/null: No such file or directory
+>>> 
+[10/83] Installing crypto-policies-0:20 100% |  14.0 MiB/s | 157.7 KiB |  00m00s
+[11/83] Upgrading p11-kit-trust-0:0.26. 100% |   3.3 MiB/s | 480.1 KiB |  00m00s
+[12/83] Upgrading libnghttp3-0:1.18.0-1 100% | 161.0 MiB/s | 164.8 KiB |  00m00s
+[13/83] Upgrading fuse3-libs-0:3.18.3-1 100% | 291.9 MiB/s | 298.9 KiB |  00m00s
+[14/83] Upgrading libacl-0:2.4.0-1.fc44 100% |   0.0   B/s |  40.7 KiB |  00m00s
+[15/83] Upgrading libattr-0:2.6.0-1.fc4 100% |  24.7 MiB/s |  25.2 KiB |  00m00s
+[16/83] Upgrading libcap-ng-0:0.9.6-1.f 100% |  69.0 MiB/s |  70.6 KiB |  00m00s
+[17/83] Upgrading audit-libs-0:4.2.1-1. 100% | 191.9 MiB/s | 393.1 KiB |  00m00s
+[18/83] Upgrading pam-libs-0:1.7.2-2.fc 100% | 129.6 MiB/s | 132.7 KiB |  00m00s
+[19/83] Upgrading libcap-0:2.78-1.fc44. 100% | 106.1 MiB/s | 217.2 KiB |  00m00s
+[20/83] Upgrading libnghttp2-0:1.68.0-5 100% | 163.3 MiB/s | 167.3 KiB |  00m00s
+[21/83] Upgrading libsepol-0:3.11-1.fc4 100% | 280.9 MiB/s | 863.0 KiB |  00m00s
+[22/83] Upgrading libselinux-0:3.11-2.f 100% | 201.6 MiB/s | 206.5 KiB |  00m00s
+[23/83] Upgrading systemd-libs-0:259.9- 100% | 350.1 MiB/s |   2.5 MiB |  00m00s
+[24/83] Upgrading fedora-gpg-keys-0:44- 100% |  15.8 MiB/s | 355.3 KiB |  00m00s
+[25/83] Upgrading fuse-common-0:3.18.3- 100% |   0.0   B/s | 292.0   B |  00m00s
+[26/83] Upgrading fedora-release-identi 100% |   0.0   B/s | 888.0   B |  00m00s
+[27/83] Upgrading fedora-repos-0:44-2.n 100% |   0.0   B/s |   5.7 KiB |  00m00s
+[28/83] Upgrading fedora-release-common 100% |  12.2 MiB/s |  24.9 KiB |  00m00s
+[29/83] Upgrading fedora-release-0:44-1 100% |   0.0   B/s | 124.0   B |  00m00s
+[30/83] Upgrading libssh-config-0:0.12. 100% |   0.0   B/s | 816.0   B |  00m00s
+[31/83] Upgrading coreutils-common-0:9. 100% | 368.5 MiB/s |  10.7 MiB |  00m00s
+[32/83] Upgrading openssl-libs-1:3.5.9- 100% | 460.6 MiB/s |   9.2 MiB |  00m00s
+[33/83] Upgrading coreutils-0:9.10-5.fc 100% |  34.5 MiB/s |   5.7 MiB |  00m00s
+[34/83] Installing ca-certificates-0:20 100% |   2.0 MiB/s |   2.5 MiB |  00m01s
+[35/83] Upgrading krb5-libs-0:1.22.2-4. 100% | 239.5 MiB/s |   2.4 MiB |  00m00s
+[36/83] Upgrading libssh-0:0.12.2-1.fc4 100% | 355.3 MiB/s | 727.6 KiB |  00m00s
+[37/83] Upgrading ngtcp2-crypto-ossl-0: 100% |   0.0   B/s |  52.5 KiB |  00m00s
+[38/83] Upgrading libevent-0:2.1.13-1.f 100% | 320.5 MiB/s | 984.4 KiB |  00m00s
+[39/83] Upgrading openldap-0:2.6.14-1.f 100% | 219.6 MiB/s | 674.7 KiB |  00m00s
+[40/83] Upgrading libcurl-0:8.18.0-12.f 100% | 332.7 MiB/s |   1.0 MiB |  00m00s
+[41/83] Upgrading curl-0:8.18.0-12.fc44 100% | 471.4 MiB/s | 482.7 KiB |  00m00s
+[42/83] Upgrading fuse3-0:3.18.3-1.fc44 100% | 138.1 MiB/s | 141.4 KiB |  00m00s
+[43/83] Upgrading expat-0:2.8.5-1.fc44. 100% | 336.2 MiB/s | 344.3 KiB |  00m00s
+[44/83] Upgrading xxhash-libs-0:0.8.4-1 100% |   0.0   B/s |  95.4 KiB |  00m00s
+[45/83] Removing p11-kit-trust-0:0.26.2 100% |  82.0   B/s |  12.0   B |  00m00s
+[46/83] Removing p11-kit-0:0.26.2-1.fc4 100% |  98.6 KiB/s | 101.0   B |  00m00s
+[47/83] Removing fuse3-0:3.18.2-1.fc44. 100% |   0.0   B/s |  16.0   B |  00m00s
+[48/83] Removing fuse3-libs-0:3.18.2-1. 100% |   0.0   B/s |   7.0   B |  00m00s
+[49/83] Removing curl-0:8.18.0-4.fc44.x 100% |   0.0   B/s |  18.0   B |  00m00s
+[50/83] Removing libcurl-0:8.18.0-4.fc4 100% |   0.0   B/s |   7.0   B |  00m00s
+[51/83] Removing libssh-0:0.12.0-1.fc44 100% |  13.7 KiB/s |  14.0   B |  00m00s
+[52/83] Removing krb5-libs-0:1.22.2-2.f 100% |  63.5 KiB/s |  65.0   B |  00m00s
+[53/83] Removing coreutils-0:9.10-3.fc4 100% |  98.0 KiB/s | 301.0   B |  00m00s
+[54/83] Removing systemd-libs-0:259.5-1 100% |   0.0   B/s |  20.0   B |  00m00s
+[55/83] Removing libselinux-0:3.10-1.fc 100% |   0.0   B/s |   8.0   B |  00m00s
+[56/83] Removing openldap-0:2.6.13-1.fc 100% |  25.4 KiB/s |  26.0   B |  00m00s
+[57/83] Removing libevent-0:2.1.12-17.f 100% |  24.4 KiB/s |  25.0   B |  00m00s
+[58/83] Removing libcap-0:2.77-2.fc44.x 100% |  34.2 KiB/s |  35.0   B |  00m00s
+[59/83] Removing pam-libs-0:1.7.2-1.fc4 100% |  15.6 KiB/s |  16.0   B |  00m00s
+[60/83] Removing audit-libs-0:4.1.4-1.f 100% |   0.0   B/s |  17.0   B |  00m00s
+[61/83] Removing ngtcp2-crypto-ossl-0:1 100% |   0.0   B/s |   5.0   B |  00m00s
+[62/83] Removing openssl-libs-1:3.5.5-1 100% |  19.0 KiB/s |  39.0   B |  00m00s
+[63/83] Removing libsepol-0:3.10-1.fc44 100% |   0.0   B/s |   6.0   B |  00m00s
+[64/83] Removing libcap-ng-0:0.9.2-1.fc 100% |   0.0   B/s |  12.0   B |  00m00s
+[65/83] Removing expat-0:2.7.3-2.fc44.x 100% |  13.7 KiB/s |  14.0   B |  00m00s
+[66/83] Removing libacl-0:2.3.2-6.fc44. 100% |   0.0   B/s |   5.0   B |  00m00s
+[67/83] Removing ngtcp2-0:1.21.0-1.fc44 100% |   0.0   B/s |  10.0   B |  00m00s
+[68/83] Removing libnghttp2-0:1.68.0-3. 100% |   0.0   B/s |   7.0   B |  00m00s
+[69/83] Removing libnghttp3-0:1.15.0-1. 100% |   0.0   B/s |   9.0   B |  00m00s
+[70/83] Removing xxhash-libs-0:0.8.3-4. 100% |   0.0   B/s |   9.0   B |  00m00s
+[71/83] Removing fedora-release-0:44-17 100% |   0.0   B/s | 100.0   B |  00m00s
+[72/83] Removing fedora-release-common- 100% |   0.0   B/s |  29.0   B |  00m00s
+[73/83] Removing fedora-repos-0:44-1.no 100% |   0.0   B/s |   5.0   B |  00m00s
+[74/83] Removing fedora-gpg-keys-0:44-1 100% |   0.0   B/s | 311.0   B |  00m00s
+[75/83] Removing fedora-release-identit 100% |   0.0   B/s |   1.0   B |  00m00s
+[76/83] Removing coreutils-common-0:9.1 100% | 249.0 KiB/s | 255.0   B |  00m00s
+[77/83] Removing libssh-config-0:0.12.0 100% |   0.0   B/s |   3.0   B |  00m00s
+[78/83] Removing fuse-common-0:3.18.2-1 100% |   0.0   B/s |   1.0   B |  00m00s
+[79/83] Removing libattr-0:2.5.2-8.fc44 100% |   5.9 KiB/s |   6.0   B |  00m00s
+[80/83] Removing glibc-0:2.43-2.fc44.x8 100% |  49.3 KiB/s | 101.0   B |  00m00s
+[81/83] Removing glibc-minimal-langpack 100% |   0.0   B/s | 100.0   B |  00m00s
+[82/83] Removing glibc-common-0:2.43-2. 100% |  49.8 KiB/s |  51.0   B |  00m00s
+[83/83] Removing libgcc-0:16.0.1-0.10.f 100% |   6.0   B/s |  11.0   B |  00m02s
+Transaction failed: Rpm transaction failed.
+Warning: skipped OpenPGP checks for 42 packages from repositories: fedora, updates

@@ -104,7 +104,7 @@ overlay_user_edits() {
   return 0
 }
 
-# Quickshell links Qt's private API, so an AUR build (quickshell-git) stops
+# Quickshell links Qt's private API, so a build made against another Qt stops
 # loading after a Qt update. Restarting into that leaves a black screen with no
 # way back, so check first and keep the live desktop instead.
 check_renderer() {
@@ -114,16 +114,10 @@ check_renderer() {
   fi
   say "ryoku-shell NOT restarted: quickshell cannot start"
   printf '%s\n' "$out" | sed 's/^/    /' >&2
-  local hint="sudo pacman -S quickshell"
-  if command -v dnf >/dev/null 2>&1; then
-    hint="sudo dnf install quickshell"
-  elif command -v apt-get >/dev/null 2>&1; then
-    hint="sudo apt-get install quickshell"
-  fi
   cat >&2 <<EOF
     Quickshell links Qt's private API, so a build made against another Qt will
-    not load. The repo package is rebuilt with Qt; quickshell-git is not:
-        $hint
+    not load. The COPR package is rebuilt with Qt:
+        sudo dnf install quickshell
     Then run this deploy again. The desktop you have now was left running.
 EOF
   return 1
@@ -226,20 +220,14 @@ start_session_power_units() {
   return 1
 }
 
-# Building the desktop from a checkout needs the Go toolchain (cmake/ninja and
-# makepkg below self-gate; go is the one hard requirement). A packaged box that
+# Building the desktop from a checkout needs the Go toolchain (cmake/ninja
+# below self-gate; go is the one hard requirement). A packaged box that
 # was switched to a checkout channel without it would otherwise die here with a
 # bare "go: command not found"; name the problem and the fix.
 if ! command -v go >/dev/null 2>&1; then
   printf '  the Go toolchain is required to build the desktop from a checkout, but go is not installed.\n' >&2
-  if command -v dnf >/dev/null 2>&1; then
-    printf '    install it:  sudo dnf install golang\n' >&2
-  elif command -v apt-get >/dev/null 2>&1; then
-    printf '    install it:  sudo apt-get install golang\n' >&2
-  else
-    printf '    install it:  sudo pacman -S --needed go\n' >&2
-  fi
-  printf '    (a packaged install updates through pacman and does not build from source; check ryoku status.)\n' >&2
+  printf '    install it:  sudo dnf install golang\n' >&2
+  printf '    (a packaged install updates through dnf and does not build from source; check ryoku status.)\n' >&2
   exit 1
 fi
 
@@ -310,7 +298,7 @@ for s in "$here/scripts"/*.sh; do
   install -m755 "$s" "$bindir/${s##*/}"
 done
 # Depth and Parallax merged into ryostage; a checkout box that installed the old
-# helpers keeps them on PATH forever otherwise (pacman drops them on packaged boxes).
+# helpers keeps them on PATH forever otherwise (rpm drops them on packaged boxes).
 rm -f "$bindir"/ryoku-{depth,parallax-engine}
 
 # Build ryogami-live, the software-decode video-wallpaper daemon the shell drives
@@ -490,9 +478,7 @@ fi
 # it, so a Qt update has to force a rebuild.
 qmldir="$HOME/.local/lib/qt6/qml"
 qtver=""
-if command -v pacman >/dev/null 2>&1; then
-  qtver="$(pacman -Q qt6-base 2>/dev/null | awk '{print $2}')"
-elif command -v rpm >/dev/null 2>&1; then
+if command -v rpm >/dev/null 2>&1; then
   qtver="$(rpm -q --qf "%{VERSION}" qt6-qtbase 2>/dev/null || true)"
 elif command -v pkg-config >/dev/null 2>&1 && pkg-config --exists Qt6Core 2>/dev/null; then
   qtver="$(pkg-config --modversion Qt6Core 2>/dev/null || true)"
@@ -659,15 +645,11 @@ stage_qylock_user() {
   say "staged in-session lockscreen for the next daemon start"
 }
 
-# Packaged externals on a checkout box. ryotunes (and every other package
-# release/packages pins to an upstream commit) is a [ryoku] package users get
-# from pacman; a dev box takes the same signed package from the channel its
-# branch publishes to (unstable-dev -> testing, main -> stable) rather than
-# spending minutes on a local makepkg that could differ from what ships. The
-# release key is in the checkout (release/packages/ryoku-keyring), so trusting
-# it needs no network; the stanza is added once and repointed when the tracked
-# branch changes, and a [ryoku] that points somewhere Ryoku does not publish
-# (a private mirror) is left alone. Skipped cleanly without sudo (CI).
+# Packaged externals on a checkout box. Ryotunes ships from its own COPR
+# (itskontra/ryotunes, enabled by the installer with the other dependency COPRs),
+# so a dev box installs the same package users get rather than building it.
+# Installed once; dnf upgrades it with the rest of the system after that.
+# Skipped cleanly without dnf, or without a sudo that can run (CI).
 # The Chromium wrapper this script once laid into ~/.local/bin is retired
 # first so it can never shadow the app.
 if [[ -f "$bindir/ryotunes" ]] && [[ "$(head -c 2 "$bindir/ryotunes" 2>/dev/null)" == '#!' ]] \
@@ -682,58 +664,25 @@ if [[ -x "$bindir/ryotunes" ]] && [[ -f "$HOME/.local/share/ryoku/ryotunes.commi
     "$HOME/.local/share/ryoku/ryotunes.commit" "$appshare"/icons/hicolor/*/apps/ryotunes.png
   say "retired the locally built ryotunes (the package takes over)"
 fi
-if command -v sudo >/dev/null 2>&1 && command -v pacman >/dev/null 2>&1; then
-  _rkey=EB6D3C0F55A7B3CABA6B2838847B274F025DD6E3
-  _rbase="https://repo.ryoku.dev/stable"
-  case "${RYOKU_CHANNEL:-$(sed -n 's/^RYOKU_CHANNEL=//p' "$HOME/.config/environment.d/ryoku.conf" 2>/dev/null)}" in
-    unstable-dev) _rserver="$_rbase/channels/testing/\$arch" ;;
-    *)            _rserver="$_rbase/\$arch" ;;
-  esac
-  _rcur="$(awk '/^\[ryoku\]/{f=1;next} /^\[/{f=0} f && /^Server/{sub(/^Server *= */,""); print; exit}' /etc/pacman.conf)"
-  if [[ -z "$_rcur" ]]; then
-    say "adding the [ryoku] repo ($_rserver) so packaged externals install from it"
-    sudo pacman-key --add "$repo_root/release/packages/ryoku-keyring/ryoku.gpg" >/dev/null 2>&1 || true
-    sudo pacman-key --lsign-key "$_rkey" >/dev/null 2>&1 || true
-    printf '\n[ryoku]\nSigLevel = Required\nServer = %s\n' "$_rserver" | sudo tee -a /etc/pacman.conf >/dev/null
-  elif [[ "$_rcur" != "$_rserver" ]] && [[ "$_rcur" == "$_rbase"/* ]]; then
-    say "repointing the [ryoku] repo at $_rserver"
-    sudo sed -i "/^\[ryoku\]/,/^\[/ s|^Server *=.*|Server = $_rserver|" /etc/pacman.conf
-  fi
-  # -Syu, not -Sy + -S: a refreshed db with an un-upgraded system is the
-  # partial-upgrade trap, and a packaged box upgrades on every update anyway.
-  _plog="$HOME/.cache/ryoku/deploy-pacman.log"
-  mkdir -p "$(dirname "$_plog")"
-  # the redirect is the user's file, which is the intent (shellcheck SC2024 is
-  # about root-owned targets); pacman's own output goes to the log for -v.
-  # --overwrite the ryoku-owned paths the ISO installer and this script seed
-  # unowned (privileged helpers, systemd units, polkit rules, the plymouth theme,
-  # the boot configs); once ryoku-desktop packages them an unowned copy otherwise
-  # aborts the whole -Syu with "exists in filesystem" and nothing upgrades.
-  _rovw='/usr/bin/ryoku-*,/usr/lib/systemd/system/ryoku-*,/usr/lib/initcpio/install/ryoku-*,/usr/share/polkit-1/rules.d/*ryoku*.rules,/usr/share/plymouth/themes/ryoku/*,/usr/share/ryoku/boot/*,/etc/systemd/logind.conf.d/10-ryoku-lid.conf'
-  _pac_ryotunes() { sudo pacman -Syu --needed --noconfirm --overwrite "$_rovw" ryotunes; }
-  # shellcheck disable=SC2024
-  if _pac_ryotunes >"$_plog" 2>&1; then
-    say "ryotunes from [ryoku]: $(pacman -Q ryotunes 2>/dev/null | awk '{print $2}')"
-  elif grep -q 'exists in filesystem' "$_plog"; then
-    # a new package now claims files that exist unowned (an installer/deploy
-    # stray for any package, not just ryoku): remove the ones no package owns and
-    # retry once. A file another package owns is a real conflict, left in place.
-    _strays=()
-    while IFS= read -r _f; do
-      [ -e "$_f" ] || continue
-      pacman -Qo "$_f" >/dev/null 2>&1 || _strays+=("$_f")
-    done < <(sed -n 's/.*: \(\/[^ ]*\) exists in filesystem.*/\1/p' "$_plog")
-    # shellcheck disable=SC2024
-    if [ "${#_strays[@]}" -gt 0 ] && sudo rm -f "${_strays[@]}" && _pac_ryotunes >>"$_plog" 2>&1; then
-      say "ryotunes from [ryoku]: $(pacman -Q ryotunes 2>/dev/null | awk '{print $2}') (cleared ${#_strays[@]} unowned file(s))"
-    else
-      say "  ryotunes not installed from [ryoku] (file conflicts remain; see $_plog)"
-    fi
+if ! rpm -q ryotunes >/dev/null 2>&1; then
+  if ! command -v sudo >/dev/null 2>&1 || ! command -v dnf >/dev/null 2>&1; then
+    say "skipping packaged externals (sudo or dnf not available)"
+  elif ! sudo -n true 2>/dev/null && [[ ! -t 0 ]]; then
+    say "skipping packaged externals (sudo needs a password and there is no terminal)"
   else
-    say "  ryotunes not installed from [ryoku] (channel unreachable or not published yet); see $_plog"
+    _dlog="$HOME/.cache/ryoku/deploy-dnf.log"
+    mkdir -p "$(dirname "$_dlog")"
+    # the redirect is the user's file, which is the intent (shellcheck SC2024 is
+    # about root-owned targets); dnf's own output goes to the log for -v.
+    # shellcheck disable=SC2024
+    if sudo dnf -y install ryotunes >"$_dlog" 2>&1; then
+      say "ryotunes from its COPR: $(rpm -q --qf '%{VERSION}-%{RELEASE}' ryotunes 2>/dev/null)"
+    elif grep -q 'No match for argument' "$_dlog"; then
+      say "  ryotunes not installed (is the itskontra/ryotunes COPR enabled?); see $_dlog"
+    else
+      say "  ryotunes not installed; see $_dlog"
+    fi
   fi
-else
-  say "skipping packaged externals (sudo or pacman not available)"
 fi
 
 # Nautilus stash actions (a nautilus-python extension). Installs ship it system-wide
