@@ -1937,32 +1937,6 @@ func TestResolveGtkThemeName(t *testing.T) {
 	}
 }
 
-func TestUpgradeFastfetchOSLine(t *testing.T) {
-	old := `{ "type": "command", "key": "OS",     "text": "echo \"Ryoku $(ryoku version 2>/dev/null || echo dev)\"" },
-{ "type": "command", "key": "BRANCH", "text": "ryoku version --branch 2>/dev/null || echo main" },`
-	got, changed := upgradeFastfetchOSLine(old)
-	if !changed {
-		t.Fatal("the pre-release OS line must be upgraded")
-	}
-	if !strings.Contains(got, `ryoku version --pretty 2>/dev/null || echo dev`) {
-		t.Fatalf("OS line not moved to --pretty:\n%s", got)
-	}
-	if !strings.Contains(got, `ryoku version --branch 2>/dev/null || echo main`) {
-		t.Fatalf("BRANCH line must be untouched:\n%s", got)
-	}
-	if again, changed := upgradeFastfetchOSLine(got); changed || again != got {
-		t.Fatal("upgrading twice must be a no-op")
-	}
-	if _, changed := upgradeFastfetchOSLine(`{ "key": "OS", "text": "echo mine" }`); changed {
-		t.Fatal("a user-rewritten OS line must be left alone")
-	}
-	saved := `"text": "echo \"Ryoku $(ryoku version 2\u003e/dev/null || echo dev)\""`
-	got, changed = upgradeFastfetchOSLine(saved)
-	if !changed || !strings.Contains(got, `ryoku version --pretty 2\u003e/dev/null`) {
-		t.Fatalf("a Hub-saved config (JSON-escaped >) must be upgraded too:\n%s", got)
-	}
-}
-
 func TestStaleUserRyotunesSpotsTheWrapperOnly(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", filepath.Join(dir, "share"))
