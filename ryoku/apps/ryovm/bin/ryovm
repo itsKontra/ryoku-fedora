@@ -357,7 +357,9 @@ cmd_create() {
 	if [ "$rc" -eq 0 ] && [ -n "$made" ]; then
 		# quickget's per-VM virtio-win pull lands an anti-bot HTML stub; point the
 		# machine at the shared, validated driver CD instead (fetched on demand by
-		# `virtio`) so Windows setup finds the disk once the drivers land.
+		# `virtio`) so Windows setup finds the disk once the drivers land. quickget
+		# writes secureboot="off" (or nothing, and quickemu defaults off); turn it
+		# on to match a Load ISO Windows VM.
 		case "$g" in
 			windows|windows-server)
 				rm -f "$vms_dir/$made/virtio-win.iso" 2>/dev/null
@@ -365,6 +367,11 @@ cmd_create() {
 					sed -i -E "s|^fixed_iso=.*|fixed_iso=\"$(virtioWin)\"|" "$vms_dir/$made.conf"
 				else
 					echo "fixed_iso=\"$(virtioWin)\"" >>"$vms_dir/$made.conf"
+				fi
+				if grep -qE '^secureboot=' "$vms_dir/$made.conf"; then
+					sed -i -E 's|^secureboot=.*|secureboot="on"|' "$vms_dir/$made.conf"
+				else
+					echo 'secureboot="on"' >>"$vms_dir/$made.conf"
 				fi ;;
 		esac
 		emit "{\"phase\":\"done\",\"name\":\"$made\"}"
@@ -392,13 +399,14 @@ cmd_import() {
 	} >"$conf"
 	# Windows ships no in-box virtio driver, so a plain ISO install finds no disk
 	# without the driver CD; point it at the shared VirtIO CD (fetched on demand
-	# by `virtio`). 11 also wants a TPM to pass setup; Secure Boot is not needed
-	# for setup, so it stays off and quickemu boots edk2-ovmf's plain
-	# /usr/share/edk2/ovmf/OVMF_CODE.fd rather than the secboot build.
+	# by `virtio`). 11 also wants a TPM to pass setup. quickemu defaults Secure
+	# Boot off, so turn it on: it then boots edk2-ovmf's secboot firmware with
+	# the Microsoft keys enrolled (OVMF_VARS*.secboot), and enables the SMM that
+	# firmware needs for every Windows guest.
 	case "$guest" in
 		windows|windows-server)
 			echo 'tpm="on"' >>"$conf"
-			echo 'secureboot="off"' >>"$conf"
+			echo 'secureboot="on"' >>"$conf"
 			echo "fixed_iso=\"$(virtioWin)\"" >>"$conf"
 			;;
 	esac
