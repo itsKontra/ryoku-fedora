@@ -104,24 +104,16 @@ sddm_autologin() {
   return 1
 }
 
+# Fedora's stock /etc/pam.d/sddm already carries these two lines, so this only
+# restores a stack that never-ask stripped. It writes them exactly as Fedora
+# ships them, after the same password-auth lines, so the file returns to the
+# packaged bytes. ryoku keyring apply-pam uses the same form.
 wire_keyring_pam() {
   if ! grep -qE '^[[:space:]]*-?auth.*pam_gnome_keyring\.so' "$PAM_FILE"; then
-    if grep -qE '^[[:space:]]*auth[[:space:]].*include[[:space:]].*system-login' "$PAM_FILE"; then
-      priv sed -i '/^[[:space:]]*auth[[:space:]].*include[[:space:]].*system-login/a auth optional pam_gnome_keyring.so' "$PAM_FILE"
-    elif grep -qE '^[[:space:]]*auth[[:space:]].*substack[[:space:]].*password-auth' "$PAM_FILE"; then
-      priv sed -i '/^[[:space:]]*auth[[:space:]].*substack[[:space:]].*password-auth/a -auth optional pam_gnome_keyring.so' "$PAM_FILE"
-    elif grep -qE '^[[:space:]]*auth[[:space:]].*include[[:space:]].*password-auth' "$PAM_FILE"; then
-      priv sed -i '/^[[:space:]]*auth[[:space:]].*include[[:space:]].*password-auth/a -auth optional pam_gnome_keyring.so' "$PAM_FILE"
-    fi
+    priv sed -i '/^auth[[:space:]]\+substack[[:space:]]\+password-auth$/a -auth        optional      pam_gnome_keyring.so' "$PAM_FILE"
   fi
   if ! grep -qE '^[[:space:]]*-?session.*pam_gnome_keyring\.so' "$PAM_FILE"; then
-    if grep -qE '^[[:space:]]*session[[:space:]].*include[[:space:]].*system-login' "$PAM_FILE"; then
-      priv sed -i '/^[[:space:]]*session[[:space:]].*include[[:space:]].*system-login/a session optional pam_gnome_keyring.so auto_start' "$PAM_FILE"
-    elif grep -qE '^[[:space:]]*session[[:space:]].*include[[:space:]].*password-auth' "$PAM_FILE"; then
-      priv sed -i '/^[[:space:]]*session[[:space:]].*include[[:space:]].*password-auth/a -session optional pam_gnome_keyring.so auto_start' "$PAM_FILE"
-    elif grep -qE '^[[:space:]]*session[[:space:]].*include[[:space:]].*postlogin' "$PAM_FILE"; then
-      priv sed -i '/^[[:space:]]*session[[:space:]].*include[[:space:]].*postlogin/i -session optional pam_gnome_keyring.so auto_start' "$PAM_FILE"
-    fi
+    priv sed -i '/^session[[:space:]]\+include[[:space:]]\+password-auth$/a -session     optional      pam_gnome_keyring.so auto_start' "$PAM_FILE"
   fi
 }
 

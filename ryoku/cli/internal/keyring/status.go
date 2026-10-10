@@ -90,11 +90,11 @@ func gatherStatus() Status {
 	source := "configured"
 	if !configured {
 		source = "inferred"
-		// Ryoku's default is never prompt: an unconfigured box with no PAM wiring
-		// defaults to never-ask (a blank, passwordless keyring) rather than ask
-		// (which prompts on first use). `ryoku keyring init` records this and seeds
-		// the blank keyring at first login. A PAM-wired box means the user chose
-		// unlock-on-login, so honour that.
+		// Fedora's stock SDDM stack wires pam_gnome_keyring, so an unconfigured
+		// stock box infers unlock-on-login. Only a stack without the lines
+		// (stripped by never-ask or ask, or edited) falls back to never-ask (a
+		// blank, passwordless keyring) rather than ask, which prompts on first
+		// use. `ryoku keyring init` records the inferred mode at first login.
 		if pam {
 			mode = ModeUnlockOnLogin
 		} else {

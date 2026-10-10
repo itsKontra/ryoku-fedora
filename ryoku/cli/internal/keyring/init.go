@@ -7,15 +7,16 @@ import (
 )
 
 // runInit is the first-login keyring default, run by the Hyprland autostart
-// (`ryoku keyring init`) every login. Its job is that no app ever prompts for a
-// keyring password out of the box: it records the mode for a user who has never
-// chosen one and seeds the blank, passwordless default keyring that never-ask
-// needs. Idempotent and user-side only (it never edits the root PAM stack).
+// (`ryoku keyring init`) every login. It records the mode for a user who has
+// never chosen one, and seeds the blank, passwordless default keyring when that
+// mode is never-ask. Idempotent and user-side only (it never edits the root PAM
+// stack).
 //
 //   - Already configured -> no-op, so a user who picked a mode in Ryoku Settings
 //     keeps it.
-//   - PAM already wired (unlock-on-login) -> record that and touch nothing.
-//   - Otherwise never-ask: seed a blank default keyring so nothing prompts. This
+//   - PAM wired (unlock-on-login) -> record that and touch nothing. Fedora's
+//     stock SDDM stack ships the keyring lines, so this is a fresh Fedora box.
+//   - Otherwise (the lines were stripped) never-ask: seed a blank default keyring so nothing prompts. This
 //     is non-destructive -- a pre-existing password-protected keyring is left
 //     intact and only its policy is recorded (the user converts or resets it
 //     explicitly), and a transient "secret service not up yet" failure is left

@@ -812,7 +812,7 @@ func TestExpandTilde(t *testing.T) {
 	}
 }
 
-// reconcileFastfetchEmblem keeps the branded readout off the stock Arch logo.
+// reconcileFastfetchEmblem keeps the branded readout off the stock Fedora logo.
 // exercised end to end through real IO in temp dirs (config + packaged base
 // tree), driven entirely by env so it never touches the real HOME or system
 // paths. one subtest per branch of the reconciler's decision.

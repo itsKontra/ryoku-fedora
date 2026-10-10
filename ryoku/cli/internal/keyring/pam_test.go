@@ -7,24 +7,61 @@ import (
 	"testing"
 )
 
-// archSDDM is the stock Arch /etc/pam.d/sddm, the byte-for-byte baseline the
-// wiring must preserve around its inserts.
-const archSDDM = `#%PAM-1.0
+// fedoraSDDM is Fedora's stock /etc/pam.d/sddm (sddm 0.21, Fedora 44), copied
+// unmodified into testdata. It already carries the optional pam_gnome_keyring
+// lines, so a fresh install reads as unlock-on-login.
+var fedoraSDDM = readTestdata("fedora-sddm")
 
-auth        include     system-login
--auth       optional    pam_kwallet5.so
+func readTestdata(name string) string {
+	b, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
 
-account     include     system-login
+// bareSDDM is fedoraSDDM with its keyring lines stripped, the stack the
+// never-ask and ask modes leave and the byte-for-byte baseline the wiring
+// must preserve around its inserts.
+var bareSDDM = stripKeyring(fedoraSDDM)
 
-password    include     system-login
+func TestFedoraStockStackIsWired(t *testing.T) {
+	if !pamHasKeyring(fedoraSDDM, "auth") || !pamHasKeyring(fedoraSDDM, "session") {
+		t.Fatal("Fedora's stock stack carries both optional keyring lines")
+	}
+	if out, missing := applyPAMText(fedoraSDDM, true); out != fedoraSDDM || len(missing) != 0 {
+		t.Fatalf("converging the stock stack must be a no-op, missing %v:\n%s", missing, out)
+	}
+}
 
-session     optional    pam_keyinit.so          force revoke
-session     include     system-login
--session    optional    pam_kwallet5.so         auto_start
-`
+// ask (or never-ask) and then unlock-on-login must give back the stock file
+// byte-for-byte, so the package-owned stack never counts as modified.
+func TestStockStackRoundTrips(t *testing.T) {
+	stripped, _ := applyPAMText(fedoraSDDM, false)
+	if stripped != bareSDDM || pamPresent(stripped) {
+		t.Fatalf("strip must remove exactly the two keyring lines:\n%s", stripped)
+	}
+	if back, missing := applyPAMText(stripped, true); back != fedoraSDDM || len(missing) != 0 {
+		t.Fatalf("unlock-on-login must restore the stock file byte-for-byte, missing %v:\n%s", missing, back)
+	}
+
+	p := filepath.Join(t.TempDir(), "sddm")
+	if err := os.WriteFile(p, []byte(fedoraSDDM), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RYOKU_PAM_FILE", p)
+	for _, mode := range []string{ModeAsk, ModeUnlockOnLogin, ModeNeverAsk, ModeUnlockOnLogin} {
+		if err := runApplyPAM([]string{mode}); err != nil {
+			t.Fatalf("apply-pam %s: %v", mode, err)
+		}
+	}
+	if got, _ := os.ReadFile(p); string(got) != fedoraSDDM {
+		t.Fatalf("the file did not round-trip to the stock stack:\n%s", got)
+	}
+}
 
 func TestApplyPAMTextInsert(t *testing.T) {
-	out, missing := applyPAMText(archSDDM, true)
+	out, missing := applyPAMText(bareSDDM, true)
 	if len(missing) != 0 {
 		t.Fatalf("stock stack has both anchors; got missing %v", missing)
 	}
@@ -33,26 +70,26 @@ func TestApplyPAMTextInsert(t *testing.T) {
 	}
 	lines := strings.Split(out, "\n")
 	for i, l := range lines {
-		if strings.HasPrefix(l, "auth") && strings.Contains(l, "system-login") {
+		if strings.HasPrefix(l, "auth") && strings.Contains(l, "password-auth") {
 			if lines[i+1] != pamAuthLine {
 				t.Fatalf("auth keyring line must sit right after the auth include, got %q", lines[i+1])
 			}
 		}
-		if strings.HasPrefix(l, "session") && strings.Contains(l, "system-login") {
+		if strings.HasPrefix(l, "session") && strings.Contains(l, "password-auth") {
 			if lines[i+1] != pamSessionLine {
 				t.Fatalf("session keyring line must sit right after the session include, got %q", lines[i+1])
 			}
 		}
 	}
 	// the untouched lines survive verbatim.
-	if !strings.Contains(out, "-auth       optional    pam_kwallet5.so") ||
-		!strings.Contains(out, "session     optional    pam_keyinit.so          force revoke") {
+	if !strings.Contains(out, "-auth        optional      pam_kwallet5.so") ||
+		!strings.Contains(out, "session     optional      pam_keyinit.so force revoke") {
 		t.Fatalf("insert disturbed unrelated lines:\n%s", out)
 	}
 }
 
 func TestApplyPAMTextIdempotent(t *testing.T) {
-	once, _ := applyPAMText(archSDDM, true)
+	once, _ := applyPAMText(bareSDDM, true)
 	twice, _ := applyPAMText(once, true)
 	if once != twice {
 		t.Fatalf("second insert changed the file (duplicate lines):\n%s", twice)
@@ -63,12 +100,12 @@ func TestApplyPAMTextIdempotent(t *testing.T) {
 }
 
 func TestApplyPAMTextStrip(t *testing.T) {
-	wired, _ := applyPAMText(archSDDM, true)
+	wired, _ := applyPAMText(bareSDDM, true)
 	stripped, _ := applyPAMText(wired, false)
 	if pamPresent(stripped) {
 		t.Fatalf("strip left keyring lines behind:\n%s", stripped)
 	}
-	if stripped != archSDDM {
+	if stripped != bareSDDM {
 		t.Fatalf("strip did not restore the stock stack byte-for-byte:\n%q", stripped)
 	}
 	// strip is idempotent on an already-clean stack.
@@ -79,7 +116,7 @@ func TestApplyPAMTextStrip(t *testing.T) {
 }
 
 func TestApplyPAMTextMissingAnchor(t *testing.T) {
-	noAnchors := "#%PAM-1.0\n\naccount     include     system-login\n"
+	noAnchors := "#%PAM-1.0\n\naccount     include     password-auth\n"
 	out, missing := applyPAMText(noAnchors, true)
 	if out != noAnchors {
 		t.Fatalf("with no anchors the content must be untouched:\n%s", out)
@@ -92,7 +129,7 @@ func TestApplyPAMTextMissingAnchor(t *testing.T) {
 func TestApplyPAMFileWritesOnlyOnChange(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "sddm")
-	if err := os.WriteFile(p, []byte(archSDDM), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(bareSDDM), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := applyPAMFile(p, ModeUnlockOnLogin); err != nil {
@@ -117,7 +154,7 @@ func TestApplyPAMFileWritesOnlyOnChange(t *testing.T) {
 func TestApplyPAMFileMissingAnchorErrors(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "sddm")
-	os.WriteFile(p, []byte("#%PAM-1.0\naccount include system-login\n"), 0o644)
+	os.WriteFile(p, []byte("#%PAM-1.0\naccount include password-auth\n"), 0o644)
 	if err := applyPAMFile(p, ModeUnlockOnLogin); err == nil {
 		t.Fatal("want an error when the insert anchor is missing")
 	}
@@ -126,7 +163,7 @@ func TestApplyPAMFileMissingAnchorErrors(t *testing.T) {
 func TestRunApplyPAMHonorsFixtureEnv(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "sddm")
-	os.WriteFile(p, []byte(archSDDM), 0o644)
+	os.WriteFile(p, []byte(bareSDDM), 0o644)
 	t.Setenv("RYOKU_PAM_FILE", p)
 	if err := runApplyPAM([]string{ModeUnlockOnLogin}); err != nil {
 		t.Fatalf("apply-pam: %v", err)

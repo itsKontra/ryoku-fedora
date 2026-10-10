@@ -76,10 +76,8 @@ func seedDefault(t *testing.T, name string) {
 }
 
 func TestSetAskConfigOnly(t *testing.T) {
-	pam := sandbox(t, archSDDM)
+	pam := sandbox(t, fedoraSDDM)
 	useFake(t)
-	// start from a wired stack so ask has something to strip.
-	applyPAMFile(pam, ModeUnlockOnLogin)
 	if err := runSet([]string{ModeAsk}); err != nil {
 		t.Fatalf("set ask: %v", err)
 	}
@@ -87,13 +85,13 @@ func TestSetAskConfigOnly(t *testing.T) {
 		t.Fatalf("config not recorded as ask (%q, %v)", m, ok)
 	}
 	got, _ := os.ReadFile(pam)
-	if pamPresent(string(got)) {
-		t.Fatalf("ask must strip the PAM lines:\n%s", got)
+	if string(got) != bareSDDM {
+		t.Fatalf("ask must strip exactly the stock keyring lines:\n%s", got)
 	}
 }
 
 func TestSetNeverAskCreatesBlankWhenAbsent(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	if err := runSet([]string{ModeNeverAsk}); err != nil {
 		t.Fatalf("set never-ask: %v", err)
@@ -107,7 +105,7 @@ func TestSetNeverAskCreatesBlankWhenAbsent(t *testing.T) {
 }
 
 func TestSetNeverAskBlockedWhenEncrypted(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	useFake(t)
 	seedDefault(t, "Default_Keyring")
 	writeKeyringFixtureAt(t, "Default_Keyring", true)
@@ -121,7 +119,7 @@ func TestSetNeverAskBlockedWhenEncrypted(t *testing.T) {
 }
 
 func TestSetNeverAskConvert(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	seedDefault(t, "Default_Keyring")
 	writeKeyringFixtureAt(t, "Default_Keyring", true)
@@ -135,7 +133,7 @@ func TestSetNeverAskConvert(t *testing.T) {
 }
 
 func TestSetNeverAskReset(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	seedDefault(t, "Default_Keyring")
 	writeKeyringFixtureAt(t, "Default_Keyring", true)
@@ -156,7 +154,7 @@ func TestSetNeverAskReset(t *testing.T) {
 }
 
 func TestSetUnlockOnLoginPointsDefaultAndWires(t *testing.T) {
-	pam := sandbox(t, archSDDM)
+	pam := sandbox(t, bareSDDM)
 	useFake(t)
 	seedDefault(t, "Default_Keyring")
 	if err := runSet([]string{ModeUnlockOnLogin}); err != nil {
@@ -170,13 +168,13 @@ func TestSetUnlockOnLoginPointsDefaultAndWires(t *testing.T) {
 		t.Fatalf("previous pointer must be backed up, got %q", bak)
 	}
 	got, _ := os.ReadFile(pam)
-	if !pamHasKeyring(string(got), "auth") || !pamHasKeyring(string(got), "session") {
-		t.Fatalf("PAM must be wired:\n%s", got)
+	if string(got) != fedoraSDDM {
+		t.Fatalf("PAM must be wired back to the stock stack:\n%s", got)
 	}
 }
 
 func TestSetUnlockOnLoginEncryptedNoFlagSucceeds(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	// login keyring already encrypted; without a flag this is a valid choice.
 	writeKeyringFixtureAt(t, "login", true)

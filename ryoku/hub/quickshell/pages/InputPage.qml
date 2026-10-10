@@ -300,7 +300,7 @@ Item {
     function applyOptionsArg() { return String(pg.hv("desktop.input.kbOptions") || ""); }
     // `ryoku keyboard apply` owns all four layers: it sets the greeter and the
     // console through localectl AND rebuilds the boot image, which localectl
-    // alone cannot do. mkinitcpio bakes a copy of /etc/vconsole.conf into the
+    // alone cannot do. dracut bakes a copy of /etc/vconsole.conf into the
     // image at build time, so without that rebuild the disk passphrase prompt
     // keeps the keymap it was built with however correct /etc looks.
     Process {
