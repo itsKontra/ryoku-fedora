@@ -11,6 +11,15 @@ INSTALLABLE = (
     ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tar",
 )
 
+# Arch packages end in a tarball suffix too, but stash-install.sh refuses
+# them on Fedora, so the menu never offers them.
+REFUSED = ".pkg.tar"
+
+
+def _installable(path):
+    name = os.path.basename(path).lower()
+    return name.endswith(INSTALLABLE) and REFUSED not in name
+
 # Exactly what stash-compress.sh re-encodes; offering it on anything else would
 # just pop a "can't compress" error.
 COMPRESSIBLE = (
@@ -65,7 +74,7 @@ if not getattr(Nautilus, "_ryoku_stash_menu_registered", False):
 
             items = []
 
-            installable = [p for p in paths if p.lower().endswith(INSTALLABLE)]
+            installable = [p for p in paths if _installable(p)]
             if installable:
                 item = Nautilus.MenuItem(
                     name="RyokuStashMenu::install",

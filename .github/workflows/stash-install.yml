@@ -2,9 +2,10 @@ name: Stash installer
 
 # stash-install (shell/scripts/stash-install.sh) turns a dropped file into a
 # launcher entry: an .rpm goes through dnf install, a flatpak bundle through
-# flatpak install, a .deb payload gets cracked open with bsdtar. tests stub
-# pkexec/dnf/flatpak and check each dispatch (and that a generic tarball is
-# never escalated). see tests/stash-install.sh.
+# flatpak install, a .deb payload gets cracked open with bsdtar, and an Arch
+# package is refused. tests stub pkexec/dnf/rpm/flatpak and check each
+# dispatch, that a generic tarball is never escalated, and that a failed or
+# cancelled rpm install keeps its source. see tests/stash-install.sh.
 
 on:
   pull_request:
