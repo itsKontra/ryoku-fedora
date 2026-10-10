@@ -24,6 +24,13 @@ for b in /sys/class/power_supply/BAT*; do
     break
 done
 
+# packages: the ones the user asked for (dnf's userinstalled set), and the ones
+# not built by Fedora itself (COPR, RPM Fusion, vendor repos), told apart by the
+# RPM Vendor tag. the third-party set overlaps the explicit one.
+pkg_explicit=$(dnf repoquery --userinstalled -q 2>/dev/null | wc -l)
+pkg_third_party=$(rpm -qa --nodigest --nosignature --qf '%{NAME}\t%{VENDOR}\n' 2>/dev/null |
+    awk -F'\t' '$1 != "gpg-pubkey" && $2 != "Fedora Project"' | wc -l)
+
 # palette, comma-joined, for the swatch strip.
 palette=""
 cj="${XDG_CACHE_HOME:-$HOME/.cache}/ryoku/colors.json"
@@ -48,7 +55,7 @@ free --si | awk '/Swap:/{ if ($2 > 0) printf "%d%%\n", $3 / $2 * 100; else print
 printf '%s\n' "$bat"
 printf '%s\n' "$wm_ver"
 printf '%s\n' "$monitors"
-pacman -Qen 2>/dev/null | wc -l
-pacman -Qm 2>/dev/null | wc -l
+printf '%s\n' "$pkg_explicit"
+printf '%s\n' "$pkg_third_party"
 printf '%s\n' "${XCURSOR_THEME:--}${XCURSOR_SIZE:+ · $XCURSOR_SIZE}"
 printf '%s\n' "$palette"

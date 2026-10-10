@@ -50,7 +50,7 @@ Singleton {
     property string sysWmVer: "-"
     property string sysMonitors: "-"
     property string sysPkgExplicit: "-"
-    property string sysPkgAur: "-"
+    property string sysPkgThirdParty: "-"
     property string sysCursor: "-"
     property string sysPalette: ""
 
@@ -105,7 +105,7 @@ Singleton {
                 root.sysWmVer = (l[5] || "-").trim();
                 root.sysMonitors = (l[6] || "-").trim();
                 root.sysPkgExplicit = (l[7] || "-").trim();
-                root.sysPkgAur = (l[8] || "-").trim();
+                root.sysPkgThirdParty = (l[8] || "-").trim();
                 root.sysCursor = (l[9] || "-").trim();
                 root.sysPalette = (l[10] || "").trim();
             }
