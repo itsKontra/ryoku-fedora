@@ -11,8 +11,8 @@ import (
 // Version prints the running Ryoku version. Plain form feeds fastfetch's OS
 // line ("Ryoku v0.73.0"); `--branch` feeds its BRANCH line as
 // "<channel> · <sha>" (e.g. "main · dcd7b80"). Deliberately fast: it runs on
-// every shell launch, so it never touches the network or `pacman -Sl`. A
-// checkout reads git, a packaged box parses the local pacman version. Any
+// every shell launch, so it never touches the network or the repo metadata. A
+// checkout reads git, a packaged box parses the local RPM version. Any
 // unknown piece degrades gracefully rather than erroring.
 func Version(args []string) error {
 	branch, pretty := false, false
@@ -90,7 +90,7 @@ func checkoutVersion(repo string) string {
 
 // versionParts returns (base version, short sha) for the running Ryoku. On a
 // checkout: the nearest release tag + git HEAD. On a packaged install: parsed
-// from the pacman version "<core>.r<count>.g<sha>-<rel>" the repo build embeds
+// from the RPM version "<core>.r<count>.g<sha>-<rel>" the repo build embeds
 // (the r<count> token is skipped). Any field comes back "" when undeterminable.
 func versionParts() (base, sha string) {
 	if repo := sys.ResolveRepo(); repo != "" {
@@ -101,7 +101,7 @@ func versionParts() (base, sha string) {
 		return base, sha
 	}
 
-	// packaged: extract git sha and semver core from Arch or RPM version format.
+	// packaged: extract git sha and semver core from the RPM version.
 	rawVer := sys.InstalledVersion()
 	for _, tok := range strings.FieldsFunc(rawVer, func(r rune) bool {
 		return r == '.' || r == '-' || r == '^' || r == '_'

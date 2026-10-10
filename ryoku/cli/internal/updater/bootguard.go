@@ -69,7 +69,7 @@ func armBootGuard(snapshot string) {
 	}
 	from := strings.TrimSpace(os.Getenv("RYOKU_UPDATE_FROM"))
 	to := sys.ReadRelease().Release
-	if from == "" || to == "" || from == to || !sys.IsReleaseTag(from) {
+	if from == "" || to == "" || from == to {
 		return
 	}
 	p := pendingUpdate{From: from, To: to, Snapshot: snapshot, ArmedBoot: bootID(), At: time.Now().UTC().Format(time.RFC3339)}

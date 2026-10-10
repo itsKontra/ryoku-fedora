@@ -75,7 +75,7 @@ func TestReconcileShippedAppsDeliversOnce(t *testing.T) {
 		t.Fatalf("first run = %+v, want fixed", got)
 	}
 	if runs != 1 {
-		t.Fatalf("pacman runs = %d, want one transaction for the whole set", runs)
+		t.Fatalf("dnf runs = %d, want one transaction for the whole set", runs)
 	}
 	for _, a := range shippedApps() {
 		if !provisioned()[a.pkg] {
@@ -117,7 +117,6 @@ func TestReconcileShippedAppsClaimsDependencyInstalls(t *testing.T) {
 func TestReconcileShippedAppsSkipsUnpackagedApps(t *testing.T) {
 	present := map[string]bool{}
 	withShippedAppTestState(t, present)
-	appPackager = func() string { return "dnf" }
 	appsAvailable = func([]string) map[string]bool { return map[string]bool{"pavucontrol": true} }
 
 	var installs [][]string
@@ -146,18 +145,6 @@ func TestReconcileShippedAppsSkipsUnpackagedApps(t *testing.T) {
 	}
 }
 
-func TestInstallFixNamesThePackageManager(t *testing.T) {
-	withShippedAppTestState(t, nil)
-	appPackager = func() string { return "dnf" }
-	if got := installFix([]string{"pavucontrol"}); got != "sudo dnf install pavucontrol" {
-		t.Fatalf("dnf fix = %q", got)
-	}
-	appPackager = func() string { return "pacman" }
-	if got := installFix([]string{"pavucontrol"}); !strings.Contains(got, "pacman -S pavucontrol") {
-		t.Fatalf("pacman fix = %q", got)
-	}
-}
-
 // withShippedAppTestState isolates the ledger and stubs every package-manager
 // seam;
 // present lists the installed packages (nil = none).
@@ -166,12 +153,12 @@ func withShippedAppTestState(t *testing.T, present map[string]bool) {
 	isolateProvisioned(t)
 	oldInstalled, oldDep := appInstalled, appInstalledAsDep
 	oldInstall, oldExplicit := installShippedApps, markAppsExplicit
-	oldPackager, oldAvailable := appPackager, appsAvailable
+	oldHasDNF, oldAvailable := hasDNF, appsAvailable
 	appInstalled = func(pkg string) bool { return present[pkg] }
 	appInstalledAsDep = func(string) bool { return false }
 	installShippedApps = func([]string) {}
 	markAppsExplicit = func([]string) {}
-	appPackager = func() string { return "pacman" } // the CI runner has neither
+	hasDNF = func() bool { return true } // the CI runner has no dnf
 	appsAvailable = func(pkgs []string) map[string]bool {
 		all := map[string]bool{}
 		for _, p := range pkgs {
@@ -182,6 +169,6 @@ func withShippedAppTestState(t *testing.T, present map[string]bool) {
 	t.Cleanup(func() {
 		appInstalled, appInstalledAsDep = oldInstalled, oldDep
 		installShippedApps, markAppsExplicit = oldInstall, oldExplicit
-		appPackager, appsAvailable = oldPackager, oldAvailable
+		hasDNF, appsAvailable = oldHasDNF, oldAvailable
 	})
 }

@@ -11,7 +11,7 @@ const symbolError = `quickshell: symbol lookup error: quickshell: undefined symb
 	`_ZN23QUntypedPropertyBindingC1EP23QPropertyBindingPrivate, version Qt_6_PRIVATE_API`
 
 // stubPath puts fake binaries on PATH so the reconciler can be driven without a
-// real quickshell or pacman.
+// real quickshell.
 func stubPath(t *testing.T, scripts map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -43,57 +43,22 @@ func TestLoaderFailureRecognisesTheQtPrivateApiBreak(t *testing.T) {
 	}
 }
 
-func TestQuickshellBrokenFromTheRepoAsksForAFullUpgrade(t *testing.T) {
+func TestQuickshellBrokenAsksForAnUpgrade(t *testing.T) {
 	stubPath(t, map[string]string{
-		"qs":     "echo '" + symbolError + "' >&2; exit 127",
-		"pacman": `case "$1" in -Qoq) echo quickshell;; -Qmq) echo something-else;; esac`,
+		"qs": "echo '" + symbolError + "' >&2; exit 127",
 	})
 	res := reconcileQuickshell(true)
 	if res.status != recWarn {
 		t.Fatalf("status = %v (%s)", res.status, res.detail)
 	}
-	if res.remedy == "" {
-		t.Fatal("a broken renderer has to come with the command that fixes it")
+	if !strings.Contains(res.remedy, "dnf upgrade quickshell") {
+		t.Fatalf("a broken renderer has to come with the command that fixes it: %q", res.remedy)
 	}
 }
 
-// The reported case: an AUR build satisfying the dependency, dead after a Qt
-// update. Check-only must name it and change nothing.
-func TestQuickshellBrokenFromAurOffersTheRepoBuild(t *testing.T) {
+func TestQuickshellRunningIsQuiet(t *testing.T) {
 	stubPath(t, map[string]string{
-		"qs":     "echo '" + symbolError + "' >&2; exit 127",
-		"pacman": `case "$1" in -Qoq) echo quickshell-git;; -Qmq) echo quickshell-git;; esac`,
-	})
-	res := reconcileQuickshell(true)
-	if res.status != recWouldFix {
-		t.Fatalf("status = %v (%s)", res.status, res.detail)
-	}
-	if !strings.Contains(res.detail, "quickshell-git") {
-		t.Fatalf("detail should name the package at fault: %s", res.detail)
-	}
-}
-
-// Working, but built before the installed Qt: worth saying before the next
-// update takes the desktop down.
-func TestQuickshellForeignButWorkingIsANote(t *testing.T) {
-	dir := stubPath(t, map[string]string{
-		"qs":     "echo 'Quickshell 0.3.0'; exit 0",
-		"pacman": `case "$1" in -Qoq) echo quickshell-git;; -Qmq) echo quickshell-git;; esac`,
-	})
-	_ = dir
-	res := reconcileQuickshell(true)
-	if res.status != recNote {
-		t.Fatalf("status = %v (%s)", res.status, res.detail)
-	}
-	if !strings.Contains(res.detail, "quickshell-git") {
-		t.Fatalf("detail should name the build: %s", res.detail)
-	}
-}
-
-func TestQuickshellFromTheRepoAndRunningIsQuiet(t *testing.T) {
-	stubPath(t, map[string]string{
-		"qs":     "echo 'Quickshell 0.3.0'; exit 0",
-		"pacman": `case "$1" in -Qoq) echo quickshell;; -Qmq) echo other-pkg;; esac`,
+		"qs": "echo 'Quickshell 0.3.0'; exit 0",
 	})
 	if res := reconcileQuickshell(true); res.status != recOK {
 		t.Fatalf("status = %v (%s)", res.status, res.detail)
@@ -121,8 +86,7 @@ func TestQuickshellStaleLocalModuleIsMovedAside(t *testing.T) {
 		t.Fatal(err)
 	}
 	stubPath(t, map[string]string{
-		"qs":     "echo 'quickshell: symbol lookup error: " + mod + ": undefined symbol: _ZN9QQmlDebug, version Qt_6_PRIVATE_API' >&2; exit 127",
-		"pacman": `case "$1" in -Qoq) echo quickshell;; -Qmq) echo other;; esac`,
+		"qs": "echo 'quickshell: symbol lookup error: " + mod + ": undefined symbol: _ZN9QQmlDebug, version Qt_6_PRIVATE_API' >&2; exit 127",
 	})
 
 	if res := reconcileQuickshell(true); res.status != recWouldFix {

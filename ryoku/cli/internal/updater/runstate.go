@@ -130,7 +130,7 @@ func (p *publisher) markDone(keys ...string) {
 	}
 }
 
-// skip marks a step skipped (e.g. the AUR step on a box with no yay).
+// skip marks a step skipped (e.g. the Flatpak step on a box with no remote).
 func (p *publisher) skip(key string) {
 	if i := p.indexOf(key); i >= 0 {
 		p.steps[i].State = stepSkipped

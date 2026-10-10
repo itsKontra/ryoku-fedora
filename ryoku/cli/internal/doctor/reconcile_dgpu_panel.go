@@ -360,7 +360,7 @@ func dgpuMuxFix() string {
 // dgpuRtd3OffFix applies when the driver itself reports runtime D3 off. Then no
 // amount of closing applications will help: the feature is switched off.
 func dgpuRtd3OffFix() string {
-	return i18n.T("the NVIDIA driver reports runtime D3 power management off for this card, so it can never power down. Enable fine-grained control with `NVreg_DynamicPowerManagement=0x02` in a /etc/modprobe.d/nvidia.conf `options nvidia` line, rebuild the initramfs (`sudo mkinitcpio -P`), and reboot.")
+	return i18n.T("the NVIDIA driver reports runtime D3 power management off for this card, so it can never power down. Enable fine-grained control with `NVreg_DynamicPowerManagement=0x02` in a /etc/modprobe.d/nvidia.conf `options nvidia` line, rebuild the initramfs (`sudo dracut --force`), and reboot.")
 }
 
 // dgpuHeldFix applies when the driver says runtime D3 is on yet the card has still

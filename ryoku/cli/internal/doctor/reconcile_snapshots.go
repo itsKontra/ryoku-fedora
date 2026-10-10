@@ -16,9 +16,8 @@ import (
 const snapshotDrainBatch = 20
 
 // reconcileSnapperCleanup keeps pruning working. Pruning normally runs only via
-// snapper-cleanup.timer -> snapper-cleanup.service, whose success is coupled to
-// limine-snapper-sync (its ExecStopPost); when that breaks nothing is pruned
-// and every update leaves another unremovable pair. So keep the cleanup timer
+// snapper-cleanup.timer -> snapper-cleanup.service; when that timer is off
+// nothing is pruned and every update leaves another pair behind. So keep the cleanup timer
 // on, the timeline timer off (Ryoku prunes by number, and Cleanup=timeline
 // snapshots leak past number cleanup), and drain leaked timeline snapshots.
 // Draining runs only under a number-only config (TIMELINE_CREATE="no").

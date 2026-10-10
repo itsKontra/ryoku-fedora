@@ -8,29 +8,19 @@ import (
 	"ryoku-cli/internal/sys"
 )
 
-// packagedConf points sys.PacmanConf at a fixture whose [ryoku] Server names
-// channel (no [ryoku] stanza when channel==""), plus a temp sync dir, so the
-// channel writers and readers stay hermetic under a temp HOME and never touch
-// /etc or /var.
-func packagedConf(t *testing.T, channel string) {
+// packagedRepo points sys.RPMRepoFile at a fixture whose RyokuCOPR baseurl is
+// server, so the channel writers and readers stay hermetic under a temp HOME
+// and never touch /etc.
+func packagedRepo(t *testing.T, server string) {
 	t.Helper()
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "pacman"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+	repo := filepath.Join(t.TempDir(), "RyokuCOPR.repo")
+	body := "[RyokuCOPR]\nname=Ryoku\nbaseurl=" + server + "\ngpgcheck=1\n"
+	if err := os.WriteFile(repo, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
-	conf := filepath.Join(dir, "pacman.conf")
-	body := "[options]\nHoldPkg = pacman\n"
-	if channel != "" {
-		body += "\n[ryoku]\nSigLevel = Required\nServer = " + sys.ChannelServer(channel) + "\n"
-	}
-	if err := os.WriteFile(conf, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	oldConf, oldSync := sys.PacmanConf, sys.PacmanSyncDir
-	sys.PacmanConf = conf
-	sys.PacmanSyncDir = t.TempDir()
-	t.Cleanup(func() { sys.PacmanConf = oldConf; sys.PacmanSyncDir = oldSync })
+	old := sys.RPMRepoFile
+	sys.RPMRepoFile = repo
+	t.Cleanup(func() { sys.RPMRepoFile = old })
 }
 
 // initRyokuArchClone makes a git work tree at dir whose origin names ryoku-arch,
@@ -57,48 +47,41 @@ func isolateHome(t *testing.T) string {
 	return home
 }
 
-// track unstable-dev (== testing) rewrites the [ryoku] Server to channels/testing
-// and reports testing; track main (== stable) rewrites it back. A packaged box
-// has nothing to migrate.
+// track copr rewrites a mirror baseurl back to the COPR and reports copr; a
+// channel Fedora has no repository for is refused and the file is left alone.
+// A packaged box has nothing to migrate.
 func TestSwitchToPackageChannelRewritesServer(t *testing.T) {
 	isolateHome(t)
-	packagedConf(t, "stable")
+	packagedRepo(t, "https://mirror.example/ryoku/fedora-$releasever-$basearch")
 
-	migrated, err := switchToPackageChannel(sys.ChannelTesting)
+	if _, err := switchToPackageChannel("stable"); err == nil {
+		t.Fatal("switch to stable: want an error, Fedora has only the COPR channel")
+	}
+	migrated, err := switchToPackageChannel(sys.ChannelCOPR)
 	if err != nil {
-		t.Fatalf("switch to testing: %v", err)
+		t.Fatalf("switch to copr: %v", err)
 	}
 	if migrated {
 		t.Fatal("a packaged box has nothing to migrate")
 	}
-	if got := sys.PackagedChannel(); got != "testing" {
-		t.Fatalf("channel = %q, want testing", got)
+	if got := sys.PackagedChannel(); got != sys.ChannelCOPR {
+		t.Fatalf("channel = %q, want copr", got)
 	}
-	if got := ryokuChannel(); got != "testing" {
-		t.Fatalf("ryokuChannel = %q, want testing", got)
+	if got := ryokuChannel(); got != sys.ChannelCOPR {
+		t.Fatalf("ryokuChannel = %q, want copr", got)
 	}
-	if srv := sys.RyokuServer(); srv != sys.ChannelServer("testing") {
-		t.Fatalf("server = %q, want %q", srv, sys.ChannelServer("testing"))
-	}
-
-	if _, err := switchToPackageChannel(sys.ChannelStable); err != nil {
-		t.Fatalf("switch to stable: %v", err)
-	}
-	if got := sys.PackagedChannel(); got != "stable" {
-		t.Fatalf("channel = %q, want stable", got)
-	}
-	if srv := sys.RyokuServer(); srv != sys.ChannelServer("stable") {
-		t.Fatalf("server = %q, want %q", srv, sys.ChannelServer("stable"))
+	if srv := sys.RyokuServer(); srv != sys.COPRServer {
+		t.Fatalf("server = %q, want %q", srv, sys.COPRServer)
 	}
 }
 
-// track main on a box whose updates come from a checkout (a recorded pointer plus
+// track copr on a box whose updates come from a checkout (a recorded pointer plus
 // a RYOKU_CHANNEL=unstable-dev env file) migrates it onto packages: both are
 // removed so the update path resolves to packages, not the checkout, while the
 // clone directory itself is left on disk.
 func TestSwitchToPackageChannelMigratesOffCheckout(t *testing.T) {
 	home := isolateHome(t)
-	packagedConf(t, "testing") // a checkout box with a leftover [ryoku] stanza
+	packagedRepo(t, sys.COPRServer) // a checkout box with the COPR repo configured
 
 	clone := filepath.Join(home, "ryoku-arch")
 	initRyokuArchClone(t, clone)
@@ -120,7 +103,7 @@ func TestSwitchToPackageChannelMigratesOffCheckout(t *testing.T) {
 		t.Fatalf("precondition: SourceTracked=%v ResolveRepo=%q, want a checkout at %q", sys.SourceTracked(), sys.ResolveRepo(), clone)
 	}
 
-	migrated, err := switchToPackageChannel(sys.ChannelStable)
+	migrated, err := switchToPackageChannel(sys.ChannelCOPR)
 	if err != nil {
 		t.Fatalf("switch: %v", err)
 	}
@@ -139,7 +122,7 @@ func TestSwitchToPackageChannelMigratesOffCheckout(t *testing.T) {
 	if _, err := os.Stat(clone); err != nil {
 		t.Fatalf("clone directory removed: %v", err)
 	}
-	if got := sys.PackagedChannel(); got != "stable" {
-		t.Fatalf("channel = %q, want stable", got)
+	if got := sys.PackagedChannel(); got != sys.ChannelCOPR {
+		t.Fatalf("channel = %q, want copr", got)
 	}
 }

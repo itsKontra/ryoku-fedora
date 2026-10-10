@@ -8,12 +8,7 @@ import (
 	i18n "ryoku-i18n"
 )
 
-func recoveryURL() string {
-	if sys.RPMManager() != "" {
-		return "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-recovery"
-	}
-	return "https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-recovery"
-}
+const recoveryURL = "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-recovery"
 
 // cmdRecovery hands off to bin/ryoku-recovery: prefer the copy in a local
 // checkout, otherwise fetch the canonical one. The script does the real work and
@@ -25,7 +20,7 @@ func cmdRecovery(args []string) error {
 		}
 	}
 
-	url := recoveryURL()
+	url := recoveryURL
 	if !sys.Has("curl") {
 		return fmt.Errorf(i18n.T("no local recovery script and curl is missing; run it by hand:\n  curl -fsSL %s | bash"), url)
 	}

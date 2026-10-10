@@ -34,7 +34,7 @@ func reconcileBacklight(_ bool) recResult {
 	}
 	if !sys.Has("brightnessctl") {
 		return warnRes(i18n.T("backlight present but brightnessctl is missing; brightness keys and idle-dim will not work")).
-			withFix("sudo pacman -S brightnessctl")
+			withFix("sudo dnf install brightnessctl")
 	}
 	if gpus := gpuDriversLoaded(); len(gpus) >= 2 && onlyFirmwareBacklight(devs) {
 		detail := fmt.Sprintf(i18n.T("hybrid GPU (%s) with only a firmware backlight (%s); the panel may not dim"),

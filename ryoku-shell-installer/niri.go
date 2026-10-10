@@ -30,8 +30,9 @@ var niriTransform = map[string]int{
 
 var niriIncludeRe = regexp.MustCompile(`(?m)^\s*include\s+(?:optional=true\s+)?"([^"]+)"`)
 
-// stripKdl drops // line comments and /- commented nodes (cachyos ships its
-// display.kdl fully /- commented; importing those blocks would be wrong).
+// stripKdl drops // line comments and /- commented nodes (some shared configs
+// ship whole files /- commented out as examples; importing those blocks would
+// be wrong).
 func stripKdl(ln string) string {
 	t := strings.TrimSpace(ln)
 	if strings.HasPrefix(t, "/-") || strings.HasPrefix(t, "//") {
@@ -73,8 +74,8 @@ func readNiriTree(path, home string, seen map[string]bool, depth int) string {
 	return sb.String()
 }
 
-// loadNiriConfig concatenates config.kdl, its includes, and the common
-// modular layouts (inir config.d, cachyos cfg).
+// loadNiriConfig concatenates config.kdl, its includes, and the two modular
+// layouts users bring from other setups (config.d/ and cfg/).
 func loadNiriConfig(home string) string {
 	seen := map[string]bool{}
 	root := filepath.Join(home, ".config/niri")

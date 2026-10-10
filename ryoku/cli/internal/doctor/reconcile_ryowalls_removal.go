@@ -13,9 +13,9 @@ import (
 // ---- reconciler: sweep the sunset ryowalls app's per-user leftovers ---------
 //
 // ryowalls (a Quickshell wallpaper app on PATH) was folded into the ryogami
-// picker and deleted from the repo. pacman drops the packaged /usr/bin and
+// picker and deleted from the repo. rpm drops the packaged /usr/bin and
 // /usr/share copies on `ryoku update`, but a box that ran the dev deploy or
-// materialized the app keeps per-user leftovers pacman never owned: the launcher
+// materialized the app keeps per-user leftovers no package ever owned: the launcher
 // on PATH, its launcher entry (.desktop + hicolor icon), the app's Quickshell
 // config, and its thumbnail cache. They are inert but clutter the launcher and
 // the apps grid. Only paths that are unmistakably ryowalls' are swept; the

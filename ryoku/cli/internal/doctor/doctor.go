@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"ryoku-cli/internal/sys"
 	"strconv"
 	"strings"
@@ -109,7 +108,6 @@ func reconcilers() []reconciler {
 		{i18n.T("snapshot cleanup"), reconcileSnapperCleanup},
 		{i18n.T("boot volume writability"), reconcileBootRW},
 		{i18n.T("updatedb snapshot prune"), reconcileUpdatedbPrune},
-		{i18n.T("conflicting Ryoku files"), reconcileConflictingRyokuFiles},
 		{i18n.T("stale update run-state"), reconcileStaleUpdateRun},
 		{i18n.T("stale install crypt mapper"), reconcileStaleCryptMapper},
 		{i18n.T("boot guard"), reconcileBootGuard},
@@ -202,7 +200,7 @@ func reconcilers() []reconciler {
 		{i18n.T("fingerprint unlock module"), reconcileFingerprintModule},
 		{i18n.T("Secure Boot signed NVIDIA driver"), reconcileNvidiaSigned},
 		{i18n.T("NVIDIA sleep units"), reconcileNvidiaSleepUnits},
-		{i18n.T("pending config (.pacnew)"), reconcilePacnew},
+		{i18n.T("pending config (.rpmnew)"), reconcileRPMNew},
 		{i18n.T("orphaned packages"), reconcileOrphans},
 	}
 }
@@ -450,18 +448,8 @@ const snapperConfdRoot = `## Path: System/Snapper
 SNAPPER_CONFIGS="root"
 `
 
-// snapperGlobalConfPath returns the path to the system snapper configuration
-// file where SNAPPER_CONFIGS is declared. On Fedora/openSUSE/RHEL this is
-// /etc/sysconfig/snapper; on Debian/Ubuntu /etc/default/snapper; on Arch /etc/conf.d/snapper.
-func snapperGlobalConfPath() string {
-	if sys.Exists("/etc/sysconfig/snapper") || sys.Exists("/etc/sysconfig") || sys.Has("dnf") {
-		return "/etc/sysconfig/snapper"
-	}
-	if sys.Exists("/etc/default/snapper") || (sys.Exists("/etc/default") && !sys.Exists("/etc/conf.d")) {
-		return "/etc/default/snapper"
-	}
-	return "/etc/conf.d/snapper"
-}
+// snapperSysconfig is where Fedora's snapper units read SNAPPER_CONFIGS.
+const snapperSysconfig = "/etc/sysconfig/snapper"
 
 // snapperOutcome: what planSnapper hands to reconcileSnapper. ok = leave the
 // box alone; the two warn variants surface as-is; create writes the canonical
@@ -487,7 +475,6 @@ type snapperState struct {
 	snapshotsExists   bool
 	snapshotsIsSubvol bool
 	snapshotsMode     os.FileMode
-	confdPath         string
 	confdExists       bool
 	confdContents     string
 	snapperInstalled  bool
@@ -522,10 +509,7 @@ func planSnapper(s snapperState) (snapperOutcome, []string) {
 	if s.snapshotsExists && s.snapshotsMode != 0o750 {
 		problems = append(problems, fmt.Sprintf(i18n.T("/.snapshots is mode %04o, expected 0750"), s.snapshotsMode))
 	}
-	confPath := s.confdPath
-	if confPath == "" {
-		confPath = "/etc/conf.d/snapper"
-	}
+	confPath := snapperSysconfig
 	if s.confdExists && !strings.Contains(s.confdContents, "root") {
 		problems = append(problems, fmt.Sprintf("%s does not list the root config (timers and hooks will skip it)", confPath))
 	}
@@ -556,14 +540,13 @@ func gatherSnapperState() snapperState {
 		snapperInstalled: sys.Has("snapper"),
 		dnfInstalled:     sys.Has("dnf"),
 		dnfHookInstalled: sys.PkgInstalled("libdnf5-plugin-actions") && sys.Exists(dnfSnapshotActions),
-		confdPath:        snapperGlobalConfPath(),
 	}
 	if fi, err := os.Stat("/.snapshots"); err == nil {
 		s.snapshotsExists = true
 		s.snapshotsMode = fi.Mode().Perm()
 		s.snapshotsIsSubvol = sys.IsBtrfsSubvolumeRoot("/.snapshots")
 	}
-	if b, err := os.ReadFile(s.confdPath); err == nil {
+	if b, err := os.ReadFile(snapperSysconfig); err == nil {
 		s.confdExists = true
 		s.confdContents = string(b)
 	}
@@ -591,10 +574,7 @@ func reconcileSnapper(checkOnly bool) recResult {
 		}
 		return createSnapperRootConfig(st)
 	case snapperWarnInconsistent:
-		confPath := st.confdPath
-		if confPath == "" {
-			confPath = snapperGlobalConfPath()
-		}
+		confPath := snapperSysconfig
 		if st.confdExists && !strings.Contains(st.confdContents, "root") {
 			if checkOnly {
 				return wouldRes("%s does not list the root config (timers and hooks will skip it)", confPath).
@@ -712,10 +692,7 @@ func createSnapperRootConfig(st snapperState) recResult {
 	}
 	actions = append(actions, "/etc/snapper/configs/root")
 
-	confPath := st.confdPath
-	if confPath == "" {
-		confPath = snapperGlobalConfPath()
-	}
+	confPath := snapperSysconfig
 	newConfd, changed := mergedConfdRoot(st.confdExists, st.confdContents)
 	if changed {
 		if err := writeRootFile(confPath, newConfd, "0644"); err != nil {
@@ -732,7 +709,7 @@ func createSnapperRootConfig(st snapperState) recResult {
 	return fixedRes(i18n.T("created snapper root config: %s"), strings.Join(actions, ", "))
 }
 
-// mergedConfdRoot returns the desired /etc/conf.d/snapper contents + whether
+// mergedConfdRoot returns the desired /etc/sysconfig/snapper contents + whether
 // they differ from the current file. missing file -> canonical snippet.
 // SNAPPER_CONFIGS already lists root -> unchanged. SNAPPER_CONFIGS lists other
 // configs -> append "root", keep them. file present, no SNAPPER_CONFIGS line
@@ -969,52 +946,35 @@ func baseSource(s string) string {
 
 // ---- reconciler: Material Symbols icon font ------------------------------------
 
-// reconcileIconFont converges the icon font onto boxes that predate it being a
-// ryoku-desktop dependency: every shell glyph is a Material Symbols ligature
-// (MaterialIcon.qml), so without the font each icon renders as its name in
-// plain text ("network_wifi"). the package depend heals packaged boxes on
-// their next full update; this heals git-channel boxes and anyone already
-// broken today.
+// reconcileIconFont restores the icon font when it is missing: every shell
+// glyph is a Material Symbols ligature (MaterialIcon.qml), so without the font
+// each icon renders as its name in plain text ("network_wifi"). ryoku-extras
+// ships it; this fetches the same pinned extra on a box that lost it.
 func reconcileIconFont(checkOnly bool) recResult {
 	if wm.Detect().Name == "" {
 		return okRes(i18n.T("no window manager provider"))
-	}
-	if anyPkgInstalled("ttf-material-symbols-variable", "ttf-material-symbols-variable-git") {
-		return okRes(i18n.T("Material Symbols icon font installed"))
 	}
 	userFont := filepath.Join(sys.Home(), ".local", "share", "fonts", "MaterialSymbolsRounded.ttf")
 	fontPaths := []string{
 		userFont,
 		"/usr/share/fonts/MaterialSymbolsRounded.ttf",
-		"/usr/share/fonts/TTF/MaterialSymbolsRounded.ttf",
 		"/usr/share/fonts/material-symbols/MaterialSymbolsRounded.ttf",
 	}
 	for _, fp := range fontPaths {
 		if validFont(fp) {
-			return okRes("Material Symbols icon font installed")
+			return okRes(i18n.T("Material Symbols icon font installed"))
 		}
-	}
-	if !sys.Has("pacman") {
-		if checkOnly {
-			return wouldRes("Material Symbols font missing; every shell icon renders as its ligature name").
-				withFix("ryoku doctor downloads Material Symbols font to ~/.local/share/fonts")
-		}
-		fontsDir := filepath.Join(sys.Home(), ".local", "share", "fonts")
-		if err := os.MkdirAll(fontsDir, 0o755); err != nil {
-			return failRes("could not create font directory: %v", err)
-		}
-		if err := installDesktopExtra("material-symbols"); err != nil {
-			return failRes("could not install Material Symbols font: %v", err)
-		}
-		return fixedRes("installed the Material Symbols icon font; `ryoku reload` picks it up")
 	}
 	if checkOnly {
 		return wouldRes(i18n.T("Material Symbols font missing; every shell icon renders as its ligature name")).
-			withFix(i18n.T("ryoku doctor installs ttf-material-symbols-variable"))
+			withFix(i18n.T("ryoku doctor downloads Material Symbols font to ~/.local/share/fonts"))
 	}
-	if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", "ttf-material-symbols-variable"); err != nil {
-		return failRes(i18n.T("could not install ttf-material-symbols-variable: %v"), err).
-			withFix("sudo pacman -S ttf-material-symbols-variable")
+	fontsDir := filepath.Join(sys.Home(), ".local", "share", "fonts")
+	if err := os.MkdirAll(fontsDir, 0o755); err != nil {
+		return failRes(i18n.T("could not create font directory: %v"), err)
+	}
+	if err := installDesktopExtra("material-symbols"); err != nil {
+		return failRes(i18n.T("could not install Material Symbols font: %v"), err)
 	}
 	return fixedRes(i18n.T("installed the Material Symbols icon font; `ryoku reload` picks it up"))
 }
@@ -1814,28 +1774,25 @@ func migrateShellConfig(raw []byte) ([]byte, []string, error) {
 // portalFrontends maps a declared backend to the frontend package that serves
 // it, keyed by the seam's own provider constant so no bare compositor name is
 // branched on here.
-var portalFrontends = map[string]struct {
-	fix  string
-	pkgs []string
-}{
-	wm.ProviderHyprland: {"sudo pacman -S xdg-desktop-portal-hyprland", []string{"xdg-desktop-portal-hyprland"}},
-	"gnome":             {"sudo pacman -S xdg-desktop-portal-gnome", []string{"xdg-desktop-portal-gnome"}},
-	"kde":               {"sudo pacman -S xdg-desktop-portal-kde", []string{"xdg-desktop-portal-kde"}},
-	"wlr":               {"sudo pacman -S xdg-desktop-portal-wlr", []string{"xdg-desktop-portal-wlr"}},
+var portalFrontends = map[string]string{
+	wm.ProviderHyprland: "xdg-desktop-portal-hyprland",
+	"gnome":             "xdg-desktop-portal-gnome",
+	"kde":               "xdg-desktop-portal-kde",
+	"wlr":               "xdg-desktop-portal-wlr",
 }
 
 // portalFrontendCheck resolves the xdg-desktop-portal frontend this session
-// needs from the live provider's declared backend, with the command to install
-// it. With no provider answering (a broken or headless box) every frontend is
-// accepted rather than pointing at one compositor's, which is what the check
-// did before the backend was read.
-func portalFrontendCheck() (fix string, pkgs []string) {
+// needs from the live provider's declared backend: the package to install and
+// the packages that satisfy it. With no provider answering (a broken or
+// headless box) every frontend is accepted rather than pointing at one
+// compositor's, which is what the check did before the backend was read.
+func portalFrontendCheck() (pkg string, pkgs []string) {
 	backend := ""
 	if caps, err := wm.Open().Caps(); err == nil {
 		backend = caps.PortalBackend
 	}
-	if f, ok := portalFrontends[backend]; ok {
-		return f.fix, f.pkgs
+	if p, ok := portalFrontends[backend]; ok {
+		return p, []string{p}
 	}
 	return "", []string{
 		"xdg-desktop-portal-hyprland", "xdg-desktop-portal-gnome",
@@ -1847,40 +1804,20 @@ func reconcileSessionComponents(_ bool) recResult {
 	if wm.Detect().Name == "" {
 		return okRes(i18n.T("no window manager provider"))
 	}
-	portalFix, portalPkgs := portalFrontendCheck()
+	portalPkg, portalPkgs := portalFrontendCheck()
 	checks := []struct {
 		role, pkg string
 		any       []string
 	}{
-		{i18n.T("authentication agent"), "hyprpolkitagent", []string{"hyprpolkitagent", "polkit-gnome", "polkit-kde-agent", "polkit-kde", "lxsession"}},
-		{i18n.T("desktop portal"), strings.TrimPrefix(portalFix, "sudo pacman -S "), portalPkgs},
+		{i18n.T("authentication agent"), "hyprpolkitagent", []string{"hyprpolkitagent", "polkit-gnome", "polkit-kde", "lxsession"}},
+		{i18n.T("desktop portal"), portalPkg, portalPkgs},
 		{i18n.T("audio server"), "pipewire", []string{"pipewire"}},
-		{i18n.T("network manager"), "networkmanager", []string{"networkmanager", "NetworkManager"}},
+		{i18n.T("network manager"), "NetworkManager", []string{"NetworkManager"}},
 	}
 	var missing []string
 	for _, c := range checks {
 		if !anyPkgInstalled(c.any...) {
-			pkg := c.pkg
-			if !sys.Has("pacman") {
-				if sys.Has("dnf") {
-					if c.pkg == "hyprpolkitagent" {
-						pkg = "polkit-kde"
-					}
-					fix := "sudo dnf install " + pkg
-					missing = append(missing, fmt.Sprintf("%s [%s]", c.role, fix))
-					continue
-				} else if sys.Has("apt-get") {
-					fix := "sudo apt-get install " + pkg
-					missing = append(missing, fmt.Sprintf("%s [%s]", c.role, fix))
-					continue
-				} else {
-					fix := "install " + pkg
-					missing = append(missing, fmt.Sprintf("%s [%s]", c.role, fix))
-					continue
-				}
-			}
-			fix := "sudo pacman -S " + pkg
-			missing = append(missing, fmt.Sprintf("%s [%s]", c.role, fix))
+			missing = append(missing, fmt.Sprintf("%s [sudo dnf install %s]", c.role, c.pkg))
 		}
 	}
 	if len(missing) == 0 {
@@ -2018,7 +1955,7 @@ func reconcilePortalRouting(checkOnly bool) recResult {
 	}
 	if healthy == "" {
 		return warnRes(i18n.T("no config routes portals to the %s backend; screenshare and portal dialogs cannot work"), backend).
-			withFix(i18n.T("sudo pacman -S xdg-desktop-portal-%s"), backend)
+			withFix(i18n.T("sudo dnf install xdg-desktop-portal-%s"), backend)
 	}
 	list := strings.Join(offenders, ", ")
 	if checkOnly {
@@ -2133,7 +2070,7 @@ func resetCursorTheme(raw []byte, def string) ([]byte, error) {
 // the failure worth healing is a Hub-picked third-party theme that was never
 // installed (or was removed): the pointer then falls back to a bare bitmap.
 // the fix is config-side -- reset hypr.json to the guaranteed default -- never a
-// pacman call. when even the default is absent (a dev checkout with no package)
+// package install. when even the default is absent (a dev checkout with no package)
 // there is nothing config can heal, so it only warns.
 func reconcileCursorTheme(checkOnly bool) recResult {
 	if wm.Detect().Name == "" {
@@ -2148,7 +2085,7 @@ func reconcileCursorTheme(checkOnly bool) recResult {
 	}
 	if !cursorThemeInstalled(defaultCursorTheme, dirs) {
 		// the package default is missing too: no config edit can conjure the
-		// theme files, and doctor never drives pacman.
+		// theme files, and doctor never installs packages here.
 		return warnRes(i18n.T("cursor theme %q is missing on disk and so is the default %q; the pointer falls back to a bitmap"), theme, defaultCursorTheme).
 			withFix(i18n.T("install ryoku-cursors (it ships the Bibata family and is a ryoku-desktop dependency)"))
 	}
@@ -2464,7 +2401,7 @@ func sddmWaylandBody() string {
 // Running the greeter on Wayland like the session lets SDDM own the VT and stop
 // it cleanly at login. Installer boxes get this from sddm/setup; this backports
 // it. Only ever writes our own conf, and only once weston is installed -- a hard
-// depend `pacman -Syu` lands before doctor runs, so this is unmet only on a box
+// depend `ryoku update` lands before doctor runs, so this is unmet only on a box
 // that has not pulled the package yet.
 func reconcileGreeterDisplayServer(checkOnly bool) recResult {
 	if !sys.Exists(greeterThemeDir) {
@@ -3178,7 +3115,7 @@ func liveInstance() string {
 	return caps.Instance
 }
 
-// shellDaemonOutdated: is the running daemon's binary gone from disk? pacman
+// shellDaemonOutdated: is the running daemon's binary gone from disk? rpm
 // replacing /usr/bin/ryoku-shell (or a deploy replacing the home build) turns
 // the daemon's /proc exe link into "... (deleted)". Matches by exact cmdline,
 // never pgrep -f, so doctor's own shell can't shadow the answer.
@@ -3584,182 +3521,31 @@ func reconcileBtrfsHealth(_ bool) recResult {
 	return okRes(i18n.T("btrfs device error counters clean"))
 }
 
-// ---- reconciler: pending .pacnew config --------------------------------------
+// ---- reconciler: pending .rpmnew config --------------------------------------
 
-// pacnewOutcome classifies one .pacnew against its live file. pure, so the
-// resolve decision is unit-testable without root or a real /etc.
-type pacnewOutcome int
-
-const (
-	pacnewIdentical pacnewOutcome = iota // bytes match: pacman's new default is already in place
-	pacnewRyokuOnly                      // differs only by Ryoku's deterministic [ryoku] repo stanza
-	pacnewLocaleGen                      // locale.gen re-shipping the template that re-comments the user's locale
-	pacnewConflict                       // a real merge only a human should make
-)
-
-// classifyPacnew decides whether a .pacnew is safe to drop. identical bytes mean
-// the packaged default already equals the live file (the flagged edit was
-// reverted, or the bump was metadata-only). the [ryoku] repo stanza the
-// installer appends to pacman.conf is Ryoku's own deterministic addition, not a
-// user edit: a live pacman.conf that equals the .pacnew once that stanza is
-// stripped carries nothing to merge. anything else is a genuine conflict left
-// for the user + pacdiff.
-func classifyPacnew(livePath string, live, pacnew []byte) pacnewOutcome {
-	if bytes.Equal(live, pacnew) {
-		return pacnewIdentical
-	}
-	if filepath.Base(livePath) == "pacman.conf" &&
-		bytes.Equal(trimTrailing(stripRyokuRepoStanza(live)), trimTrailing(pacnew)) {
-		return pacnewRyokuOnly
-	}
-	// locale.gen perpetually .pacnews: the installer uncomments the user's
-	// locale, so every glibc bump re-ships the all-commented template (and now and
-	// then a new obscure commented locale). On a configured system it is never
-	// user-actionable -- the active locales live in the real file and dropping the
-	// .pacnew never touches them -- so clear it instead of nagging forever.
-	if filepath.Base(livePath) == "locale.gen" && localeConfigured(live) {
-		return pacnewLocaleGen
-	}
-	return pacnewConflict
-}
-
-var localeCharsetRe = regexp.MustCompile(`^[A-Z0-9][A-Z0-9._-]*$`)
-
-// localeConfigured reports whether locale.gen has at least one active
-// (uncommented) locale definition, i.e. a normal configured system whose
-// locale.gen.pacnew is just the re-shipped template. A charset-shaped second
-// field distinguishes a locale line from the prose header.
-func localeConfigured(live []byte) bool {
-	sc := bufio.NewScanner(bytes.NewReader(live))
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) == 2 && strings.ContainsAny(fields[0], "_.") && localeCharsetRe.MatchString(fields[1]) {
-			return true
-		}
-	}
-	return false
-}
-
-// stripRyokuRepoStanza removes the `[ryoku]` section (and a single blank
-// separator before it) the installer appends to pacman.conf, so what remains is
-// the base config pacman ships. a later section header ends the stanza, so a
-// user's edits after [ryoku] survive the comparison.
-func stripRyokuRepoStanza(conf []byte) []byte {
-	lines := strings.Split(string(conf), "\n")
-	out := make([]string, 0, len(lines))
-	inRyoku := false
-	for _, l := range lines {
-		t := strings.TrimSpace(l)
-		if t == "[ryoku]" {
-			inRyoku = true
-			for len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
-				out = out[:len(out)-1]
-			}
-			continue
-		}
-		if inRyoku {
-			if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
-				inRyoku = false // a new section begins; keep it
-			} else {
-				continue // still inside the [ryoku] stanza
-			}
-		}
-		out = append(out, l)
-	}
-	return []byte(strings.Join(out, "\n"))
-}
-
-// trimTrailing drops trailing whitespace/newlines so a lone trailing-newline
-// difference never reads as a conflict.
-func trimTrailing(b []byte) []byte { return bytes.TrimRight(b, " \t\r\n") }
-
-// reconcilePacnew resolves the .pacnew files pacman drops when it upgrades a
-// package whose tracked /etc file the install (or a later edit) changed. it
-// auto-clears only the provably safe ones -- a .pacnew identical to the live
-// file, or a pacman.conf whose sole diff is the [ryoku] repo stanza the
-// installer appends -- and never overwrites a user-modified base config with the
-// packaged default. genuine merges are reported for `sudo pacdiff`. idempotent:
-// once the safe ones are gone a re-run only sees (and reports) the conflicts.
-func reconcilePacnew(checkOnly bool) recResult {
-	if !sys.Has("pacman") {
-		if sys.Has("rpm") {
-			out, _ := sys.RunOut("find", "/etc", "-name", "*.rpmnew", "-o", "-name", "*.rpmsave")
-			files := nonEmptyLines(out)
-			if len(files) == 0 {
-				return okRes("no pending config updates (.rpmnew/.rpmsave)")
-			}
-			return noteRes("%d pending config update(s) (.rpmnew/.rpmsave)", len(files)).
-				withFix("review differences and merge manually or with rpmconf")
-		}
-		return okRes("no pending config updates")
-	}
-	out, _ := sys.RunOut("find", "/etc", "-name", "*.pacnew")
+// reconcileRPMNew reports the .rpmnew and .rpmsave files rpm leaves beside a
+// config file the user changed. rpm never overwrites a modified config, so
+// each one is a merge only the user can make; doctor reports and never drops.
+func reconcileRPMNew(_ bool) recResult {
+	out, _ := sys.RunOut("find", "/etc", "-name", "*.rpmnew", "-o", "-name", "*.rpmsave")
 	files := nonEmptyLines(out)
 	if len(files) == 0 {
-		return okRes(i18n.T("no pending config updates"))
+		return okRes(i18n.T("no pending config updates (.rpmnew/.rpmsave)"))
 	}
-	resolved, conflicts := 0, 0
-	for _, pacnew := range files {
-		live := strings.TrimSuffix(pacnew, ".pacnew")
-		lb, lerr := os.ReadFile(live)
-		pb, perr := os.ReadFile(pacnew)
-		if lerr != nil || perr != nil || classifyPacnew(live, lb, pb) == pacnewConflict {
-			conflicts++
-			continue
-		}
-		if checkOnly {
-			resolved++
-			continue
-		}
-		if err := sys.Sudo("rm", "-f", pacnew); err != nil {
-			conflicts++
-			continue
-		}
-		resolved++
-	}
-	if conflicts == 0 {
-		if checkOnly {
-			return wouldRes(i18n.T("%d pending .pacnew are safe to drop (identical to the live config, only the [ryoku] repo addition, or a re-commented locale.gen)"), resolved)
-		}
-		return fixedRes(i18n.T("cleared %d safe .pacnew (identical to the live config, only the [ryoku] repo addition, or a re-commented locale.gen)"), resolved)
-	}
-	msg := warnRes(i18n.T("%d pending config update(s) (.pacnew) need review"), conflicts)
-	if resolved > 0 {
-		verb := i18n.T("cleared")
-		if checkOnly {
-			verb = i18n.T("safe to drop")
-		}
-		msg = warnRes(i18n.T("%d pending config update(s) (.pacnew) need review (%d %s)"), conflicts, resolved, verb)
-	}
-	return msg.withFix(i18n.T("review and merge with `sudo pacdiff` (from pacman-contrib)"))
+	return noteRes(i18n.T("%d pending config update(s) (.rpmnew/.rpmsave)"), len(files)).
+		withFix(i18n.T("review differences and merge manually or with rpmconf"))
 }
 
 // ---- reconciler: orphaned packages -------------------------------------------
 
 func reconcileOrphans(_ bool) recResult {
-	if sys.Has("pacman") {
-		out, err := sys.RunOut("pacman", "-Qtdq")
-		orphans := nonEmptyLines(out)
-		if err != nil || len(orphans) == 0 {
-			return okRes(i18n.T("no orphaned packages"))
-		}
-		return noteRes(i18n.T("%d orphaned package(s)"), len(orphans)).
-			withFix(i18n.T("review `pacman -Qtd`, then `sudo pacman -Rns $(pacman -Qtdq)` if unneeded"))
+	out, err := sys.RunOut("dnf", "repoquery", "--unneeded", "-q")
+	orphans := nonEmptyLines(out)
+	if err != nil || len(orphans) == 0 {
+		return okRes(i18n.T("no orphaned packages"))
 	}
-	if sys.Has("dnf") {
-		out, err := sys.RunOut("dnf", "repoquery", "--unneeded", "-q")
-		orphans := nonEmptyLines(out)
-		if err != nil || len(orphans) == 0 {
-			return okRes(i18n.T("no orphaned packages"))
-		}
-		return noteRes(i18n.T("%d orphaned package(s)"), len(orphans)).
-			withFix("review `dnf repoquery --unneeded`, remove with `sudo dnf autoremove` if unneeded")
-	}
-	return okRes(i18n.T("no orphaned packages"))
+	return noteRes(i18n.T("%d orphaned package(s)"), len(orphans)).
+		withFix(i18n.T("review `dnf repoquery --unneeded`, remove with `sudo dnf autoremove` if unneeded"))
 }
 
 // ---- swap helpers ------------------------------------------------------------
@@ -3884,85 +3670,6 @@ func tailLines(s string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
-}
-
-// ---- reconciler: unowned Ryoku system files (deploy-seeded) -------------------
-
-// ryokuSystemGlobs are the ryoku-desktop-owned paths that the ISO installer
-// (bootloader.sh) and ryoku/shell deploy.sh also seed unowned: the privileged
-// helpers + their polkit rules (so a dev checkout's pkexec has a rule to match),
-// the ryoku-owned systemd units, the shipped boot configs under
-// /usr/share/ryoku/boot, the Plymouth splash theme, and the logind lid-switch
-// drop-in. On a packaged box an unowned copy from an earlier dev deploy, an
-// older ISO, or `ryoku recovery` collides with the package on `pacman -Syu`
-// ("exists in filesystem") and aborts the whole atomic transaction, so no update
-// lands. `ryoku update` now passes --overwrite for these
-// (updater.ryokuOverwriteGlob), but a box already wedged cannot reach that fixed
-// binary; clearing the copies here lets the next update adopt them.
-var ryokuSystemGlobs = []string{
-	"/usr/bin/ryoku-*",
-	"/usr/lib/systemd/system/ryoku-*",
-	"/usr/share/polkit-1/rules.d/*ryoku*.rules",
-	"/usr/share/plymouth/themes/ryoku/*",
-	"/usr/share/ryoku/boot/*",
-	"/etc/systemd/logind.conf.d/10-ryoku-lid.conf",
-}
-
-var pkgOwnsFile = func(path string) bool {
-	if sys.Has("pacman") {
-		return exec.Command("pacman", "-Qo", path).Run() == nil
-	}
-	if sys.Has("rpm") {
-		return exec.Command("rpm", "-qf", path).Run() == nil
-	}
-	if sys.Has("dpkg-query") {
-		return exec.Command("dpkg-query", "-S", path).Run() == nil
-	}
-	return false
-}
-
-// strayRyokuFiles returns the files matching globs that pacman does not own: the
-// deploy-seeded leftovers that block -Syu. Pure over its injected probes, so the
-// selection is unit-testable without a real filesystem or pacman.
-func strayRyokuFiles(globs []string, glob func(string) ([]string, error), owned func(string) bool) []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, g := range globs {
-		matches, _ := glob(g)
-		for _, m := range matches {
-			if seen[m] || owned(m) {
-				continue
-			}
-			seen[m] = true
-			out = append(out, m)
-		}
-	}
-	return out
-}
-
-func reconcileConflictingRyokuFiles(checkOnly bool) recResult {
-	// Only a packaged box hits the conflict. A dev checkout has no ryoku-desktop,
-	// and deploy.sh's unowned helpers there are correct, so leave them be.
-	if !sys.PkgInstalled("ryoku-desktop") {
-		return okRes(i18n.T("dev checkout (no ryoku-desktop); deploy-seeded helpers are expected"))
-	}
-	stray := strayRyokuFiles(ryokuSystemGlobs, filepath.Glob, pkgOwnsFile)
-	if len(stray) == 0 {
-		return okRes(i18n.T("no unowned Ryoku files blocking pacman"))
-	}
-	if checkOnly {
-		return wouldRes(i18n.T("%d unowned Ryoku file(s) block `pacman -Syu` (deploy-seeded): %s"),
-			len(stray), strings.Join(stray, ", ")).
-			withFix("sudo rm -f %s", strings.Join(stray, " "))
-	}
-	for _, f := range stray {
-		if err := sys.Sudo("rm", "-f", f); err != nil {
-			return failRes(i18n.T("could not remove %s: %v"), f, err).
-				withFix("sudo rm -f %s", strings.Join(stray, " "))
-		}
-	}
-	return fixedRes(i18n.T("removed %d unowned Ryoku file(s) so the next update adopts them: %s"),
-		len(stray), strings.Join(stray, ", "))
 }
 
 // transientAppScope reports whether a --user unit is a transient GUI app-launch

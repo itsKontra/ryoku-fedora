@@ -40,8 +40,8 @@ func writeReport(override string, findings []finding) (string, error) {
 var diagnosticPackages = []string{
 	"ryoku-desktop", "ryoku", "ryoku-shell", "ryoku-hub", "ryoku-blobs", "ryoku-rashin",
 	"quickshell",
-	"qt6-base", "qt6-declarative", "qt6-wayland",
-	"pipewire", "wireplumber", "nvidia-utils", "mesa", "limine", "snapper",
+	"qt6-qtbase", "qt6-qtdeclarative", "qt6-qtwayland",
+	"pipewire", "wireplumber", "nvidia-driver", "mesa-dri-drivers", "grub2-common", "snapper",
 }
 
 // compositorDiagnosticPackages: the live compositor's own stack, so a report
@@ -92,7 +92,7 @@ func gatherReport(findings []finding) string {
 	section("ryoku")
 	cmd("ryoku", "status")
 	line("state dir:\n%s", captureOut("ls", "-la", filepath.Join(sys.Xdg("XDG_STATE_HOME", ".local/state"), "ryoku")))
-	line("[ryoku] repo configured: %v", strings.Contains(readFileSafe("/etc/pacman.conf"), "[ryoku]"))
+	line("[%s] repo configured: %v", sys.RPMRepoName, sys.Exists(sys.RPMRepoFile))
 
 	section("storage (btrfs)")
 	cmd("sudo", "-n", "btrfs", "filesystem", "usage", "/")
@@ -101,22 +101,10 @@ func gatherReport(findings []finding) string {
 	if sys.Exists("/etc/sysconfig/snapper") {
 		line("/etc/sysconfig/snapper:\n%s", readFileSafe("/etc/sysconfig/snapper"))
 	}
-	if sys.Exists("/etc/conf.d/snapper") {
-		line("/etc/conf.d/snapper:\n%s", readFileSafe("/etc/conf.d/snapper"))
-	}
 
 	section("packages")
-	if sys.Has("pacman") {
-		cmd("pacman", append(append([]string{"-Q"}, diagnosticPackages...), compositorDiagnosticPackages()...)...)
-		cmd("pacman", "-Qtdq")
-		cmd("pacman", "-Dk")
-		line(".pacnew files:\n%s", captureOut("find", "/etc", "-name", "*.pacnew"))
-		line("pacman.log (tail):\n%s", tailLines(readFileSafe("/var/log/pacman.log"), 25))
-	} else if sys.Has("rpm") {
-		cmd("rpm", append(append([]string{"-q"}, diagnosticPackages...), compositorDiagnosticPackages()...)...)
-	} else if sys.Has("dpkg-query") {
-		cmd("dpkg-query", append(append([]string{"-l"}, diagnosticPackages...), compositorDiagnosticPackages()...)...)
-	}
+	cmd("rpm", append(append([]string{"-q"}, diagnosticPackages...), compositorDiagnosticPackages()...)...)
+	line(".rpmnew/.rpmsave files:\n%s", captureOut("find", "/etc", "-name", "*.rpmnew", "-o", "-name", "*.rpmsave"))
 
 	section("services")
 	cmd("systemctl", "--failed", "--no-legend", "--plain")

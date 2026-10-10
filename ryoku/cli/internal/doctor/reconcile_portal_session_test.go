@@ -70,7 +70,7 @@ func TestParseStartTicksMatchesRealProcSelf(t *testing.T) {
 	}
 }
 
-// portalShims puts a fake busctl (printing `introspect`), systemctl and pacman
+// portalShims puts a fake busctl (printing `introspect`), systemctl and rpm
 // on PATH so the reconciler sees exactly one portal state, with no live session.
 func portalShims(t *testing.T, introspect string, busctl bool, pkgInstalled bool) {
 	t.Helper()
@@ -97,7 +97,7 @@ func portalShims(t *testing.T, introspect string, busctl bool, pkgInstalled bool
 	if pkgInstalled {
 		rc = "0"
 	}
-	write("pacman", "#!/bin/sh\nexit "+rc+"\n")
+	write("rpm", "#!/bin/sh\nexit "+rc+"\n")
 	t.Setenv("PATH", bin)
 }
 
@@ -160,7 +160,7 @@ func TestPortalSessionDistinguishesADeadBackendFromAMissingOne(t *testing.T) {
 	if got.status != recWarn {
 		t.Fatalf("dead backend: status=%v, want warn", got.status)
 	}
-	if strings.Contains(got.remedy, "pacman -S") {
+	if strings.Contains(got.remedy, "dnf install") {
 		t.Fatalf("remedy %q tells the user to reinstall a package that is already there", got.remedy)
 	}
 }

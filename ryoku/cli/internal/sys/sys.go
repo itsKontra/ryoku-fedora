@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// Run executes name with args wired to the parent's stdio, so pacman, git, and
+// Run executes name with args wired to the parent's stdio, so dnf, git, and
 // friends stream straight to the terminal.
 func Run(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
@@ -45,35 +45,13 @@ func PathPresent(p string) bool { _, err := os.Lstat(p); return err == nil }
 
 // PkgInstalled reports whether a package is installed on the host.
 func PkgInstalled(name string) bool {
-	if Has("pacman") {
-		return exec.Command("pacman", "-Q", name).Run() == nil
-	}
-	if Has("rpm") {
-		return exec.Command("rpm", "-q", "--quiet", name).Run() == nil
-	}
-	if Has("dpkg-query") {
-		out, err := exec.Command("dpkg-query", "-W", "-f=${Status}", name).Output()
-		return err == nil && strings.Contains(string(out), "install ok installed")
-	}
-	return false
+	return exec.Command("rpm", "-q", "--quiet", name).Run() == nil
 }
 
 // PkgOwner is the name of the installed package that owns path, or "" when no
-// package owns it (or the host has no known package manager).
+// package owns it (or rpm is missing).
 func PkgOwner(path string) string {
-	var out string
-	var err error
-	switch {
-	case Has("pacman"):
-		out, err = RunOut("pacman", "-Qoq", path)
-	case Has("rpm"):
-		out, err = RunOut("rpm", "-qf", "--qf", "%{NAME}\n", path)
-	case Has("dpkg-query"):
-		out, err = RunOut("dpkg-query", "-S", path)
-		out, _, _ = strings.Cut(out, ":")
-	default:
-		return ""
-	}
+	out, err := RunOut("rpm", "-qf", "--qf", "%{NAME}\n", path)
 	if err != nil {
 		return ""
 	}
@@ -88,26 +66,11 @@ func UnitEnabled(unit string) bool {
 
 // InstalledVersion is the installed ryoku-desktop package version, or "".
 func InstalledVersion() string {
-	if Has("pacman") {
-		out, err := RunOut("pacman", "-Q", "ryoku-desktop")
-		if err == nil {
-			f := strings.Fields(strings.TrimSpace(out))
-			if len(f) == 2 {
-				return f[1]
-			}
-		}
-	} else if Has("rpm") {
-		out, err := RunOut("rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", "ryoku-desktop")
-		if err == nil && !strings.Contains(out, "not installed") {
-			return strings.TrimSpace(out)
-		}
-	} else if Has("dpkg-query") {
-		out, err := RunOut("dpkg-query", "-W", "-f=${Version}", "ryoku-desktop")
-		if err == nil {
-			return strings.TrimSpace(out)
-		}
+	out, err := RunOut("rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", "ryoku-desktop")
+	if err != nil || strings.Contains(out, "not installed") {
+		return ""
 	}
-	return ""
+	return strings.TrimSpace(out)
 }
 
 // CountNonEmpty counts the non-blank lines in s.

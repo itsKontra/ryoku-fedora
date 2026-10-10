@@ -18,12 +18,7 @@ type asusAuraStatus struct {
 var (
 	readAsusAuraStatus = probeAsusAuraStatus
 	installAsusAura    = func() error {
-		if sys.Has("pacman") {
-			return sys.Sudo("pacman", "-S", "--needed", "--noconfirm", "asusctl")
-		} else if sys.Has("dnf") {
-			return sys.Sudo("dnf", "-y", "install", "asusctl")
-		}
-		return nil
+		return sys.Sudo("dnf", "-y", "install", "asusctl")
 	}
 	startAsusAura = func() error {
 		return sys.Sudo("systemctl", "start", "asusd.service")
@@ -60,7 +55,7 @@ func reconcileAsusAura(checkOnly bool) recResult {
 		}
 		if err := installAsusAura(); err != nil {
 			return failRes(i18n.T("could not install the ASUS Aura provider: %v"), err).
-				withFix("sudo pacman -S asusctl")
+				withFix("sudo dnf install asusctl")
 		}
 		recordProvisioned("asusctl")
 	}

@@ -16,7 +16,7 @@ import (
 // An up-to-date packaged box (installed == latest) reports nothing pending but
 // lists the recent history the installed commit contains, so the Hub's Updates
 // page still has content. packagedStatus is the pure core of buildStatus, so
-// this exercises the sha branching and the recent lookup without pacman.
+// this exercises the sha branching and the recent lookup without dnf.
 func TestPackagedStatusUpToDatePopulatesRecent(t *testing.T) {
 	srv, _ := stubRecent(t, [][2]string{
 		{"latest work", "86a91f4aaaa"},
@@ -80,107 +80,24 @@ func TestPackagedStatusUpToDateOfflineEmptyRecent(t *testing.T) {
 	}
 }
 
-// The Ryoku lane must never be a sysupgrade: the kernel and the base come from
-// the distribution the box was installed from, on the user's schedule. It must
-// also --overwrite the Ryoku system paths the ISO installer and deploy.sh seed
-// unowned (ryoku-dns / ryoku-wifi-powersave + their polkit rules, the Plymouth
-// splash theme, the initcpio hook, the logind lid drop-in). Once a package owns
-// one of those paths a
-// file conflict otherwise aborts the whole transaction and blocks every user
-// update, so pin them here.
-func TestRyokuInstallArgsStayInTheRyokuLane(t *testing.T) {
-	bin := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bin, "pacman"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin)
-	set := []string{"ryoku/ryoku-desktop", "ryoku/ryogami"}
-	args := ryokuInstallArgs(set)
-	joined := strings.Join(args, " ")
-	for _, want := range []string{"pacman -S", "--needed", "--noconfirm", "--overwrite",
-		"RYOKU_MANAGED_UPDATE=1", "ryoku/ryoku-desktop", "ryoku/ryogami"} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("ryokuInstallArgs missing %q: %v", want, args)
-		}
-	}
-	// -Su/-Syu here would upgrade the whole system, kernel included, which is
-	// exactly what this lane exists not to do.
-	for _, banned := range []string{"-Su", "-Syu", "-Syyu", "-u"} {
-		for _, a := range args {
-			if a == banned {
-				t.Errorf("ryokuInstallArgs runs %q: that is a system upgrade, not the Ryoku set", banned)
-			}
-		}
-	}
-	// The database refresh is its own step, and a channel move forces it: pacman
-	// skips a db that is not newer than its cache, and a frozen release is older
-	// than the channel the box just left.
-	if got := strings.Join(refreshDBArgs(false), " "); !strings.Contains(got, "pacman -Sy") {
-		t.Errorf("refreshDBArgs = %q, want a -Sy refresh", got)
-	}
-	if got := strings.Join(refreshDBArgs(true), " "); !strings.Contains(got, "pacman -Syy") {
-		t.Errorf("refreshDBArgs(force) = %q, want -Syy so a frozen release's db is refetched", got)
-	}
-
-	var glob string
-	for i, a := range args {
-		if a == "--overwrite" && i+1 < len(args) {
-			glob = args[i+1]
-		}
-	}
-	if glob == "" {
-		t.Fatalf("no --overwrite glob in %v", args)
-	}
-	for _, p := range []string{
-		"/usr/bin/ryoku-dns",
-		"/usr/bin/ryoku-wifi-powersave",
-		"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules",
-		"/usr/share/polkit-1/rules.d/49-ryoku-wifi-powersave.rules",
-		"/usr/share/plymouth/themes/ryoku/bullet.png",
-		"/usr/share/plymouth/themes/ryoku/logo.png",
-		"/usr/lib/systemd/system/ryoku-network-kill-guard.service",
-		"/usr/lib/initcpio/install/ryoku-gpu-trim",
-		"/usr/share/ryoku/boot/default.conf",
-		"/etc/systemd/logind.conf.d/10-ryoku-lid.conf",
-	} {
-		covered := false
-		for _, g := range strings.Split(glob, ",") {
-			if ok, _ := filepath.Match(g, p); ok {
-				covered = true
-				break
-			}
-		}
-		if !covered {
-			t.Errorf("--overwrite %q does not cover deploy.sh-seeded path %q", glob, p)
-		}
-	}
-
-	// The opt-in lane is the only place a sysupgrade may appear.
-	if got := strings.Join(systemUpgradeArgs(), " "); !strings.Contains(got, "pacman -Syu") {
-		t.Errorf("systemUpgradeArgs = %q, want the full -Syu it exists for", got)
-	} else if !strings.Contains(got, "RYOKU_MANAGED_UPDATE=1") {
-		t.Errorf("systemUpgradeArgs = %q, want first-rollout scheduling owned by stage2", got)
-	}
-}
-
 // prowlDecide is the pure core of prowlRefresh: a dev install (on PATH, not
-// pacman-owned) self-updates; a pacman-owned copy is left to `pacman -Syu`; an
-// absent binary is a no-op. Pinned so the dev-vs-packaged branch cannot regress.
+// rpm-owned) self-updates; an rpm-owned copy is left to dnf; an absent binary
+// is a no-op. Pinned so the dev-vs-packaged branch cannot regress.
 func TestProwlDecide(t *testing.T) {
 	cases := []struct {
-		name        string
-		onPath      bool
-		pacmanOwned bool
-		want        prowlAction
+		name     string
+		onPath   bool
+		pkgOwned bool
+		want     prowlAction
 	}{
 		{"absent does nothing", false, false, prowlNoop},
-		{"packaged is left to pacman", true, true, prowlManaged},
+		{"packaged is left to dnf", true, true, prowlManaged},
 		{"dev install self-updates", true, false, prowlSelfUpdate},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := prowlDecide(c.onPath, c.pacmanOwned); got != c.want {
-				t.Fatalf("prowlDecide(onPath=%v, owned=%v) = %v, want %v", c.onPath, c.pacmanOwned, got, c.want)
+			if got := prowlDecide(c.onPath, c.pkgOwned); got != c.want {
+				t.Fatalf("prowlDecide(onPath=%v, owned=%v) = %v, want %v", c.onPath, c.pkgOwned, got, c.want)
 			}
 		})
 	}
@@ -192,14 +109,14 @@ func TestFedoraUpdateLanes(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
-	got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-desktop", "ryoku/ryoku-shell"}), " ")
+	got := strings.Join(ryokuInstallArgs([]string{"ryoku-desktop", "ryoku-shell"}), " ")
 	if got != "sudo dnf -y --repo=RyokuCOPR distro-sync ryoku-desktop ryoku-shell" {
 		t.Fatalf("Ryoku lane: %s", got)
 	}
 	if got := strings.Join(systemUpgradeArgs(), " "); got != "sudo dnf -y upgrade" {
 		t.Fatalf("system lane: %s", got)
 	}
-	if got := strings.Join(refreshDBArgs(true), " "); got != "sudo dnf --repo=RyokuCOPR --refresh makecache" {
+	if got := strings.Join(refreshDBArgs(), " "); got != "sudo dnf --repo=RyokuCOPR --refresh makecache" {
 		t.Fatalf("refresh: %s", got)
 	}
 }
@@ -211,7 +128,7 @@ func TestDNFSymlinkAndEmptyRyokuSet(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
-	if got := strings.Join(ryokuInstallArgs([]string{"ryoku/ryoku-shell"}), " "); got != "sudo dnf -y --repo=RyokuCOPR distro-sync ryoku-shell" {
+	if got := strings.Join(ryokuInstallArgs([]string{"ryoku-shell"}), " "); got != "sudo dnf -y --repo=RyokuCOPR distro-sync ryoku-shell" {
 		t.Fatal(got)
 	}
 	if got := strings.Join(ryokuInstallArgs(nil), " "); got != "true" {
@@ -375,44 +292,5 @@ func TestLatestAvailableRPMRefreshRefetchesMetadata(t *testing.T) {
 	}
 	if got := latestAvailable("ryoku-desktop", true); got != "0.3916-35.fc44" {
 		t.Fatalf("refreshed latestAvailable = %q, want the refetched answer", got)
-	}
-}
-
-func TestDbRejection(t *testing.T) {
-	cases := map[string]bool{
-		"error: failed to commit transaction (conflicting files)": false,
-		"could not satisfy dependencies":                          false,
-		"target not found: ryoku-desktop":                         false,
-		"ryoku.db: invalid or corrupted package":                  true,
-		"signature from repository is unknown":                    true,
-		"could not read db file":                                  true,
-	}
-	for msg, want := range cases {
-		if got := dbRejection(errors.New(msg)); got != want {
-			t.Fatalf("dbRejection(%q) = %v, want %v", msg, got, want)
-		}
-	}
-	if dbRejection(nil) {
-		t.Fatal("a nil error is not a database rejection")
-	}
-}
-
-func TestDropSplitMetasNotServed(t *testing.T) {
-	installed := map[string]bool{"ryoku-desktop-hyprland": true, "ryoku-desktop-niri": false}
-	var removed []string
-	oldI, oldR := splitMetaInstalled, splitMetaRemove
-	splitMetaInstalled = func(n string) bool { return installed[n] }
-	splitMetaRemove = func(n string) error { removed = append(removed, n); return nil }
-	t.Cleanup(func() { splitMetaInstalled, splitMetaRemove = oldI, oldR })
-
-	// A release that predates the split serves neither meta: the installed one
-	// goes, the absent one is untouched.
-	if got := dropSplitMetasNotServed(map[string]bool{"ryoku-desktop": true}); len(got) != 1 || got[0] != "ryoku-desktop-hyprland" {
-		t.Fatalf("across the split the installed meta must be dropped, got %v", got)
-	}
-	// A release that serves the metas keeps them.
-	removed = nil
-	if got := dropSplitMetasNotServed(map[string]bool{"ryoku-desktop-hyprland": true}); len(got) != 0 || len(removed) != 0 {
-		t.Fatalf("a served meta must stay, got %v removed %v", got, removed)
 	}
 }

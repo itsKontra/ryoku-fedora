@@ -413,7 +413,6 @@ func TestPlanSnapper(t *testing.T) {
 	withMode := func(m os.FileMode) snapperState { s := consistent; s.snapshotsMode = m; return s }
 	withConfd := func(c string) snapperState { s := consistent; s.confdContents = c; return s }
 	plainSnapshotsDir := func() snapperState { s := consistent; s.snapshotsIsSubvol = false; return s }
-	withConfdPath := func(path, c string) snapperState { s := consistent; s.confdPath = path; s.confdContents = c; return s }
 
 	cases := []struct {
 		name        string
@@ -428,8 +427,7 @@ func TestPlanSnapper(t *testing.T) {
 		{"existing config wins over a stale opt-out marker", func() snapperState { s := consistent; s.optedOut = true; return s }(), snapperOK, ""},
 		{"present + consistent reads ok", consistent, snapperOK, ""},
 		{"/.snapshots wrong mode warns inconsistent", withMode(0o755), snapperWarnInconsistent, "mode 0755"},
-		{"conf.d missing root warns inconsistent", withConfd("SNAPPER_CONFIGS=\"home\"\n"), snapperWarnInconsistent, "does not list the root config"},
-		{"sysconfig missing root warns inconsistent", withConfdPath("/etc/sysconfig/snapper", "SNAPPER_CONFIGS=\"\"\n"), snapperWarnInconsistent, "/etc/sysconfig/snapper does not list the root config"},
+		{"sysconfig missing root warns inconsistent", withConfd("SNAPPER_CONFIGS=\"home\"\n"), snapperWarnInconsistent, "/etc/sysconfig/snapper does not list the root config"},
 		{"/.snapshots is plain dir warns inconsistent", plainSnapshotsDir(), snapperWarnInconsistent, "plain directory"},
 		{"config present but snapper missing recommends it", func() snapperState { s := consistent; s.snapperInstalled = false; return s }(), snapperWarnInconsistent, "snapper is not installed"},
 		{"dnf box without the snapshot hook warns", func() snapperState { s := consistent; s.dnfInstalled = true; return s }(), snapperWarnInconsistent, "dnf snapshot hook is missing"},
@@ -455,7 +453,7 @@ func TestPlanSnapper(t *testing.T) {
 	}
 }
 
-// mergedConfdRoot decides how /etc/conf.d/snapper changes when doctor writes
+// mergedConfdRoot decides how /etc/sysconfig/snapper changes when doctor writes
 // the snapper root config. it must add "root" without dropping anything a
 // human (or another tool) already put in the file.
 func TestMergedConfdRoot(t *testing.T) {
@@ -736,11 +734,6 @@ func TestDefaultCursorIndexInheritsShipped(t *testing.T) {
 	}
 }
 
-// configs shaped like the old installer's shadow file and like
-// limine-mkinitcpio-hook's generated tree.
-// branding in charge of the globals, (c) keep foreign globals a user or the
-// tool added, and (d) pick a bootable default_entry for the resulting menu
-// shape.
 // fastfetchLogoSource lifts the single logo image path out of the JSONC
 // config the reconciler keys on. it must read the value verbatim, skip a
 // "source" that only appears inside a // comment, and report absence rather
@@ -967,20 +960,6 @@ func TestReconcileFastfetchEmblem(t *testing.T) {
 	})
 }
 
-// entry already boot the package-refreshed limine, so `ryoku update` may retire
-// the legacy entry / the healing reconciler can stand down? "present" means an
-// active entry (BootXXXX* ...) either loads \limine_x64.efi or carries the
-// limine-install label "Limine" (VenHw, no file path). The legacy \limine.efi
-// entry, inactive entries, foreign entries, and empty output must all read NOT
-// present. Fixtures mirror real efibootmgr: a header block, then one entry per
-// line with a TAB between label and device path.
-// after BootXXXX and an optional *, up to the first TAB (space-separated
-// fallback when there is no tab). A label with spaces must survive intact
-// (run to the tab, not the first space), and a non-entry header line must yield
-// writer needs. It trims all three inputs and refuses (ok=false) unless the
-// mount source is under /dev/ and both the parent-disk name and partition
-// number are non-empty; on success the disk is "/dev/"+pkname and the part is
-// the trimmed partition number.
 // hyprSetFollowMouse must flip only desktop.input.followMouse and preserve every
 // other field.
 func TestHyprFollowMouseRewrite(t *testing.T) {
@@ -1339,10 +1318,6 @@ func TestMigrateDockStore(t *testing.T) {
 	}
 }
 
-// entries go (with their indented options), default_entry moves off the tree
-// directory, globals and the /+ tree survive untouched.
-// 1.37+ limine-entry-tool adopts the flat placeholder as the tree root: the
-// entry must survive promotion, only default_entry moves off the directory.
 // The hijack the portal-routing reconciler heals: a niri-era generic
 // portals.conf routing to the gnome backend, which hangs app launches under
 // Hyprland. hyprland anywhere in the default list means the file is intent,
@@ -1552,38 +1527,6 @@ func TestReconcilePortalRoutingNiriPackaged(t *testing.T) {
 	}
 }
 
-// limineAdoptedDirty mirrors a live /boot/limine.conf after limine-entry-tool
-// 1.37+ adopts the flat "/Ryoku Linux" placeholder as the menu directory: the
-// placeholder's boot stanza (protocol/kernel_path/cmdline/module_path) is left
-// wedged between the directory title and its first "//" sub-entry, where
-// Limine allows only a comment. that malformed "directory that is also a boot
-// entry" cannot autoboot, so the timeout countdown restarts forever.
-const limineAdoptedDirty = `timeout: 3
-default_entry: 2
-interface_branding: Ryoku Bootloader
-
-/Ryoku Linux
-    protocol: linux
-    kernel_path: boot():/vmlinuz-linux
-    cmdline: root=UUID=x rw quiet splash
-    module_path: boot():/initramfs-linux.img
-
-  //linux
-  comment: Kernel version: 7.0.12
-  protocol: efi
-  path: boot():/EFI/Linux/ryoku_linux.efi
-
-     //Snapshots
-     comment: 5 / 5 snapshots
-
-/EFI fallback
-    protocol: efi
-    path: boot():/EFI/BOOT/BOOTX64.EFI
-`
-
-// TestLimineEnsureAutoboot covers the countdown-loop fix on the real adopted
-// layout: default_entry: 2 lands on the /EFI fallback (which re-launches Limine),
-// so it must become the kernel's entry path, with remember_last_entry enabled.
 func TestReconcileStaleUpdateRun(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", dir)
@@ -1968,50 +1911,6 @@ func TestTransientAppScope(t *testing.T) {
 	}
 }
 
-// strayRyokuFiles must return only the deploy-seeded paths pacman does not own:
-// removing a package-owned file would break the install, and missing an unowned
-// one leaves the -Syu conflict that wedges every update.
-func TestStrayRyokuFilesSelectsUnownedOnly(t *testing.T) {
-	glob := func(pat string) ([]string, error) {
-		switch pat {
-		case "/usr/bin/ryoku-*":
-			return []string{"/usr/bin/ryoku-dns", "/usr/bin/ryoku-gpu"}, nil
-		case "/usr/share/polkit-1/rules.d/*ryoku*.rules":
-			return []string{"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules"}, nil
-		case "/usr/share/plymouth/themes/ryoku/*":
-			return []string{"/usr/share/plymouth/themes/ryoku/bullet.png", "/usr/share/plymouth/themes/ryoku/logo.png"}, nil
-		case "/usr/lib/systemd/system/ryoku-*":
-			return []string{"/usr/lib/systemd/system/ryoku-network-kill-guard.service"}, nil
-		case "/usr/share/ryoku/boot/*":
-			return []string{"/usr/share/ryoku/boot/default.conf"}, nil
-		case "/etc/systemd/logind.conf.d/10-ryoku-lid.conf":
-			return []string{"/etc/systemd/logind.conf.d/10-ryoku-lid.conf"}, nil
-		}
-		return nil, nil
-	}
-	// packaged; the rest are seeded unowned by the installer / a dev deploy.
-	owned := func(p string) bool {
-		return p == "/usr/bin/ryoku-gpu" || p == "/usr/share/plymouth/themes/ryoku/logo.png"
-	}
-	got := strayRyokuFiles(ryokuSystemGlobs, glob, owned)
-	want := map[string]bool{
-		"/usr/bin/ryoku-dns":                                       true,
-		"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules":           true,
-		"/usr/share/plymouth/themes/ryoku/bullet.png":              true,
-		"/usr/lib/systemd/system/ryoku-network-kill-guard.service": true,
-		"/usr/share/ryoku/boot/default.conf":                       true,
-		"/etc/systemd/logind.conf.d/10-ryoku-lid.conf":             true,
-	}
-	if len(got) != len(want) {
-		t.Fatalf("strayRyokuFiles = %v, want exactly the unowned paths", got)
-	}
-	for _, g := range got {
-		if !want[g] {
-			t.Errorf("strayRyokuFiles returned %q; package-owned files must be excluded", g)
-		}
-	}
-}
-
 // resolveGtkThemeName maps the theme.json GTK choice + session mode to the exact
 // gsettings gtk-theme name the daemon writes (C3), so the GTK session reconciler
 // converges to a name the next repaint will not immediately flip. system means
@@ -2109,12 +2008,12 @@ func TestPortalFrontendCheckFollowsTheDeclaredBackend(t *testing.T) {
 		t.Setenv("PATH", bin)
 		t.Setenv("RYOKU_WM", c.provider)
 
-		fix, pkgs := portalFrontendCheck()
+		pkg, pkgs := portalFrontendCheck()
 		if len(pkgs) != 1 || pkgs[0] != c.wantPkg {
 			t.Errorf("%s: pkgs=%v, want [%s]", c.provider, pkgs, c.wantPkg)
 		}
-		if !strings.Contains(fix, c.wantPkg) {
-			t.Errorf("%s: fix hint %q should name %s", c.provider, fix, c.wantPkg)
+		if pkg != c.wantPkg {
+			t.Errorf("%s: install package %q, want %s", c.provider, pkg, c.wantPkg)
 		}
 	}
 
@@ -2122,8 +2021,8 @@ func TestPortalFrontendCheckFollowsTheDeclaredBackend(t *testing.T) {
 	// compositor's: the old behaviour pointed a niri box at Hyprland's portal.
 	t.Setenv("RYOKU_WM", "none")
 	t.Setenv("PATH", t.TempDir())
-	fix, pkgs := portalFrontendCheck()
-	if fix != "" || len(pkgs) < 2 {
-		t.Fatalf("no provider: fix=%q pkgs=%v, want no hint and every frontend", fix, pkgs)
+	pkg, pkgs := portalFrontendCheck()
+	if pkg != "" || len(pkgs) < 2 {
+		t.Fatalf("no provider: pkg=%q pkgs=%v, want no package and every frontend", pkg, pkgs)
 	}
 }

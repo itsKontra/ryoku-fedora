@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ryoku-cli/internal/sys"
 )
 
 // mustGit runs git in dir with an isolated identity and config, failing the test
@@ -351,7 +353,7 @@ func TestRyokuChannelDefaultAndOverride(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir()) // no recorded checkout
 	t.Setenv("XDG_CONFIG_HOME", cfg)        // no persisted environment.d channel, so default applies
 	t.Setenv("RYOKU_CHANNEL", "")
-	packagedConf(t, "") // no [ryoku] stanza: not packaged, so the tracked/env/default path applies
+	packagedRepo(t, "") // no COPR baseurl: not packaged, so the tracked/env/default path applies
 	if got := ryokuChannel(); got != "main" {
 		t.Errorf("default channel = %q, want main", got)
 	}
@@ -635,7 +637,7 @@ func TestChannelUsesPersistedChannel(t *testing.T) {
 	t.Setenv("RYOKU_REPO", "")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", cfg)
-	packagedConf(t, "") // no packaged channel, so the persisted RYOKU_CHANNEL is authoritative
+	packagedRepo(t, "") // no packaged channel, so the persisted RYOKU_CHANNEL is authoritative
 	writeFile(t, filepath.Join(cfg, "environment.d", "ryoku.conf"), "RYOKU_CHANNEL=unstable-dev\n")
 
 	t.Setenv("RYOKU_CHANNEL", "")
@@ -649,18 +651,18 @@ func TestChannelUsesPersistedChannel(t *testing.T) {
 }
 
 // A migrated box carries a stale RYOKU_CHANNEL=unstable-dev in environment.d
-// (and the login env) but a packaged testing Server. The packaged channel is
-// authoritative, so status/version/doctor report testing, not unstable-dev.
+// (and the login env) but a packaged COPR baseurl. The packaged channel is
+// authoritative, so status/version/doctor report copr, not unstable-dev.
 func TestRyokuChannelPrefersPackagedOverStaleEnv(t *testing.T) {
 	cfg := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("RYOKU_REPO", "")
 	t.Setenv("XDG_STATE_HOME", t.TempDir()) // no checkout: this box is packaged
 	t.Setenv("XDG_CONFIG_HOME", cfg)
-	packagedConf(t, "testing")
+	packagedRepo(t, sys.COPRServer)
 	writeFile(t, filepath.Join(cfg, "environment.d", "ryoku.conf"), "RYOKU_CHANNEL=unstable-dev\n")
 	t.Setenv("RYOKU_CHANNEL", "unstable-dev") // the stale login env
-	if got := ryokuChannel(); got != "testing" {
-		t.Fatalf("ryokuChannel = %q, want testing (the packaged Server wins over the stale env)", got)
+	if got := ryokuChannel(); got != sys.ChannelCOPR {
+		t.Fatalf("ryokuChannel = %q, want copr (the packaged baseurl wins over the stale env)", got)
 	}
 }

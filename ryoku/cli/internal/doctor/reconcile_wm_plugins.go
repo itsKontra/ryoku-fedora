@@ -103,7 +103,7 @@ func planWmPlugins(s wmPluginState, checkOnly bool, repair func() (map[string]st
 	list := strings.Join(s.stale, ", ")
 	if !s.toolchain {
 		return warnRes(i18n.T("enabled plugin(s) built for another compositor build and this box cannot rebuild them (missing %s): %s"), strings.Join(s.missing, ", "), list).
-			withFix(i18n.T("sudo pacman -S --needed base-devel cmake git, then Settings > Plugins > Rebuild"))
+			withFix(i18n.T("sudo dnf install gcc-c++ make cmake git pkgconf-pkg-config, then Settings > Plugins > Rebuild"))
 	}
 	if checkOnly {
 		return wouldRes(i18n.T("enabled plugin(s) built for another compositor build: %s"), list).

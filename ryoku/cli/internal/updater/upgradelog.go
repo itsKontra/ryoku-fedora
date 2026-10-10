@@ -26,7 +26,7 @@ import (
 // header, a one-line package summary, an in-place spinner, and untouched
 // surfacing of warnings and errors. It only runs on a real terminal (the caller
 // keeps raw passthrough for pipes, logs, and --verbose), so nothing that scrapes
-// pacman output breaks, and the command's exit status is passed straight back.
+// dnf output breaks, and the command's exit status is passed straight back.
 
 // verboseLog forces raw package-manager output instead of the curated view; set
 // from `ryoku update --verbose` / `-v` for debugging a transaction.
@@ -40,7 +40,7 @@ var (
 )
 
 // renderUpgrade runs argv, rendering a curated view of its output. phase is the
-// short label for the header ("System", "AUR", "Flatpak").
+// short label for the header ("System", "Flatpak").
 func renderUpgrade(phase string, argv []string) error {
 	// sudo is primed once up front by the update (primeSudo), so the piped
 	// transaction here never blocks on an unseen password prompt.
@@ -74,7 +74,7 @@ func renderUpgrade(phase string, argv []string) error {
 // inhibitor. Taking one is polkit-gated in sessions with no agent (SSH, a
 // headless run), where systemd-inhibit exits "Access denied" BEFORE the wrapped
 // command runs: wrapping there turned a best-effort guard into a failed
-// transaction, with pacman never invoked. Probe once per process; on a denial
+// transaction, with dnf never invoked. Probe once per process; on a denial
 // the transaction runs unwrapped instead of failing the update.
 var sleepInhibitOK = sync.OnceValue(func() bool {
 	if !sys.Has("systemd-inhibit") {
@@ -84,12 +84,10 @@ var sleepInhibitOK = sync.OnceValue(func() bool {
 		"--who=ryoku update", "--why=probe", "--mode=block", "true").Run() == nil
 })
 
-// runUpgradeCollecting runs a package transaction sleep-inhibited and rendered
-// (or streamed raw for pipes/--verbose) exactly like renderUpgrade, and returns
-// the "exists in filesystem" conflict paths pacman reported, so a failed upgrade
-// can clear the strays no package owns and retry. Both views scan the same
-// stream, so the collection is identical on a TTY and in a log.
-func runUpgradeCollecting(phase, why string, argv []string) ([]string, error) {
+// runUpgrade runs a package transaction sleep-inhibited when the session may
+// take the inhibitor, rendered like renderUpgrade, or streamed raw for
+// --verbose.
+func runUpgrade(phase, why string, argv []string) error {
 	full := argv
 	if sleepInhibitOK() {
 		full = append([]string{"systemd-inhibit", "--what=sleep:idle",
@@ -97,19 +95,19 @@ func runUpgradeCollecting(phase, why string, argv []string) ([]string, error) {
 	}
 	pr, pw, err := os.Pipe()
 	if err != nil {
-		return nil, sys.Run(full[0], full[1:]...)
+		return sys.Run(full[0], full[1:]...)
 	}
 	cmd := exec.Command(full[0], full[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, pw, pw
 	if err := cmd.Start(); err != nil {
 		pw.Close()
 		pr.Close()
-		return nil, err
+		return err
 	}
 	pw.Close()
 	// Curated for every consumer, animated only for a terminal: the Hub's update
 	// island and `ryoku update > log` read stdout through a pipe, where the raw
-	// pacman firehose (package lists, progress redraws, conflict paths) reads as
+	// dnf firehose (package lists, progress redraws, conflict paths) reads as
 	// a broken install. The full firehose still lands in update-log.txt, and
 	// --verbose keeps the raw passthrough on stdout.
 	rendered := !verboseLog
@@ -117,16 +115,12 @@ func runUpgradeCollecting(phase, why string, argv []string) ([]string, error) {
 	if rendered {
 		r = newUpgradeRenderer(os.Stdout, phase, sys.StdoutIsTTY())
 	}
-	var conflicts []string
 	sc := bufio.NewScanner(pr)
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	sc.Split(scanLinesCR)
 	for sc.Scan() {
 		line := sc.Text()
 		logRaw(line)
-		if p := conflictPath(line); p != "" {
-			conflicts = append(conflicts, p)
-		}
 		if rendered {
 			r.feed(line)
 		} else {
@@ -138,27 +132,7 @@ func runUpgradeCollecting(phase, why string, argv []string) ([]string, error) {
 	if rendered {
 		r.finish(werr == nil)
 	}
-	return conflicts, werr
-}
-
-// conflictPath pulls the path from a pacman file-conflict line, e.g.
-// "noto-fonts: /usr/share/fontconfig/conf.avail/46-noto-sans.conf exists in
-// filesystem" -> the path. Empty for any other line.
-func conflictPath(line string) string {
-	const marker = " exists in filesystem"
-	i := strings.Index(line, marker)
-	if i < 0 {
-		return ""
-	}
-	head := strings.TrimSpace(line[:i])
-	c := strings.LastIndex(head, ": ")
-	if c < 0 {
-		return ""
-	}
-	if p := strings.TrimSpace(head[c+2:]); strings.HasPrefix(p, "/") {
-		return p
-	}
-	return ""
+	return werr
 }
 
 // rawLog, set for the duration of an update, receives every unstyled line the
@@ -331,7 +305,7 @@ func quietError(s string) bool {
 func quietWarn(s string) bool {
 	l := strings.ToLower(s)
 	return strings.HasPrefix(l, "warning") || strings.Contains(l, "not restarted") ||
-		strings.Contains(l, "skipped") || strings.Contains(l, ".pacnew")
+		strings.Contains(l, "skipped") || strings.Contains(l, ".rpmnew")
 }
 
 // scanLinesCR splits on either newline or carriage return, so each redraw of a
@@ -522,8 +496,8 @@ func classify(line, trimmed string) lineClass {
 	case strings.Contains(trimmed, "exists in filesystem"),
 		strings.Contains(trimmed, "exists in filesystem)"):
 		return clConflict
-	// .pacnew/.pacsave notices are the one warning class a user must act on.
-	case strings.Contains(trimmed, ".pacnew"), strings.Contains(trimmed, ".pacsave"):
+	// .rpmnew/.rpmsave notices are the one warning class a user must act on.
+	case strings.Contains(trimmed, ".rpmnew"), strings.Contains(trimmed, ".rpmsave"):
 		return clWarn
 	case strings.HasPrefix(trimmed, "warning:"):
 		if strings.Contains(trimmed, " is newer than ") {

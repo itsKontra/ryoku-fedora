@@ -73,7 +73,7 @@ func TestPlanWmPlugins(t *testing.T) {
 		s := stale
 		s.toolchain, s.missing = false, []string{"cmake", "compositor headers"}
 		r := planWmPlugins(s, false, noRepair)
-		if r.status != recWarn || !strings.Contains(r.detail, "cmake") || !strings.Contains(r.remedy, "base-devel") {
+		if r.status != recWarn || !strings.Contains(r.detail, "cmake") || !strings.Contains(r.remedy, "gcc-c++") {
 			t.Fatalf("result = %v %q fix=%q", r.status, r.detail, r.remedy)
 		}
 	})

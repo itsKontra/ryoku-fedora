@@ -94,7 +94,7 @@ func TestClassify(t *testing.T) {
 	}{
 		{" core is up to date", clDrop},
 		{"warning: zstd: local (1.5.7-3) is newer than cachyos-v3 (1.5.7-2)", clDrop},
-		{"warning: /etc/foo.conf installed as /etc/foo.conf.pacnew", clWarn},
+		{"warning: /etc/foo.conf created as /etc/foo.conf.rpmnew", clWarn},
 		{"error: failed to commit transaction (conflicting files)", clError},
 		{"ryoku-desktop: /usr/share/plymouth/themes/ryoku/logo.png exists in filesystem", clConflict},
 		{"(12/37) upgrading wine", clProgress},
@@ -119,26 +119,9 @@ func TestSizeValueAndCount(t *testing.T) {
 	}
 }
 
-func TestConflictPath(t *testing.T) {
-	cases := map[string]string{
-		"noto-fonts: /usr/share/fontconfig/conf.avail/46-noto-sans.conf exists in filesystem":          "/usr/share/fontconfig/conf.avail/46-noto-sans.conf",
-		"ryoku-desktop: /usr/lib/systemd/system/ryoku-network-kill-guard.service exists in filesystem": "/usr/lib/systemd/system/ryoku-network-kill-guard.service",
-		"foo: /a/b exists in filesystem (owned by bar)":                                                "/a/b",
-		" downloading...": "",
-		"error: failed to commit transaction (conflicting files)": "",
-		":: Proceed with installation? [Y/n]":                     "",
-	}
-	for line, want := range cases {
-		if got := conflictPath(line); got != want {
-			t.Errorf("conflictPath(%q) = %q, want %q", line, got, want)
-		}
-	}
-}
-
 // TestPipedRunIsCurated pins the consumer the Hub's update island and
 // `ryoku update > log` represent: stdout is a pipe, so the curated view (never
-// the raw pacman firehose) must reach it, while the conflict paths are still
-// collected for the stray-clearing retry.
+// the raw package-manager firehose) must reach it.
 func TestPipedRunIsCurated(t *testing.T) {
 	oldInhibit := sleepInhibitOK
 	sleepInhibitOK = func() bool { return false }
@@ -150,8 +133,8 @@ func TestPipedRunIsCurated(t *testing.T) {
 	}
 	keep := os.Stdout
 	os.Stdout = capW
-	script := `printf '%s\n' ':: Synchronizing package databases...' ' core is up to date' 'Packages (2) ryoku-1-1 ryoku-desktop-2-2' '' 'Net Upgrade Size: 1.00 MiB' '(1/2) upgrading ryoku' 'warning: /etc/foo.conf installed as /etc/foo.conf.pacnew' 'ryoku-desktop: /usr/share/plymouth/themes/ryoku/bullet.png exists in filesystem'`
-	conflicts, _ := runUpgradeCollecting("System", "test", []string{"bash", "-c", script})
+	script := `printf '%s\n' ':: Synchronizing package databases...' ' core is up to date' 'Packages (2) ryoku-1-1 ryoku-desktop-2-2' '' 'Net Upgrade Size: 1.00 MiB' '(1/2) upgrading ryoku' 'warning: /etc/foo.conf created as /etc/foo.conf.rpmnew' 'ryoku-desktop: /usr/share/plymouth/themes/ryoku/bullet.png exists in filesystem'`
+	_ = runUpgrade("System", "test", []string{"bash", "-c", script})
 	capW.Close()
 	os.Stdout = keep
 	out, _ := io.ReadAll(capR)
@@ -163,15 +146,12 @@ func TestPipedRunIsCurated(t *testing.T) {
 			t.Errorf("piped output leaked firehose line %q:\n%s", noise, got)
 		}
 	}
-	for _, want := range []string{"System packages", ".pacnew", "exists in filesystem"} {
+	for _, want := range []string{"System packages", ".rpmnew", "exists in filesystem"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("piped output missing signal %q:\n%s", want, got)
 		}
 	}
 	if strings.Contains(got, "\r") {
 		t.Errorf("piped output carries spinner carriage returns:\n%q", got)
-	}
-	if len(conflicts) != 1 || conflicts[0] != "/usr/share/plymouth/themes/ryoku/bullet.png" {
-		t.Errorf("conflicts = %q, want the one pacman conflict path", conflicts)
 	}
 }
