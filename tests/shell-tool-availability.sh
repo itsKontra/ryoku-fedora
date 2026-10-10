@@ -1,37 +1,37 @@
 #!/usr/bin/env bash
 # Prevent the "feature wired but its tool is not shipped" class: every external
-# program a Ryoku desktop feature depends on must be shipped by a package set
-# (base/dev/aur). This is a curated feature -> package map; add a row when a new
+# program a Ryoku desktop feature depends on must reach every Fedora box through
+# the RPM specs. This is a curated feature -> package map; add a row when a new
 # feature starts shelling out to a new tool.
 set -euo pipefail
 
 ROOT=${RYOKU_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
-pkgs="$ROOT/system/packages"
+rpm_dir="$ROOT/release/rpm"
 
-ships() {
-  grep -qxF "$1" "$pkgs/base.packages" "$pkgs/dev.packages" "$pkgs/aur.packages" 2>/dev/null && return 0
-  grep -qE "^(Name|Requires):[[:space:]]+$1([[:space:]]|$)" "$ROOT"/release/rpm/*.spec
+# hard_depend: $1 is a Requires of the ryoku-desktop umbrella, of a compositor
+# variant it pulls through its ryoku-desktop-compositor virtual (a tool only that
+# compositor's features shell out to, like hyprsunset, reaches every box that can
+# run them that way), or of a first-party package the umbrella requires (ryogami
+# carries inotify-tools). That is what lands on the ISO, on `ryoku update` and
+# via the shell installer alike. This is the guard the ddcutil regression
+# slipped past: ddcutil was in a package list but not a depend, so the pill
+# DISPLAY faders were dead on every packaged box.
+desktop_specs=("$rpm_dir/ryoku-desktop.spec" "$rpm_dir"/ryoku-desktop-*.spec)
+requires() {
+  grep -qE "^Requires:[[:space:]]+$1([[:space:]]|$)" "$2"
 }
-
-# reach: a tool merely in base.packages does not necessarily reach an already
-# installed box on `ryoku update` or a shell-installer box unless it is also a
-# hard depend of the ryoku-desktop umbrella, or of a compositor variant the
-# umbrella pulls through its ryoku-desktop-compositor virtual (a tool only that
-# compositor's features shell out to, like hypridle, reaches every box that can
-# run them that way). hard_depend() checks exactly that: is $1 in a depends=()
-# array of one of those PKGBUILDs (version pin ignored). This is the guard the
-# ddcutil regression slipped past -- ddcutil was added to base.packages but not
-# to depends, so the pill DISPLAY faders were dead on every packaged box.
-desktop_specs=("$ROOT/release/rpm/ryoku-desktop.spec"
-  "$ROOT"/release/rpm/ryoku-desktop-*.spec)
 hard_depend() {
-  # capture the block first, then grep a here-string: piping awk into `grep -q`
-  # lets grep close the pipe on the first match, and under `set -o pipefail`
-  # awk's SIGPIPE would make the pipeline (nondeterministically) report failure.
-  local spec
+  local spec name desktop
   for spec in "${desktop_specs[@]}"; do
     [[ -f $spec ]] || continue
-    grep -qE "^Requires:[[:space:]]+$1([[:space:]]|$)" "$spec" && return 0
+    requires "$1" "$spec" && return 0
+  done
+  for spec in "$rpm_dir"/*.spec; do
+    requires "$1" "$spec" || continue
+    name=$(awk '/^Name:/ { print $2; exit }' "$spec")
+    for desktop in "${desktop_specs[@]}"; do
+      requires "$name" "$desktop" && return 0
+    done
   done
   return 1
 }
@@ -39,33 +39,28 @@ hard_depend() {
 # binary itself, like ryoku-extras shipping the pinned matugen over Fedora's.
 bundled() {
   local spec name
-  for spec in "$ROOT"/release/rpm/*.spec; do
+  for spec in "$rpm_dir"/*.spec; do
     grep -qxF "%{_bindir}/$1" "$spec" || continue
     name=$(awk '/^Name:/ { print $2; exit }' "$spec")
     hard_depend "$name" && return 0
   done
   return 1
 }
-# official_repo: shipped from base/dev, not AUR or a first-party RPM.
-# [ryoku]. AUR tools reach boxes via the post-install AUR step; first-party
-# packages are depends already. Only official-repo tools must be hard depends.
-official_repo() {
-  grep -qxF "$1" "$pkgs/base.packages" "$pkgs/dev.packages" 2>/dev/null \
-    && ! grep -qxF "$1" "$pkgs/aur.packages" 2>/dev/null \
-    && ! grep -qE "^Name:[[:space:]]+$1$" "$ROOT"/release/rpm/*.spec
-}
 # shipped_app: the other delivery path. An application a user may delete is not a
-# hard depend (pacman would put it back on the next upgrade); `ryoku doctor`
+# hard depend (dnf would put it back on the next upgrade); `ryoku doctor`
 # delivers it once and then honours the removal. Membership is the manifest's own
 # table, so a name cannot fall out of delivery and still pass this gate.
 shipped_apps_go="$ROOT/ryoku/cli/internal/ryokumanifest/manifest.go"
 shipped_app() {
   grep -qE "^[[:space:]]*\{\"$1\", " "$shipped_apps_go"
 }
-# deliberately neither a hard depend nor a provisioned app (documented exception):
-#   chromium -- the default browser is user-swappable; base.packages ships it and
-#               the ryoku-app role resolver tolerates another browser being set.
-declare -A dependExempt=( [chromium]=1 )
+# deliberately neither a hard depend nor a provisioned app (documented exceptions):
+#   chromium     -- the default browser is user-swappable; the ISO's packages.list
+#                   ships it and the ryoku-app role resolver tolerates another
+#                   browser being set.
+#   voxtype-bin, -- no Fedora package yet (installation/fedora/README.md lists the
+#   nvibrant-bin    porting gaps); the features stay gated off until one exists.
+declare -A dependExempt=( [chromium]=1 [voxtype-bin]=1 [nvibrant-bin]=1 )
 
 # feature -> package that provides it
 declare -A need=(
@@ -114,32 +109,16 @@ declare -A need=(
   [network-kill-switch]=nftables
 )
 
-missing=()
-for feat in "${!need[@]}"; do
-  pkg=${need[$feat]}
-  ships "$pkg" || missing+=("$feat -> $pkg")
-done
-
-if (( ${#missing[@]} )); then
-  echo "::error::shell features whose package is not in any package set:" >&2
-  printf '  %s\n' "${missing[@]}" | sort >&2
-  exit 1
-fi
-
-# reach check: every official-repo feature tool must be a ryoku-desktop hard
-# depend so it lands on the ISO, on `ryoku update`, and via the shell installer
-# alike -- one source of truth, no ISO-only tools.
 notreached=()
 for feat in "${!need[@]}"; do
   pkg=${need[$feat]}
   [[ -n ${dependExempt[$pkg]:-} ]] && continue
-  official_repo "$pkg" || continue
   hard_depend "$pkg" || bundled "$pkg" || shipped_app "$pkg" || notreached+=("$feat -> $pkg")
 done
 if (( ${#notreached[@]} )); then
-  echo "::error::feature tools in base.packages but NOT a ryoku-desktop hard depend (never reach 'ryoku update' or shell-installer boxes -- the ddcutil-class drift):" >&2
+  echo "::error::feature tools no RPM delivers (not a ryoku-desktop hard depend, a first-party bundle, or a doctor-delivered app):" >&2
   printf '  %s\n' "${notreached[@]}" | sort >&2
   exit 1
 fi
 
-echo "shell-tool-availability: all ${#need[@]} gated feature packages are shipped and reach every install path (ISO, update, shell installer)"
+echo "shell-tool-availability: all ${#need[@]} gated feature packages reach every install path (ISO, update, shell installer)"

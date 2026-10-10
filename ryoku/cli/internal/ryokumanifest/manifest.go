@@ -1,8 +1,9 @@
 // Package ryokumanifest is the control manifest: what a Ryoku release is made
-// of, as data. build-repo.sh generates it at publish time and serves it beside
-// the channel's release.json, so a box can ask "what should I look like" and
-// compare. It is never hand-authored and never hand-edited: the generator is
-// the only writer, and the repo files it reads are the source of truth.
+// of, as data, served beside the channel's release.json so a box can ask "what
+// should I look like" and compare. Fedora publishing serves none: the RPM
+// specs' Requires carry the package set, and a box with no manifest converges
+// on its package dependencies alone. Apps() and OptIn stay, because the
+// deliver-once and opt-in lanes read them directly.
 //
 // The manifest states intent, not versions. First-party packages are pinned to
 // the release that built them (one shared RYOKU_PKGVER, as ryoku-desktop's
@@ -25,10 +26,10 @@ type Manifest struct {
 	Commit      string              `json:"commit"`  // full SHA this manifest was generated from
 	Channel     string              `json:"channel"` // stable | testing | v<tag>
 	Date        string              `json:"date"`
-	Base        []string            `json:"base"`                 // system/packages/base.packages
-	Dev         []string            `json:"dev"`                  // system/packages/dev.packages
-	Hardware    map[string][]string `json:"hardware,omitempty"`   // hardware.packages, per profile section
-	AUR         []string            `json:"aur"`                  // system/packages/aur.packages
+	Base        []string            `json:"base"`                 // every machine's distribution packages
+	Dev         []string            `json:"dev"`                  // developer toolchains
+	Hardware    map[string][]string `json:"hardware,omitempty"`   // per hardware profile
+	AUR         []string            `json:"aur"`                  // best-effort extras
 	FirstParty  []string            `json:"firstParty"`           // release/rpm/*.spec, pinned to Version
 	Compositor  map[string][]string `json:"compositor,omitempty"` // provider -> its packages, from its caps
 	Provisioned []string            `json:"provisioned"`          // apps doctor delivers once and never re-adds

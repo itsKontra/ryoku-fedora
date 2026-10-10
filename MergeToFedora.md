@@ -75,6 +75,7 @@ port and must remain absent after every merge.
 | `release/packages/` PKGBUILDs, `release/repo/`, `release/gradle-offline/`, Arch package keys | `release/rpm/` specs, staged payload recipes, SRPM/COPR publishing, and RPM keys. |
 | Pacman, yay, AUR, CachyOS repositories, `makepkg`, `pacstrap`, `archiso`, `mkinitcpio`, Limine, Snapper | DNF/RPM, Anaconda/Kickstart, dracut, GRUB, and the Fedora release/update implementation. |
 | `system/boot/` Arch boot assets and CachyOS-specific system/package policy | Fedora boot and package policy already represented by the installer and RPM payloads. |
+| `system/packages/` Arch package lists, and the `ryoku-manifest` generator that published them (`ryoku/cli/cmd/ryoku-manifest/`, `ryoku/cli/internal/ryokumanifest/generate.go`) | The `Requires:` of the RPM specs and `installation/fedora/packages.list`. |
 | Arch release/channel workflows and Arch-only CI | Fedora workflows and the COPR/release-repository checks. |
 
 An upstream directory omitted above is not automatically portable. Search its
@@ -98,8 +99,9 @@ Bring these areas forward by default, with the listed Fedora checks.
 
 New upstream packages must be declared in the RPM spec that owns the feature
 and, when needed for an ISO or first boot, in the Fedora installer package set.
-Do not revive `system/packages/*.packages` as an installation source; the RPM
-specs and `installation/fedora/packages.list` define Fedora delivery.
+Do not revive upstream's `system/packages/*.packages` lists; the RPM specs and
+`installation/fedora/packages.list` define Fedora delivery, and the shell
+installer and `ryoku recovery` read their package sets from those two.
 
 ## Repeatable PR procedure
 

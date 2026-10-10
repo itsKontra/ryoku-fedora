@@ -12,11 +12,16 @@ deploying the checkout. Packaged installs use DNF for desktop binaries and
 extras, and preserve locally edited source artifacts by refusing an unsafe
 conversion. An interrupted install resumes only with the same mode/provider.
 
-Arch-based hosts get the signed `[ryoku]` packages. Debian-based hosts have no
-`[ryoku]` repository, so the desktop is built from the cloned payload with
-`ryoku/shell/deploy.sh`: dependencies come from apt, and the Go programs, QML
-modules and `Ryoku.Blobs` are compiled locally. The Hyprland compositor plugins
-need `makepkg` and are skipped there; the shell degrades to them being off.
+A source install builds the desktop from the cloned payload with
+`ryoku/shell/deploy.sh`. Its dnf dependencies are read from the payload, never
+kept here: the `Requires:` and `Recommends:` of `ryoku-desktop`, the chosen
+`ryoku-desktop-<compositor>` and every first-party spec they pull in
+(`release/rpm/`), so a source box gets what a packaged install gets. Either
+way the box keeps its own boot chain: dracut, grubby, grub2-tools and
+btrfs-progs are left out (a packaged install passes them to dnf as
+`--exclude`), and snapper goes in only on a btrfs root. The ISO's extra applications in
+`installation/fedora/packages.list` are not installed. `ryoku recovery`
+installs the same list (`--dependency-list`). Other distributions are refused.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
@@ -43,7 +48,7 @@ ryoku-shell-install --uninstall        # or: ... | bash -s -- --uninstall
 ## What it does
 
 `install.sh` is a dumb bootstrap: it verifies the machine is a supported
-x86_64 family (pacman or apt-get), downloads the prebuilt `ryoku-shell-install`
+x86_64 Fedora (dnf), downloads the prebuilt `ryoku-shell-install`
 binary (checksummed) from this directory, and hands it the real terminal.
 Everything else is the binary, a bubbletea TUI sharing the ISO installer's
 visual language:
@@ -53,22 +58,23 @@ visual language:
    quickshell shells (Noctalia, DankMaterialShell, Caelestia, iNiR), known
    Hyprland rices (ML4W, HyDE, JaKooLit, end-4, Caelestia), conflicting user
    daemons (dunst/mako/waybar/swww/…), a plain Hyprland, niri or sway setup
-   to migrate from, an Omarchy install to retire (repo + mirror pin),
-   keyboard layout, btrfs, and an interrupted previous run to resume.
+   to migrate from, keyboard layout, btrfs, and an interrupted previous run to resume.
 2. **Plan** review with per-item toggles (NVIDIA drivers, SDDM switch,
    greeter theme, NetworkManager switch, rival-shell removal, monitor-layout
-   carry-over, AUR extras, fish shell); sections group the list when it gets
+   carry-over, developer toolchain, fish shell); sections group the list when it gets
    long.
 3. **Install**, streamed step by step:
-   legacy-repo retirement → `pacman -Syu` → tools → sparse payload clone → config backup (with a
-   generated `restore.sh`) → `[ryoku]` repo + keyring trust → conflict removal
-   → desktop packages → GPU drivers → SDDM/qylock/network wiring →
-   `ryoku materialize` + seeds (wallpapers, brand, keyboard layout salvaged
-   from the old setup) → AUR extras → `ryoku doctor` → verify.
+   `dnf upgrade` → tools → sparse payload clone → config backup (with a
+   generated `restore.sh`) → signed Ryoku repository → conflict removal
+   → desktop packages (or the source build's dependencies) → GPU drivers →
+   source build or retirement of a previous source deployment →
+   SDDM/qylock/network wiring → `ryoku materialize` + seeds (wallpapers,
+   brand, keyboard layout salvaged from the old setup) → `ryoku doctor` →
+   verify.
 
 Afterwards the machine is a normal Ryoku box: `ryoku update` updates it
-forever, `ryoku doctor` heals it, and the `[ryoku]` pacman repository signs
-everything. Nothing here ever needs re-running.
+forever, `ryoku doctor` heals it, and the signed Ryoku RPM repository
+delivers everything. Nothing here ever needs re-running.
 
 Migration policy: rival shells are uninstalled (toggle), conflicting daemons
 are disabled but never uninstalled, the old display manager is disabled (not
@@ -92,8 +98,8 @@ Manjaro requires a typed acknowledgement in the TUI and is refused under
 Lifecycle: an interrupted run records its completed steps in
 `~/.local/state/ryoku/shell-install-state.json`; the next run offers a
 resume toggle (automatic with `--yes`) that skips finished steps and
-continues the same backup. `--uninstall` removes the ryoku packages, drops
-the `[ryoku]` repo stanza, and walks the backup chain newest to oldest,
+continues the same backup. `--uninstall` removes the ryoku packages, disables
+the Ryoku RPM repository, and walks the backup chain newest to oldest,
 running each `restore.sh` with confirmation; those scripts also re-enable
 the services and display manager their run disabled. Session packages
 (sddm, pipewire, NetworkManager, …) are left installed.

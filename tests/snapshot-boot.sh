@@ -59,8 +59,9 @@ check "%preun disables the menu trigger" has "$spec" \
   "systemctl disable ryoku-snapshot-restored.service ryoku-snapshot-menu.path"
 check "%preun undoes the theme and the menu" has "$spec" "/usr/bin/ryoku-grub-menu purge"
 check "%postun drops them from grub.cfg" has "$spec" "grub2-mkconfig -o /boot/grub2/grub.cfg"
-for dep in grub2-tools btrfs-progs snapper dracut; do
-  check "ryoku-desktop requires $dep" grep -qE "^Requires: +$dep\$" "$spec"
+for dep in grub2-tools grubby btrfs-progs snapper dracut; do
+  check "ryoku-desktop recommends $dep" grep -qE "^Recommends: +$dep\$" "$spec"
+  check "the ISO installs $dep without weak deps" grep -qxF "$dep" "$repo/installation/fedora/packages.list"
 done
 check "the menu unit runs the CLI sync" line "$bm/ryoku-snapshot-menu.service" "ExecStart=/usr/bin/ryoku boot-menu sync"
 check "the trigger watches /.snapshots" line "$bm/ryoku-snapshot-menu.path" "PathChanged=/.snapshots"

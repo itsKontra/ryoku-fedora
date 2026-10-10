@@ -41,6 +41,7 @@ Requires:       polkit
 Requires:       xdg-desktop-portal
 Requires:       xdg-desktop-portal-gtk
 Requires:       xdg-user-dirs
+Requires:       xdg-utils
 Requires:       qt6-qtwayland
 Requires:       qt5-qtwayland
 Requires:       qt6-qt5compat
@@ -55,11 +56,6 @@ Requires:       NetworkManager-wifi
 Requires:       pciutils
 Requires:       usbutils
 Requires:       kmod
-Requires:       dracut
-Requires:       grubby
-Requires:       grub2-tools
-Requires:       btrfs-progs
-Requires:       snapper
 Requires:       wireless-regdb
 Requires:       wireplumber
 Requires:       brightnessctl
@@ -116,6 +112,15 @@ Requires:       upower
 Requires:       power-profiles-daemon
 Requires:       ddcutil
 Requires:       uv
+# The boot chain the snapshot menu drives. Recommended, not required: a box
+# converted from another Fedora keeps its own bootloader and initramfs, and
+# every use is guarded (ryoku-grub-menu, the boot-menu and snapper code check
+# for the tool and the layout first). The ISO lists them in packages.list.
+Recommends:     dracut
+Recommends:     grubby
+Recommends:     grub2-tools
+Recommends:     btrfs-progs
+Recommends:     snapper
 Recommends:     quickemu
 Recommends:     spice-gtk-tools
 Recommends:     xorriso

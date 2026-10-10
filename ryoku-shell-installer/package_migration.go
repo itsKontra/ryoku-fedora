@@ -52,7 +52,7 @@ func (e *engine) checkPackageMigration() error {
 }
 
 func stepPackageMigration(e *engine) error {
-	if e.d().id != "fedora" || e.fromSource() {
+	if e.fromSource() {
 		return nil
 	}
 	if err := e.checkPackageMigration(); err != nil {

@@ -1,30 +1,11 @@
 package main
 
 import (
-	"os"
 	"os/exec"
-	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 )
-
-// The qt6ct-kde shape: an installed provider must drop the shipped name from
-// the install set instead of the run dying on the conflict prompt.
-func TestDropSatisfiedKeepsOnlyUnmet(t *testing.T) {
-	e := &engine{}
-	unmetOut := "qt6ct\nryoku-desktop\n"
-	got := filterByUnmet([]string{"git", "qt6ct", "ryoku-desktop"}, unmetOut)
-	want := []string{"qt6ct", "ryoku-desktop"}
-	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
-		t.Errorf("filter = %v, want %v", got, want)
-	}
-	_ = e
-}
-
-func TestDropSatisfiedEmptyUnmetDropsAll(t *testing.T) {
-	if got := filterByUnmet([]string{"git", "curl"}, ""); len(got) != 0 {
-		t.Errorf("everything satisfied should drop all, got %v", got)
-	}
-}
 
 func TestDropSatisfiedFedora(t *testing.T) {
 	if exec.Command("rpm", "-q", "--quiet", "git").Run() != nil {
@@ -50,18 +31,31 @@ func TestDropSatisfiedFedora(t *testing.T) {
 	}
 }
 
+// Every package's answer comes from one rpm listing, and the alternatives a box
+// may already carry stand in for the package they replace.
+func TestDropSatisfiedAlternatives(t *testing.T) {
+	stubCapabilities(t, "kitty", "tuned-ppd", "ffmpeg-free")
+	e := &engine{f: &facts{distro: fedoraLinux}}
+	got := e.dropSatisfied([]string{"kitty", "power-profiles-daemon", "ffmpeg", "", "quickshell"})
+	if strings.Join(got, " ") != "quickshell" {
+		t.Fatalf("dropSatisfied = %v, want [quickshell]", got)
+	}
+}
+
+func stubCapabilities(t *testing.T, caps ...string) {
+	t.Helper()
+	orig := installedCapabilities
+	t.Cleanup(func() { installedCapabilities = orig })
+	installedCapabilities = func() (func(string) bool, error) {
+		return func(c string) bool { return caps == nil || slices.Contains(caps, c) }, nil
+	}
+}
+
 func TestStepPackagesAllSatisfiedNoop(t *testing.T) {
-	dir := t.TempDir()
-	pkgDir := filepath.Join(dir, "system", "packages")
-	if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(pkgDir, "base.packages"), []byte(""), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	customDistro := &distro{id: "fedora", name: "Fedora", fromSource: true, build: nil, rename: map[string]string{"hyprland": "", "hyprpolkitagent": "", "xdg-desktop-portal-hyprland": "", "hypridle": "", "hyprpicker": ""}, installCmd: []string{"fail-if-called"}}
-	f := &facts{distro: customDistro}
-	e := &engine{f: f, p: &plan{compositor: "hyprland"}, payload: dir, payloadOverride: dir, dry: false}
+	stubCapabilities(t)
+	dir := fakePayload(t, nil)
+	f := &facts{distro: &distro{id: "fedora", name: "Fedora", installCmd: []string{"fail-if-called"}, queryCmd: []string{"true"}}}
+	e := &engine{f: f, p: &plan{compositor: compositors()[0]}, payload: dir, payloadOverride: dir, dry: false}
 	if err := stepPackages(e); err != nil {
 		t.Errorf("stepPackages when all satisfied should return nil without running installCmd, got %v", err)
 	}

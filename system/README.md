@@ -5,9 +5,6 @@ How an installed Ryoku machine is put together, separate from the desktop in
 
 ## What's here
 
-- `packages/` Package manifests used by the shell installer and delivery audits:
-  `base.packages` for the desktop system, hardware and development lists, and
-  distro translation metadata.
 - `recovery/` What the machine does when the desktop cannot start: the `sddm`
   drop-in and units that fall back to a text login on tty1 with a recovery
   banner, and the kernel-install plugin that adds a "Ryoku console" boot entry

@@ -37,7 +37,8 @@ func stepFedoraRepo(e *engine) error {
 				}
 			}
 		}
-		if err := e.sudo("dnf", "-y", "--downloadonly", "install", "ryoku-desktop", "ryoku-desktop-"+e.p.compositor); err != nil {
+		preflight := append([]string{"dnf", "-y", "--downloadonly", "install"}, e.bootChainExcludes()...)
+		if err := e.sudo(append(preflight, "ryoku-desktop", "ryoku-desktop-"+e.p.compositor)...); err != nil {
 			return fmt.Errorf(i18n.T("desktop dependency preflight failed before conflict removal: %w"), err)
 		}
 	}

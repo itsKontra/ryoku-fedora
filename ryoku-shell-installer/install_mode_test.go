@@ -59,7 +59,7 @@ func TestFedoraInstallMode(t *testing.T) {
 		{"packages", "/checkout", "main", false},
 		{"source", "", "main", true},
 	} {
-		if got := sourceMode(fedoraLinux, c.mode, c.payload, c.ref); got != c.source {
+		if got := sourceMode(c.mode, c.payload, c.ref); got != c.source {
 			t.Errorf("sourceMode(%+v) = %v", c, got)
 		}
 	}
@@ -69,7 +69,7 @@ func TestCustomRepositoryRetainsSourceBuild(t *testing.T) {
 	previous := repoURL
 	t.Cleanup(func() { repoURL = previous })
 	repoURL = "https://github.com/example/ryoku-fedora.git"
-	if !sourceMode(fedoraLinux, "auto", "", "main") {
+	if !sourceMode("auto", "", "main") {
 		t.Fatal("a custom publisher must not silently install the default publisher's RPMs")
 	}
 }

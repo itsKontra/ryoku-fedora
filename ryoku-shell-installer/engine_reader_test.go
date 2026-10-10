@@ -1,13 +1,11 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// pacman progress repaints end in \r, not \n; they must surface live as
+// dnf progress repaints end in \r, not \n; they must surface live as
 // transient events (throttled), while only newline-terminated lines are final.
 func TestCmdReaderSplitsCarriageReturns(t *testing.T) {
 	e := &engine{events: make(chan any, 64)}
@@ -42,61 +40,3 @@ func TestCmdReaderSplitsCarriageReturns(t *testing.T) {
 // hook packages -- which pull limine + mkinitcpio back as depends and ship
 // pacman hooks that collide with a host's own (Garuda's garuda-hooks, #58) --
 // must be filtered out of the install set alongside limine/mkinitcpio/snapper.
-func TestReadBasePackagesSkipsBootChain(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "system/packages"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	base := "# a comment\nlimine\nlimine-mkinitcpio-hook\nlimine-snapper-sync\nmkinitcpio\nsnapper\nkitty\nryoku-desktop\n"
-	if err := os.WriteFile(filepath.Join(dir, "system/packages/base.packages"), []byte(base), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	got, err := (&engine{payload: dir}).readBasePackages()
-	if err != nil {
-		t.Fatal(err)
-	}
-	set := map[string]bool{}
-	for _, p := range got {
-		set[p] = true
-	}
-	for _, skip := range []string{"limine", "limine-mkinitcpio-hook", "limine-snapper-sync", "mkinitcpio", "snapper"} {
-		if set[skip] {
-			t.Errorf("%s must be skipped on a shell-converted box, got %v", skip, got)
-		}
-	}
-	for _, keep := range []string{"kitty", "ryoku-desktop"} {
-		if !set[keep] {
-			t.Errorf("%s must install, missing from %v", keep, got)
-		}
-	}
-}
-
-func TestReadBasePackagesBtrfsRootKeepsSnapper(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "system/packages"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	base := "# a comment\nlimine\nlimine-mkinitcpio-hook\nlimine-snapper-sync\nmkinitcpio\nsnapper\nsnap-pac\nkitty\nryoku-desktop\n"
-	if err := os.WriteFile(filepath.Join(dir, "system/packages/base.packages"), []byte(base), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	e := &engine{payload: dir, f: &facts{btrfsRoot: true}}
-	got, err := e.readBasePackages()
-	if err != nil {
-		t.Fatal(err)
-	}
-	set := map[string]bool{}
-	for _, p := range got {
-		set[p] = true
-	}
-	for _, keep := range []string{"snapper", "snap-pac", "kitty", "ryoku-desktop"} {
-		if !set[keep] {
-			t.Errorf("%s must install on btrfs root, missing from %v", keep, got)
-		}
-	}
-	for _, skip := range []string{"limine", "limine-mkinitcpio-hook", "limine-snapper-sync", "mkinitcpio"} {
-		if set[skip] {
-			t.Errorf("%s must still be skipped on btrfs root, got %v", skip, got)
-		}
-	}
-}

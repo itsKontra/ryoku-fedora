@@ -19,11 +19,10 @@ import (
 // module unconditionally, and the Hub's Lockscreen page only offers the sddm/sudo
 // fingerprint toggles when it is present.
 //
-// The module is AUR-only (pam-fprint-grosshack) and ships in aur.packages, but
-// that set is installed once at post-install and never revisited by
-// `ryoku update`, so a box that predates the entry -- or that skipped the AUR
-// step -- has the whole fingerprint-unlock feature wired up with the module
-// missing: fprintd's own enroll/verify (Ryoku Settings) still works, but the
+// The module is AUR-only (pam-fprint-grosshack), installed once at
+// post-install and never revisited by `ryoku update`, so a box that predates
+// the entry -- or that skipped the AUR step -- has the whole fingerprint-unlock
+// feature wired up with the module missing: fprintd's own enroll/verify (Ryoku Settings) still works, but the
 // lock and greeter silently do nothing on a touch, and PAM logs a "cannot open
 // pam_fprintd_grosshack.so / faulty module" line on every unlock attempt.
 //
@@ -31,6 +30,8 @@ import (
 // same AUR path the other backfilled packages use (reconcile_limine's
 // ryoku-pkg-aur-add). Report-only in checkOnly. Silent on a machine with no
 // reader, so a desktop is never made to build an AUR package it cannot use.
+// Fedora has no package for the module yet (installation/fedora/README.md), so
+// an RPM box with a reader is told so instead of reaching for the AUR.
 
 // fingerprintModulePath is where the grosshack PAM module lands, the exact path
 // the lock's PAM stack and the Hub probe. A var so a test can point it elsewhere.
@@ -55,15 +56,18 @@ var fingerprintReaderPresent = func() bool {
 	return strings.Contains(out, "/net/reactivated/Fprint/Device")
 }
 
-// planFingerprintModule decides the result from the two facts it depends on: is
-// there a reader, and is the module already installed. pure, so every branch is
-// unit-testable without fprintd or an AUR helper.
-func planFingerprintModule(readerPresent, moduleInstalled, checkOnly bool) (recResult, bool) {
+// planFingerprintModule decides the result from the facts it depends on: is
+// there a reader, is the module already installed, and is this an RPM box with
+// no package to install it from. pure, so every branch is unit-testable without
+// fprintd or an AUR helper.
+func planFingerprintModule(readerPresent, moduleInstalled, rpm, checkOnly bool) (recResult, bool) {
 	switch {
 	case !readerPresent:
 		return okRes(i18n.T("no fingerprint reader; the unlock module is not needed")), false
 	case moduleInstalled:
 		return okRes(i18n.T("fingerprint unlock module (pam-fprint-grosshack) present")), false
+	case rpm:
+		return noteRes(i18n.T("pam-fprint-grosshack has no Fedora package yet; touch-to-unlock at the lock and login screens stays off")), false
 	case checkOnly:
 		return wouldRes(i18n.T("install the fingerprint unlock module so touch-to-unlock works at the lock and login screens")).
 			withFix(i18n.T("ryoku doctor installs pam-fprint-grosshack (AUR)")), false
@@ -73,7 +77,8 @@ func planFingerprintModule(readerPresent, moduleInstalled, checkOnly bool) (recR
 }
 
 func reconcileFingerprintModule(checkOnly bool) recResult {
-	res, install := planFingerprintModule(fingerprintReaderPresent(), sys.Exists(fingerprintModulePath), checkOnly)
+	res, install := planFingerprintModule(fingerprintReaderPresent(), sys.Exists(fingerprintModulePath),
+		sys.RPMManager() != "", checkOnly)
 	if !install {
 		return res
 	}

@@ -223,6 +223,10 @@ func prowlAgentNeeded(rashinEnabled, prowlPresent bool) bool {
 	return rashinEnabled && !prowlPresent
 }
 
+// rashinPackagedSkills is where the ryoku-rashin package installs the skills. A
+// var so a test on a box that has the package can point it elsewhere.
+var rashinPackagedSkills = "/usr/share/ryoku/skills"
+
 // rashinSkillSource resolves the shipped `ryoku` skill dir the same way
 // ryoku-rashin wire does: an override, the packaged tree, then a dev checkout.
 // Returns "" when the skill is not installed, so a box without it stays quiet.
@@ -231,7 +235,7 @@ func rashinSkillSource() string {
 	if v := strings.TrimSpace(os.Getenv("RYOKU_RASHIN_SKILLS")); v != "" {
 		roots = append(roots, v)
 	}
-	roots = append(roots, "/usr/share/ryoku/skills")
+	roots = append(roots, rashinPackagedSkills)
 	if repo := sys.ResolveRepo(); repo != "" {
 		roots = append(roots, filepath.Join(repo, "ryoku", "rashin", "skills"))
 	}

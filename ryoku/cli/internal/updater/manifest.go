@@ -168,10 +168,10 @@ func manifestNames(m ryokumanifest.Manifest) map[string]bool {
 }
 
 // convergeNames is the set this reconciler moves: the converge lanes minus the
-// deliver-once apps. Many Apps() names are ALSO named by base.packages (the
-// installer's pacstrap list), and the lane table would otherwise let the
-// converge pass re-install what reconcileShippedApps just honoured as a user
-// deletion. The provisioned lane owns those names; the manifest never does.
+// deliver-once apps. Many Apps() names are ALSO named by the base lane, and the
+// lane table would otherwise let the converge pass re-install what
+// reconcileShippedApps just honoured as a user deletion. The provisioned lane
+// owns those names; the manifest never does.
 func convergeNames(m ryokumanifest.Manifest) map[string]bool {
 	names := nameSet(convergeLanes(m))
 	for _, n := range m.Provisioned {

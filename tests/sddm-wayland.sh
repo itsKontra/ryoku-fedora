@@ -8,10 +8,8 @@ setup=$repo/ryoku/lockscreen/sddm/setup
 fail() { printf 'sddm-wayland: %s\n' "$*" >&2; exit 1; }
 
 out=$(RYOKU_DRYRUN=1 "$setup" --dry-run)
-grep -Fxq 'qt5-wayland' "$repo/system/packages/base.packages" ||
-  fail "base package set omits the Qt5 Wayland plugin needed by Qt5 SDDM"
 grep -Fqx 'Requires:       qt5-qtwayland' "$repo/release/rpm/ryoku-desktop.spec" ||
-  fail "ryoku-desktop omits the Qt5 Wayland plugin needed by existing systems"
+  fail "ryoku-desktop omits the Qt5 Wayland plugin needed by Qt5 SDDM"
 grep -Fqx 'Requires:       qt6-qt5compat' "$repo/release/rpm/ryoku-desktop.spec" ||
   fail "ryoku-desktop must retain Qt6 compatibility imports"
 for line in \

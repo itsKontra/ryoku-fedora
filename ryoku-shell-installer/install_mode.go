@@ -10,10 +10,7 @@ import (
 
 var installMode = "auto"
 
-func sourceMode(d *distro, mode, payload, ref string) bool {
-	if d.id != "fedora" {
-		return d.fromSource
-	}
+func sourceMode(mode, payload, ref string) bool {
 	if mode != "auto" {
 		return mode == "source"
 	}
@@ -21,7 +18,7 @@ func sourceMode(d *distro, mode, payload, ref string) bool {
 }
 
 func (e *engine) fromSource() bool {
-	return sourceMode(e.d(), installMode, e.payloadOverride, e.ref)
+	return sourceMode(installMode, e.payloadOverride, e.ref)
 }
 
 func fedoraRepositoryConfig() (string, error) {

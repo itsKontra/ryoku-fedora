@@ -400,14 +400,15 @@ remains selected; Fedora’s `mesa-libgallium` supplies the VA-API driver files.
 Fedora's FFmpeg packages match the current published Ryoku
 RPM requirements; forcing full RPM Fusion FFmpeg conflicts with those RPMs.
 
-The Arch lists under `system/packages/` also inform this manifest. Fedora names
-cover the compiler/build tools, Rust and Cargo, Node.js 24 and npm, Python pip
-and pipx, Intel VA-API, and controller access rules (`steam-devices`). The Node
-`-bin` packages ensure the unversioned commands are installed. `ryoku-extras`
-already supplies Matugen, Bibata, Space Grotesk, Material Symbols, JetBrains
-Mono Nerd Font and SpaceMono Nerd Font; QEMU's desktop backends are dependencies of `qemu-system-x86`.
-Arch boot hooks, pacman/AUR tooling, CachyOS packages, 32-bit graphics and
-out-of-tree NVIDIA/xpadneo modules are excluded from this comparison.
+The manifest also covers the compiler/build tools, Rust and Cargo, Node.js 24
+and npm, Python pip and pipx, Intel VA-API, and controller access rules
+(`steam-devices`). The Node `-bin` packages ensure the unversioned commands are
+installed. `ryoku-extras` already supplies Matugen, Bibata, Space Grotesk,
+Material Symbols, JetBrains Mono Nerd Font and SpaceMono Nerd Font; QEMU's
+desktop backends are dependencies of `qemu-system-x86`. The shell installer's
+source mode and `ryoku recovery` install the `[drivers]`, `[utilities]`,
+`[services]`, `[multimedia]` and `[desktop]` sections of this manifest beside
+the RPM specs' `Requires:`, so a source box matches an ISO one.
 
 Some Arch applications and assets still have no selected RPM source: mise,
 ble.sh, zsh-history-substring-search, SongRec, GPU Screen Recorder,
