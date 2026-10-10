@@ -1,9 +1,9 @@
 #!/bin/bash
 # stash app installer: makes whatever the user dropped in the Ryoku stash
 # launchable. an AppImage or self-contained tarball gets a synthesized XDG
-# desktop entry under ~/.local; a pacman package (.pkg.tar.zst) is handed to
-# `pacman -U` via pkexec so it installs the normal way and the launcher reads
-# the entry the package itself ships.
+# desktop entry under ~/.local; an RPM is handed to `dnf install` via pkexec so
+# it installs the normal way and the launcher reads the entry the package
+# itself ships.
 # on success we drop the source from the stash so it doesn't sit there as a
 # duplicate (RYOKU_STASH_KEEP=1 keeps it).
 # usage: stash-install.sh [file]   (no arg = install every supported file in $STASH)
@@ -37,25 +37,14 @@ cleanup_source() {
 classify() {
   case "$1" in
     *.AppImage|*.appimage) printf 'appimage'; return ;;
-    *.pkg.tar.zst|*.pkg.tar.xz|*.pkg.tar.gz|*.pkg.tar) printf 'pacman'; return ;;
     *.flatpak) printf 'flatpak'; return ;;
     *.deb) printf 'deb'; return ;;
     *.rpm) printf 'rpm'; return ;;
   esac
   case "$1" in
-    *.tar|*.tar.gz|*.tgz|*.tar.xz|*.tar.zst|*.tar.bz2)
-      # a renamed Arch package is still a system pkg, not a self-contained app
-      # tree; top-level .PKGINFO is the tell. route it to pacman, never to the
-      # extract-into-~/.local path that can't produce a working /opt app.
-      if is_pacman_pkg "$1"; then printf 'pacman'; else printf 'tarball'; fi ;;
+    *.tar|*.tar.gz|*.tgz|*.tar.xz|*.tar.zst|*.tar.bz2) printf 'tarball' ;;
     *) printf 'unknown' ;;
   esac
-}
-
-# is_pacman_pkg FILE: true if the archive carries a top-level .PKGINFO. that
-# entry is the first member of every pacman package.
-is_pacman_pkg() {
-  { bsdtar -tf "$1" 2>/dev/null || tar -tf "$1" 2>/dev/null; } | head -n 8 | grep -qxF '.PKGINFO'
 }
 
 strip_appimage_ext() {
@@ -301,10 +290,10 @@ install_tarball() {
 }
 
 # install_deb / install_rpm SRC: pull a foreign package's payload (its usr/ tree)
-# and synthesize an entry from it. bsdtar (libarchive, always around via pacman)
-# reads both: .deb nests its payload in data.tar.*, .rpm exposes the cpio tree
-# directly. best-effort, like the tarball path; a native pacman package or
-# flatpak is the better route for an app that hardcodes system paths.
+# and synthesize an entry from it. bsdtar (libarchive) reads both: .deb nests
+# its payload in data.tar.*, .rpm exposes the cpio tree directly. best-effort,
+# like the tarball path; an RPM installed through dnf or a flatpak is the
+# better route for an app that hardcodes system paths.
 install_deb() {
   local src rawname name dst tmp data
   src="$1"
@@ -356,29 +345,6 @@ install_flatpak() {
   LAST_NAME=$(slug "$(basename "$src" .flatpak)")
 }
 
-# install_pacman SRC: install an Arch package via `pacman -U`. the stash runs
-# with no tty, so escalate through pkexec (polkit agent raises the GUI prompt).
-# the package ships its own /usr/share/applications entry, which the launcher
-# reads, so nothing's synthesized here. sets LAST_NAME.
-install_pacman() {
-  local src="$1" name
-  command -v pacman >/dev/null 2>&1 || return 1
-  command -v pkexec >/dev/null 2>&1 || return 1
-  # tell the shell to step the control deck aside before the polkit prompt.
-  # the deck is a top overlay layer with a keyboard grab, so the prompt would
-  # land behind it and could not take the password. shell reads this off stdout.
-  printf '@AUTH\n'
-  pkexec pacman -U --noconfirm "$src" >/dev/null 2>&1 || return 1
-  name=$(pacman_pkgname "$src")
-  LAST_NAME="${name:-$(slug "$(basename "$src")")}"
-}
-
-# pacman_pkgname FILE: the pkgname out of the package's .PKGINFO.
-pacman_pkgname() {
-  { bsdtar -xOf "$1" .PKGINFO 2>/dev/null || tar -xOf "$1" .PKGINFO 2>/dev/null; } \
-    | sed -n 's/^pkgname = //p' | head -n1
-}
-
 # install_one FILE: 0 ok, 1 fail, 2 unsupported extension.
 install_one() {
   local f="$1" kind appname dest
@@ -396,9 +362,6 @@ install_one() {
       ;;
     tarball)
       install_tarball "$f" || return 1
-      ;;
-    pacman)
-      install_pacman "$f" || return 1
       ;;
     flatpak)
       install_flatpak "$f" || return 1
@@ -425,7 +388,7 @@ case "${1:-}" in
     shopt -s nullglob
     for f in "$STASH"/*; do
       [ -f "$f" ] || continue
-      case "$(classify "$f")" in appimage|tarball|pacman|flatpak|deb|rpm) targets+=("$f") ;; esac
+      case "$(classify "$f")" in appimage|tarball|flatpak|deb|rpm) targets+=("$f") ;; esac
     done
     shopt -u nullglob
     ;;

@@ -27,7 +27,7 @@ Item {
     readonly property color dim: Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
 
     readonly property var videoImage: ["*.mp4", "*.mkv", "*.webm", "*.mov", "*.avi", "*.m4v", "*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp", "*.gif", "*.tiff"]
-    readonly property var appFiles: ["*.AppImage", "*.pkg.tar.zst", "*.pkg.tar.xz", "*.deb", "*.rpm", "*.flatpak", "*.tar.gz", "*.tgz", "*.tar.xz", "*.tar.bz2", "*.tar.zst", "*.tar"]
+    readonly property var appFiles: ["*.AppImage", "*.deb", "*.rpm", "*.flatpak", "*.tar.gz", "*.tgz", "*.tar.xz", "*.tar.bz2", "*.tar.zst", "*.tar"]
 
     implicitHeight: 520 * root.s
 

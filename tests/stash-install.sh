@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # hermetic test for ryoku/shell/scripts/stash-install.sh. stash makes dropped
 # files launchable: AppImages + self-contained tarballs get a synth desktop
-# entry; an Arch package (.pkg.tar.zst, recognised by its .PKGINFO member) must
-# go through `pacman -U` via pkexec, never extracted into ~/.local where its
-# /opt binary would not work. pkexec + pacman stubbed; this asserts the dispatch
-# without touching the real system.
+# entry; an RPM goes through `dnf install` via pkexec, never extracted into
+# ~/.local where its /opt binary would not work. pkexec + dnf stubbed; this
+# asserts the dispatch without touching the real system.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -18,7 +17,7 @@ check() { if [[ $1 == "$2" ]]; then echo "  ok: $3"; else echo "::error::FAIL: $
 present() { if [[ -e $1 ]]; then echo "  ok: $2"; else echo "::error::FAIL: $2 (missing $1)" >&2; fail=1; fi; }
 absent()  { if [[ ! -e $1 ]]; then echo "  ok: $2"; else echo "::error::FAIL: $2 ($1 exists)" >&2; fail=1; fi; }
 
-# stubs. pkexec records args (escalation assertion); pacman, notify-send,
+# stubs. pkexec records args (escalation assertion); dnf, notify-send,
 # update-desktop-database just need to exist for the script's presence checks.
 stub="$work/bin"
 mkdir -p "$stub"
@@ -32,61 +31,44 @@ cat >"$stub/flatpak" <<EOF
 printf '%s\n' "\$*" >>"$work/flatpak.log"
 exit 0
 EOF
-for t in pacman notify-send update-desktop-database; do printf '#!/bin/sh\nexit 0\n' >"$stub/$t"; done
+for t in dnf notify-send update-desktop-database; do printf '#!/bin/sh\nexit 0\n' >"$stub/$t"; done
 chmod +x "$stub"/*
 export PATH="$stub:$PATH"
-
-# fake Arch package: a tar with a top-level .PKGINFO (pkgname=$2). gz so no zstd
-# needed; classify keys on the .pkg.tar. infix or the .PKGINFO member.
-mkpkg() {
-  local out="$1" name="$2" d="$work/pkgsrc"
-  rm -rf "$d"; mkdir -p "$d"
-  printf 'pkgname = %s\npkgver = 1-1\n' "$name" >"$d/.PKGINFO"
-  ( cd "$d" && tar -czf "$out" .PKGINFO )
-}
 
 run_stash() {
   rm -rf "${work:?}/home"
   HOME="$work/home" bash "$SCRIPT" >"$work/out" 2>&1
 }
 
-# case 1: .pkg.tar.* installs via pkexec pacman -U, not extracted.
+# case 1: .rpm installs via pkexec dnf install, not extracted.
 s1="$work/stash1"; mkdir -p "$s1"
-mkpkg "$s1/foo.pkg.tar.gz" foo
+: >"$s1/foo.rpm"
 : >"$work/pkexec.log"
 STASH_DIR="$s1" run_stash
 if grep -q "Installed foo" "$work/out"; then
-  echo "  ok: reported the pkgname (foo)"
+  echo "  ok: reported the package name (foo)"
 else
-  echo "::error::FAIL: did not report pkgname; out: $(cat "$work/out")" >&2
+  echo "::error::FAIL: did not report the package name; out: $(cat "$work/out")" >&2
   fail=1
 fi
-check "$(cat "$work/pkexec.log")" "pacman -U --noconfirm $s1/foo.pkg.tar.gz" \
-  "pacman package handed to pkexec pacman -U"
-absent "$work/home/.local/share/ryoku-apps/foo" "pacman package NOT extracted into ~/.local"
-absent "$s1/foo.pkg.tar.gz" "source removed from the stash after a successful install"
+check "$(cat "$work/pkexec.log")" "dnf install -y $s1/foo.rpm" \
+  "rpm handed to pkexec dnf install"
+absent "$work/home/.local/share/ryoku-apps/foo" "rpm NOT extracted into ~/.local"
+absent "$s1/foo.rpm" "source removed from the stash after a successful install"
 if grep -qx "@AUTH" "$work/out"; then
-  echo "  ok: pacman install signals the deck to step aside (@AUTH)"
+  echo "  ok: rpm install signals the deck to step aside (@AUTH)"
 else
-  echo "::error::FAIL: pacman install did not emit @AUTH" >&2; fail=1
+  echo "::error::FAIL: rpm install did not emit @AUTH" >&2; fail=1
 fi
 
-# case 2: renamed package (.tar.gz with .PKGINFO) still detected as pacman.
-s2="$work/stash2"; mkdir -p "$s2"
-mkpkg "$s2/bar.tar.gz" bar
-: >"$work/pkexec.log"
-STASH_DIR="$s2" run_stash
-check "$(cat "$work/pkexec.log")" "pacman -U --noconfirm $s2/bar.tar.gz" \
-  "renamed Arch package detected by .PKGINFO and sent to pacman"
-
-# case 3: generic tarball (no .PKGINFO) stays the extract path, never pacman.
+# case 3: generic tarball stays the extract path, never escalated.
 s3="$work/stash3"; mkdir -p "$s3"
 g="$work/gen"; rm -rf "$g"; mkdir -p "$g"
 printf '#!/bin/sh\necho hi\n' >"$g/plainbin"; chmod +x "$g/plainbin"
 ( cd "$g" && tar -czf "$s3/plainapp.tar.gz" plainbin )
 : >"$work/pkexec.log"
 STASH_DIR="$s3" run_stash
-check "$(cat "$work/pkexec.log")" "" "generic tarball never escalated to pacman"
+check "$(cat "$work/pkexec.log")" "" "generic tarball never escalated"
 present "$work/home/.local/share/applications/plainapp.desktop" \
   "generic tarball still becomes a launcher entry"
 if grep -qx "@AUTH" "$work/out"; then
@@ -106,7 +88,7 @@ else
   echo "::error::FAIL: flatpak bundle not installed; log: $(cat "$work/flatpak.log")" >&2
   fail=1
 fi
-check "$(cat "$work/pkexec.log")" "" "flatpak never escalated to pacman"
+check "$(cat "$work/pkexec.log")" "" "flatpak never escalated"
 
 # case 5: .deb payload extracted into a launcher entry (best-effort). needs ar
 # (to build the fixture) + bsdtar (libarchive); skipped if either missing.
@@ -120,7 +102,7 @@ if command -v ar >/dev/null 2>&1 && command -v bsdtar >/dev/null 2>&1; then
   ( cd "$work" && ar rc "$s5/debapp.deb" debian-binary data.tar.gz )
   : >"$work/pkexec.log"; : >"$work/flatpak.log"
   STASH_DIR="$s5" run_stash
-  check "$(cat "$work/pkexec.log")" "" "deb payload never escalated to pacman"
+  check "$(cat "$work/pkexec.log")" "" "deb payload never escalated"
   present "$work/home/.local/share/applications/debapp.desktop" "deb payload extracted into a launcher entry"
 
   # case 5b: a .deb whose desktop Exec is an absolute /opt path must resolve to
@@ -151,9 +133,9 @@ fi
 
 # case 6: RYOKU_STASH_KEEP=1 keeps the source after a successful install.
 s6="$work/stash6"; mkdir -p "$s6"
-mkpkg "$s6/keep.pkg.tar.gz" keep
+: >"$s6/keep.rpm"
 RYOKU_STASH_KEEP=1 STASH_DIR="$s6" run_stash
-present "$s6/keep.pkg.tar.gz" "RYOKU_STASH_KEEP=1 keeps the source in the stash"
+present "$s6/keep.rpm" "RYOKU_STASH_KEEP=1 keeps the source in the stash"
 
 # case 7: a failed install leaves the source in place (no cleanup on failure).
 s7="$work/stash7"; mkdir -p "$s7"

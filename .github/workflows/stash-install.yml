@@ -1,10 +1,10 @@
 name: Stash installer
 
 # stash-install (shell/scripts/stash-install.sh) turns a dropped file into a
-# launcher entry: an Arch pkg (.pkg.tar.zst) goes through pacman -U, a flatpak
-# bundle through flatpak install, .deb/.rpm payloads get cracked open with
-# bsdtar. tests stub pkexec/pacman/flatpak and check each dispatch (and that a
-# generic tarball is never escalated). see tests/stash-install.sh.
+# launcher entry: an .rpm goes through dnf install, a flatpak bundle through
+# flatpak install, a .deb payload gets cracked open with bsdtar. tests stub
+# pkexec/dnf/flatpak and check each dispatch (and that a generic tarball is
+# never escalated). see tests/stash-install.sh.
 
 on:
   pull_request:
@@ -30,7 +30,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install bsdtar (libarchive) for the .deb/.rpm payload cases
+      - name: Install bsdtar (libarchive) for the .deb payload cases
         run: sudo apt-get update && sudo apt-get install -y libarchive-tools
 
       - name: Stash installer dispatch

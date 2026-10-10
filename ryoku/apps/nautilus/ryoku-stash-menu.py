@@ -5,8 +5,7 @@ import subprocess
 from gi.repository import Nautilus, GObject
 
 # Anything stash-install.sh can turn into a launcher: AppImages, self-contained
-# tarballs, Arch/foreign packages, Flatpak bundles. Matched on the full suffix
-# so ".pkg.tar.zst" lands via ".tar.zst".
+# tarballs, .deb/.rpm packages, Flatpak bundles. Matched on the full suffix.
 INSTALLABLE = (
     ".appimage", ".flatpak", ".deb", ".rpm",
     ".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".tar.zst", ".tar",
