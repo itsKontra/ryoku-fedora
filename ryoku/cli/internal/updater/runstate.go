@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"ryoku-cli/internal/sys"
-	"strings"
-	"time"
 )
 
 // An in-flight `ryoku update` publishes its progress to a run-state file the
@@ -37,26 +35,18 @@ type runStep struct {
 	State stepState `json:"state"`
 }
 
-type promptSpec struct {
-	ID      string   `json:"id"`
-	Title   string   `json:"title"`
-	Detail  string   `json:"detail"`
-	Options []string `json:"options"`
-}
-
 // runState is the JSON document the GUI reads. phase and progress stay for
 // older readers; steps/label/log/error/snapshot are the richer surface.
 type runState struct {
-	Phase    string      `json:"phase"` // idle | running | prompt | done | error
-	PID      int         `json:"pid,omitempty"`
-	Step     string      `json:"step"`
-	Label    string      `json:"label"`
-	Progress float64     `json:"progress"`
-	Steps    []runStep   `json:"steps,omitempty"`
-	Log      []string    `json:"log,omitempty"`
-	Error    string      `json:"error,omitempty"`
-	Snapshot string      `json:"snapshot,omitempty"`
-	Prompt   *promptSpec `json:"prompt,omitempty"`
+	Phase    string    `json:"phase"` // idle | running | done | error
+	PID      int       `json:"pid,omitempty"`
+	Step     string    `json:"step"`
+	Label    string    `json:"label"`
+	Progress float64   `json:"progress"`
+	Steps    []runStep `json:"steps,omitempty"`
+	Log      []string  `json:"log,omitempty"`
+	Error    string    `json:"error,omitempty"`
+	Snapshot string    `json:"snapshot,omitempty"`
 }
 
 // progress is the singleton run-state publisher for the update in this process.
@@ -216,46 +206,3 @@ func (p *publisher) fail(err error) {
 
 // idle clears the run state so the island folds away.
 func (p *publisher) idle() { writeState(runState{Phase: "idle"}) }
-
-// answerPath is the back-channel a prompt phase is answered on: the Hub (or a
-// terminal) writes the chosen option label here, and `ryoku update` reads it.
-func answerPath() string {
-	d := os.Getenv("XDG_RUNTIME_DIR")
-	if d == "" {
-		d = "/tmp"
-	}
-	return filepath.Join(d, "ryoku-update-answer")
-}
-
-// publishPrompt writes a "prompt" phase the Hub renders as a question with
-// option buttons, keeping the current steps + log for context. Any prior
-// answer is cleared first so a stale click cannot satisfy this prompt.
-func publishPrompt(id, title, detail string, options []string) {
-	_ = os.Remove(answerPath())
-	writeState(runState{
-		Phase:    "prompt",
-		PID:      progress.pid,
-		Steps:    progress.steps,
-		Log:      progress.log,
-		Snapshot: progress.snapshot,
-		Prompt:   &promptSpec{ID: id, Title: title, Detail: detail, Options: options},
-	})
-}
-
-// awaitAnswer blocks until the back-channel carries a choice or timeout
-// elapses, then clears it. Returns the chosen option label and true, or "" and
-// false on timeout (the caller treats that as a decline).
-func awaitAnswer(timeout time.Duration) (string, bool) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if b, err := os.ReadFile(answerPath()); err == nil {
-			choice := strings.TrimSpace(string(b))
-			_ = os.Remove(answerPath())
-			if choice != "" {
-				return choice, true
-			}
-		}
-		time.Sleep(300 * time.Millisecond)
-	}
-	return "", false
-}

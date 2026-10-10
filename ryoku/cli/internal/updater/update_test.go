@@ -11,44 +11,7 @@ import (
 	wm "ryoku-wm"
 	"strings"
 	"testing"
-	"time"
 )
-
-// publishPrompt/awaitAnswer = the Hub consent back-channel. publish clears
-// stale answers, run-state carries the prompt, awaitAnswer reads + consumes.
-func TestPromptAnswerRoundTrip(t *testing.T) {
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
-
-	// stale answer from a previous prompt must not satisfy this one.
-	if err := os.WriteFile(answerPath(), []byte("Install"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	publishPrompt("snapper-helpers", "Enable snapshot helpers?", "detail", []string{"Install", "Skip"})
-	if _, err := os.Stat(answerPath()); !os.IsNotExist(err) {
-		t.Fatal("publishPrompt must clear a stale answer")
-	}
-
-	b, err := os.ReadFile(runStatePath())
-	if err != nil || !strings.Contains(string(b), `"phase":"prompt"`) || !strings.Contains(string(b), "snapper-helpers") {
-		t.Fatalf("run-state missing the prompt: %s (err %v)", b, err)
-	}
-
-	// no answer in the window = decline.
-	if choice, ok := awaitAnswer(150 * time.Millisecond); ok {
-		t.Fatalf("awaitAnswer should time out with no answer, got %q", choice)
-	}
-
-	// written answer: read, then consume.
-	if err := os.WriteFile(answerPath(), []byte("Install\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if choice, ok := awaitAnswer(2 * time.Second); !ok || choice != "Install" {
-		t.Fatalf("awaitAnswer = %q, %v; want Install, true", choice, ok)
-	}
-	if _, err := os.Stat(answerPath()); !os.IsNotExist(err) {
-		t.Fatal("awaitAnswer must consume the answer file")
-	}
-}
 
 // An up-to-date packaged box (installed == latest) reports nothing pending but
 // lists the recent history the installed commit contains, so the Hub's Updates

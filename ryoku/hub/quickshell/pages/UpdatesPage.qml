@@ -100,7 +100,7 @@ Item {
     }
 
     // ── live run state (published by `ryoku update`) ────────────────────────
-    property string phase: "idle"   // idle | running | prompt | done | error
+    property string phase: "idle"   // idle | running | done | error
     property real progress: 0
     property string label: ""
     property int ownerPid: 0
@@ -108,11 +108,7 @@ Item {
     property var logLines: []
     property string errorMsg: ""
     property string snapshot: ""
-    property string promptTitle: ""
-    property string promptDetail: ""
-    property var promptOptions: []
     readonly property string statePath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-update.json"
-    readonly property string answerPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-update-answer"
 
     // the fill fraction for the shared progress track. `ryoku update` may report
     // an explicit progress, but even when it only advances the stage list we can
@@ -179,11 +175,6 @@ Item {
             pg.logLines = o.log || [];
             pg.errorMsg = o.error || "";
             pg.snapshot = o.snapshot || "";
-            if (pg.phase === "prompt" && o.prompt) {
-                pg.promptTitle = o.prompt.title || "";
-                pg.promptDetail = o.prompt.detail || "";
-                pg.promptOptions = o.prompt.options || [];
-            }
         } catch (e) {
             pg.phase = "idle";
             pg.progress = 0;
@@ -196,14 +187,6 @@ Item {
         if (prev !== "idle" && pg.phase === "idle")
             Updates.check();
         pg.checkOwner();
-    }
-
-    // answer a prompt phase: write the choice to the back-channel `ryoku update`
-    // is polling (positional args, so a quote in the label can't break out),
-    // then optimistically resume the running view so the buttons clear.
-    function answer(choice) {
-        Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" > \"$2\"", "sh", choice, pg.answerPath]);
-        pg.phase = "running";
     }
 
     // guide restoring the pre-update snapshot after a failed run, in a terminal
@@ -893,69 +876,6 @@ Item {
                     Btn {
                         text: I18n.tr("DISMISS")
                         onAct: pg.dismiss()
-                    }
-                }
-            }
-        }
-    }
-
-    // ── prompt: the editorial question `ryoku update` is blocked on -- an ink
-    // rule + title + detail, with the option stamps `ryoku update` offers. ──
-    Item {
-        visible: pg.phase === "prompt"
-        anchors {
-            left: parent.left; right: parent.right
-            top: head.bottom; bottom: footer.top
-            leftMargin: Tokens.s6; rightMargin: Tokens.s6
-        }
-
-        Row {
-            anchors.centerIn: parent
-            width: Math.min(parent.width, 540)
-            spacing: Tokens.s4
-
-            Rectangle {
-                width: 2; height: promptCol.implicitHeight
-                color: Tokens.ink; antialiasing: false
-            }
-
-            Column {
-                id: promptCol
-                width: parent.width - 2 - Tokens.s4
-                spacing: Tokens.s4
-
-                Text {
-                    width: parent.width
-                    text: pg.promptTitle
-                    color: Tokens.ink; font.family: Tokens.ui
-                    font.pixelSize: Tokens.fValue; font.weight: Font.DemiBold
-                    wrapMode: Text.WordWrap
-                }
-                Text {
-                    width: parent.width
-                    text: pg.promptDetail
-                    color: Tokens.inkMuted; font.family: Tokens.ui
-                    font.pixelSize: Tokens.fSmall
-                    lineHeight: 1.35
-                    wrapMode: Text.WordWrap
-                }
-
-                Item { width: 1; height: Tokens.s1 }
-
-                // the option stamps: arbitrary strings from the CLI, uppercased.
-                // the first is the armed primary (inverts to bone), the rest are
-                // ghosts -- the beta18 button carries both.
-                Row {
-                    spacing: Tokens.s3
-                    Repeater {
-                        model: pg.promptOptions
-                        delegate: Btn {
-                            required property var modelData
-                            required property int index
-                            text: ("" + modelData).toUpperCase()
-                            primary: index === 0
-                            onAct: pg.answer(modelData)
-                        }
                     }
                 }
             }
