@@ -1,11 +1,13 @@
 #!/bin/bash
 # stash app installer: makes whatever the user dropped in the Ryoku stash
 # launchable. an AppImage or self-contained tarball gets a synthesized XDG
-# desktop entry under ~/.local; a pacman package (.pkg.tar.zst) is handed to
-# `pacman -U` via pkexec so it installs the normal way and the launcher reads
-# the entry the package itself ships.
+# desktop entry under ~/.local; an RPM is handed to `dnf install` via pkexec so
+# it installs the normal way and the launcher reads the entry the package
+# itself ships. an Arch package (.pkg.tar.*) is refused: it cannot install on
+# Fedora, and extracting it would only produce a broken launcher.
 # on success we drop the source from the stash so it doesn't sit there as a
-# duplicate (RYOKU_STASH_KEEP=1 keeps it).
+# duplicate (RYOKU_STASH_KEEP=1 keeps it). a refused, failed or cancelled
+# install leaves the source where it is.
 # usage: stash-install.sh [file]   (no arg = install every supported file in $STASH)
 set -u
 
@@ -19,6 +21,7 @@ KEEP_SOURCE="${RYOKU_STASH_KEEP:-0}"
 mkdir -p "$APPSTORE" "$APPDIR" "$ICONDIR"
 
 LAST_NAME=""
+REASON=""
 
 # --- helpers ---------------------------------------------------------------
 
@@ -36,26 +39,16 @@ cleanup_source() {
 
 classify() {
   case "$1" in
+    *.pkg.tar|*.pkg.tar.*) printf 'arch'; return ;;
     *.AppImage|*.appimage) printf 'appimage'; return ;;
-    *.pkg.tar.zst|*.pkg.tar.xz|*.pkg.tar.gz|*.pkg.tar) printf 'pacman'; return ;;
     *.flatpak) printf 'flatpak'; return ;;
     *.deb) printf 'deb'; return ;;
     *.rpm) printf 'rpm'; return ;;
   esac
   case "$1" in
-    *.tar|*.tar.gz|*.tgz|*.tar.xz|*.tar.zst|*.tar.bz2)
-      # a renamed Arch package is still a system pkg, not a self-contained app
-      # tree; top-level .PKGINFO is the tell. route it to pacman, never to the
-      # extract-into-~/.local path that can't produce a working /opt app.
-      if is_pacman_pkg "$1"; then printf 'pacman'; else printf 'tarball'; fi ;;
+    *.tar|*.tar.gz|*.tgz|*.tar.xz|*.tar.zst|*.tar.bz2) printf 'tarball' ;;
     *) printf 'unknown' ;;
   esac
-}
-
-# is_pacman_pkg FILE: true if the archive carries a top-level .PKGINFO. that
-# entry is the first member of every pacman package.
-is_pacman_pkg() {
-  { bsdtar -tf "$1" 2>/dev/null || tar -tf "$1" 2>/dev/null; } | head -n 8 | grep -qxF '.PKGINFO'
 }
 
 strip_appimage_ext() {
@@ -300,11 +293,11 @@ install_tarball() {
   dispatch_extracted "$dst" "$name" "$rawname"
 }
 
-# install_deb / install_rpm SRC: pull a foreign package's payload (its usr/ tree)
-# and synthesize an entry from it. bsdtar (libarchive, always around via pacman)
-# reads both: .deb nests its payload in data.tar.*, .rpm exposes the cpio tree
-# directly. best-effort, like the tarball path; a native pacman package or
-# flatpak is the better route for an app that hardcodes system paths.
+# install_deb SRC (and install_rpm on a box without dnf or rpm): pull a
+# foreign package's payload (its usr/ tree) and synthesize an entry from it. bsdtar (libarchive) reads both: .deb nests
+# its payload in data.tar.*, .rpm exposes the cpio tree directly. best-effort,
+# like the tarball path; an RPM installed through dnf or a flatpak is the
+# better route for an app that hardcodes system paths.
 install_deb() {
   local src rawname name dst tmp data
   src="$1"
@@ -320,23 +313,33 @@ install_deb() {
   dispatch_extracted "$dst" "$name" "$rawname"
 }
 
+# install_rpm SRC: install through dnf (or rpm) via pkexec. a refusal, or a
+# polkit prompt the user dismissed (pkexec exits 126 or 127), is a failed
+# install: extracting the payload instead would hand over an app the package
+# manager rejected or the user declined. only a box with no way to install an
+# rpm at all falls back to the payload extraction.
 install_rpm() {
-  local src rawname name dst
+  local src rawname name dst tool rc
   src="$1"
   rawname=$(basename "$src" .rpm)
   name=$(slug "$rawname"); [ -n "$name" ] || name="app"
-  if command -v dnf >/dev/null 2>&1 && command -v pkexec >/dev/null 2>&1; then
+  if command -v dnf >/dev/null 2>&1; then tool=dnf
+  elif command -v rpm >/dev/null 2>&1; then tool=rpm
+  else tool=""
+  fi
+  if [ -n "$tool" ] && command -v pkexec >/dev/null 2>&1; then
     printf '@AUTH\n'
-    if pkexec dnf install -y "$src" >/dev/null 2>&1; then
-      LAST_NAME="$name"
-      return 0
+    if [ "$tool" = dnf ]; then
+      pkexec dnf install -y "$src" >/dev/null 2>&1; rc=$?
+    else
+      pkexec rpm -Uvh "$src" >/dev/null 2>&1; rc=$?
     fi
-  elif command -v rpm >/dev/null 2>&1 && command -v pkexec >/dev/null 2>&1; then
-    printf '@AUTH\n'
-    if pkexec rpm -Uvh "$src" >/dev/null 2>&1; then
-      LAST_NAME="$name"
-      return 0
-    fi
+    case "$rc" in
+      0) LAST_NAME="$name"; return 0 ;;
+      126|127) REASON="Install of $(basename "$src") was cancelled" ;;
+      *) REASON="$tool could not install $(basename "$src")" ;;
+    esac
+    return 1
   fi
   command -v bsdtar >/dev/null 2>&1 || return 1
   dst=$(app_store_dir "$rawname")
@@ -356,36 +359,19 @@ install_flatpak() {
   LAST_NAME=$(slug "$(basename "$src" .flatpak)")
 }
 
-# install_pacman SRC: install an Arch package via `pacman -U`. the stash runs
-# with no tty, so escalate through pkexec (polkit agent raises the GUI prompt).
-# the package ships its own /usr/share/applications entry, which the launcher
-# reads, so nothing's synthesized here. sets LAST_NAME.
-install_pacman() {
-  local src="$1" name
-  command -v pacman >/dev/null 2>&1 || return 1
-  command -v pkexec >/dev/null 2>&1 || return 1
-  # tell the shell to step the control deck aside before the polkit prompt.
-  # the deck is a top overlay layer with a keyboard grab, so the prompt would
-  # land behind it and could not take the password. shell reads this off stdout.
-  printf '@AUTH\n'
-  pkexec pacman -U --noconfirm "$src" >/dev/null 2>&1 || return 1
-  name=$(pacman_pkgname "$src")
-  LAST_NAME="${name:-$(slug "$(basename "$src")")}"
-}
-
-# pacman_pkgname FILE: the pkgname out of the package's .PKGINFO.
-pacman_pkgname() {
-  { bsdtar -xOf "$1" .PKGINFO 2>/dev/null || tar -xOf "$1" .PKGINFO 2>/dev/null; } \
-    | sed -n 's/^pkgname = //p' | head -n1
-}
-
-# install_one FILE: 0 ok, 1 fail, 2 unsupported extension.
+# install_one FILE: 0 ok, 1 fail, 2 unsupported extension. a failure may set
+# REASON to say why.
 install_one() {
   local f="$1" kind appname dest
   LAST_NAME=""
+  REASON=""
   [ -f "$f" ] || return 1
   kind=$(classify "$f")
   case "$kind" in
+    arch)
+      REASON="$(basename "$f") is an Arch package; Arch packages aren't supported on Fedora"
+      return 1
+      ;;
     appimage)
       appname=$(slug "$(strip_appimage_ext "$(basename "$f")")")
       [ -n "$appname" ] || appname="app"
@@ -396,9 +382,6 @@ install_one() {
       ;;
     tarball)
       install_tarball "$f" || return 1
-      ;;
-    pacman)
-      install_pacman "$f" || return 1
       ;;
     flatpak)
       install_flatpak "$f" || return 1
@@ -425,7 +408,7 @@ case "${1:-}" in
     shopt -s nullglob
     for f in "$STASH"/*; do
       [ -f "$f" ] || continue
-      case "$(classify "$f")" in appimage|tarball|pacman|flatpak|deb|rpm) targets+=("$f") ;; esac
+      case "$(classify "$f")" in arch|appimage|tarball|flatpak|deb|rpm) targets+=("$f") ;; esac
     done
     shopt -u nullglob
     ;;
@@ -438,6 +421,7 @@ single=0; [ "${#targets[@]}" -eq 1 ] && single=1
 NAMES=()
 attempted=0
 cleaned=0
+FAIL_REASON=""
 if [ "${#targets[@]}" -gt 0 ]; then
   for t in "${targets[@]}"; do
     install_one "$t"; rc=$?
@@ -452,6 +436,10 @@ if [ "${#targets[@]}" -gt 0 ]; then
       [ "$single" -eq 1 ] && attempted=$((attempted + 1))
     else
       attempted=$((attempted + 1))
+      if [ -n "$REASON" ]; then
+        FAIL_REASON="$REASON"
+        echo "$REASON" >&2
+      fi
     fi
   done
 fi
@@ -467,7 +455,7 @@ if [ "${#NAMES[@]}" -gt 0 ]; then
 fi
 
 if [ "$attempted" -gt 0 ]; then
-  notify-send "Stash" "Install failed" -i dialog-error
+  notify-send "Stash" "${FAIL_REASON:-Install failed}" -i dialog-error
   echo "Install failed" >&2
   exit 1
 fi

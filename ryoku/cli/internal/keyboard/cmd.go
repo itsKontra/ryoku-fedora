@@ -84,6 +84,7 @@ type State struct {
 	ConsoleXkb string `json:"console_as_layout"`
 	BootImage  string `json:"boot_image"`
 	BootStale  bool   `json:"boot_stale"`
+	BootDenied string `json:"boot_unreadable,omitempty"`
 	Agrees     bool   `json:"agrees"`
 }
 
@@ -92,21 +93,27 @@ type State struct {
 // not reported as drift.
 func Read() State {
 	d := DesktopLayout().Primary()
-	stale, img := BootStale()
+	boot := BootStale()
 	s := State{
 		Desktop:    d,
 		Greeter:    strings.SplitN(X11Layout(), ",", 2)[0],
 		Console:    ConsoleKeymap(),
 		ConsoleXkb: ConsoleAsXkb(ConsoleKeymap()),
-		BootImage:  img,
-		BootStale:  stale,
+		BootImage:  boot.Image,
+		BootStale:  boot.Stale,
+		BootDenied: boot.Denied,
 	}
-	// A layer that says nothing is unset, not disagreeing; it simply has not
-	// been written yet, which the greeter case covers on a fresh install.
+	s.Agrees = layersAgree(s) && !s.BootStale && s.BootDenied == ""
+	return s
+}
+
+// layersAgree compares the greeter and console with the desktop. A layer that
+// says nothing is unset, not disagreeing; it simply has not been written yet,
+// which the greeter case covers on a fresh install.
+func layersAgree(s State) bool {
 	greeterOK := s.Greeter == "" || s.Desktop == "" || s.Greeter == s.Desktop
 	consoleOK := s.ConsoleXkb == "" || s.Desktop == "" || s.ConsoleXkb == s.Desktop
-	s.Agrees = greeterOK && consoleOK && !s.BootStale
-	return s
+	return greeterOK && consoleOK
 }
 
 func runStatus(args []string) error {
@@ -122,7 +129,9 @@ func runStatus(args []string) error {
 	fmt.Printf(i18n.T("desktop   %s\n"), orUnset(s.Desktop))
 	fmt.Printf(i18n.T("greeter   %s\n"), orUnset(s.Greeter))
 	fmt.Printf(i18n.T("console   %s%s\n"), orUnset(s.Console), xkbNote(s))
-	if s.BootImage == "" {
+	if s.BootDenied != "" {
+		fmt.Printf(i18n.T("boot      unknown: %s is not readable as this user, so the boot image was not checked\n"), s.BootDenied)
+	} else if s.BootImage == "" {
 		fmt.Printf(i18n.T("boot      no image found\n"))
 	} else if s.BootStale {
 		fmt.Printf(i18n.T("boot      %s is older than %s, so the passphrase prompt still uses the keymap it was built with\n"),
@@ -130,9 +139,12 @@ func runStatus(args []string) error {
 	} else {
 		fmt.Printf(i18n.T("boot      %s carries the current keymap\n"), filepath.Base(s.BootImage))
 	}
-	if s.Agrees {
+	switch {
+	case s.Agrees:
 		fmt.Println(i18n.T("\nevery layer agrees."))
-	} else {
+	case s.BootDenied != "" && layersAgree(s):
+		fmt.Println(i18n.T("\nthe readable layers agree; run `sudo ryoku keyboard status` to check the boot image too."))
+	default:
 		fmt.Println(i18n.T("\nthey disagree; `ryoku keyboard apply` puts the desktop's layout on all of them."))
 	}
 	return nil

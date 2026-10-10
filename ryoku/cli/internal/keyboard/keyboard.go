@@ -20,10 +20,8 @@ package keyboard
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"ryoku-cli/internal/sys"
 	i18n "ryoku-i18n"
@@ -189,48 +187,6 @@ func SystemLocale() string {
 		}
 	}
 	return os.Getenv("LANG")
-}
-
-// BootImageGlobs is a package var so a test can point it at a temp dir.
-var BootImageGlobs = []string{"/boot/EFI/Linux/*.efi", "/boot/initramfs-*.img"}
-
-// BootImageTime is the newest non-fallback boot image and its mtime. A fallback
-// image is regenerated on its own schedule, so it never speaks for freshness.
-func BootImageTime() (time.Time, string) {
-	var newest time.Time
-	var which string
-	for _, g := range BootImageGlobs {
-		paths, _ := filepath.Glob(g)
-		for _, p := range paths {
-			if strings.Contains(p, "fallback") {
-				continue
-			}
-			fi, err := os.Stat(p)
-			if err != nil {
-				continue
-			}
-			if fi.ModTime().After(newest) {
-				newest, which = fi.ModTime(), p
-			}
-		}
-	}
-	return newest, which
-}
-
-// BootStale reports whether the boot image predates /etc/vconsole.conf, meaning
-// the passphrase prompt still carries the keymap baked in when it was built.
-// This is the check a plain config comparison misses: every file under /etc can
-// agree while the prompt is still wrong.
-func BootStale() (bool, string) {
-	when, path := BootImageTime()
-	if when.IsZero() {
-		return false, ""
-	}
-	fi, err := os.Stat(VconsolePath)
-	if err != nil {
-		return false, path
-	}
-	return fi.ModTime().After(when), path
 }
 
 // ---- pushing a layout out ----------------------------------------------------

@@ -4,7 +4,9 @@
 # commands, optional-tier items are skipped in a whole-bundle install, and a
 # plugin install places the plugin without enabling it (install never activates).
 # The actuator prepends $HOME/.local/bin to PATH, so the fakes live there and
-# HOME is a temp dir; no network, no pacman, no real shell, no real ryostore.
+# HOME is a temp dir; rpm and dnf are fakes too (only defaultpkg is installed,
+# every package is available), so no network, no host package database, no
+# real shell and no real ryostore. Runs the same on a runner without rpm.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$here/.."
@@ -65,9 +67,22 @@ esac
 exit 0
 EOF
 
-# fake pacman: nothing installed, nothing official -> packages route to the AUR.
-cat >"$bin/pacman" <<'EOF'
+# fake rpm: defaultpkg is the only installed package. -qa feeds load_pkgset's
+# snapshot; -q answers the live per-package query.
+cat >"$bin/rpm" <<'EOF'
 #!/usr/bin/env bash
+case "$1" in
+  -qa) printf 'defaultpkg\ndefaultpkg.x86_64\n'; exit 0 ;;
+  -q) [[ ${*: -1} == defaultpkg ]] && { echo defaultpkg.x86_64; exit 0; }
+      echo "package ${*: -1} is not installed"; exit 1 ;;
+esac
+exit 1
+EOF
+
+# fake dnf: every package is available from the enabled repositories.
+cat >"$bin/dnf" <<'EOF'
+#!/usr/bin/env bash
+[[ " $* " == *" repoquery "* ]] && { echo "${*: -1}"; exit 0; }
 exit 1
 EOF
 
@@ -80,6 +95,15 @@ grep -q '"type": *"nautilus-pack"' <<<"$out" || fail "nautilus-pack missing from
 grep -q '"type": *"plugin"' <<<"$out" || fail "plugin missing from status"
 out="$(bash "$act" status bundle default)"
 grep -q '"name": *"defaultpkg"' <<<"$out" || fail "empty registry path did not use canonical bundle path"
+[ "$(jq -r '.items[] | select(.name == "defaultpkg") | .status' <<<"$out")" = present ] \
+  || fail "installed package not reported present from the rpm snapshot"
+out="$(bash "$act" status bundle demo)"
+[ "$(jq -r '.items[] | select(.name == "corepkg") | .status' <<<"$out")" = absent ] \
+  || fail "missing package not reported absent"
+
+# --- an installed package is left alone at item scope --------------------------
+out="$(RYOSTORE_DRYRUN=1 bash "$act" install item default defaultpkg 2>&1)"
+grep -q 'DRYRUN: ryoku-pkg-add' <<<"$out" && fail "an installed package was reinstalled"
 
 # --- whole-bundle DRYRUN install: core planned, optional skipped --------------
 out="$(RYOSTORE_DRYRUN=1 bash "$act" install bundle demo 2>&1)"
@@ -91,7 +115,7 @@ grep -q "Skipping the catalogue's 32-bit GPU prerequisite" <<<"$out" || fail "le
 
 # --- optional installs when named as a single item ----------------------------
 out="$(RYOSTORE_DRYRUN=1 bash "$act" install item demo optpkg 2>&1)"
-grep -q 'optpkg' <<<"$out" || fail "optional package not installed at item scope"
+grep -q 'DRYRUN: ryoku-pkg-add optpkg' <<<"$out" || fail "optional package not installed at item scope"
 
 # --- real (non-dryrun) plugin install places the plugin, install-only ---------
 bash "$act" install item demo creator-deck >/dev/null 2>&1 || true

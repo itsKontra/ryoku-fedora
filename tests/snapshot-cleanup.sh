@@ -21,9 +21,9 @@ for t in losetup mkfs.btrfs btrfs snapper truncate awk mountpoint unshare; do
 done
 
 # snapper runs client plugins from /usr/lib/snapper/plugins on every operation;
-# on a Ryoku box the limine-snapper-sync plugin fails against this throwaway
-# root and aborts snapper. Re-exec in a private mount namespace so the host
-# plugin dir can be hidden without touching the real system.
+# a host plugin can fail against this throwaway root and abort snapper. Re-exec
+# in a private mount namespace so the host plugin dir can be hidden without
+# touching the real system.
 if [[ -z ${RYOKU_SNAPTEST_NS:-} ]]; then
   export RYOKU_SNAPTEST_NS=1
   exec unshare -m --propagation private -- bash "$0" "$@"
@@ -49,7 +49,7 @@ cleanup() {
 trap cleanup EXIT
 
 # hide the host snapper plugins in this namespace so none run against the test
-# root (the limine-snapper-sync plugin would fail and abort snapper).
+# root, where a failing plugin would abort snapper.
 if [[ -d /usr/lib/snapper/plugins ]]; then
   _empty="$(mktemp -d)"
   mount --bind "$_empty" /usr/lib/snapper/plugins 2>/dev/null || skip "cannot isolate snapper plugins"

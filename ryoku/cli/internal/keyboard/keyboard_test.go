@@ -131,65 +131,13 @@ func touch(t *testing.T, path string, when time.Time) {
 	}
 }
 
-// A fallback image is regenerated on its own schedule, so it must never be the
-// image freshness is judged against.
-func TestBootImageTimeIgnoresFallback(t *testing.T) {
-	dir := t.TempDir()
-	base := time.Now().Add(-2 * time.Hour)
-	touch(t, filepath.Join(dir, "ryoku_linux.efi"), base)
-	touch(t, filepath.Join(dir, "ryoku_linux-cachyos.efi"), base.Add(30*time.Minute))
-	touch(t, filepath.Join(dir, "initramfs-linux-fallback.img"), base.Add(90*time.Minute))
-
-	orig := BootImageGlobs
-	BootImageGlobs = []string{filepath.Join(dir, "*.efi"), filepath.Join(dir, "initramfs-*.img")}
-	t.Cleanup(func() { BootImageGlobs = orig })
-
-	when, which := BootImageTime()
-	if filepath.Base(which) != "ryoku_linux-cachyos.efi" {
-		t.Errorf("picked %q, want the newest non-fallback image", filepath.Base(which))
-	}
-	if !when.Equal(base.Add(30 * time.Minute)) {
-		t.Errorf("time = %v, want the newest non-fallback mtime", when)
-	}
-}
-
-// The trap this whole package exists for: every file under /etc can agree while
-// the passphrase prompt is still wrong, because the image carries its own copy.
-func TestBootStaleWhenVconsoleIsNewer(t *testing.T) {
-	dir := t.TempDir()
-	base := time.Now().Add(-time.Hour)
-	img := filepath.Join(dir, "ryoku_linux.efi")
-	vc := filepath.Join(dir, "vconsole.conf")
-	touch(t, img, base)
-	touch(t, vc, base.Add(10*time.Minute))
-
-	origG, origV := BootImageGlobs, VconsolePath
-	BootImageGlobs = []string{filepath.Join(dir, "*.efi")}
-	VconsolePath = vc
-	t.Cleanup(func() { BootImageGlobs, VconsolePath = origG, origV })
-
-	stale, got := BootStale()
-	if !stale {
-		t.Error("a boot image older than vconsole.conf must read as stale")
-	}
-	if filepath.Base(got) != "ryoku_linux.efi" {
-		t.Errorf("image = %q", got)
-	}
-
-	// and the other way: rebuilt after the keymap change, so the prompt is current
-	touch(t, img, base.Add(20*time.Minute))
-	if stale, _ := BootStale(); stale {
-		t.Error("a boot image newer than vconsole.conf must not read as stale")
-	}
-}
-
 // A French box, end to end through Read(): the greeter is unset (nothing has
 // pushed to it yet), the console says fr, and the image predates the change.
 // This is the shape of the bug users hit and cannot see.
 func TestReadReportsDriftOnAFrenchBox(t *testing.T) {
 	dir := t.TempDir()
 	base := time.Now().Add(-time.Hour)
-	img := filepath.Join(dir, "ryoku_linux.efi")
+	img := filepath.Join(dir, "initramfs-6.17.1-300.fc44.x86_64.img")
 	vc := filepath.Join(dir, "vconsole.conf")
 	x11 := filepath.Join(dir, "00-keyboard.conf")
 	touch(t, img, base)
@@ -203,10 +151,10 @@ func TestReadReportsDriftOnAFrenchBox(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	og, ov, ox := BootImageGlobs, VconsolePath, X11Path
-	BootImageGlobs = []string{filepath.Join(dir, "*.efi")}
+	bootFixture(t, dir, t.TempDir(), "")
+	ov, ox := VconsolePath, X11Path
 	VconsolePath, X11Path = vc, x11
-	t.Cleanup(func() { BootImageGlobs, VconsolePath, X11Path = og, ov, ox })
+	t.Cleanup(func() { VconsolePath, X11Path = ov, ox })
 
 	if got := ConsoleKeymap(); got != "fr-latin1" {
 		t.Fatalf("console = %q, want fr-latin1", got)
@@ -219,8 +167,7 @@ func TestReadReportsDriftOnAFrenchBox(t *testing.T) {
 	if got := Detect(X11Layout(), ConsoleKeymap(), ""); got.Layout != "fr" {
 		t.Errorf("detected %q, want fr", got.Layout)
 	}
-	stale, _ := BootStale()
-	if !stale {
+	if !BootStale().Stale {
 		t.Error("the boot image predates the keymap change and must read as stale")
 	}
 }

@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// gitInitRyokuArch makes a git work tree at dir whose origin names ryoku-arch,
+// gitInitRyoku makes a git work tree at dir whose origin names ryoku-fedora,
 // so ResolveRepo's fallback and a recorded pointer both accept it.
-func gitInitRyokuArch(t *testing.T, dir string) {
+func gitInitRyoku(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -23,11 +23,11 @@ func gitInitRyokuArch(t *testing.T, dir string) {
 		}
 	}
 	run("init")
-	run("remote", "add", "origin", "https://github.com/ryoku-dev/ryoku-arch.git")
+	run("remote", "add", "origin", "https://github.com/ryoku-dev/ryoku-fedora.git")
 }
 
 // RetireSourceTracking drops the recorded pointer and the tracked channel so the
-// update path resolves to packages, while the ~/ryoku-arch clone is left on disk
+// update path resolves to packages, while the ~/ryoku-fedora clone is left on disk
 // (the user's data) and, absent the tracked channel, is not re-adopted.
 func TestRetireSourceTrackingMigratesOffCheckout(t *testing.T) {
 	home := t.TempDir()
@@ -36,8 +36,8 @@ func TestRetireSourceTrackingMigratesOffCheckout(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state"))
 
-	clone := filepath.Join(home, "ryoku-arch")
-	gitInitRyokuArch(t, clone)
+	clone := filepath.Join(home, "ryoku-fedora")
+	gitInitRyoku(t, clone)
 
 	if err := os.MkdirAll(StateDir(), 0o755); err != nil {
 		t.Fatal(err)
@@ -96,7 +96,7 @@ func TestRetireSourceTrackingMigratesOffCheckout(t *testing.T) {
 	}
 }
 
-// ResolveRepo's ~/ryoku-arch fallback is gated on the tracked channel: a
+// ResolveRepo's ~/ryoku-fedora fallback is gated on the tracked channel: a
 // migrated box (no RYOKU_CHANNEL) never re-adopts the clone it left on disk,
 // while a source box (a recorded RYOKU_CHANNEL) still self-heals a lost pointer.
 func TestResolveRepoFallbackNeedsTracking(t *testing.T) {
@@ -106,12 +106,8 @@ func TestResolveRepoFallbackNeedsTracking(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state")) // no recorded pointer
 
-	name := "ryoku-arch"
-	if RPMManager() != "" {
-		name = "ryoku-fedora"
-	}
-	clone := filepath.Join(home, name)
-	gitInitRyokuArch(t, clone)
+	clone := filepath.Join(home, "ryoku-fedora")
+	gitInitRyoku(t, clone)
 
 	if got := ResolveRepo(); got != "" {
 		t.Fatalf("ResolveRepo without tracking = %q, want empty (clone left deliberately)", got)
@@ -129,37 +125,25 @@ func TestResolveRepoFallbackNeedsTracking(t *testing.T) {
 	}
 }
 
-func TestFedoraResolveRepoDoesNotAdoptArchFallback(t *testing.T) {
-	home, bin := t.TempDir(), t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".state"))
-	t.Setenv("RYOKU_REPO", "")
-	git, err := exec.LookPath("git")
-	if err != nil {
+// IsRyokuTree adopts only a git work tree whose origin is a ryoku-fedora
+// remote: never an empty path, a plain directory or an unrelated repo.
+func TestIsRyokuTree(t *testing.T) {
+	root := t.TempDir()
+	fedora := filepath.Join(root, "ryoku-fedora")
+	gitInitRyoku(t, fedora)
+	other := filepath.Join(root, "other")
+	gitInitRyoku(t, other)
+	cmd := exec.Command("git", "-C", other, "remote", "set-url", "origin", "https://example.com/unrelated.git")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("set-url: %v\n%s", err, out)
+	}
+	plain := filepath.Join(root, "plain")
+	if err := os.MkdirAll(plain, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(git, filepath.Join(bin, "git")); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(bin, "dnf"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", bin)
-	gitInitRyokuArch(t, filepath.Join(home, "ryoku-arch"))
-	env := filepath.Join(ConfigHome(), "environment.d", "ryoku.conf")
-	if err := os.MkdirAll(filepath.Dir(env), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(env, []byte("RYOKU_CHANNEL=main\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if got := ResolveRepo(); got != "" {
-		t.Fatalf("adopted Arch checkout: %s", got)
-	}
-	fedora := filepath.Join(home, "ryoku-fedora")
-	gitInitRyokuArch(t, fedora)
-	if got := ResolveRepo(); got != fedora {
-		t.Fatalf("got %s, want %s", got, fedora)
+	for dir, want := range map[string]bool{fedora: true, other: false, plain: false, "": false} {
+		if got := IsRyokuTree(dir); got != want {
+			t.Errorf("IsRyokuTree(%q) = %v, want %v", dir, got, want)
+		}
 	}
 }
