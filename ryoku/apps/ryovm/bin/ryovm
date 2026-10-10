@@ -8,7 +8,7 @@
 #
 # Verbs (all machine-readable verbs print one JSON document to stdout):
 #   caps                              host readiness (quickemu/qemu/kvm/spice)
-#   setup                            install quickemu (AUR) + spice-gtk (repo)
+#   setup                            install quickemu, spice-gtk-tools, xorriso
 #   catalog [--refresh]              quickget OS catalogue (cached)
 #   list                             local VMs + live run state
 #   get <name>                       one VM: config + state + snapshots
@@ -392,8 +392,9 @@ cmd_import() {
 	} >"$conf"
 	# Windows ships no in-box virtio driver, so a plain ISO install finds no disk
 	# without the driver CD; point it at the shared VirtIO CD (fetched on demand
-	# by `virtio`). 11 also wants a TPM to pass setup; Secure Boot stays off since
-	# Arch's edk2 has no MS-key vars, so on would reject the signed loader.
+	# by `virtio`). 11 also wants a TPM to pass setup; Secure Boot is not needed
+	# for setup, so it stays off and quickemu boots edk2-ovmf's plain
+	# /usr/share/edk2/ovmf/OVMF_CODE.fd rather than the secboot build.
 	case "$guest" in
 		windows|windows-server)
 			echo 'tpm="on"' >>"$conf"
@@ -681,8 +682,8 @@ write_seed() { # $1=dir $2=name $3=want_sudo $4=os $5=tools_csv $6=extra_csv $7=
 	iso_build "$dir/seed.iso" "$dir/user-data" "$dir/meta-data" || return 1
 }
 
-# build a cidata ISO with whatever tool is installed. xorriso is in the Arch
-# repos (libisoburn); genisoimage/mkisofs come from cdrtools (AUR). The volid
+# build a cidata ISO with whatever tool is installed. setup pulls in xorriso;
+# Fedora also packages genisoimage, and mkisofs is the last resort. The volid
 # MUST be cidata — that's the only thing cloud-init's NoCloud datasource scans.
 iso_build() { # $1 = out.iso, $2.. = files
 	local out="$1"; shift
@@ -712,10 +713,7 @@ cmd_instant() {
 	# the clip helper is always baked; spice-vdagent gives console clipboard.
 	# both are cheap; a user who wants nothing else still gets clipboard.
 	[ -n "$os" ] || { emit '{"phase":"error","message":"instant needs an OS (e.g. debian)"}'; exit 1; }
-	local hint="sudo pacman -S libisoburn"
-	have dnf && hint="sudo dnf install xorriso"
-	have apt-get && hint="sudo apt-get install libisoburn"
-	have_iso_builder || { emit "{\"phase\":\"error\",\"message\":\"no ISO builder — install xorriso: $hint\"}"; exit 1; }
+	have_iso_builder || { emit '{"phase":"error","message":"no ISO builder — install xorriso: sudo dnf install xorriso"}'; exit 1; }
 	have qemu-img || { emit '{"phase":"error","message":"qemu-img is missing"}'; exit 1; }
 
 	local entry; entry="$(cloud_catalog | jq -c --arg q "$os" 'first(.[] | select(.os==$q))')"
