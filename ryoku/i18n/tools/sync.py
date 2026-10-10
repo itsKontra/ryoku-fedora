@@ -26,11 +26,11 @@ A developer only ever writes English, wrapped at the point it is displayed:
            (the cause of overflowing/overlapping UI). --strict to fail on them.
   prune    drop keys nothing uses any more from en.json, every language and
            overrides/, translating nothing. A key is an orphan only when
-           extract no longer finds it and its text appears in no source file,
+           extract no longer finds it and its text appears in no tracked file,
            so a string looked up by variable is kept. sync already drops a
            generated key extract stopped finding; this also reaches overrides
            and works offline. --match=REGEX limits it, --dry-run only lists.
-  cost    price the next full pass: source tokens, output tokens and dollars
+  cost     price the next full pass: source tokens, output tokens and dollars
            per language for the configured model. --model/--force to compare.
   llm      generate a full language into the layered config dir
            (~/.config/ryoku/i18n/<lang>.json), for a higher-quality pass or a
@@ -59,6 +59,7 @@ import json
 import os
 import random
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -780,25 +781,29 @@ def cmd_check(argv):
 
 # A pruned key must be dead everywhere, not just to extract: a label wrapped by
 # variable keeps its literal in some data table extract does not walk. So a key
-# survives if its text still appears in any source file outside the catalogs.
-CORPUS_SKIP = {".git", "node_modules", "__pycache__"}
-CORPUS_MAX = 4 << 20
-
-
+# survives if its text still appears in any tracked source file. Only tracked
+# files count: an untracked worktree nested in the checkout, or a built binary
+# that embeds the catalogs, would otherwise make every key look alive.
 def _corpus():
+    try:
+        out = subprocess.run(["git", "-C", REPO, "ls-files", "-z"], check=True,
+                             capture_output=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    catalog = os.path.relpath(TRANS, REPO) + os.sep
     parts = []
-    for root, dirs, files in os.walk(REPO):
-        dirs[:] = [d for d in dirs if d not in CORPUS_SKIP
-                   and os.path.join(root, d) != TRANS]
-        for f in files:
-            p = os.path.join(root, f)
-            try:
-                if os.path.getsize(p) > CORPUS_MAX:
+    for rel in out.decode("utf-8", "surrogateescape").split("\0"):
+        p = os.path.join(REPO, rel)
+        if not rel or rel.startswith(catalog) or os.path.islink(p):
+            continue
+        try:
+            with open(p, "rb") as fh:
+                head = fh.read(8192)
+                if b"\0" in head:
                     continue
-                with open(p, encoding="utf-8", errors="ignore") as fh:
-                    parts.append(fh.read())
-            except OSError:
-                continue
+                parts.append((head + fh.read()).decode("utf-8", "ignore"))
+        except OSError:
+            continue
     return "\0".join(parts)
 
 
@@ -812,18 +817,33 @@ def _anchor(key):
 def cmd_prune(argv):
     """Drop orphan keys from en.json, every language and overrides/, translating
     nothing. --match=REGEX limits the prune; --dry-run only lists."""
-    dry = "--dry-run" in argv
-    match = None
+    dry, match = False, None
     for a in argv:
-        if a.startswith("--match="):
-            match = re.compile(a.split("=", 1)[1], re.I)
+        if a == "--dry-run":
+            dry = True
+        elif a.startswith("--match=") and len(a) > len("--match="):
+            try:
+                match = re.compile(a.split("=", 1)[1], re.I)
+            except re.error as e:
+                print(f"prune: bad --match regex: {e}", file=sys.stderr)
+                return 2
+        else:
+            # an unread argument (`--match pacman`) would widen the prune to
+            # every orphan, so anything unknown stops it instead.
+            print(f"prune: unknown argument {a!r} (--match=REGEX, --dry-run)",
+                  file=sys.stderr)
+            return 2
     paths = [os.path.join(TRANS, f"{l['code']}.json") for l in LANGS]
     paths += [os.path.join(OVERRIDES, f"{code}.json") for code in TARGETS]
     paths = [p for p in paths if os.path.isfile(p)]
     catalogs = {p: load_json(p) for p in paths}
 
-    live = extract_keys()
     corpus = _corpus()
+    if corpus is None:
+        print("prune: needs a git checkout of the repo (git ls-files failed)",
+              file=sys.stderr)
+        return 1
+    live = extract_keys()
     every = set().union(*catalogs.values())
     orphans = sorted(k for k in every
                      if k not in live and (match is None or match.search(k))
