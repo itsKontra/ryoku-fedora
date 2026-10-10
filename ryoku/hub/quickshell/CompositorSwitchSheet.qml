@@ -11,7 +11,7 @@ import Quickshell.Io
 // honour, then asks the one extra question a switch raises: keep the compositor
 // you are leaving so you can return with no download, or remove it to reclaim
 // the space. Confirming runs `ryoku wm use <target>` in a terminal (the same
-// reversible pacman transaction the CLI uses), and, only if you chose remove,
+// reversible dnf transaction the CLI uses), and, only if you chose remove,
 // drops the old package afterwards. Nothing here is spelled
 // per compositor: every name, package and path comes from the preview.
 Item {
@@ -43,7 +43,7 @@ Item {
     }
     function close() { sh.active = false; sh.closed(); }
     function cap(name) { return name && name.length ? name.charAt(0).toUpperCase() + name.slice(1) : (name || ""); }
-    // The reclaimed size, named the way pacman's own removal summary does.
+    // The reclaimed size, named the way dnf's own transaction summary does.
     function humanSize(bytes) {
         var b = Number(bytes) || 0;
         if (b >= 1073741824) return (b / 1073741824).toFixed(2) + " GiB";
@@ -91,7 +91,7 @@ Item {
     // The deployed switch has nothing to install, so it runs here rather than
     // in a terminal: a console window for work that needs no password and
     // prints one line was the wrong surface for it. A package install still
-    // gets the terminal, where pacman's progress and its sudo prompt belong.
+    // gets the terminal, where dnf's progress and its sudo prompt belong.
     Process {
         id: switchProc
         stdout: StdioCollector { }
@@ -107,14 +107,14 @@ Item {
     function confirm() {
         if (!sh.available || sh.loading || sh.switching || !sh.target)
             return;
-        // The CLI owns the transaction order, so the Hub never spells a pacman
+        // The CLI owns the transaction order, so the Hub never spells a dnf
         // command of its own. Removal drops the outgoing compositor's packages
         // only; its config tree holds hand-written files the user owns, and the
         // switch leaves them in place.
         var removing = sh.keep === "remove" && sh.reclaimRemovable;
         // The in-process path is only safe when nothing privileged happens: a
         // deployed target installs nothing, and keeping the old compositor
-        // removes nothing. Anything that runs pacman gets a terminal for its
+        // removes nothing. Anything that runs dnf gets a terminal for its
         // progress and its sudo prompt.
         if (sh.deployed && !removing) {
             sh.switching = true;

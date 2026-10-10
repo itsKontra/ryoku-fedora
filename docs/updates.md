@@ -359,7 +359,7 @@ untouched; recovery deliberately resets both when both are installed.
 - **Switching** (`ryoku wm use <name> [--keep-previous|--remove-previous]`)
   installs the target's package; removing the old compositor reclaims its
   packages. `wm.Reclaim` computes the free set from the outgoing provider's
-  `Caps.Packages`, and the package and byte counts shown come from the rpm
+  `Caps.Packages`, and the package and byte counts shown come from dnf's
   removal plan, re-checked immediately before the transaction. Full switch
   contract in `docs/compositors.md`.
 

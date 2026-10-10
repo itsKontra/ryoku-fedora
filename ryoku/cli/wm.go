@@ -265,9 +265,9 @@ func cmdWmUse(args []string) {
 
 	// The keep-or-remove tradeoff in the terms that are actually true: what
 	// leaving the active compositor reclaims, or that there is nothing to remove.
-	printWmPreviousChoice(active, name, keepPrevious)
+	reclaim := printWmPreviousChoice(active, name, keepPrevious)
 
-	pkg := "ryoku-desktop-" + name
+	pkg := wm.VariantPackage(name)
 	// A checkout box runs deployed trees, so switching to one installs nothing;
 	// picking the session at the greeter is the whole move. A package box installs
 	// the target first, as a plain package transaction, so the distro's snapshot
@@ -285,7 +285,7 @@ func cmdWmUse(args []string) {
 		}
 		fmt.Printf(i18n.T("%s is ready. Log out and pick %s at the greeter.\n"), name, name)
 	} else {
-		if !packageAvailable(pkg) {
+		if !wm.PackageAvailable(pkg) {
 			die(i18n.T("cannot switch to %s yet: the %s package is not available on this channel"), name, pkg)
 		}
 		// The variants are not exclusive, so the install leaves the outgoing
@@ -293,7 +293,7 @@ func cmdWmUse(args []string) {
 		// predate that still declares the shared virtual as a conflict and the
 		// package manager refuses the install; only then drop it first.
 		if err := installPackage(pkg); err != nil {
-			out := "ryoku-desktop-" + active
+			out := wm.VariantPackage(active)
 			if active == "" || active == name || !packageInstalled(out) {
 				die(i18n.T("could not install %s: %v"), pkg, err)
 			}
@@ -327,7 +327,7 @@ func cmdWmUse(args []string) {
 	// runs whether the target came from a package or a checkout, because the old
 	// compositor is a package set either way.
 	if !keepPrevious && active != "" && active != name {
-		removePreviousCompositor(active, name)
+		removePreviousCompositor(reclaim)
 	}
 }
 
@@ -400,43 +400,42 @@ func syncLeafScripts(name string) error {
 // printWmPreviousChoice states the tradeoff in the terms that are actually true:
 // how many packages leaving the active compositor reclaims and how much space,
 // or that nothing of it is installed to remove. The settings surviving either
-// way is what makes a removal safe, and is stated by the preview above.
-func printWmPreviousChoice(active, incoming string, keep bool) {
+// way is what makes a removal safe, and is stated by the preview above. It
+// returns the set it showed, which is the reviewed set a removal may take.
+func printWmPreviousChoice(active, incoming string, keep bool) wm.ReclaimSet {
 	if active == "" || active == incoming {
-		return
+		return wm.ReclaimSet{}
 	}
 	rs, err := wm.Reclaim(active, incoming)
 	if err != nil || !rs.Removable {
 		fmt.Printf(i18n.T("  Nothing to remove: no installed %s packages can be reclaimed, so switching back costs nothing.\n"), active)
-		return
+		return wm.ReclaimSet{}
 	}
 	if keep {
 		fmt.Printf(i18n.T("  Keeping %s: switch back with no download, at the cost of %d packages (%s) staying on disk.\n"), active, rs.Count, humanSize(rs.Size))
-		return
+		return rs
 	}
 	fmt.Printf(i18n.T("  Removing %s: frees %d packages (%s) and drops its session entry; switching back later reinstalls them.\n"), active, rs.Count, humanSize(rs.Size))
+	return rs
 }
 
 // removePreviousCompositor removes the outgoing compositor's packages after a
-// switch to incoming, in one transaction over exactly the reviewed set, leaving
-// its config tree and its wm.<name>.* settings alone so a switch back restores
-// the desktop rather than a default one. It refuses rather than remove anything
-// the package manager's own plan no longer agrees with, so a switch can never
-// cascade past what the preview showed.
-func removePreviousCompositor(active, incoming string) {
-	rs, err := wm.Reclaim(active, incoming)
-	if err != nil {
-		fmt.Printf(i18n.T("Switched, but %s could not be measured for removal: %v\n"), active, err)
-		return
-	}
+// switch, in one transaction over exactly the reviewed set the preview showed,
+// leaving its config tree and its wm.<name>.* settings alone so a switch back
+// restores the desktop rather than a default one. dnf's plan is asked once more
+// now that the incoming variant is installed, and any difference from the
+// reviewed set refuses the removal, so a switch can never cascade past what the
+// preview showed. A preview that found nothing to remove removes nothing.
+func removePreviousCompositor(rs wm.ReclaimSet) {
 	if !rs.Removable {
 		return // nothing installed to reclaim
 	}
+	active := rs.Outgoing
 	if err := wm.VerifyRemoval(rs); err != nil {
 		fmt.Printf(i18n.T("Switched, but %s was kept: %v\n"), active, err)
 		return
 	}
-	if err := removePackages(rs.Targets); err != nil {
+	if err := removePackages(rs.Packages); err != nil {
 		fmt.Printf(i18n.T("Switched, but %s could not be removed: %v\n"), active, err)
 		return
 	}
@@ -516,11 +515,6 @@ func rawLen(raw json.RawMessage) int {
 		return len(obj)
 	}
 	return 0
-}
-
-func packageAvailable(pkg string) bool {
-	out, err := sys.RunOut("dnf", "-q", "repoquery", "--available", pkg)
-	return err == nil && strings.TrimSpace(out) != ""
 }
 
 // packageInstalled reports whether pkg is installed here, which decides whether

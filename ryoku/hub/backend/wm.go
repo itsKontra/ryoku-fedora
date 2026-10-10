@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	wm "ryoku-wm"
@@ -13,7 +12,7 @@ import (
 // ryoku-hub wm is the neutral compositor-switch backend for the Hub. It answers
 // two questions and mutates nothing: which providers exist and their state
 // (list), and what a switch to one would cost (preview). The switch itself is
-// `ryoku wm use <name>`, a reversible pacman transaction the Hub launches, so
+// `ryoku wm use <name>`, a reversible dnf transaction the Hub launches, so
 // there is never a second package path with different rollback semantics.
 //
 //	wm list             every provider: name, package, installed, active, caps
@@ -36,8 +35,6 @@ func runWm(args []string) error {
 		return fmt.Errorf("wm needs list|preview")
 	}
 }
-
-func wmPackage(name string) string { return "ryoku-desktop-" + name }
 
 // wmDeployed reports whether a provider works without its package: its binary
 // answers caps and its config tree exists. Both must hold, since a provider
@@ -76,9 +73,9 @@ func wmList() error {
 	for _, name := range wm.Providers() {
 		p := wmProvider{
 			Name:      name,
-			Package:   wmPackage(name),
+			Package:   wm.VariantPackage(name),
 			ConfigDir: wm.ConfigDir(name),
-			Installed: pkgInstalled(wmPackage(name)),
+			Installed: pkgInstalled(wm.VariantPackage(name)),
 			Deployed:  wmDeployed(name),
 			Active:    name == active,
 		}
@@ -129,10 +126,10 @@ func wmPreview(name string) error {
 	out := wmPreviewReport{
 		Target:       name,
 		Active:       wm.Detect().Name,
-		Package:      wmPackage(name),
+		Package:      wm.VariantPackage(name),
 		ConfigDir:    wm.ConfigDir(name),
-		Installed:    pkgInstalled(wmPackage(name)),
-		Available:    pkgAvailable(wmPackage(name)),
+		Installed:    pkgInstalled(wm.VariantPackage(name)),
+		Available:    wm.PackageAvailable(wm.VariantPackage(name)),
 		Deployed:     wmDeployed(name),
 		KeybindCount: storeKeybindCount(store),
 		Unhonored:    []wm.Unhonored{},
@@ -148,7 +145,7 @@ func wmPreview(name string) error {
 		}
 	}
 	// What leaving the active compositor reclaims. Computed for the outgoing
-	// compositor, not the target, and best-effort: a box without pacman (or with
+	// compositor, not the target, and best-effort: a box without rpm (or with
 	// no active compositor) simply carries no reclaim block and the sheet reads
 	// that as nothing to remove.
 	if out.Active != "" && out.Active != name {
@@ -167,11 +164,6 @@ func wmKnown(name string) bool {
 	}
 	return false
 }
-
-// pkgAvailable reports whether a package can be installed from a synced repo
-// (pacman -Si succeeds), so a target on a channel that does not carry it yet is
-// shown as unavailable instead of a switch that would fail at the transaction.
-func pkgAvailable(pkg string) bool { return exec.Command("pacman", "-Si", pkg).Run() == nil }
 
 // storeKeybindCount is the neutral keybind carry-over: the count `ryoku wm use`
 // prints, so the sheet says the same number. Zero when the store or field is

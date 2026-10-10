@@ -1,22 +1,24 @@
 package wm
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
 // The removal set is the one computation a switch can break a machine with, so
-// it is pinned across the four cases that matter: a satellite the incoming
-// compositor also uses stays, a package a surviving package needs stays, a
-// package only the outgoing compositor uses goes, and a box with nothing
-// installed reclaims nothing and says so.
+// it is pinned at two levels: the orchestration (shared satellites stay, a
+// target a survivor needs stays, the rest goes with its unused libraries) over a
+// modelled planner, and the dnf planner itself over transcripts captured from
+// dnf5 on a Fedora 44 Hyprland box.
 
-// reclaimEnv swaps the pacman seams for a hand-built model and restores them.
+// reclaimEnv swaps the planner seam for a hand-built model and restores it.
 type reclaimEnv struct {
 	packages map[string][]string // provider -> declared packages
-	// plan models `pacman -Rs` for a target list: names[t] is what removing t
-	// alone would drop (t plus its private orphans), and needs[t] is the
-	// surviving package that keeps t installed, if any.
+	// private[t] is what removing t drops besides t (its unused libraries),
+	// and needs[t] is the surviving package that keeps t installed, if any.
 	private map[string][]string
 	needs   map[string]string
 	size    map[string]int64
@@ -41,7 +43,7 @@ func (e reclaimEnv) install(t *testing.T) {
 		}
 		return total, nil
 	}
-	removalOnce = func(targets []string) (set, blocked []string, err error) {
+	removalOnce = func(_ string, targets []string) (set, blocked []string, err error) {
 		for _, t := range targets {
 			if n := e.needs[t]; n != "" && !contains(targets, n) {
 				blocked = append(blocked, t)
@@ -93,7 +95,7 @@ func TestReclaimKeepsSatelliteSharedWithIncoming(t *testing.T) {
 		t.Errorf("shared-portal must stay: %v", rs.Packages)
 	}
 	if !contains(rs.Packages, "out-core") || !contains(rs.Packages, "out-lib") {
-		t.Errorf("out-core and its orphan must go: %v", rs.Packages)
+		t.Errorf("out-core and its unused library must go: %v", rs.Packages)
 	}
 	if rs.Size != 150 {
 		t.Errorf("size = %d, want 150", rs.Size)
@@ -110,7 +112,6 @@ func TestReclaimKeepsPackageASurvivorNeeds(t *testing.T) {
 			"out-core":   nil,
 			"out-portal": nil,
 		},
-		// a surviving app still needs out-portal, so pacman refuses to remove it
 		needs: map[string]string{"out-portal": "some-app"},
 		size:  map[string]int64{"out-core": 200, "out-portal": 80},
 	}.install(t)
@@ -119,11 +120,8 @@ func TestReclaimKeepsPackageASurvivorNeeds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if contains(rs.Packages, "out-portal") {
-		t.Errorf("out-portal is needed by a survivor and must stay: %v", rs.Packages)
-	}
-	if contains(rs.Targets, "out-portal") {
-		t.Errorf("out-portal must be dropped from the named targets: %v", rs.Targets)
+	if contains(rs.Packages, "out-portal") || contains(rs.Targets, "out-portal") {
+		t.Errorf("out-portal is needed by a survivor and must stay: %+v", rs)
 	}
 	if !contains(rs.Packages, "out-core") {
 		t.Errorf("out-core must still be removed: %v", rs.Packages)
@@ -133,41 +131,13 @@ func TestReclaimKeepsPackageASurvivorNeeds(t *testing.T) {
 	}
 }
 
-func TestReclaimRemovesOutgoingOnlyPackage(t *testing.T) {
-	reclaimEnv{
-		packages: map[string][]string{
-			"out": {"out-core"},
-			"in":  {"in-core"},
-		},
-		private: map[string][]string{
-			"out-core": {"out-lib"},
-		},
-		size: map[string]int64{"out-core": 300, "out-lib": 25},
-	}.install(t)
-
-	rs, err := Reclaim("out", "in")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !rs.Removable {
-		t.Fatal("expected a removable set")
-	}
-	want := []string{"out-core", "out-lib"}
-	if !reflect.DeepEqual(rs.Packages, want) {
-		t.Errorf("packages = %v, want %v", rs.Packages, want)
-	}
-	if rs.Count != 2 || rs.Size != 325 {
-		t.Errorf("count/size = %d/%d, want 2/325", rs.Count, rs.Size)
-	}
-}
-
 func TestReclaimNothingInstalledIsHonestlyEmpty(t *testing.T) {
 	reclaimEnv{
 		packages: map[string][]string{
 			"out": {"out-core", "out-portal"},
 			"in":  {"in-core"},
 		},
-		private: map[string][]string{}, // nothing installed
+		private: map[string][]string{},
 		size:    map[string]int64{},
 	}.install(t)
 
@@ -175,11 +145,8 @@ func TestReclaimNothingInstalledIsHonestlyEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rs.Removable {
+	if rs.Removable || len(rs.Packages) != 0 || rs.Count != 0 || rs.Size != 0 {
 		t.Errorf("nothing is installed, so nothing is removable: %+v", rs)
-	}
-	if len(rs.Packages) != 0 || rs.Count != 0 || rs.Size != 0 {
-		t.Errorf("empty set expected, got %+v", rs)
 	}
 }
 
@@ -187,7 +154,7 @@ func TestReclaimNothingInstalledIsHonestlyEmpty(t *testing.T) {
 // clean, so a chain of blocked targets still yields the safe remainder.
 func TestRemovalSetDropsEachBlockedTarget(t *testing.T) {
 	blocked := map[string]bool{"a": true, "b": true}
-	plan := func(targets []string) (set, block []string, err error) {
+	plan := func(_ string, targets []string) (set, block []string, err error) {
 		for _, t := range targets {
 			if blocked[t] {
 				block = append(block, t)
@@ -198,22 +165,19 @@ func TestRemovalSetDropsEachBlockedTarget(t *testing.T) {
 		}
 		return append([]string{}, targets...), nil, nil
 	}
-	removed, kept, err := removalSet([]string{"a", "b", "c", "d"}, plan)
+	removed, kept, err := removalSet("in", []string{"a", "b", "c", "d"}, plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(removed, []string{"c", "d"}) {
-		t.Errorf("removed = %v, want [c d]", removed)
-	}
-	if !reflect.DeepEqual(kept, []string{"c", "d"}) {
-		t.Errorf("kept targets = %v, want [c d]", kept)
+	if !reflect.DeepEqual(removed, []string{"c", "d"}) || !reflect.DeepEqual(kept, []string{"c", "d"}) {
+		t.Errorf("removed = %v, kept = %v, want [c d] both", removed, kept)
 	}
 }
 
 // VerifyRemoval is the guard run right before the destructive removal: it must
-// refuse when pacman's live plan no longer matches the reviewed set.
+// refuse when dnf's live plan no longer matches the reviewed set.
 func TestVerifyRemovalRefusesOnDivergence(t *testing.T) {
-	rs := ReclaimSet{Outgoing: "out", Targets: []string{"out-core"}, Packages: []string{"out-core", "out-lib"}, Removable: true}
+	rs := ReclaimSet{Outgoing: "out", Incoming: "in", Targets: []string{"out-core"}, Packages: []string{"out-core", "out-lib"}, Removable: true}
 
 	cases := []struct {
 		name string
@@ -230,7 +194,12 @@ func TestVerifyRemovalRefusesOnDivergence(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			old := removalOnce
 			t.Cleanup(func() { removalOnce = old })
-			removalOnce = func([]string) (set, blocked []string, err error) { return c.set, c.blk, nil }
+			removalOnce = func(incoming string, _ []string) (set, blocked []string, err error) {
+				if incoming != "in" {
+					t.Errorf("verify planned for %q, want the reviewed incoming", incoming)
+				}
+				return c.set, c.blk, nil
+			}
 			err := VerifyRemoval(rs)
 			if c.ok && err != nil {
 				t.Errorf("expected pass, got %v", err)
@@ -248,29 +217,157 @@ func TestVerifyRemovalSkipsEmptySet(t *testing.T) {
 	}
 }
 
-// pacman writes its refusal lines to stdout, not stderr. The parser must read
-// the stream the refusals actually arrive on, or a packaged box -- where the
-// variant package owns every satellite -- sees "nothing to remove" and the
-// switch loses its keep-or-remove choice. This is the seam the mocked tests
-// cannot catch, so it is pinned on the real transcript shape.
-func TestParseRemovalPlanReadsStdoutRefusals(t *testing.T) {
-	targets := []string{"ryoku-desktop-hyprland", "hyprland"}
-	stdout := ":: removing hyprland breaks dependency 'hyprland' required by ryoku-desktop-hyprland\n" +
-		":: removing ryoku-desktop-hyprland breaks dependency 'ryoku-desktop-compositor' required by ryoku-desktop\n"
-	_, blocked := parseRemovalPlan(stdout, "", targets)
-	if len(blocked) != 2 {
-		t.Fatalf("blocked = %v, want both targets", blocked)
+func readTestdata(t *testing.T, name string) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}
+
+var hyprTargets = []string{"ryoku-desktop-hyprland", "hyprland", "hyprpolkitagent", "xdg-desktop-portal-hyprland", "hyprpicker"}
+
+// The switch plan installs the incoming variant and removes the outgoing one in
+// one transaction. Only the Removing sections count: the incoming install, the
+// upgrades it drags in and their "replacing" lines are not removals.
+func TestParseRemovalPlanSwitchTranscript(t *testing.T) {
+	plan := parseRemovalPlan(readTestdata(t, "dnf5-switch-plan.txt"))
+	for _, want := range append([]string{"aquamarine", "hyprcursor", "hyprgraphics", "hyprwire", "uwsm"}, hyprTargets...) {
+		if !contains(plan.removed, want) {
+			t.Errorf("%s missing from the removed set", want)
+		}
+	}
+	for _, not := range []string{"ryoku-desktop-niri", "niri", "ryoku-desktop", "ryogami", "gtk-layer-shell", "replacing", "Removing:"} {
+		if contains(plan.removed, not) {
+			t.Errorf("%s is not a removal", not)
+		}
+	}
+	if len(plan.removed) != 30 {
+		t.Errorf("removed %d packages, want the 30 dnf's summary counts", len(plan.removed))
+	}
+	if deps := plan.dependents(hyprTargets); len(deps) != 0 {
+		t.Errorf("dependents = %v, want none once the incoming variant provides the virtual", deps)
 	}
 }
 
-func TestParseRemovalPlanCleanPrintList(t *testing.T) {
-	targets := []string{"hyprland"}
-	stdout := "hyprland\nhyprcursor\naquamarine\n"
-	set, blocked := parseRemovalPlan(stdout, "", targets)
-	if blocked != nil {
-		t.Fatalf("blocked = %v, want none", blocked)
+func TestParseRemovalPlanDependentsTranscript(t *testing.T) {
+	plan := parseRemovalPlan(readTestdata(t, "dnf5-remove-dependents.txt"))
+	want := []string{"ryoku-desktop", "ryoku-desktop-hyprland", "ryotunes"}
+	if got := plan.dependents([]string{"hyprpicker"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("dependents = %v, want %v", got, want)
 	}
-	if !reflect.DeepEqual(set, []string{"hyprland", "hyprcursor", "aquamarine"}) {
-		t.Errorf("set = %v", set)
+	if !contains(plan.removed, "hyprpicker") || !contains(plan.removed, "webkit2gtk4.1") {
+		t.Errorf("targets and unused dependencies belong to the removed set: %v", plan.removed)
+	}
+}
+
+func TestParseRemovalPlanNothingToDo(t *testing.T) {
+	plan := parseRemovalPlan(readTestdata(t, "dnf5-remove-nothing.txt"))
+	if len(plan.removed) != 0 || len(plan.dependent) != 0 {
+		t.Errorf("nothing to do parsed as %+v", plan)
+	}
+}
+
+// plannerEnv swaps the dnf and rpm seams under hostRemovalOnce.
+func plannerEnv(t *testing.T, plan func(targets []string) string, provides map[string][]string, requires map[string][]string) {
+	t.Helper()
+	oldRun, oldProv, oldReq := runPlan, targetProvides, packageRequires
+	t.Cleanup(func() { runPlan, targetProvides, packageRequires = oldRun, oldProv, oldReq })
+	runPlan = func(_ string, targets []string) (string, error) { return plan(targets), nil }
+	targetProvides = func([]string) (map[string][]string, error) { return provides, nil }
+	packageRequires = func(names []string) ([]string, error) {
+		var out []string
+		for _, n := range names {
+			out = append(out, requires[n]...)
+		}
+		return out, nil
+	}
+}
+
+// The libraries only the outgoing compositor used go with it, which is what
+// makes the reclaimed size worth reporting.
+func TestHostRemovalOnceIncludesUnusedLibraries(t *testing.T) {
+	transcript := readTestdata(t, "dnf5-switch-plan.txt")
+	plannerEnv(t, func([]string) string { return transcript }, nil, nil)
+	set, blocked, err := hostRemovalOnce("niri", hyprTargets)
+	if err != nil || blocked != nil {
+		t.Fatalf("set err = %v, blocked = %v", err, blocked)
+	}
+	for _, lib := range []string{"aquamarine", "hyprcursor", "hyprgraphics", "hyprland-qt-support"} {
+		if !contains(set, lib) {
+			t.Errorf("unused library %s missing from %v", lib, set)
+		}
+	}
+}
+
+// A package the user did not target that needs one (a plugin, a -devel
+// package) is a survivor: the target it requires is blocked, never cascaded.
+func TestHostRemovalOnceDependentBlocksTarget(t *testing.T) {
+	transcript := func(targets []string) string {
+		var b strings.Builder
+		b.WriteString("Package Arch Version Repository Size\nRemoving:\n")
+		for _, p := range targets {
+			b.WriteString(" " + p + " x86_64 0:1-1.fc44 repo 1.0 MiB\n")
+		}
+		if contains(targets, "hyprland") {
+			b.WriteString("Removing dependent packages:\n hyprland-devel x86_64 0:1-1.fc44 repo 1.0 MiB\n")
+		}
+		b.WriteString("Removing unused dependencies:\n aquamarine x86_64 0:1-1.fc44 repo 1.0 MiB\n\nTransaction Summary:\n Removing: 3 packages\n")
+		return b.String()
+	}
+	plannerEnv(t, transcript,
+		map[string][]string{"hyprland": {"hyprland", "hyprland(x86-64)", "/usr/bin/Hyprland"}},
+		map[string][]string{"hyprland-devel": {"hyprland(x86-64)", "pkgconfig"}})
+
+	_, blocked, err := hostRemovalOnce("niri", []string{"hyprland", "hyprpicker"})
+	if err != nil || !reflect.DeepEqual(blocked, []string{"hyprland"}) {
+		t.Fatalf("blocked = %v, err = %v; want hyprland blocked", blocked, err)
+	}
+	removed, kept, err := removalSet("niri", []string{"hyprland", "hyprpicker"}, hostRemovalOnce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(kept, []string{"hyprpicker"}) || contains(removed, "hyprland-devel") || contains(removed, "hyprland") {
+		t.Errorf("removed = %v, kept = %v; hyprland and its dependent must stay", removed, kept)
+	}
+}
+
+// A dependent that maps to no target cannot be resolved by dropping one, so the
+// plan refuses rather than reporting a set dnf would exceed.
+func TestHostRemovalOnceUnmappedDependentRefuses(t *testing.T) {
+	transcript := readTestdata(t, "dnf5-remove-dependents.txt")
+	plannerEnv(t, func([]string) string { return transcript }, map[string][]string{}, map[string][]string{})
+	if _, _, err := hostRemovalOnce("niri", []string{"hyprpicker"}); err == nil {
+		t.Error("an unmapped dependent must refuse the plan")
+	}
+}
+
+// The planner reads English section headers, so dnf must run in the C locale
+// whatever the user's session sets.
+func TestDnfCommandForcesCLocale(t *testing.T) {
+	t.Setenv("LC_ALL", "de_DE.UTF-8")
+	t.Setenv("LANG", "de_DE.UTF-8")
+	cmd := dnfCommand("remove", "--assumeno", "x")
+	last := ""
+	for _, kv := range cmd.Env {
+		if v, ok := strings.CutPrefix(kv, "LC_ALL="); ok {
+			last = v
+		}
+	}
+	if last != "C" {
+		t.Errorf("effective LC_ALL = %q, want C", last)
+	}
+}
+
+// rpm prints "%{SIZE}" one per line; a non-numeric line must fail rather than
+// undercount the reclaimed space.
+func TestSumSizes(t *testing.T) {
+	total, err := sumSizes("1024\n\n2048\n")
+	if err != nil || total != 3072 {
+		t.Errorf("sumSizes = %d, %v; want 3072", total, err)
+	}
+	if _, err := sumSizes("package foo is not installed\n"); err == nil {
+		t.Error("a non-numeric line must fail")
 	}
 }
