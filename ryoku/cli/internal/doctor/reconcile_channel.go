@@ -80,7 +80,7 @@ func reconcileRepoPointer(checkOnly bool) recResult {
 	// recorded RYOKU_CHANNEL). A box migrated onto packages carries no tracked
 	// channel and left its clone on disk deliberately; re-adopting it would undo
 	// the migration.
-	if sys.TrackedChannel() != "" && !isRyokuTree(recorded) && isRyokuTree(track) {
+	if sys.TrackedChannel() != "" && !sys.IsRyokuTree(recorded) && sys.IsRyokuTree(track) {
 		if checkOnly {
 			what := i18n.T("missing")
 			if recorded != "" {
@@ -102,19 +102,6 @@ func reconcileRepoPointer(checkOnly bool) recResult {
 		return okRes(i18n.T("update-checkout pointer and state dir are healthy"))
 	}
 	return fixedRes(i18n.T("%s; run `ryoku update` to advance"), strings.Join(actions, "; "))
-}
-
-// isRyokuTree reports whether p is a git work tree whose origin is a
-// ryoku-fedora remote, so a stray unrelated repo is never adopted as the channel.
-func isRyokuTree(p string) bool {
-	if p == "" {
-		return false
-	}
-	if _, err := sys.RunOut("git", "-C", p, "rev-parse", "--git-dir"); err != nil {
-		return false
-	}
-	url, err := sys.RunOut("git", "-C", p, "remote", "get-url", "origin")
-	return err == nil && strings.Contains(url, "ryoku-fedora")
 }
 
 // desymlinkStateDir turns a symlinked state dir into a real one, migrating the

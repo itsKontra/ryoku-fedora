@@ -41,13 +41,24 @@ func ResolveRepo() string {
 	if TrackedChannel() == "" {
 		return ""
 	}
-	track := filepath.Join(Home(), "ryoku-fedora")
-	if _, err := RunOut("git", "-C", track, "rev-parse", "--git-dir"); err == nil {
-		if url, e := RunOut("git", "-C", track, "remote", "get-url", "origin"); e == nil && strings.Contains(url, "ryoku-fedora") {
-			return track
-		}
+	if track := filepath.Join(Home(), "ryoku-fedora"); IsRyokuTree(track) {
+		return track
 	}
 	return ""
+}
+
+// IsRyokuTree reports whether dir is a git work tree whose origin is a
+// ryoku-fedora remote, so a stray unrelated repo is never adopted as the
+// update checkout.
+func IsRyokuTree(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	if _, err := RunOut("git", "-C", dir, "rev-parse", "--git-dir"); err != nil {
+		return false
+	}
+	url, err := RunOut("git", "-C", dir, "remote", "get-url", "origin")
+	return err == nil && strings.Contains(url, "ryoku-fedora")
 }
 
 // TrackedChannel is the update channel `ryoku track` recorded in

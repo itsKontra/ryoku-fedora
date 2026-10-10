@@ -83,7 +83,7 @@ func TestReconcileUpdateChannelSwitchesToTrackedBranch(t *testing.T) {
 }
 
 // mkRyoku makes a git work tree at dst whose origin path contains
-// "ryoku-fedora", so isRyokuTree accepts it.
+// "ryoku-fedora", so sys.IsRyokuTree accepts it.
 func mkRyoku(t *testing.T, root, dst string) {
 	t.Helper()
 	origin := filepath.Join(root, "ryoku-fedora.git")

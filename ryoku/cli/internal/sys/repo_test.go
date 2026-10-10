@@ -124,3 +124,26 @@ func TestResolveRepoFallbackNeedsTracking(t *testing.T) {
 		t.Fatalf("ResolveRepo with tracking = %q, want %q (self-heal a lost pointer)", got, clone)
 	}
 }
+
+// IsRyokuTree adopts only a git work tree whose origin is a ryoku-fedora
+// remote: never an empty path, a plain directory or an unrelated repo.
+func TestIsRyokuTree(t *testing.T) {
+	root := t.TempDir()
+	fedora := filepath.Join(root, "ryoku-fedora")
+	gitInitRyoku(t, fedora)
+	other := filepath.Join(root, "other")
+	gitInitRyoku(t, other)
+	cmd := exec.Command("git", "-C", other, "remote", "set-url", "origin", "https://example.com/unrelated.git")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("set-url: %v\n%s", err, out)
+	}
+	plain := filepath.Join(root, "plain")
+	if err := os.MkdirAll(plain, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for dir, want := range map[string]bool{fedora: true, other: false, plain: false, "": false} {
+		if got := IsRyokuTree(dir); got != want {
+			t.Errorf("IsRyokuTree(%q) = %v, want %v", dir, got, want)
+		}
+	}
+}
