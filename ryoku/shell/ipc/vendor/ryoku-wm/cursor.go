@@ -9,8 +9,9 @@ package wm
 // CursorThemeDynamic is the stored sentinel for the wallpaper-following pick.
 const CursorThemeDynamic = "DYNAMIC"
 
-// CursorThemeMaterial is the concrete theme behind the sentinel. The
-// ryoku-cursor-material package installs it and its recolor tool.
+// CursorThemeMaterial is the concrete theme behind the sentinel.
+// ryoku-cursor-material-recolor builds it into ~/.local/share/icons from the
+// Bibata SVG sources.
 const CursorThemeMaterial = "Bibata-Material-Ryoku"
 
 // ResolveCursorTheme maps the stored theme onto one installed on disk.
