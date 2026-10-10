@@ -759,10 +759,10 @@ Item {
             pushPulse("win", -1)
         } else if (kind === "monsweep" || kind === "sweep") {
             pushPulse("monsweep", arg === "-1" ? -1 : 1, { life: 5200, gain: 0.82, count: root.maxSweepParticleCount7 })
-        } else if (kind === "pacman" || kind === "packages") {
+        } else if (kind === "dnf" || kind === "packages") {
             var parsedN = parseInt(arg || "3")
             var n = isFinite(parsedN) ? Math.max(1, parsedN) : 3
-            pushText(n + (n === 1 ? " PACKAGE" : " PACKAGES") + " CHANGED", "PACMAN", 1, "long")
+            pushText(n + (n === 1 ? " PACKAGE" : " PACKAGES") + " CHANGED", "DNF", 1, "long")
         } else if (kind === "ai" || kind === "model") {
             return
         } else if (kind === "urgent") {
@@ -1027,22 +1027,28 @@ Item {
         else if (aiOc7 < aiQuotaReset7) aiOcHot = false
     }
 
-    // pacman transaction finished (streaming log tail - no helper script)
+    // dnf transaction finished (streaming log tail - no helper script). An
+    // upgrade logs an install of the new build and an uninstall of the old one,
+    // so installs are the count; uninstalls count only for a pure removal.
     Process {
-        id: pacTail
+        id: dnfTail
         running: root.active && root.reactorMode7 && root.ownsGlobalHelpers7
-        command: ["bash", "-c", "if [ -f /var/log/pacman.log ]; then exec tail -n 0 -F /var/log/pacman.log; elif [ -f /var/log/dnf5.log ]; then exec tail -n 0 -F /var/log/dnf5.log; elif [ -f /var/log/dnf.log ]; then exec tail -n 0 -F /var/log/dnf.log; else sleep infinity; fi 2>/dev/null"]
-        property int pkgN: 0
-        onRunningChanged: if (!running) pkgN = 0
+        command: ["bash", "-c", "if [ -f /var/log/dnf5.log ]; then exec tail -n 0 -F /var/log/dnf5.log; else sleep infinity; fi 2>/dev/null"]
+        property int installN: 0
+        property int removeN: 0
+        onRunningChanged: if (!running) { installN = 0; removeN = 0 }
         stdout: SplitParser {
             onRead: function(line) {
-                if (line.indexOf("transaction started") >= 0) pacTail.pkgN = 0
-                else if (line.indexOf("] upgraded ") >= 0
-                         || line.indexOf("] installed ") >= 0
-                         || line.indexOf("] removed ") >= 0) pacTail.pkgN++
-                else if (line.indexOf("transaction completed") >= 0 && pacTail.pkgN > 0)
-                    root.pushText(pacTail.pkgN + (pacTail.pkgN === 1 ? " PACKAGE" : " PACKAGES") + " CHANGED",
-                                  "PACMAN", 1, "long")
+                if (line.indexOf("DNF5 launched") >= 0) { dnfTail.installN = 0; dnfTail.removeN = 0 }
+                else if (line.indexOf("RPM callback install stop ") >= 0) dnfTail.installN++
+                else if (line.indexOf("RPM callback uninstall stop ") >= 0) dnfTail.removeN++
+                else if (line.indexOf("DNF5 finished") >= 0) {
+                    var n = dnfTail.installN > 0 ? dnfTail.installN : dnfTail.removeN
+                    dnfTail.installN = 0
+                    dnfTail.removeN = 0
+                    if (n > 0)
+                        root.pushText(n + (n === 1 ? " PACKAGE" : " PACKAGES") + " CHANGED", "DNF", 1, "long")
+                }
             }
         }
     }
@@ -1504,7 +1510,7 @@ Item {
                 //   window open/close  -> subtle clock-side pulse in/out
                 //   monitor focus      -> soft sweep on that bar only
                 //   workspace/fullscreen/theme/config reload/notification/track
-                //   DND/mute/Voxtype/update/pacman -> text swarm
+                //   DND/mute/Voxtype/update/dnf -> text swarm
                 //   warning states     -> recurring text while true:
                 //     OFFLINE, BATTERY, AI QUOTA, URGENT.
                 // Event pulses decay; the ambient field keeps a slow idle loop alive.
