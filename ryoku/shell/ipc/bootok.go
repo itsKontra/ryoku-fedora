@@ -9,11 +9,12 @@ import (
 	"time"
 )
 
-// bootOKDir is where a session records that the desktop came up in this boot:
-// a sticky, world-writable directory the ryoku package ships through
-// tmpfiles, so an unprivileged session can write its own marker and the
-// root-side boot guard (ryoku boot-guard, ryoku-boot-guard.service) can read
-// it on the next boot. One file per uid; the content is the boot id.
+// bootOKDir is where a session records what it reached in this boot: a
+// sticky, world-writable directory the ryoku package ships through tmpfiles,
+// so an unprivileged session can write its own markers and the root-side boot
+// guard (ryoku boot-guard, ryoku-boot-guard.service) can read them on the next
+// boot. Per uid, session-<uid> says a Ryoku session started and ok-<uid> that
+// its shell stayed up; the content is the boot id.
 const bootOKDir = "/var/lib/ryoku/boot"
 
 // bootOKSettle is how long the shell must stay up before the boot counts as
@@ -21,17 +22,25 @@ const bootOKDir = "/var/lib/ryoku/boot"
 // login followed by a quick logout still records it.
 const bootOKSettle = 45 * time.Second
 
-// recordBootOK waits for the shell to prove itself and writes the marker for
-// this boot. Best effort: a missing directory (an older package) or an
-// unwritable one leaves the guard without a signal, which it treats as an
-// unproven boot, never as a failure of its own.
+// recordBootOK marks this boot as one that reached a Ryoku session, then waits
+// for the shell to prove itself and marks the boot good. The guard counts only
+// boots with the session marker as failed, so a greeter left idle, another
+// desktop or a headless boot never reads as a broken update. Best effort: a
+// missing directory (an older package) or an unwritable one leaves the guard
+// without a signal, which it treats as an unproven boot, never as a failure of
+// its own.
 func recordBootOK(exited <-chan struct{}) {
+	writeBootMarker("session")
 	select {
 	case <-exited:
 		return // died inside the window; not a good boot
 	case <-time.After(bootOKSettle):
 	}
 	markGrubBootSuccess()
+	writeBootMarker("ok")
+}
+
+func writeBootMarker(kind string) {
 	id, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
 	if err != nil {
 		return
@@ -39,7 +48,7 @@ func recordBootOK(exited <-chan struct{}) {
 	if st, err := os.Stat(bootOKDir); err != nil || !st.IsDir() {
 		return
 	}
-	path := filepath.Join(bootOKDir, fmt.Sprintf("ok-%d", os.Getuid()))
+	path := filepath.Join(bootOKDir, fmt.Sprintf("%s-%d", kind, os.Getuid()))
 	_ = os.WriteFile(path, []byte(strings.TrimSpace(string(id))+"\n"), 0o644)
 }
 

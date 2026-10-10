@@ -3,7 +3,6 @@ package sys
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -11,14 +10,6 @@ import (
 // ReleaseFile is the package-owned marker ryoku-desktop ships naming the
 // release a box runs; a var for tests.
 var ReleaseFile = "/etc/ryoku-release"
-
-// the shape bin/ryoku-release tags: a core version with an optional rc counter.
-// a COPR build past a release (v0.73.0-5-gabc1234, git describe) is not one.
-var releaseTagRe = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$`)
-
-// IsReleaseTag reports whether s names a tagged release (v0.73.0,
-// v1.0.0-rc.1) rather than a rolling build between releases.
-func IsReleaseTag(s string) bool { return releaseTagRe.MatchString(s) }
 
 // PackagedChannel is the channel a packaged box follows: the channel its
 // RyokuCOPR baseurl names, "" when there is no repo file or it points at a

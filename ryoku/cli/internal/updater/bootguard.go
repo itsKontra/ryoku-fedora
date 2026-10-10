@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,29 +18,36 @@ import (
 //
 //   - stage2 arms it: pendingFile records the release the box ran before, the
 //     one it moved to, the pre-update snapshot, and the boot the update ran in.
-//   - the shell daemon records a good boot: once the shell has stayed up past
-//     its crash window it writes bootOKDir/ok-<uid> with the boot id.
+//   - the shell daemon records each boot that reached a Ryoku session: it
+//     writes bootOKDir/session-<uid> with the boot id when it starts the
+//     shell, and bootOKDir/ok-<uid> once the shell has stayed up past its
+//     crash window.
 //   - ryoku-boot-guard.service runs `ryoku boot-guard` early in every boot,
 //     as root. With a marker present and no ok file from a boot after the
-//     update, it counts the boot; on the third such boot it sends the next
-//     boot, once, to the pre-update snapshot's read-only entry and leaves a
-//     notice the doctor surfaces.
+//     update, it counts the previous boot if a Ryoku session started in it;
+//     on the third such boot it sends the next boot, once, to the pre-update
+//     snapshot's read-only entry and leaves a notice the doctor surfaces. A
+//     boot no one logged into Ryoku from (a greeter left idle, another
+//     desktop, a headless boot) proves nothing either way and is not counted.
 //
 // Nothing here needs the user session, so it works when the session is what
 // broke.
 const (
 	pendingFile = "/var/lib/ryoku/update-pending.json"
-	bootOKDir   = "/var/lib/ryoku/boot"
 	noticeFile  = "/var/lib/ryoku/boot/notice.json"
 )
 
+// bootOKDir holds the session's boot markers; a var for tests.
+var bootOKDir = "/var/lib/ryoku/boot"
+
 type pendingUpdate struct {
-	From      string `json:"from"`
-	To        string `json:"to"`
-	Snapshot  string `json:"snapshot,omitempty"`
-	ArmedBoot string `json:"armedBoot"`
-	Boots     int    `json:"boots"`
-	At        string `json:"at"`
+	From      string   `json:"from"`
+	To        string   `json:"to"`
+	Snapshot  string   `json:"snapshot,omitempty"`
+	ArmedBoot string   `json:"armedBoot"`
+	Boots     int      `json:"boots"`
+	Counted   []string `json:"counted,omitempty"` // the boot ids already counted
+	At        string   `json:"at"`
 }
 
 // bootNotice is what the doctor shows after the guard acted.
@@ -62,26 +70,28 @@ func bootID() string {
 
 // armBootGuard is called by stage2 on a packaged box once the packages are
 // in. RYOKU_UPDATE_FROM carries the release the first stage read before dnf
-// ran; the marker is written only when the box moves off a tagged release.
-// Rolling COPR builds change the release string on nearly every update, and
-// the guard reads any boot that never keeps the shell up (a greeter left idle,
-// another desktop, a headless boot) as a failure, so arming there would send
-// healthy boxes to a snapshot.
+// ran; the marker is written whenever the release changes, a rolling COPR
+// build included, since only boots that reached a Ryoku session count.
 func armBootGuard(snapshot string) {
 	if sys.ResolveRepo() != "" {
 		return
 	}
 	from := strings.TrimSpace(os.Getenv("RYOKU_UPDATE_FROM"))
 	to := sys.ReadRelease().Release
-	if from == "" || to == "" || from == to || !sys.IsReleaseTag(from) {
+	if from == "" || to == "" || from == to {
 		return
 	}
 	p := pendingUpdate{From: from, To: to, Snapshot: snapshot, ArmedBoot: bootID(), At: time.Now().UTC().Format(time.RFC3339)}
 	b, _ := json.MarshalIndent(p, "", "  ")
-	// earlier ok files would read as proof of a boot after this update; clear
-	// them so only a boot from here on counts.
-	if matches, _ := filepath.Glob(filepath.Join(bootOKDir, "ok-*")); len(matches) > 0 {
-		_ = sys.Sudo(append([]string{"rm", "-f"}, matches...)...)
+	// earlier markers would read as boots after this update; clear them so
+	// only a boot from here on counts.
+	var markers []string
+	for _, kind := range []string{"ok-*", "session-*"} {
+		m, _ := filepath.Glob(filepath.Join(bootOKDir, kind))
+		markers = append(markers, m...)
+	}
+	if len(markers) > 0 {
+		_ = sys.Sudo(append([]string{"rm", "-f"}, markers...)...)
 	}
 	if err := sys.WriteRootFile(pendingFile, string(b)+"\n", "0644"); err != nil {
 		fmt.Fprintf(os.Stderr, i18n.T("note: boot guard not armed: %v\n"), err)
@@ -114,7 +124,13 @@ func BootGuard(args []string) error {
 		fmt.Printf(i18n.T("boot guard: %s came up after the update; disarmed\n"), p.To)
 		return disarmBootGuard("")
 	}
+	failed := sessionBoots(p, bootID())
+	if len(failed) == 0 {
+		fmt.Printf(i18n.T("boot guard: no Ryoku session since the last boot; %s -> %s still pending\n"), p.From, p.To)
+		return nil
+	}
 	p.Boots++
+	p.Counted = append(p.Counted, failed...)
 	b, _ := json.MarshalIndent(p, "", "  ")
 	_ = os.WriteFile(pendingFile, append(b, '\n'), 0o644)
 	fmt.Printf(i18n.T("boot guard: boot %d after %s -> %s without the desktop coming up\n"), p.Boots, p.From, p.To)
@@ -127,17 +143,42 @@ func BootGuard(args []string) error {
 // provenAfter reports whether any session recorded a good boot other than
 // the one the update ran in.
 func provenAfter(armedBoot string) bool {
-	matches, _ := filepath.Glob(filepath.Join(bootOKDir, "ok-*"))
+	for _, id := range markerBoots("ok-*") {
+		if id != armedBoot {
+			return true
+		}
+	}
+	return false
+}
+
+// sessionBoots is the boots a Ryoku session started in since the update and
+// that are not counted yet: not the boot the update ran in, not this one (the
+// guard runs before any login, so a marker naming it is a rerun by hand).
+func sessionBoots(p pendingUpdate, current string) []string {
+	var out []string
+	for _, id := range markerBoots("session-*") {
+		if id == p.ArmedBoot || id == current || slices.Contains(p.Counted, id) || slices.Contains(out, id) {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
+}
+
+// markerBoots reads the boot ids the markers matching pattern record.
+func markerBoots(pattern string) []string {
+	matches, _ := filepath.Glob(filepath.Join(bootOKDir, pattern))
+	var ids []string
 	for _, m := range matches {
 		b, err := os.ReadFile(m)
 		if err != nil {
 			continue
 		}
-		if id := strings.TrimSpace(string(b)); id != "" && id != armedBoot {
-			return true
+		if id := strings.TrimSpace(string(b)); id != "" {
+			ids = append(ids, id)
 		}
 	}
-	return false
+	return ids
 }
 
 func disarmBootGuard(why string) error {
