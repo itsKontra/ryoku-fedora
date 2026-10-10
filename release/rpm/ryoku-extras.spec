@@ -28,6 +28,9 @@ PY
 mkdir -p stage/usr/share/ryoku
 mv stage/usr/state/ryoku/extras stage/usr/share/ryoku/extras
 rm -r stage/usr/state
+# rtgiskard/bibata_cursor is GPL-3.0-or-later but its tarball carries no
+# license text; ship the same GPLv3 text with the recolour sources.
+install -Dm644 LICENSE stage/usr/share/licenses/bibata_cursor/LICENSE
 
 %install
 cp -a stage/. %{buildroot}/
@@ -41,3 +44,4 @@ cp -a stage/. %{buildroot}/
 %{_datadir}/ryoku-cursor-material
 %{_datadir}/ryoku/extras
 %license %{_datadir}/licenses/Bibata/LICENSE
+%license %{_datadir}/licenses/bibata_cursor/LICENSE

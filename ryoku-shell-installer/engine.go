@@ -1084,7 +1084,7 @@ func (e *engine) installDesktopExtras() {
 		e.say("desktop extras require x86_64")
 		return
 	}
-	for _, name := range []string{"matugen", "prowl-agent", "bibata", "space-grotesk", "material-symbols"} {
+	for _, name := range []string{"matugen", "prowl-agent", "bibata", "bibata-source", "space-grotesk", "material-symbols"} {
 		if has(name) && !pathExists(filepath.Join(e.f.homeDir, ".local/state/ryoku/extras", name+".json")) {
 			continue
 		}
