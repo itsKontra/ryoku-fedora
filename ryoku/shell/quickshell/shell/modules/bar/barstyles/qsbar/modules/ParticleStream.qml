@@ -1030,22 +1030,29 @@ Item {
     // dnf transaction finished (streaming log tail - no helper script). An
     // upgrade logs an install of the new build and an uninstall of the old one,
     // so installs are the count; uninstalls count only for a pure removal.
+    // Every line carries its run's "[PID]", and runs interleave (a background
+    // makecache can start and finish inside the user's transaction), so the
+    // counters are kept per PID.
     Process {
         id: dnfTail
         running: root.active && root.reactorMode7 && root.ownsGlobalHelpers7
         command: ["bash", "-c", "if [ -f /var/log/dnf5.log ]; then exec tail -n 0 -F /var/log/dnf5.log; else sleep infinity; fi 2>/dev/null"]
-        property int installN: 0
-        property int removeN: 0
-        onRunningChanged: if (!running) { installN = 0; removeN = 0 }
+        property var runs: ({})
+        onRunningChanged: if (!running) runs = ({})
         stdout: SplitParser {
             onRead: function(line) {
-                if (line.indexOf("DNF5 launched") >= 0) { dnfTail.installN = 0; dnfTail.removeN = 0 }
-                else if (line.indexOf("RPM callback install stop ") >= 0) dnfTail.installN++
-                else if (line.indexOf("RPM callback uninstall stop ") >= 0) dnfTail.removeN++
+                var m = /^\S+ \[(\d+)\] /.exec(line)
+                if (!m) return
+                var pid = m[1]
+                var runs = dnfTail.runs
+                if (line.indexOf("DNF5 launched") >= 0) { runs[pid] = { installN: 0, removeN: 0 }; return }
+                var run = runs[pid]
+                if (!run) return
+                if (line.indexOf("RPM callback install stop ") >= 0) run.installN++
+                else if (line.indexOf("RPM callback uninstall stop ") >= 0) run.removeN++
                 else if (line.indexOf("DNF5 finished") >= 0) {
-                    var n = dnfTail.installN > 0 ? dnfTail.installN : dnfTail.removeN
-                    dnfTail.installN = 0
-                    dnfTail.removeN = 0
+                    var n = run.installN > 0 ? run.installN : run.removeN
+                    delete runs[pid]
                     if (n > 0)
                         root.pushText(n + (n === 1 ? " PACKAGE" : " PACKAGES") + " CHANGED", "DNF", 1, "long")
                 }
