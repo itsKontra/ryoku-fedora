@@ -109,7 +109,18 @@ func toolSystemQuery(ctx context.Context, topic, arg string) string {
 		}
 		return runCapped(ctx, 2048, "sh", "-c", "rpm -qa --nodigest --nosignature | wc -l")
 	case "updates":
-		return runCapped(ctx, 4096, "sh", "-c", "dnf -q check-update 2>/dev/null | head -50 | grep . || echo 'no updates'")
+		out, pending, ok := dnfCheckUpdate(ctx, 8)
+		switch {
+		case !ok:
+			return "error: dnf check-update failed"
+		case !pending:
+			return "no updates"
+		}
+		lines := nonEmptyLines(out)
+		if len(lines) > 50 {
+			lines = append(lines[:50], "...(truncated)")
+		}
+		return strings.Join(lines, "\n")
 	case "service":
 		if arg == "" {
 			return "error: service topic needs a name in arg"

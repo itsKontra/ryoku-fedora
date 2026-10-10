@@ -530,47 +530,90 @@ func diskRows() []string {
 	return rows
 }
 
+// rpmVersion is the installed version-release of pkg, or "". A package that is
+// installed more than once (kernels, installonly sets) prints one line per copy
+// in install order, so the last line is the most recently installed one.
 func rpmVersion(pkg string) string {
-	if out, ok := probe(5, "rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", pkg); ok {
-		return strings.TrimSpace(out)
+	if out, ok := probe(5, "rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}\n", pkg); ok {
+		return lastLine(out)
 	}
 	return ""
 }
 
-// pendingUpdates counts upgradable packages from dnf's cached metadata, so the
-// indexer never waits on the network. dnf check-update exits 100 when updates
-// are pending and 0 when none are; anything else means the count is unknown.
-// Only "name.arch version repo" rows count, so section headings do not.
-func pendingUpdates() (int, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "dnf", "-q", "-C", "check-update").Output()
-	var exitErr *exec.ExitError
-	switch {
-	case err == nil:
-		return 0, true
-	case errors.As(err, &exitErr) && exitErr.ExitCode() == 100:
-		n := 0
-		for _, l := range nonEmptyLines(string(out)) {
-			if len(strings.Fields(l)) == 3 {
-				n++
-			}
-		}
-		return n, true
+func lastLine(s string) string {
+	lines := nonEmptyLines(s)
+	if len(lines) == 0 {
+		return ""
 	}
-	return 0, false
+	return lines[len(lines)-1]
+}
+
+// dnfCheckUpdate runs dnf check-update against cached metadata, so a caller
+// never waits on the network. dnf exits 100 when updates are pending and 0
+// when none are; anything else means the answer is unknown (ok is false).
+func dnfCheckUpdate(ctx context.Context, seconds int) (out string, pending bool, ok bool) {
+	out, code, ran := probeExit(ctx, seconds, "dnf", "-q", "-C", "check-update")
+	switch {
+	case ran && code == 0:
+		return "", false, true
+	case ran && code == 100:
+		return out, true, true
+	}
+	return "", false, false
+}
+
+func pendingUpdates() (int, bool) {
+	out, _, ok := dnfCheckUpdate(context.Background(), 10)
+	if !ok {
+		return 0, false
+	}
+	return countUpdates(out), true
+}
+
+// countUpdates counts the "name.arch version repo" rows of dnf check-update
+// output. Headings ("Upgrades") are not rows, and the "Obsoleting packages"
+// section repeats packages already listed above, so counting stops there.
+func countUpdates(out string) int {
+	n := 0
+	for _, l := range strings.Split(out, "\n") {
+		if strings.HasPrefix(strings.ToLower(l), "obsoleting") {
+			break
+		}
+		if l == "" || l[0] == ' ' || l[0] == '\t' {
+			continue
+		}
+		if len(strings.Fields(l)) == 3 {
+			n++
+		}
+	}
+	return n
 }
 
 // probe runs a command with a timeout, returning its stdout and whether it
-// succeeded. It is the single best-effort exec path for the indexer.
+// succeeded.
 func probe(seconds int, name string, args ...string) (string, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(seconds)*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, name, args...).Output()
-	if err != nil {
+	out, code, ran := probeExit(context.Background(), seconds, name, args...)
+	if !ran || code != 0 {
 		return "", false
 	}
-	return string(out), true
+	return out, true
+}
+
+// probeExit is the single best-effort exec path for the indexer: it runs a
+// command with a timeout and returns its stdout and exit code, with ran false
+// when the command could not start or was killed by the timeout.
+func probeExit(ctx context.Context, seconds int, name string, args ...string) (out string, code int, ran bool) {
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
+	defer cancel()
+	b, err := exec.CommandContext(ctx, name, args...).Output()
+	var exitErr *exec.ExitError
+	switch {
+	case err == nil:
+		return string(b), 0, true
+	case ctx.Err() == nil && errors.As(err, &exitErr):
+		return string(b), exitErr.ExitCode(), true
+	}
+	return "", -1, false
 }
 
 func nonEmptyLines(s string) []string {
