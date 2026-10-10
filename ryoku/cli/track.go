@@ -10,12 +10,7 @@ import (
 	"strings"
 )
 
-func trackURL() string {
-	if sys.RPMManager() != "" {
-		return "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-track"
-	}
-	return "https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-track"
-}
+const trackURL = "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-track"
 
 // sourceChannels are the git branches `ryoku track ... --source` builds from.
 var sourceChannels = map[string]bool{"main": true, "unstable-dev": true}
@@ -104,7 +99,7 @@ func trackFromSource(channel string) error {
 			return sys.Run("bash", script, channel)
 		}
 	}
-	url := trackURL()
+	url := trackURL
 	if !sys.Has("curl") {
 		return fmt.Errorf(i18n.T("no local track script and curl is missing; run it by hand:\n  curl -fsSL %s | bash -s -- %s"), url, channel)
 	}
