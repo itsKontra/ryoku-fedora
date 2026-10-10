@@ -30,7 +30,8 @@ echo "root:x:0:0:root:/root:/bin/bash" > "$target/etc/passwd"
 echo "root:x:0:" > "$target/etc/group"
 echo "wheel:x:10:" >> "$target/etc/group"
 echo "root:!::0:99999:7:::" > "$target/etc/shadow"
-echo -e "auth substack password-auth\nsession include postlogin" > "$target/etc/pam.d/sddm"
+stock_pam="$root/ryoku/cli/internal/keyring/testdata/fedora-sddm"
+cp "$stock_pam" "$target/etc/pam.d/sddm"
 
 # Copy required host binaries and systemd units into the offline target
 cp -a /usr/lib/systemd/system/. "$target/usr/lib/systemd/system/"
@@ -150,7 +151,7 @@ grep -q 'Session=hyprland.desktop' "$target/etc/sddm.conf.d/99-ryoku.conf"
 [[ $(readlink "$target/etc/systemd/system/display-manager.service") == "/usr/lib/systemd/system/sddm.service" ]]
 [[ -L "$target/etc/systemd/system/default.target" ]]
 [[ $(readlink "$target/etc/systemd/system/default.target") == "/usr/lib/systemd/system/graphical.target" ]]
-grep -q 'pam_gnome_keyring.so' "$target/etc/pam.d/sddm"
+cmp -s "$stock_pam" "$target/etc/pam.d/sddm"
 test -f "$target/usr/share/icons/default/index.theme"
 grep -q 'Inherits=Bibata-Modern-Ice' "$target/usr/share/icons/default/index.theme"
 

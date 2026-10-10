@@ -85,4 +85,23 @@ pinned "$gini" eDP-1 || fail "a stale hand-off must fall back to the internal pa
 gini=$(gdry RYOKU_GREETER_PRIMARY_FILE="$gtmp/primary" RYOKU_GREETER_PRIMARY=eDP-1)
 pinned "$gini" eDP-1 || fail "RYOKU_GREETER_PRIMARY must outrank the session hand-off"
 
+# --- keyring PAM wiring: setup owns no PAM logic of its own. It asks the ryoku
+# CLI whether SDDM autologs in and hands the edit to `ryoku keyring apply-pam`.
+mkdir -p "$gtmp/kbin"
+cat >"$gtmp/kbin/ryoku" <<'STUB'
+#!/bin/sh
+if [ "$1 $2 $3" = "keyring status --json" ]; then
+  printf '{\n  "pam_present": true,\n  "autologin": %s\n}\n' "$STUB_AUTOLOGIN"
+fi
+STUB
+chmod +x "$gtmp/kbin/ryoku"
+: >"$gtmp/pam-sddm"
+kdry() { PATH="$gtmp/kbin:$PATH" RYOKU_PAM_FILE="$gtmp/pam-sddm" STUB_AUTOLOGIN="$1" "$setup" --dry-run 2>&1; }
+grep -q 'keyring apply-pam unlock-on-login$' <<<"$(kdry false)" ||
+  fail "setup does not wire unlock-on-login through ryoku keyring apply-pam"
+grep -q 'keyring apply-pam never-ask$' <<<"$(kdry true)" ||
+  fail "setup does not strip the keyring through apply-pam never-ask under autologin"
+grep -q 'pam_gnome_keyring' "$setup" &&
+  fail "setup edits pam_gnome_keyring itself; ryoku keyring apply-pam owns that"
+
 printf 'sddm-wayland: PASS\n'

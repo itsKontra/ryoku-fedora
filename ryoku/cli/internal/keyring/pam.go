@@ -37,12 +37,18 @@ func pamFilePath() string {
 // so an insert never duplicates and status can read the true state.
 func pamHasKeyring(content, kind string) bool {
 	for _, l := range strings.Split(content, "\n") {
-		f := strings.Fields(l)
-		if len(f) > 0 && (f[0] == kind || f[0] == "-"+kind) && strings.Contains(l, "pam_gnome_keyring.so") {
+		if pamKindIs(strings.Fields(l), kind) && strings.Contains(l, "pam_gnome_keyring.so") {
 			return true
 		}
 	}
 	return false
+}
+
+// pamKindIs reports whether a stack line's module type is kind. Linux-PAM
+// compares types and controls with strcasecmp, and a leading dash only makes a
+// missing module non-fatal, so "-Auth" is still an auth line.
+func pamKindIs(fields []string, kind string) bool {
+	return len(fields) > 0 && strings.EqualFold(strings.TrimPrefix(fields[0], "-"), kind)
 }
 
 // pamPresent reports whether the stack wires pam_gnome_keyring at all.
@@ -58,7 +64,7 @@ func insertAfterInclude(content, kind, line string) (string, bool) {
 	lines := strings.Split(content, "\n")
 	for i, l := range lines {
 		f := strings.Fields(l)
-		if len(f) >= 3 && strings.TrimPrefix(f[0], "-") == kind && (f[1] == "include" || f[1] == "substack") && f[2] == "password-auth" {
+		if len(f) >= 3 && pamKindIs(f, kind) && (strings.EqualFold(f[1], "include") || strings.EqualFold(f[1], "substack")) && f[2] == "password-auth" {
 			out := append([]string{}, lines[:i+1]...)
 			out = append(out, line)
 			out = append(out, lines[i+1:]...)
@@ -117,7 +123,7 @@ func applyPAMFile(path, mode string) error {
 	want := mode == ModeUnlockOnLogin
 	out, missing := applyPAMText(string(raw), want)
 	if len(missing) > 0 {
-		return fmt.Errorf(i18n.T("%s has no %s anchor to wire pam_gnome_keyring after"), path, strings.Join(missing, " / "))
+		return fmt.Errorf(i18n.T("%s has no %s line to wire pam_gnome_keyring after, so the keyring will not unlock at login; add the pam_gnome_keyring lines by hand"), path, strings.Join(missing, " / "))
 	}
 	if out == string(raw) {
 		return nil

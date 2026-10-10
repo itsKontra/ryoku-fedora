@@ -133,8 +133,10 @@ class ProvisionTargetTest(unittest.TestCase):
         self.assertTrue(def_target.is_symlink())
         self.assertEqual(def_target.readlink(), Path("/usr/lib/systemd/system/graphical.target"))
 
+        # Fedora's stock stack already wires the keyring; ryoku keyring owns any
+        # change to it, so provisioning leaves the file alone.
         pam_sddm = (self.root / "etc/pam.d/sddm").read_text()
-        self.assertIn("pam_gnome_keyring.so", pam_sddm)
+        self.assertEqual(pam_sddm, "auth substack password-auth\nsession include postlogin\n")
 
     def test_enable_base_services(self):
         provision_target.enable_base_services(self.root)

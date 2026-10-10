@@ -176,3 +176,77 @@ func TestRunApplyPAMHonorsFixtureEnv(t *testing.T) {
 		t.Fatalf("ask should have stripped the lines:\n%s", got)
 	}
 }
+
+// Stacks Fedora does not ship but users carry (an include instead of the
+// substack, stray whitespace and case, a commented-out anchor) still get the
+// stock lines right after the real password-auth anchor, round-trip back on a
+// strip, and converge only once.
+func TestApplyPAMTextStackVariants(t *testing.T) {
+	for _, name := range []string{"sddm-include", "sddm-whitespace"} {
+		in, want := readTestdata(name), readTestdata(name+".wired")
+		out, missing := applyPAMText(in, true)
+		if len(missing) != 0 || out != want {
+			t.Fatalf("%s: missing %v, got:\n%s", name, missing, out)
+		}
+		if again, _ := applyPAMText(out, true); again != out {
+			t.Fatalf("%s: second converge changed the stack:\n%s", name, again)
+		}
+		if stripped, _ := applyPAMText(out, false); stripped != in {
+			t.Fatalf("%s: strip did not give the input back:\n%q", name, stripped)
+		}
+	}
+}
+
+// A stack with no password-auth line at all must fail loudly and leave the file
+// alone, never append the lines somewhere PAM may not reach them.
+func TestApplyPAMNoPasswordAuthFailsLoudly(t *testing.T) {
+	in := readTestdata("sddm-no-password-auth")
+	p := filepath.Join(t.TempDir(), "sddm")
+	if err := os.WriteFile(p, []byte(in), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RYOKU_PAM_FILE", p)
+	err := runApplyPAM([]string{ModeUnlockOnLogin})
+	if err == nil || !strings.Contains(err.Error(), "auth password-auth / session password-auth") {
+		t.Fatalf("want an error naming both missing anchors, got %v", err)
+	}
+	if got, _ := os.ReadFile(p); string(got) != in {
+		t.Fatalf("a failed converge must not touch the file:\n%s", got)
+	}
+}
+
+// The installers (sddm/setup) read "autologin" from `ryoku keyring status
+// --json` and run apply-pam never-ask under it, unlock-on-login otherwise. The
+// stock stack must stay byte-identical without autologin, and lose exactly its
+// keyring lines with it.
+func TestInstallerKeyringFlow(t *testing.T) {
+	conf := t.TempDir()
+	t.Setenv("RYOKU_SDDM_CONF_ROOT", conf)
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p := filepath.Join(t.TempDir(), "sddm")
+	if err := os.WriteFile(p, []byte(fedoraSDDM), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RYOKU_PAM_FILE", p)
+	install := func() {
+		t.Helper()
+		mode := ModeUnlockOnLogin
+		if gatherStatus().Autologin {
+			mode = ModeNeverAsk
+		}
+		if err := runApplyPAM([]string{mode}); err != nil {
+			t.Fatalf("apply-pam %s: %v", mode, err)
+		}
+	}
+
+	install()
+	if got, _ := os.ReadFile(p); string(got) != fedoraSDDM {
+		t.Fatalf("without autologin the stock stack must stay byte-for-byte:\n%s", got)
+	}
+	writeConf(t, filepath.Join(conf, "sddm.conf.d", "50-autologin.conf"), "[Autologin]\nUser=nero\n")
+	install()
+	if got, _ := os.ReadFile(p); string(got) != bareSDDM {
+		t.Fatalf("autologin must strip exactly the keyring lines:\n%s", got)
+	}
+}
