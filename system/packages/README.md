@@ -1,31 +1,28 @@
 # system/packages/
 
-The package lists that make up a Ryoku machine. One package per line; blank lines
-and lines starting with `#` are ignored. The installer reads these at install
-time (`RYOKU_REPO/system/packages/`).
+Package lists inherited from upstream Ryoku, written in Arch package names. One
+package per line; blank lines and lines starting with `#` are ignored.
+
+They are not how Fedora installs Ryoku. The RPM specs in `release/rpm/` and
+`installation/fedora/packages.list` define Fedora delivery (`MergeToFedora.md`).
+Do not add a package here to ship it; declare it in the spec that owns the
+feature.
+
+## What still reads them
+
+- `ryoku-shell-installer` reads `base.packages` and `dev.packages` and translates
+  each name for the detected distribution (`ryoku-shell-installer/distro.go`).
+  `ryoku recovery` resolves its dnf dependency list through it.
+- `ryoku/cli/cmd/ryoku-manifest` reads `base`, `dev`, `hardware` and `aur` into
+  the update manifest.
+- `tests/shell-tool-availability.sh` checks that a tool the shell calls is
+  listed here and is a hard `Requires:` of `ryoku-desktop`.
 
 ## The lists
 
-- `base.packages` The set every machine gets, installed by `pacstrap`. Core
-  system, the boot chain, networking, audio, plain Hyprland, the SDDM greeter and
-  qylock dependencies, laptop idle/battery support (`hypridle`, `upower`), OpenRGB
-  for wallpaper-driven keyboard/LED color, the terminal apps (kitty, nautilus,
-  chromium, mpv), the shell stack (fish, starship, fastfetch and friends), and
-  fonts: Inter for Ryoku UI text, Noto Emoji, and Noto CJK so Japanese labels and
-  the 力 mark render in browsers and Qt.
-- `hardware.packages` Per-profile microcode and GPU drivers, grouped into
-  `[amd]`, `[intel]`, `[nvidia]`, and `[vm]` sections. The installer picks the
-  section(s) for the chosen `RYOKU_PROFILE` (`amd-nvidia` takes `[amd]` and
-  `[nvidia]`) and adds them to the pacstrap set. Base `mesa` and the Vulkan
-  loader live in `base.packages`, so these sections hold only the vendor extras.
-- `aur.packages` Things that come from the AUR. These are not installed by
-  pacstrap (the base system has no AUR helper yet); they are built later during
-  post-install. Includes the Limine integration hooks and the Bibata cursors.
-- `dev.packages` Developer toolchains (Go, Node/npm, Rust, Python/pip, mise),
-  installed by `pacstrap` with the base set so every machine is dev-ready.
-
-## Adding a package
-
-Put it in the section it belongs to, keep it on its own line, and prefer the
-official repos (`base.packages`) over the AUR when both have it. Hardware drivers
-go under the right profile section in `hardware.packages`.
+- `base.packages` the set every machine gets: core system, networking, audio,
+  the session, terminal apps, the shell stack, and fonts.
+- `dev.packages` developer toolchains (Go, Node/npm, Rust, Python/pip, mise).
+- `hardware.packages` per-profile microcode and GPU extras, in `[amd]`,
+  `[intel]`, `[nvidia]` and `[vm]` sections.
+- `aur.packages` upstream's AUR extras. Nothing on Fedora installs them.
