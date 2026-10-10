@@ -62,7 +62,7 @@ type Capability struct {
 	RamTotalMB  int     `json:"ramTotalMb"`
 	RamFreeMB   int     `json:"ramFreeMb"`
 	VmReady     bool    `json:"vmReady"` // qemu + kvm present: a plain (non-passthrough) VM can run
-	Qemu        bool    `json:"qemu"`    // qemu-desktop installed (a plain VM's only hard need)
+	Qemu        bool    `json:"qemu"`    // qemu-kvm installed (a plain VM's only hard need)
 	Kvm         bool    `json:"kvm"`     // /dev/kvm present
 }
 
@@ -277,13 +277,7 @@ func buildChecks(in capInputs, host, pass *GPU) (checks []Check, hardFail bool) 
 	case len(miss) == 0:
 		add(Check{ID: "tooling", Level: "ok", Label: "Virtualization stack", Value: "installed"})
 	case !in.tooling.qemu:
-		hint := "A plain VM needs QEMU: pacman -S qemu-desktop."
-		if _, err := exec.LookPath("dnf"); err == nil {
-			if _, perr := exec.LookPath("pacman"); perr != nil {
-				hint = "A plain VM needs QEMU: sudo dnf install qemu-kvm."
-			}
-		}
-		add(Check{ID: "tooling", Level: "warn", Label: "Virtualization stack", Value: "QEMU not installed", Hint: hint})
+		add(Check{ID: "tooling", Level: "warn", Label: "Virtualization stack", Value: "QEMU not installed", Hint: "A plain VM needs QEMU: sudo dnf install qemu-kvm."})
 	default:
 		add(Check{ID: "tooling", Level: "warn", Label: "Passthrough stack", Value: "missing: " + strings.Join(miss, ", ") + " (passthrough only)", Hint: "Only for the GPU-passthrough VM; plain VMs need none of it. Enabling passthrough in the Hub installs Looking Glass + kvmfr from COPR."})
 	}
