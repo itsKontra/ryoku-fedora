@@ -66,7 +66,6 @@
   "material shell": "material shell",
   "no NVIDIA GPU that the signed open driver supports": "ingen NVIDIA-GPU som den signerte åpne driveren støtter",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "ingen NVIDIA-først render-pin over et panel som ikke er NVIDIA",
-  "no pacman or dnf here; shipped apps are the installer's business": "ingen pacman eller dnf her; medfølgende apper er installasjonsprogrammets sak",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "det finnes ikke noe øyeblikksbilde fra før oppdateringen (snapper var utilgjengelig), så `ryoku rollback` kan ikke tilbakestille dette; gjenopprett direkte med %s",
   "no theme master; colours follow the wallpaper by default": "ingen temamaster; fargene følger bakgrunnsbildet som standard",
   "noctalia": "noctalia",

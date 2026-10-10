@@ -24,6 +24,12 @@ A developer only ever writes English, wrapped at the point it is displayed:
                             silently shipping English).
   check    report translations that are much longer than their English source
            (the cause of overflowing/overlapping UI). --strict to fail on them.
+  prune    drop keys nothing uses any more from en.json, every language and
+           overrides/, translating nothing. A key is an orphan only when
+           extract no longer finds it and its text appears in no tracked file,
+           so a string looked up by variable is kept. sync already drops a
+           generated key extract stopped finding; this also reaches overrides
+           and works offline. --match=REGEX limits it, --dry-run only lists.
   cost     price the next full pass: source tokens, output tokens and dollars
            per language for the configured model. --model/--force to compare.
   llm      generate a full language into the layered config dir
@@ -44,6 +50,7 @@ overrides/<lang>.json always wins, so a human fix is never overwritten.
   python3 sync.py sync --engine llm          # all targets, LLM
   python3 sync.py sync --engine llm --force  # full LLM re-translate
   python3 sync.py check --strict             # length guard
+  python3 sync.py prune --match=pacman --dry-run
   python3 sync.py cost                       # price the next full pass
 """
 
@@ -52,6 +59,7 @@ import json
 import os
 import random
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -771,6 +779,88 @@ def cmd_check(argv):
     return 1 if strict and offenders else 0
 
 
+# A pruned key must be dead everywhere, not just to extract: a label wrapped by
+# variable keeps its literal in some data table extract does not walk. So a key
+# survives if its text still appears in any tracked source file. Only tracked
+# files count: an untracked worktree nested in the checkout, or a built binary
+# that embeds the catalogs, would otherwise make every key look alive.
+def _corpus():
+    try:
+        out = subprocess.run(["git", "-C", REPO, "ls-files", "-z"], check=True,
+                             capture_output=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    catalog = os.path.relpath(TRANS, REPO) + os.sep
+    parts = []
+    for rel in out.decode("utf-8", "surrogateescape").split("\0"):
+        p = os.path.join(REPO, rel)
+        if not rel or rel.startswith(catalog) or os.path.islink(p):
+            continue
+        try:
+            with open(p, "rb") as fh:
+                head = fh.read(8192)
+                if b"\0" in head:
+                    continue
+                parts.append((head + fh.read()).decode("utf-8", "ignore"))
+        except OSError:
+            continue
+    return "\0".join(parts)
+
+
+def _anchor(key):
+    """The longest run of a key that a source literal carries verbatim: a
+    placeholder, a newline, a quote or a backslash is spelled differently in a
+    Go, QML or shell literal than in the catalog, so the key is cut there."""
+    return max(re.split(r'\n|"|\\|' + PLACEHOLDER.pattern, key), key=len)
+
+
+def cmd_prune(argv):
+    """Drop orphan keys from en.json, every language and overrides/, translating
+    nothing. --match=REGEX limits the prune; --dry-run only lists."""
+    dry, match = False, None
+    for a in argv:
+        if a == "--dry-run":
+            dry = True
+        elif a.startswith("--match=") and len(a) > len("--match="):
+            try:
+                match = re.compile(a.split("=", 1)[1], re.I)
+            except re.error as e:
+                print(f"prune: bad --match regex: {e}", file=sys.stderr)
+                return 2
+        else:
+            # an unread argument (`--match pacman`) would widen the prune to
+            # every orphan, so anything unknown stops it instead.
+            print(f"prune: unknown argument {a!r} (--match=REGEX, --dry-run)",
+                  file=sys.stderr)
+            return 2
+    paths = [os.path.join(TRANS, f"{l['code']}.json") for l in LANGS]
+    paths += [os.path.join(OVERRIDES, f"{code}.json") for code in TARGETS]
+    paths = [p for p in paths if os.path.isfile(p)]
+    catalogs = {p: load_json(p) for p in paths}
+
+    corpus = _corpus()
+    if corpus is None:
+        print("prune: needs a git checkout of the repo (git ls-files failed)",
+              file=sys.stderr)
+        return 1
+    live = extract_keys()
+    every = set().union(*catalogs.values())
+    orphans = sorted(k for k in every
+                     if k not in live and (match is None or match.search(k))
+                     and len(_anchor(k)) >= 8 and _anchor(k) not in corpus)
+    for k in orphans:
+        print(f"  {k!r}")
+    if not dry:
+        dead = set(orphans)
+        for p, cat in catalogs.items():
+            kept = {k: v for k, v in cat.items() if k not in dead}
+            if len(kept) != len(cat):
+                write_json(p, kept)
+    print(f"prune: {len(orphans)} orphan key(s) "
+          f"{'found' if dry else 'removed'} across {len(paths)} catalog file(s)")
+    return 0
+
+
 def cmd_llm(langs):
     """Full LLM generation into the layered config overlay (~/.config/ryoku/i18n)."""
     seed_llm_cfg()
@@ -888,7 +978,7 @@ def cmd_langs():
 
 def main():
     args = sys.argv[1:]
-    cmds = ("extract", "sync", "check", "llm", "ensure", "cost", "langs")
+    cmds = ("extract", "sync", "check", "prune", "llm", "ensure", "cost", "langs")
     if not args or args[0] not in cmds:
         print(__doc__)
         return 2
@@ -901,6 +991,8 @@ def main():
         return 0
     if args[0] == "check":
         return cmd_check(args[1:])
+    if args[0] == "prune":
+        return cmd_prune(args[1:])
     if args[0] == "cost":
         return cmd_cost(args[1:])
     if args[0] == "llm":

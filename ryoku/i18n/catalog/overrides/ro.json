@@ -109,7 +109,6 @@
   "nixos-configuration": "nixos-configuration",
   "no NVIDIA GPU that the signed open driver supports": "niciun GPU NVIDIA acceptat de driverul deschis semnat",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "nicio fixare de randare cu NVIDIA pe primul loc pe un panou non-NVIDIA",
-  "no pacman or dnf here; shipped apps are the installer's business": "nu există pacman sau dnf aici; aplicațiile incluse sunt treaba programului de instalare",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "nu există niciun snapshot dinaintea actualizării (snapper nu era disponibil), deci `ryoku rollback` nu poate anula asta; recuperați direct cu %s",
   "no signed NVIDIA driver helper on this system": "niciun utilitar pentru driverul NVIDIA semnat pe acest sistem",
   "no theme master; colours follow the wallpaper by default": "nicio temă master; culorile urmează implicit tapetul",

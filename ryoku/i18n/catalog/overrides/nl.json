@@ -164,7 +164,6 @@
   "mic.png": "mic.png",
   "no NVIDIA GPU that the signed open driver supports": "geen NVIDIA-GPU die het ondertekende open stuurprogramma ondersteunt",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "geen NVIDIA-eerst render-pin boven een niet-NVIDIA-paneel",
-  "no pacman or dnf here; shipped apps are the installer's business": "geen pacman of dnf hier; meegeleverde apps zijn de zaak van het installatieprogramma",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "er bestaat geen snapshot van vóór de update (snapper was niet beschikbaar), dus `ryoku rollback` kan dit niet ongedaan maken; herstel rechtstreeks met %s",
   "numpad": "numpad",
   "on and enforcing": "aan en afgedwongen",

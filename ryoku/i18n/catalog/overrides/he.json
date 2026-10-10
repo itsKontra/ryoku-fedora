@@ -67,7 +67,6 @@
   "look (read-only)  boots it with changes kept in RAM; nothing on disk changes": "look (read-only)  מאתחל אותה עם שינויים שנשמרים ב-RAM; דבר בדיסק אינו משתנה",
   "no NVIDIA GPU that the signed open driver supports": "אין GPU של NVIDIA שנתמך על ידי מנהל ההתקן הפתוח החתום",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "אין נעיצת רינדור NVIDIA-תחילה מעל פאנל שאינו NVIDIA",
-  "no pacman or dnf here; shipped apps are the installer's business": "אין כאן pacman או dnf; האפליקציות המצורפות הן באחריות תוכנית ההתקנה",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "לא קיימת תמונת מצב מלפני העדכון (snapper לא היה זמין), ולכן `ryoku rollback` לא יכול לבטל זאת; שחזר ישירות עם %s",
   "no signed NVIDIA driver helper on this system": "אין במערכת זו כלי עזר למנהל התקן NVIDIA חתום",
   "note: could not render %s's generated config (%v); run `ryoku doctor` inside a %s session": "הערה: לא ניתן לעבד את התצורה שנוצרה של %s (%v); הרץ `ryoku doctor` בתוך הפעלת %s",
@@ -105,7 +104,6 @@
   "the Ryoku module key is not enrolled, so the NVIDIA driver cannot load under Secure Boot": "מפתח המודול של Ryoku אינו רשום, ולכן מנהל ההתקן של NVIDIA אינו יכול להיטען תחת אתחול מאובטח",
   "the repaired volume(s): %s": "הכרכים שתוקנו: %s",
   "this NVIDIA GPU runs on nouveau; the Secure Boot signed driver is available": "GPU זה של NVIDIA פועל עם nouveau; מנהל ההתקן החתום לאתחול מאובטח זמין",
-  "unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems": "הפצה לא נתמכת: Ryoku מותקן על מערכות מבוססות Arch, Debian ו-Fedora",
   "warning: %s did not finish; check its output and retry the driver setup before rebooting": "אזהרה: %s לא הסתיים; בדוק את הפלט שלו ונסה שוב את הגדרת מנהל ההתקן לפני אתחול מחדש",
   "❯ fastfetch": "❯ fastfetch"
 }

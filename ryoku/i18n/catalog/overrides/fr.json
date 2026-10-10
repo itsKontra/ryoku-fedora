@@ -389,7 +389,6 @@
   "motionbgs.com": "motionbgs.com",
   "nl_NL": "nl_NL",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "pas d'épinglage de rendu NVIDIA prioritaire sur un panneau non NVIDIA",
-  "no pacman or dnf here; shipped apps are the installer's business": "pas de pacman ni de dnf ici ; les applications fournies relèvent du programme d'installation",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "aucun instantané antérieur à la mise à jour (snapper était indisponible), `ryoku rollback` ne peut donc pas l'annuler ; restaurez directement avec %s",
   "no theme master; colours follow the wallpaper by default": "pas de thème maître ; les couleurs suivent le fond d'écran par défaut",
   "noctalia": "noctalia",

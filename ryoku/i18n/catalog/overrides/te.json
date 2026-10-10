@@ -46,7 +46,6 @@
   "matugen -c %config% image %path% -t %scheme% -m %mode% --source-color-index %index%": "matugen -c %config% image %path% -t %scheme% -m %mode% --source-color-index %index%",
   "needle.png": "needle.png",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "NVIDIA కాని ప్యానెల్‌పై NVIDIA-మొదటి రెండర్ పిన్ లేదు",
-  "no pacman or dnf here; shipped apps are the installer's business": "ఇక్కడ pacman లేదా dnf లేదు; వెంట వచ్చే యాప్‌లు ఇన్‌స్టాలర్ బాధ్యత",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "అప్‌డేట్‌కు ముందు స్నాప్‌షాట్ ఏదీ లేదు (snapper అందుబాటులో లేదు), కాబట్టి `ryoku rollback` దీన్ని వెనక్కి మార్చలేదు; నేరుగా %s తో పునరుద్ధరించండి",
   "on and enforcing": "ఆన్‌లో ఉంది, అమలులో ఉంది",
   "optional extra %s failed; rerun ryoku-install-extra %s to retry: %v": "ఐచ్ఛిక అదనపు %s విఫలమైంది; మళ్లీ ప్రయత్నించడానికి ryoku-install-extra %s ను మళ్లీ అమలు చేయండి: %v",
@@ -64,7 +63,6 @@
   "set the wireless regulatory domain to %s from the system timezone, so the kernel enables 5 GHz channels again": "సిస్టమ్ టైమ్‌జోన్ ఆధారంగా వైర్‌లెస్ రెగ్యులేటరీ డొమైన్ %s కి సెట్ చేయబడింది, కాబట్టి కెర్నల్ 5 GHz ఛానెల్‌లను మళ్లీ ప్రారంభిస్తుంది",
   "source artifact %s was edited; preserve or move it before switching to packages": "సోర్స్ ఆర్టిఫ్యాక్ట్ %s సవరించబడింది; ప్యాకేజీలకు మారే ముందు దానిని భద్రపరచండి లేదా తరలించండి",
   "source deployment has no ownership receipt; retain --install-mode=source until its local binaries and service overrides are migrated": "సోర్స్ డిప్లాయ్‌మెంట్‌కు యాజమాన్య రసీదు లేదు; దాని స్థానిక బైనరీలు మరియు సర్వీస్ ఓవర్‌రైడ్‌లు తరలించబడే వరకు --install-mode=source ను ఉంచండి",
-  "sudo pacman -S xdg-desktop-portal-%s": "sudo pacman -S xdg-desktop-portal-%s",
   "sudo snapper -c root set-config ALLOW_USERS=%s SYNC_ACL=yes": "sudo snapper -c root set-config ALLOW_USERS=%s SYNC_ACL=yes",
   "sudo systemctl enable %s": "sudo systemctl enable %s",
   "system:        %d package(s) waiting (sudo %s)": "system:        %d ప్యాకేజీ(లు) వేచి ఉన్నాయి (sudo %s)",
@@ -74,7 +72,6 @@
   "the Ryoku module key awaits approval: reboot, choose Enroll MOK, and type the password ryoku": "Ryoku మాడ్యూల్ కీ ఆమోదం కోసం వేచి ఉంది: రీబూట్ చేసి, Enroll MOK ఎంచుకుని, పాస్‌వర్డ్ ryoku టైప్ చేయండి",
   "the wireless regulatory domain is unset (00) and ryoku-wifi-regdom is not installed to set it from the timezone country %s": "వైర్‌లెస్ రెగ్యులేటరీ డొమైన్ సెట్ చేయబడలేదు (00), టైమ్‌జోన్ దేశం %s నుండి దాన్ని సెట్ చేయడానికి ryoku-wifi-regdom ఇన్‌స్టాల్ చేయబడలేదు",
   "this NVIDIA GPU runs on nouveau; the Secure Boot signed driver is available": "ఈ NVIDIA GPU nouveau పై నడుస్తోంది; సురక్షిత బూట్ సంతకం చేసిన డ్రైవర్ అందుబాటులో ఉంది",
-  "unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems": "మద్దతు లేని పంపిణీ: Ryoku Arch-ఆధారిత, Debian-ఆధారిత మరియు Fedora-ఆధారిత సిస్టమ్‌లపై ఇన్‌స్టాల్ అవుతుంది",
   "user@pam!id=secret": "user@pam!id=secret",
   "warning: could not remove %s; the package step may abort on a dependency conflict": "హెచ్చరిక: %s ను తీసివేయలేకపోయాము; డిపెండెన్సీ వైరుధ్యం వల్ల ప్యాకేజీ దశ ఆగిపోవచ్చు",
   "wpa_supplicant": "wpa_supplicant"

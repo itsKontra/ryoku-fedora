@@ -201,7 +201,6 @@
   "needle.png": "needle.png",
   "nixos-configuration": "nixos-configuration",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "nessun pin di rendering con NVIDIA prima su un pannello non NVIDIA",
-  "no pacman or dnf here; shipped apps are the installer's business": "niente pacman o dnf qui; le app incluse sono compito del programma di installazione",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "non esiste un'istantanea pre-aggiornamento (snapper non era disponibile), quindi `ryoku rollback` non può annullare l'operazione; ripristina direttamente con %s",
   "no signed NVIDIA driver helper on this system": "nessun helper per il driver NVIDIA firmato su questo sistema",
   "no theme master; colours follow the wallpaper by default": "nessun master del tema; i colori seguono lo sfondo per impostazione predefinita",

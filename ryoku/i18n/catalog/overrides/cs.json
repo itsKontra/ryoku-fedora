@@ -77,7 +77,6 @@
   "look (read-only)  boots it with changes kept in RAM; nothing on disk changes": "look (read-only)  jej spustí se změnami uloženými v RAM; na disku se nic nezmění",
   "monitor": "monitor",
   "no NVIDIA GPU that the signed open driver supports": "žádné GPU NVIDIA podporované podepsaným otevřeným ovladačem",
-  "no pacman or dnf here; shipped apps are the installer's business": "není zde pacman ani dnf; dodávané aplikace má na starosti instalátor",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "neexistuje snímek před aktualizací (snapper nebyl dostupný), takže `ryoku rollback` to nemůže vrátit; obnovte přímo pomocí %s",
   "no signed NVIDIA driver helper on this system": "v tomto systému chybí pomocník podepsaného ovladače NVIDIA",
   "no theme master; colours follow the wallpaper by default": "žádné hlavní nastavení motivu; barvy standardně sledují tapetu",

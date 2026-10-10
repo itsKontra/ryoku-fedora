@@ -78,7 +78,6 @@
   "look (read-only)  boots it with changes kept in RAM; nothing on disk changes": "look (read-only)  elindítja, a változások a RAM-ban maradnak; a lemezen semmi sem változik",
   "monitor": "monitor",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "nincs NVIDIA-t előnyben részesítő renderelési rögzítés nem NVIDIA panelen",
-  "no pacman or dnf here; shipped apps are the installer's business": "itt nincs pacman vagy dnf; a mellékelt alkalmazások a telepítő dolga",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "nincs frissítés előtti pillanatkép (a snapper nem volt elérhető), így a `ryoku rollback` ezt nem tudja visszavonni; állítsa helyre közvetlenül ezzel: %s",
   "no signed NVIDIA driver helper on this system": "nincs aláírt NVIDIA illesztőprogram-segéd ezen a rendszeren",
   "note: could not render %s's generated config (%v); run `ryoku doctor` inside a %s session": "megjegyzés: nem sikerült előállítani a(z) %s generált konfigurációját (%v); futtassa a `ryoku doctor` parancsot egy %s munkamenetben",
@@ -114,7 +113,6 @@
   "the Ryoku module key awaits approval: reboot, choose Enroll MOK, and type the password ryoku": "a Ryoku modulkulcs jóváhagyásra vár: indítsa újra a gépet, válassza az Enroll MOK lehetőséget, és írja be a ryoku jelszót",
   "the Ryoku module key is not enrolled, so the NVIDIA driver cannot load under Secure Boot": "a Ryoku modulkulcs nincs regisztrálva, így az NVIDIA illesztőprogram nem tölthető be Secure Boot alatt",
   "this NVIDIA GPU runs on nouveau; the Secure Boot signed driver is available": "ez az NVIDIA GPU a nouveau illesztőprogramot használja; elérhető a Secure Boothoz aláírt illesztőprogram",
-  "unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems": "nem támogatott disztribúció: a Ryoku Arch-, Debian- és Fedora-alapú rendszerekre telepíthető",
   "warning: %s did not finish; check its output and retry the driver setup before rebooting": "figyelmeztetés: a(z) %s nem fejeződött be; újraindítás előtt ellenőrizze a kimenetét, és próbálja újra az illesztőprogram beállítását",
   "warning: could not remove %s; the package step may abort on a dependency conflict": "figyelmeztetés: nem sikerült eltávolítani: %s; a csomaglépés függőségi ütközés miatt megszakadhat",
   "❯ fastfetch": "❯ fastfetch"

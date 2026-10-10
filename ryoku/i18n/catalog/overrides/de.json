@@ -73,7 +73,6 @@
   "keeping the host NVIDIA driver": "Host-NVIDIA-Treiber wird beibehalten",
   "local desktop artifact %s has no ownership receipt; preserve or move it before switching to packages": "lokales Desktop-Artefakt %s hat keinen Besitznachweis; vor dem Wechsel zu Paketen sichern oder verschieben",
   "look (read-only)  boots it with changes kept in RAM; nothing on disk changes": "look (read-only)  bootet ihn mit Änderungen im RAM; auf der Festplatte ändert sich nichts",
-  "no pacman or dnf here; shipped apps are the installer's business": "kein pacman oder dnf hier; mitgelieferte Apps sind Sache des Installationsprogramms",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "kein Snapshot vor dem Update vorhanden (snapper war nicht verfügbar), daher kann `ryoku rollback` dies nicht rückgängig machen; direkt mit %s wiederherstellen",
   "no theme master; colours follow the wallpaper by default": "kein Theme-Master; Farben folgen standardmäßig dem Hintergrundbild",
   "note: could not render %s's generated config (%v); run `ryoku doctor` inside a %s session": "Hinweis: die generierte Konfiguration von %s konnte nicht erzeugt werden (%v); `ryoku doctor` in einer %s-Sitzung ausführen",
