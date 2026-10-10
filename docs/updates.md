@@ -61,10 +61,10 @@ page exists to prevent.
 ### Ryotunes
 
 Ryotunes is an RPM from its own COPR project (`itskontra/ryotunes`), enabled as
-a dependency repository, and moves with the system package lane through
-`sudo dnf upgrade`. `ryoku update` and `ryoku status` leave Ryotunes to that
-DNF lane. When the desktop expects Ryotunes and it is missing, `ryoku doctor`
-installs it with
+a dependency repository. It is not in the Ryoku set: it moves with the system
+lane (`sudo dnf upgrade`, or `ryoku update --system`), and `ryoku status` lists
+a pending Ryotunes with the other system packages. When the desktop expects
+Ryotunes and it is missing, `ryoku doctor` installs it with
 `dnf install ryotunes` and enables its socket.
 
 ## `ryoku update`

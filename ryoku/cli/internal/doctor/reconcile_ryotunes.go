@@ -1,14 +1,11 @@
 package doctor
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"ryoku-cli/internal/ryotunesrelease"
 	"ryoku-cli/internal/sys"
 
 	i18n "ryoku-i18n"
@@ -18,19 +15,14 @@ import (
 // start it on demand; enabling it also makes cold session activation available.
 const ryotunesSocketUnit = "ryotunesd.socket"
 
-// Ryotunes is part of the Ryoku desktop (ryoku-desktop depends on it) but is
-// delivered on its own GitHub release channel rather than built in the [ryoku]
-// repo: the repo imports and re-signs the official checksummed epoch=1 build,
-// and a box also tracks it directly (internal/ryotunesrelease). Two things keep
-// a box from opening the packaged native client: a wrapper or a locally built
-// copy in ~/.local/bin that shadows /usr/bin/ryotunes on PATH (a dev deploy laid
-// both before the package existed), and a managed box -- a dev checkout
-// (ResolveRepo) or one with the packaged ryoku-desktop -- simply missing the
-// package -- which the reconcile installs from the official release (never the
-// stale repo copy), so it lands the current build even before a repo re-import
-// has propagated.
+// Ryotunes is part of the Ryoku desktop but ships from its own COPR project
+// (itskontra/ryotunes), so dnf moves it with the rest of the system. Two things
+// keep a box from opening the packaged native client: a wrapper or a locally
+// built copy in ~/.local/bin that shadows /usr/bin/ryotunes on PATH (a dev
+// deploy laid both before the package existed), and a managed box -- a dev
+// checkout (ResolveRepo) or one with the packaged ryoku-desktop -- simply
+// missing the package, which the reconcile installs with dnf.
 func reconcileRyotunes(checkOnly bool) recResult {
-	rpmManager := sys.RPMManager()
 	var problems, fixes []string
 	// Deliver-once like the shipped apps: while the package is here, keep it in
 	// the provisioned ledger, so a later deletion reads as the user's choice
@@ -47,16 +39,16 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		fixes = append(fixes, "rm -f ~/.local/bin/ryotunes ~/.local/share/applications/ryotunes.desktop")
 	}
 	// A box that runs the Ryoku desktop is expected to have Ryotunes: a dev
-	// checkout (all Ryoku managed by `ryoku deploy`, so ryoku-desktop is not a
-	// pacman package) or a packaged install (ryoku-desktop present). Either way,
-	// if the app is absent the reconcile installs the current official build --
+	// checkout (all Ryoku managed by `ryoku deploy`, so ryoku-desktop is not an
+	// installed package) or a packaged install (ryoku-desktop present). Either
+	// way, if the app is absent the reconcile installs it --
 	// unless the user deleted it: ryotunes is a deliver-once app like the rest
 	// of the shipped set, so the provisioned ledger is honoured here too.
 	managedDesktop := sys.ResolveRepo() != "" || sys.PkgInstalled("ryoku-desktop")
 	desktopMissingRyotunes := managedDesktop && !sys.PkgInstalled("ryotunes") && !removedByUser("ryotunes")
 	if desktopMissingRyotunes {
 		problems = append(problems, i18n.T("the ryotunes package is not installed"))
-		fixes = append(fixes, "ryoku update")
+		fixes = append(fixes, "sudo dnf install ryotunes")
 	}
 	socketMissing := sys.PkgInstalled("ryotunes") && !ryotunesSocketEnabled()
 	if socketMissing {
@@ -64,16 +56,6 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		fixes = append(fixes, "systemctl --user enable --now ryotunesd.socket")
 	}
 	if len(problems) == 0 {
-		if rpmManager != "" {
-			return okRes(i18n.T("ryotunes is the packaged app"))
-		}
-		if _, err := sys.RunOut("pacman", "-Qoq", "/usr/bin/ryotunes"); err != nil && sys.Exists("/usr/bin/ryotunes") {
-			return warnRes(i18n.T("/usr/bin/ryotunes is not owned by the ryotunes package")).
-				withFix("sudo pacman -S --overwrite /usr/bin/ryotunes ryotunes")
-		}
-		if note, ok := ryotunesUpdateNote(); ok {
-			return note
-		}
 		return okRes(i18n.T("ryotunes is the packaged app"))
 	}
 	if checkOnly {
@@ -95,17 +77,8 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		}
 	}
 	if desktopMissingRyotunes {
-		// Fedora consumes RPMs; Arch tracks the verified upstream release.
-		var err error
-		if rpmManager != "" {
-			err = sys.Sudo(rpmManager, "-y", "install", "ryotunes")
-		} else {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			_, err = ryotunesrelease.Ensure(ctx)
-			cancel()
-		}
-		if err != nil {
-			return failRes(i18n.T("could not install ryotunes: %v"), err).withFix("ryoku update")
+		if err := sys.Sudo("dnf", "-y", "install", "ryotunes"); err != nil {
+			return failRes(i18n.T("could not install ryotunes: %v"), err).withFix("sudo dnf install ryotunes")
 		}
 	}
 	if socketMissing || (desktopMissingRyotunes && sys.PkgInstalled("ryotunes") && !ryotunesSocketEnabled()) {
@@ -118,22 +91,6 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		}
 	}
 	return fixedRes(i18n.T("ryotunes opens the packaged app (%s)"), strings.Join(problems, "; "))
-}
-
-// Release availability is advisory: doctor checks but never installs. A lookup
-// failure remains visible in check/report modes without failing desktop health.
-func ryotunesUpdateNote() (recResult, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	st, err := ryotunesrelease.Check(ctx)
-	if err != nil {
-		return noteRes(i18n.T("could not check Ryotunes releases: %v"), err), true
-	}
-	if !st.Available {
-		return recResult{}, false
-	}
-	return noteRes(i18n.T("a newer Ryotunes (%s) is available; `ryoku update` installs it"), st.Latest).
-		withFix("ryoku update"), true
 }
 
 func ryotunesSocketEnabled() bool {
