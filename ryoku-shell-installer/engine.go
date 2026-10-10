@@ -624,10 +624,10 @@ func stepConflicts(e *engine) error {
 		// noctalia-hyprland-meta, and the plan promises niri survives as a
 		// fallback session. leftover deps become orphans doctor can report.
 		e.say(i18n.Tf("removing rival shell packages: %s", strings.Join(e.f.rivalPkgs, " ")))
-		if err := e.sudo(e.d().removeArgs(e.f.rivalPkgs)...); err != nil {
+		if err := e.sudo(e.d().removeKeepingDepsArgs(e.f.rivalPkgs)...); err != nil {
 			e.say(i18n.T("bulk removal failed, retrying one by one"))
 			for _, p := range e.f.rivalPkgs {
-				if err := e.sudo(e.d().removeArgs([]string{p})...); err != nil {
+				if err := e.sudo(e.d().removeKeepingDepsArgs([]string{p})...); err != nil {
 					e.say(i18n.Tf("warning: could not remove %s (continuing)", p))
 				}
 			}

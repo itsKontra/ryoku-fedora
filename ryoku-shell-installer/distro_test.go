@@ -52,8 +52,14 @@ func TestInstallArgs(t *testing.T) {
 	if got := strings.Join(fedoraLinux.installArgs([]string{"git"}), " "); got != "dnf -y install --best git" {
 		t.Errorf("installArgs = %q", got)
 	}
-	if got := strings.Join(fedoraLinux.removeArgs([]string{"dunst"}), " "); got != "dnf -y remove --no-autoremove dunst" {
+	if got := strings.Join(fedoraLinux.removeArgs([]string{"dunst"}), " "); got != "dnf -y remove dunst" {
 		t.Errorf("removeArgs = %q", got)
+	}
+	if got := strings.Join(fedoraLinux.removeKeepingDepsArgs([]string{"dms"}), " "); got != "dnf -y remove --no-autoremove dms" {
+		t.Errorf("removeKeepingDepsArgs = %q", got)
+	}
+	if got := fedoraLinux.removeKeepingDepsArgs(nil); len(got) != 0 {
+		t.Errorf("removeKeepingDepsArgs(nil) = %v, want empty/nil", got)
 	}
 	if got := fedoraLinux.installArgs(nil); len(got) != 0 {
 		t.Errorf("installArgs(nil) = %v, want empty/nil", got)
