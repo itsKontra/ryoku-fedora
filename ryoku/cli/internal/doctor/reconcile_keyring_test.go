@@ -23,7 +23,7 @@ func kySetup(t *testing.T, pamBody string) (data, pam string) {
 	return data, pam
 }
 
-const stockSDDM = "#%PAM-1.0\n\nauth        include     system-login\n\naccount     include     system-login\n\nsession     include     system-login\n"
+const stockSDDM = "#%PAM-1.0\n\nauth        substack    password-auth\n\naccount     include     password-auth\n\nsession     include     password-auth\n"
 
 // A bare box (no config, no PAM lines) infers ask: the reconciler records that
 // mode, then is a stable no-op.

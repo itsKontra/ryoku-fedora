@@ -8,7 +8,7 @@ import (
 // A fresh box (no config, no PAM, no keyring) defaults to never-ask and seeds a
 // blank passwordless default keyring, so no app ever prompts out of the box.
 func TestInitFreshSeedsNeverAsk(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	if err := runInit(nil); err != nil {
 		t.Fatalf("init: %v", err)
@@ -23,7 +23,7 @@ func TestInitFreshSeedsNeverAsk(t *testing.T) {
 
 // init respects a user who already chose a mode: a pure no-op, no keyring touch.
 func TestInitNoopWhenConfigured(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	if err := writeConfig(ModeAsk); err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestInitNoopWhenConfigured(t *testing.T) {
 // A PAM-wired box means the user chose unlock-on-login; init records that and
 // never blanks a keyring.
 func TestInitRecordsUnlockOnLoginWhenPamWired(t *testing.T) {
-	pam := sandbox(t, archSDDM)
+	pam := sandbox(t, bareSDDM)
 	f := useFake(t)
 	applyPAMFile(pam, ModeUnlockOnLogin)
 	if err := runInit(nil); err != nil {
@@ -59,7 +59,7 @@ func TestInitRecordsUnlockOnLoginWhenPamWired(t *testing.T) {
 // A pre-existing password-protected default keyring is never destroyed: init
 // records the never-ask policy but leaves the file intact and creates nothing.
 func TestInitLeavesEncryptedKeyringIntact(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	enc := append(append([]byte{}, encryptedMagic...), 0x00)
 	if err := os.WriteFile(keyringFile("Default_Keyring"), enc, 0o600); err != nil {

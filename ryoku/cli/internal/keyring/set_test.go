@@ -76,7 +76,7 @@ func seedDefault(t *testing.T, name string) {
 }
 
 func TestSetAskConfigOnly(t *testing.T) {
-	pam := sandbox(t, archSDDM)
+	pam := sandbox(t, bareSDDM)
 	useFake(t)
 	// start from a wired stack so ask has something to strip.
 	applyPAMFile(pam, ModeUnlockOnLogin)
@@ -93,7 +93,7 @@ func TestSetAskConfigOnly(t *testing.T) {
 }
 
 func TestSetNeverAskCreatesBlankWhenAbsent(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	if err := runSet([]string{ModeNeverAsk}); err != nil {
 		t.Fatalf("set never-ask: %v", err)
@@ -107,7 +107,7 @@ func TestSetNeverAskCreatesBlankWhenAbsent(t *testing.T) {
 }
 
 func TestSetNeverAskBlockedWhenEncrypted(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	useFake(t)
 	seedDefault(t, "Default_Keyring")
 	writeKeyringFixtureAt(t, "Default_Keyring", true)
@@ -121,7 +121,7 @@ func TestSetNeverAskBlockedWhenEncrypted(t *testing.T) {
 }
 
 func TestSetNeverAskConvert(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	seedDefault(t, "Default_Keyring")
 	writeKeyringFixtureAt(t, "Default_Keyring", true)
@@ -135,7 +135,7 @@ func TestSetNeverAskConvert(t *testing.T) {
 }
 
 func TestSetNeverAskReset(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	seedDefault(t, "Default_Keyring")
 	writeKeyringFixtureAt(t, "Default_Keyring", true)
@@ -156,7 +156,7 @@ func TestSetNeverAskReset(t *testing.T) {
 }
 
 func TestSetUnlockOnLoginPointsDefaultAndWires(t *testing.T) {
-	pam := sandbox(t, archSDDM)
+	pam := sandbox(t, bareSDDM)
 	useFake(t)
 	seedDefault(t, "Default_Keyring")
 	if err := runSet([]string{ModeUnlockOnLogin}); err != nil {
@@ -176,7 +176,7 @@ func TestSetUnlockOnLoginPointsDefaultAndWires(t *testing.T) {
 }
 
 func TestSetUnlockOnLoginEncryptedNoFlagSucceeds(t *testing.T) {
-	sandbox(t, archSDDM)
+	sandbox(t, bareSDDM)
 	f := useFake(t)
 	// login keyring already encrypted; without a flag this is a valid choice.
 	writeKeyringFixtureAt(t, "login", true)
