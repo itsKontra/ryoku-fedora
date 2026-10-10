@@ -64,7 +64,7 @@ type facts struct {
 // rival quickshell stacks; ordered meta -> shell -> runtime so package removal
 // never trips its own dependency checks (iNiR's conflicts model).
 var rivalShellPkgs = []string{
-	"noctalia-hyprland-meta", "noctalia-shell", "noctalia-git", "noctalia-qs",
+	"noctalia-hyprland-meta", "noctalia", "noctalia-shell", "noctalia-git", "noctalia-qs",
 	"dms",
 	"caelestia-shell", "caelestia-shell-git",
 }
