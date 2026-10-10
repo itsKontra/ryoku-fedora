@@ -72,8 +72,18 @@ func TestPlanWmPlugins(t *testing.T) {
 	t.Run("no toolchain warns with what to install", func(t *testing.T) {
 		s := stale
 		s.toolchain, s.missing = false, []string{"cmake", "compositor headers"}
+		s.packages = []string{"cmake", "compositor-devel"}
 		r := planWmPlugins(s, false, noRepair)
-		if r.status != recWarn || !strings.Contains(r.detail, "cmake") || !strings.Contains(r.remedy, "gcc-c++") {
+		if r.status != recWarn || !strings.Contains(r.detail, "cmake") || !strings.Contains(r.remedy, "sudo dnf install cmake compositor-devel") {
+			t.Fatalf("result = %v %q fix=%q", r.status, r.detail, r.remedy)
+		}
+	})
+
+	t.Run("no toolchain and no package list still says what to do", func(t *testing.T) {
+		s := stale
+		s.toolchain, s.missing = false, []string{"cmake"}
+		r := planWmPlugins(s, false, noRepair)
+		if r.status != recWarn || strings.Contains(r.remedy, "dnf install") || !strings.Contains(r.remedy, "Rebuild") {
 			t.Fatalf("result = %v %q fix=%q", r.status, r.detail, r.remedy)
 		}
 	})

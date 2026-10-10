@@ -294,3 +294,18 @@ func TestLatestAvailableRPMRefreshRefetchesMetadata(t *testing.T) {
 		t.Fatalf("refreshed latestAvailable = %q, want the refetched answer", got)
 	}
 }
+
+// A dotted package name keeps its dots; only the arch is cut.
+func TestCheckUpdateName(t *testing.T) {
+	for in, want := range map[string]string{
+		"python3.13-libs.x86_64":   "python3.13-libs",
+		"kernel.x86_64":            "kernel",
+		"glibc-langpack-en.noarch": "glibc-langpack-en",
+		"Obsoleting":               "",
+		".x86_64":                  "",
+	} {
+		if got := checkUpdateName(in); got != want {
+			t.Errorf("checkUpdateName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

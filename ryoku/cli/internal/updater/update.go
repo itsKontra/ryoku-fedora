@@ -175,7 +175,15 @@ func Update(args []string) error {
 		return e
 	}
 	progress.logf(i18n.T("Updating %d Ryoku package(s); the base system stays as it is"), len(set))
-	if err := runRyokuUpgrade(set); err != nil {
+	err = runRyokuUpgrade(set)
+	if err != nil {
+		// One retry on fresh metadata: a COPR mirror or network hiccup is the
+		// usual cause, and the second attempt often lands on a healthy mirror.
+		progress.logf(i18n.T("The Ryoku package upgrade failed; refreshing %s and retrying once"), sys.RPMRepoName)
+		_ = sys.Sudo(refreshDBArgs()[1:]...)
+		err = runRyokuUpgrade(set)
+	}
+	if err != nil {
 		// only advertise `ryoku rollback` when the pre snapshot it needs exists;
 		// snapperPre is best-effort and returns "" when it was skipped.
 		hint := i18n.T("no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with dnf directly")
@@ -1398,11 +1406,25 @@ func pendingUpdates() []updateItem {
 	sc := bufio.NewScanner(strings.NewReader(string(out)))
 	for sc.Scan() {
 		f := strings.Fields(sc.Text())
-		if len(f) >= 3 && strings.Contains(f[0], ".") {
-			ups = append(ups, updateItem{Name: strings.Split(f[0], ".")[0], New: f[1]})
+		if len(f) < 3 {
+			continue
+		}
+		if name := checkUpdateName(f[0]); name != "" {
+			ups = append(ups, updateItem{Name: name, New: f[1]})
 		}
 	}
 	return ups
+}
+
+// checkUpdateName strips the arch from a `dnf check-update` name.arch column.
+// The arch never holds a dot but a name can (python3.13-libs), so the cut is
+// at the last one; a column with no dot is not a package row.
+func checkUpdateName(nameArch string) string {
+	i := strings.LastIndexByte(nameArch, '.')
+	if i <= 0 {
+		return ""
+	}
+	return nameArch[:i]
 }
 
 // snapshotCount returns how many snapshots the root store holds and whether it

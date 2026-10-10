@@ -649,23 +649,37 @@ type pluginInfo struct {
 	Settings      []detectedSetting `json:"settings"`
 }
 
-// toolchainInfo says whether this box can build a plugin at all.
+// toolchainInfo says whether this box can build a plugin at all, and which
+// Fedora packages supply what is missing, so the doctor and the Hub never name
+// a compositor package themselves.
 type toolchainInfo struct {
-	OK      bool     `json:"ok"`
-	Missing []string `json:"missing"`
+	OK       bool     `json:"ok"`
+	Missing  []string `json:"missing"`
+	Packages []string `json:"packages"`
+}
+
+// toolchainBins maps each build tool to the Fedora package that ships it.
+var toolchainBins = []struct{ bin, pkg string }{
+	{"git", "git"},
+	{"make", "make"},
+	{"c++", "gcc-c++"},
+	{"pkg-config", "pkgconf-pkg-config"},
+	{"cmake", "cmake"},
 }
 
 func toolchain() toolchainInfo {
-	missing := []string{}
-	for _, bin := range []string{"git", "make", "c++", "pkg-config", "cmake"} {
-		if _, err := exec.LookPath(bin); err != nil {
-			missing = append(missing, bin)
+	missing, pkgs := []string{}, []string{}
+	for _, t := range toolchainBins {
+		if _, err := exec.LookPath(t.bin); err != nil {
+			missing = append(missing, t.bin)
+			pkgs = append(pkgs, t.pkg)
 		}
 	}
 	if exec.Command("pkg-config", "--exists", "hyprland").Run() != nil {
 		missing = append(missing, "hyprland headers")
+		pkgs = append(pkgs, "hyprland-devel")
 	}
-	return toolchainInfo{OK: len(missing) == 0, Missing: missing}
+	return toolchainInfo{OK: len(missing) == 0, Missing: missing, Packages: pkgs}
 }
 
 type pluginRoster struct {

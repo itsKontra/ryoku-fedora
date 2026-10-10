@@ -32,6 +32,19 @@ func Track(channel string) error {
 		return fmt.Errorf(i18n.T("the %s repo points at %s, a mirror Ryoku does not publish; edit %s by hand"), sys.RPMRepoName, sys.RyokuServer(), sys.RPMRepoFile)
 	}
 
+	// Install before retiring the checkout: an update only moves packages that
+	// are already installed, and a failed install must leave the box on the
+	// update source it had.
+	if install {
+		if err := sys.SetPackagedChannel(channel); err != nil {
+			return err
+		}
+		fmt.Println(i18n.T("==> ryoku-desktop is not installed here; installing it from the Ryoku COPR packages."))
+		if err := installRyokuDesktop(); err != nil {
+			return fmt.Errorf(i18n.T("could not install ryoku-desktop, so updates still come from where they did: %w"), err)
+		}
+	}
+
 	migrated, err := switchToPackageChannel(channel)
 	if err != nil {
 		return err
@@ -41,12 +54,14 @@ func Track(channel string) error {
 		fmt.Println(i18n.T("==> Retired the source checkout as the update source; the clone stays on disk but no longer drives updates."))
 	}
 	fmt.Println(i18n.T("==> Now tracking the Ryoku COPR packages."))
-	if install {
-		fmt.Println(i18n.T("==> ryoku-desktop is not installed here; the channel switch installs it from the selected channel."))
-	}
 	fmt.Println(i18n.T("==> Updates now come from packages: `ryoku update` runs dnf."))
 	return runChannelUpdate()
 }
+
+// installRyokuDesktop installs the umbrella package, which pulls the rest of
+// the Ryoku set. Not limited to RyokuCOPR: its dependencies come from Fedora.
+// A var so a test exercises Track without running dnf.
+var installRyokuDesktop = func() error { return sys.Sudo("dnf", "-y", "install", "ryoku-desktop") }
 
 // switchToPackageChannel performs the filesystem side of a packaged track:
 // migrate a source-tracked box off its checkout (retire tracking, keep the

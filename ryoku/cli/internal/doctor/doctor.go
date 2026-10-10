@@ -1816,7 +1816,12 @@ func reconcileSessionComponents(_ bool) recResult {
 	}
 	var missing []string
 	for _, c := range checks {
-		if !anyPkgInstalled(c.any...) {
+		if anyPkgInstalled(c.any...) {
+			continue
+		}
+		if c.pkg == "" {
+			missing = append(missing, fmt.Sprintf(i18n.T("%s [install one of: %s]"), c.role, strings.Join(c.any, ", ")))
+		} else {
 			missing = append(missing, fmt.Sprintf("%s [sudo dnf install %s]", c.role, c.pkg))
 		}
 	}

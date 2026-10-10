@@ -354,8 +354,11 @@ Item {
                 visible: pg.loaded && !pg.canBuild
                 width: parent.width
                 wrapMode: Text.WordWrap
-                text: I18n.tr("Plugins cannot be built on this machine: missing %1. Install gcc-c++, make, cmake, git and hyprland-devel to rebuild or add one.")
-                      .arg(((pg.roster.toolchain && pg.roster.toolchain.missing) || []).join(", "))
+                readonly property string missing: ((pg.roster.toolchain && pg.roster.toolchain.missing) || []).join(", ")
+                readonly property var packages: (pg.roster.toolchain && pg.roster.toolchain.packages) || []
+                text: packages.length > 0
+                      ? I18n.tr("Plugins cannot be built on this machine: missing %1. Install %2 to rebuild or add one.").arg(missing).arg(packages.join(", "))
+                      : I18n.tr("Plugins cannot be built on this machine: missing %1. Install the missing build tools to rebuild or add one.").arg(missing)
                 color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             }
 

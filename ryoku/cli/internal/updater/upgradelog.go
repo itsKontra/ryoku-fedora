@@ -17,8 +17,8 @@ import (
 	i18n "ryoku-i18n"
 )
 
-// The package manager firehose (database sync "up to date", "newer than"
-// downgrade warnings, the resolving/conflict-check chatter, per-file progress
+// The package manager firehose (metadata sync "up to date" lines, the
+// resolving/conflict-check chatter, per-file progress
 // bars, and the full wrapped package dump) buries the handful of lines a person
 // running `ryoku update` actually cares about: what is upgrading, how far along
 // it is, and any real warning or error. renderUpgrade runs an upgrade command
@@ -493,16 +493,13 @@ func classify(line, trimmed string) lineClass {
 		strings.Contains(trimmed, "failed to commit"),
 		strings.Contains(trimmed, "Errors occurred"):
 		return clError
-	case strings.Contains(trimmed, "exists in filesystem"),
-		strings.Contains(trimmed, "exists in filesystem)"):
+	// rpm's file conflict: "file X from install of A conflicts with file from package B".
+	case strings.Contains(trimmed, "conflicts with file from package"):
 		return clConflict
 	// .rpmnew/.rpmsave notices are the one warning class a user must act on.
 	case strings.Contains(trimmed, ".rpmnew"), strings.Contains(trimmed, ".rpmsave"):
 		return clWarn
 	case strings.HasPrefix(trimmed, "warning:"):
-		if strings.Contains(trimmed, " is newer than ") {
-			return clDrop // local-newer downgrade chatter from mixed repos
-		}
 		return clWarn
 	case stepRe.MatchString(trimmed),
 		strings.HasPrefix(trimmed, ":: "),
