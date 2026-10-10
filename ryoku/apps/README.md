@@ -39,9 +39,9 @@ These are full applications, not `~/.config` seeds. Two shapes live here:
   The packaging supports it; nothing uses it today.
 
 The music app lives in [Ryotunes](https://github.com/ryoku-dev/ryotunes), with a
-native Quickshell client and libmpv daemon. `release/repo/import-ryotunes.sh`
-imports its checksummed release package unchanged and signs it for `[ryoku]`;
-the distro does not rebuild a separate music app.
+native Quickshell client and libmpv daemon. It ships as an RPM from its own
+COPR project (`itskontra/ryotunes`); the distro does not rebuild a separate
+music app.
 
 A shell *surface* is a fourth thing and does not live here. `ryoshot` and
 `welcome` launch the same single-instance way but ship inside the shell at

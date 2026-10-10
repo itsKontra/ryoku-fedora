@@ -147,7 +147,6 @@ func Update(args []string) error {
 		}
 		rashinReindex()
 		prowlRefresh()
-		upgradeRyotunes()
 		progress.at("doctor")
 		offerSnapperHelpers()
 		runFreshDoctor()
@@ -825,7 +824,6 @@ func updateStage2(pre string, withSystem bool) error {
 	powerCutoverLock = nil
 	rashinReindex()
 	prowlRefresh()
-	upgradeRyotunes()
 
 	progress.at("doctor")
 	offerSnapperHelpers()
@@ -1701,7 +1699,6 @@ func buildStatus() statusReport {
 	// box ends up looking updated while its kernel never moves.
 	r.Packages = systemPackageUpdates()
 	r.SystemPending = len(r.Packages)
-	addRyotunesUpdate(&r)
 	return r
 }
 
@@ -1864,7 +1861,7 @@ func pendingUpdates() []updateItem {
 		sc := bufio.NewScanner(strings.NewReader(string(out)))
 		for sc.Scan() {
 			f := strings.Fields(sc.Text())
-			if len(f) >= 4 && f[2] == "->" && !externalReleasePkgs[f[0]] {
+			if len(f) >= 4 && f[2] == "->" {
 				ups = append(ups, updateItem{Name: f[0], Old: f[1], New: f[3]})
 			}
 		}
@@ -1878,10 +1875,7 @@ func pendingUpdates() []updateItem {
 		for sc.Scan() {
 			f := strings.Fields(sc.Text())
 			if len(f) >= 3 && strings.Contains(f[0], ".") {
-				name := strings.Split(f[0], ".")[0]
-				if !externalReleasePkgs[name] {
-					ups = append(ups, updateItem{Name: name, New: f[1]})
-				}
+				ups = append(ups, updateItem{Name: strings.Split(f[0], ".")[0], New: f[1]})
 			}
 		}
 		return ups
@@ -1907,7 +1901,7 @@ func aurUpdates() []updateItem {
 	sc := bufio.NewScanner(strings.NewReader(string(out)))
 	for sc.Scan() {
 		f := strings.Fields(sc.Text())
-		if len(f) >= 4 && f[2] == "->" && !externalReleasePkgs[f[0]] {
+		if len(f) >= 4 && f[2] == "->" {
 			ups = append(ups, updateItem{Name: f[0], Old: f[1], New: f[3]})
 		}
 	}

@@ -19,7 +19,7 @@ import (
 // costs only itself. Tools the shell calls by name (grim, playerctl, matugen,
 // cava, mpv for the launcher's radio, the pill's OCR/capture backends) stay hard
 // depends, because losing them breaks a Ryoku surface the user never touched.
-// Ryotunes has its own official-release install/reconciliation path.
+// Ryotunes has its own reconciler (reconcile_ryotunes.go).
 type shippedApp struct {
 	pkg  string
 	what string

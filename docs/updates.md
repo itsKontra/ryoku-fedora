@@ -60,13 +60,12 @@ page exists to prevent.
 
 ### Ryotunes
 
-On Fedora, Ryotunes is an RPM from its own COPR project (`itskontra/ryotunes`,
-enabled as a dependency repository) and moves with `sudo dnf upgrade`. When the desktop expects it and it is missing,
-`ryoku doctor` installs it with `dnf install ryotunes` and enables its socket.
-The Arch build tracked prebuilt packages from the
-[ryoku-dev/ryotunes](https://github.com/ryoku-dev/ryotunes) GitHub releases
-(`internal/ryotunesrelease`); that path installs with pacman and does not apply
-to Fedora.
+Ryotunes is an RPM from its own COPR project (`itskontra/ryotunes`), enabled as
+a dependency repository. It is not in the Ryoku set: it moves with the system
+lane (`sudo dnf upgrade`, or `ryoku update --system`), and `ryoku status` lists
+a pending Ryotunes with the other system packages. When the desktop expects
+Ryotunes and it is missing, `ryoku doctor` installs it with
+`dnf install ryotunes` and enables its socket.
 
 ## `ryoku update`
 
