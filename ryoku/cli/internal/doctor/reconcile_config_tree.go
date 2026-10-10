@@ -44,7 +44,7 @@ var startSession = func() error {
 
 // shippedProviders lists the providers whose tree the packaged base carries, i.e.
 // the ones whose variant package is installed. Reading the base rather than
-// pacman keeps a checkout box honest: there the base is the repository and every
+// the package database keeps a checkout box honest: there the base is the repository and every
 // provider counts as shipped.
 func shippedProviders() []string {
 	var out []string

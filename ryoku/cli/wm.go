@@ -443,8 +443,8 @@ func removePreviousCompositor(active, incoming string) {
 	fmt.Printf(i18n.T("Removed %s: reclaimed %d packages (%s).\n"), active, rs.Count, humanSize(rs.Size))
 }
 
-// humanSize names a byte count the way pacman's own removal summary does, so a
-// reclaimed size reads the same in `ryoku wm use` as in pacman.
+// humanSize names a byte count in binary units, so a reclaimed size reads the
+// same in `ryoku wm use` as in dnf's own removal summary.
 func humanSize(n int64) string {
 	if n >= 1<<30 {
 		return fmt.Sprintf("%.2f GiB", float64(n)/(1<<30))
@@ -519,29 +519,18 @@ func rawLen(raw json.RawMessage) int {
 }
 
 func packageAvailable(pkg string) bool {
-	if sys.RPMManager() == "dnf" {
-		out, err := sys.RunOut("dnf", "-q", "repoquery", "--available", pkg)
-		return err == nil && strings.TrimSpace(out) != ""
-	}
-	_, err := sys.RunOut("pacman", "-Si", pkg)
-	return err == nil
+	out, err := sys.RunOut("dnf", "-q", "repoquery", "--available", pkg)
+	return err == nil && strings.TrimSpace(out) != ""
 }
 
 // packageInstalled reports whether pkg is installed here, which decides whether
 // a switch has an outgoing variant package to drop.
 func packageInstalled(pkg string) bool {
-	if sys.RPMManager() == "dnf" {
-		return sys.PkgInstalled(pkg)
-	}
-	_, err := sys.RunOut("pacman", "-Qq", pkg)
-	return err == nil
+	return sys.PkgInstalled(pkg)
 }
 
 func installPackage(pkg string) error {
-	if sys.RPMManager() == "dnf" {
-		return sys.Sudo("dnf", "install", "-y", pkg)
-	}
-	return sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg)
+	return sys.Sudo("dnf", "install", "-y", pkg)
 }
 
 func removePackage(pkg string) error {
@@ -552,10 +541,6 @@ func removePackages(pkgs []string) error {
 	if len(pkgs) == 0 {
 		return nil
 	}
-	if sys.RPMManager() == "dnf" {
-		args := append([]string{"dnf", "remove", "-y", "--noautoremove"}, pkgs...)
-		return sys.Sudo(args...)
-	}
-	args := append([]string{"pacman", "-Rns", "--noconfirm"}, pkgs...)
+	args := append([]string{"dnf", "remove", "-y", "--noautoremove"}, pkgs...)
 	return sys.Sudo(args...)
 }

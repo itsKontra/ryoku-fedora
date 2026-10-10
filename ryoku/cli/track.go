@@ -15,12 +15,11 @@ const trackURL = "https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/
 // sourceChannels are the git branches `ryoku track ... --source` builds from.
 var sourceChannels = map[string]bool{"main": true, "unstable-dev": true}
 
-// cmdTrack points the box at an update channel. By default a track selects a
-// package channel and hands off to updater.Track (which rewrites the [ryoku]
-// Server and runs an update): the branch aliases a tester knows map to their
-// channels -- `unstable-dev` == `testing`, `main` == `stable` -- and stable,
-// testing, and a release tag pass through. `--source` (either order) instead
-// builds the box from a git checkout via bin/ryoku-track, the developer path.
+// cmdTrack points the box at an update channel. By default a track selects the
+// COPR package channel and hands off to updater.Track (which rewrites the
+// RyokuCOPR baseurl and runs an update); `main` is an alias for it. `--source`
+// (either order) instead builds the box from a git checkout via
+// bin/ryoku-track, the developer path.
 func cmdTrack(args []string) error {
 	channel, source, err := parseTrackArgs(args)
 	if err != nil {
@@ -32,19 +31,10 @@ func cmdTrack(args []string) error {
 		}
 		return trackFromSource(channel)
 	}
-	if sys.RPMManager() != "" {
-		if channel == "main" {
-			channel = sys.ChannelCOPR
-		}
-		return updater.Track(channel)
+	if channel == "main" {
+		channel = sys.ChannelCOPR
 	}
-	pkg := packageChannelFor(channel)
-	if pkg == "" {
-		return fmt.Errorf(i18n.T("unknown channel %q\n"+
-			"  packaged: stable, testing, unstable-dev, main, or a release tag (v0.55.7-beta.19)\n"+
-			"  source:   main or unstable-dev, with --source"), channel)
-	}
-	return updater.Track(pkg)
+	return updater.Track(channel)
 }
 
 // parseTrackArgs pulls the one channel and the optional --source flag (either
@@ -63,29 +53,10 @@ func parseTrackArgs(args []string) (channel string, source bool, err error) {
 		}
 	}
 	if channel == "" {
-		return "", false, fmt.Errorf(i18n.T("usage: ryoku track <stable|testing|unstable-dev|main|v<release>>\n" +
+		return "", false, fmt.Errorf(i18n.T("usage: ryoku track <copr|main>\n" +
 			"       ryoku track <main|unstable-dev> --source   (build from a git checkout)"))
 	}
 	return channel, source, nil
-}
-
-// packageChannelFor maps a track argument to the package channel it selects:
-// unstable-dev is testing (rebuilt on every push), main is stable (named
-// releases); stable, testing, and a release tag pass through. "" for anything
-// that names no package channel.
-func packageChannelFor(name string) string {
-	switch name {
-	case "unstable-dev":
-		return sys.ChannelTesting
-	case "main":
-		return sys.ChannelStable
-	case sys.ChannelStable, sys.ChannelTesting:
-		return name
-	}
-	if sys.IsReleaseTag(name) {
-		return name
-	}
-	return ""
 }
 
 // trackFromSource hands off to bin/ryoku-track, which builds and deploys the box

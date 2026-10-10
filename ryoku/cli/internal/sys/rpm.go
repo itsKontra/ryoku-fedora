@@ -13,28 +13,35 @@ var RPMRepoFile = "/etc/yum.repos.d/" + RPMRepoName + ".repo"
 const COPRServer = "https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/fedora-$releasever-$basearch"
 const ChannelCOPR = "copr"
 
+// RPMManager is "dnf" on a box that has it, "" otherwise.
 func RPMManager() string {
-	if Has("pacman") {
-		return ""
-	}
 	if Has("dnf") {
 		return "dnf"
 	}
 	return ""
 }
-func rpmChannelServer(channel string) string {
+
+// ChannelServer is the RyokuCOPR baseurl for a channel, or "" for a name that
+// is not one. Fedora has the one rolling COPR channel.
+func ChannelServer(channel string) string {
 	if channel == ChannelCOPR {
 		return COPRServer
 	}
 	return ""
 }
-func rpmChannelOfServer(server string) string {
+
+// ChannelOfServer maps a baseurl back to its channel name, "" for a mirror Ryoku
+// does not publish, which is left alone everywhere.
+func ChannelOfServer(server string) string {
 	if strings.TrimRight(server, "/") == COPRServer {
 		return ChannelCOPR
 	}
 	return ""
 }
-func rpmRepoServer() string {
+
+// RyokuServer returns the baseurl of the RyokuCOPR repo, or "" when the repo
+// file or its baseurl is absent.
+func RyokuServer() string {
 	b, _ := os.ReadFile(RPMRepoFile)
 	in := false
 	for _, line := range strings.Split(string(b), "\n") {
@@ -50,8 +57,12 @@ func rpmRepoServer() string {
 	}
 	return ""
 }
-func setRPMChannel(channel string) error {
-	server := rpmChannelServer(channel)
+
+// SetPackagedChannel rewrites the RyokuCOPR baseurl to channel. It needs a repo
+// file to rewrite; the installer writes it. Written through sudo install, so
+// the file is replaced whole and its gpg settings survive.
+func SetPackagedChannel(channel string) error {
+	server := ChannelServer(channel)
 	if server == "" {
 		return fmt.Errorf("Fedora uses the copr channel; stable, testing and frozen release tags are unavailable")
 	}
@@ -78,14 +89,4 @@ func setRPMChannel(channel string) error {
 		return fmt.Errorf("no [RyokuCOPR] baseurl in %s", repoFile)
 	}
 	return WriteRootFile(repoFile, strings.Join(lines, "\n"), "0644")
-}
-func rpmChannelURL(channel string) string {
-	server := rpmChannelServer(channel)
-	release, _ := os.ReadFile("/etc/os-release")
-	for _, line := range strings.Split(string(release), "\n") {
-		if strings.HasPrefix(line, "VERSION_ID=") {
-			server = strings.ReplaceAll(server, "$releasever", strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), "\""))
-		}
-	}
-	return strings.ReplaceAll(server, "$basearch", "x86_64")
 }

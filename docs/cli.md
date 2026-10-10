@@ -212,9 +212,9 @@ driver (`ryoku-nvidia`), desktop session components, the keyring unlock policy (
 unlocks at sign-in; see `ryoku keyring`), Hyprland config integrity (revalidates and repairs the
 generated monitors.lua/gpu.lua drop-ins so a corrupt one cannot strand the desktop
 backlight (catches a missing interface, missing brightnessctl, or a hybrid-GPU
-firmware-only backlight), and orphaned packages (`dnf repoquery --unneeded`).
-Reconcilers that only concern pacman (its lock, its progress bar, `.pacnew`
-files) report `ok` on Fedora.
+firmware-only backlight), pending config updates (`.rpmnew`/`.rpmsave`, reported
+for a merge with `rpmconf`, never dropped), and orphaned packages
+(`dnf repoquery --unneeded`).
 Reconcilers retire once every supported install has run them, so the set stays
 small rather than growing like an ordered migration list.
 

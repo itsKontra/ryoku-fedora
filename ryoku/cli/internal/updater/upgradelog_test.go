@@ -8,15 +8,13 @@ import (
 	"testing"
 )
 
-// a transcript shaped like a real `pacman -Syu`, including the mixed-repo
-// "newer than" chatter and a file-conflict failure like the plymouth one.
+// a transcript shaped like a real upgrade, including an rpm file-conflict
+// failure like the plymouth one.
 const pacmanTranscript = `:: Synchronizing package databases...
  cachyos-v3 is up to date
  core is up to date
  ryoku is up to date
 :: Starting full system upgrade...
-warning: binutils: local (2.47-4) is newer than cachyos-v3 (2.47-2)
-warning: zstd: local (1.5.7-3) is newer than cachyos-v3 (1.5.7-2)
 resolving dependencies...
 looking for conflicting packages...
 
@@ -32,7 +30,7 @@ Net Upgrade Size:      64.09 MiB
 (2/37) upgrading colord
 (37/37) upgrading zsh
 error: failed to commit transaction (conflicting files)
-ryoku-desktop: /usr/share/plymouth/themes/ryoku/bullet.png exists in filesystem
+file /usr/share/plymouth/themes/ryoku/bullet.png from install of ryoku-desktop-2-2.noarch conflicts with file from package plymouth-1-1.x86_64
 Errors occurred, no packages were upgraded.`
 
 func renderTranscript(t *testing.T, transcript string, ok bool) string {
@@ -49,7 +47,7 @@ func renderTranscript(t *testing.T, transcript string, ok bool) string {
 func TestRendererHidesNoise(t *testing.T) {
 	out := renderTranscript(t, pacmanTranscript, false)
 	for _, noise := range []string{
-		"Synchronizing", "is up to date", "is newer than",
+		"Synchronizing", "is up to date",
 		"resolving dependencies", "looking for conflicting",
 		"checking keys", "checking package integrity", "upgrading blesh",
 	} {
@@ -67,7 +65,7 @@ func TestRendererKeepsSignal(t *testing.T) {
 		"64.09 MiB",             // net size in the summary
 		"ryoku-desktop",         // ryoku highlight (version stripped)
 		"ryoku-shell",           // ryoku highlight
-		"exists in filesystem",  // conflict detail is surfaced
+		"conflicts with file",   // conflict detail is surfaced
 		"failed to commit",      // real error is surfaced
 		"System upgrade failed", // failure cap
 	} {
@@ -93,10 +91,9 @@ func TestClassify(t *testing.T) {
 		want lineClass
 	}{
 		{" core is up to date", clDrop},
-		{"warning: zstd: local (1.5.7-3) is newer than cachyos-v3 (1.5.7-2)", clDrop},
-		{"warning: /etc/foo.conf installed as /etc/foo.conf.pacnew", clWarn},
+		{"warning: /etc/foo.conf created as /etc/foo.conf.rpmnew", clWarn},
 		{"error: failed to commit transaction (conflicting files)", clError},
-		{"ryoku-desktop: /usr/share/plymouth/themes/ryoku/logo.png exists in filesystem", clConflict},
+		{"file /usr/share/plymouth/themes/ryoku/logo.png from install of ryoku-desktop-2-2.noarch conflicts with file from package plymouth-1-1.x86_64", clConflict},
 		{"(12/37) upgrading wine", clProgress},
 		{":: Running post-transaction hooks...", clProgress},
 	}
@@ -119,26 +116,9 @@ func TestSizeValueAndCount(t *testing.T) {
 	}
 }
 
-func TestConflictPath(t *testing.T) {
-	cases := map[string]string{
-		"noto-fonts: /usr/share/fontconfig/conf.avail/46-noto-sans.conf exists in filesystem":          "/usr/share/fontconfig/conf.avail/46-noto-sans.conf",
-		"ryoku-desktop: /usr/lib/systemd/system/ryoku-network-kill-guard.service exists in filesystem": "/usr/lib/systemd/system/ryoku-network-kill-guard.service",
-		"foo: /a/b exists in filesystem (owned by bar)":                                                "/a/b",
-		" downloading...": "",
-		"error: failed to commit transaction (conflicting files)": "",
-		":: Proceed with installation? [Y/n]":                     "",
-	}
-	for line, want := range cases {
-		if got := conflictPath(line); got != want {
-			t.Errorf("conflictPath(%q) = %q, want %q", line, got, want)
-		}
-	}
-}
-
 // TestPipedRunIsCurated pins the consumer the Hub's update island and
 // `ryoku update > log` represent: stdout is a pipe, so the curated view (never
-// the raw pacman firehose) must reach it, while the conflict paths are still
-// collected for the stray-clearing retry.
+// the raw package-manager firehose) must reach it.
 func TestPipedRunIsCurated(t *testing.T) {
 	oldInhibit := sleepInhibitOK
 	sleepInhibitOK = func() bool { return false }
@@ -150,8 +130,8 @@ func TestPipedRunIsCurated(t *testing.T) {
 	}
 	keep := os.Stdout
 	os.Stdout = capW
-	script := `printf '%s\n' ':: Synchronizing package databases...' ' core is up to date' 'Packages (2) ryoku-1-1 ryoku-desktop-2-2' '' 'Net Upgrade Size: 1.00 MiB' '(1/2) upgrading ryoku' 'warning: /etc/foo.conf installed as /etc/foo.conf.pacnew' 'ryoku-desktop: /usr/share/plymouth/themes/ryoku/bullet.png exists in filesystem'`
-	conflicts, _ := runUpgradeCollecting("System", "test", []string{"bash", "-c", script})
+	script := `printf '%s\n' ':: Synchronizing package databases...' ' core is up to date' 'Packages (2) ryoku-1-1 ryoku-desktop-2-2' '' 'Net Upgrade Size: 1.00 MiB' '(1/2) upgrading ryoku' 'warning: /etc/foo.conf created as /etc/foo.conf.rpmnew' 'file /usr/share/plymouth/themes/ryoku/bullet.png from install of ryoku-desktop-2-2.noarch conflicts with file from package plymouth-1-1.x86_64'`
+	_ = runUpgrade("System", "test", []string{"bash", "-c", script})
 	capW.Close()
 	os.Stdout = keep
 	out, _ := io.ReadAll(capR)
@@ -163,15 +143,12 @@ func TestPipedRunIsCurated(t *testing.T) {
 			t.Errorf("piped output leaked firehose line %q:\n%s", noise, got)
 		}
 	}
-	for _, want := range []string{"System packages", ".pacnew", "exists in filesystem"} {
+	for _, want := range []string{"System packages", ".rpmnew", "conflicts with file"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("piped output missing signal %q:\n%s", want, got)
 		}
 	}
 	if strings.Contains(got, "\r") {
 		t.Errorf("piped output carries spinner carriage returns:\n%q", got)
-	}
-	if len(conflicts) != 1 || conflicts[0] != "/usr/share/plymouth/themes/ryoku/bullet.png" {
-		t.Errorf("conflicts = %q, want the one pacman conflict path", conflicts)
 	}
 }

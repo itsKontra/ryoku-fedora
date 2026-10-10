@@ -26,6 +26,7 @@ type wmPluginState struct {
 	enabled   int
 	toolchain bool
 	missing   []string
+	packages  []string // what the provider says supplies the missing tools
 }
 
 var gatherWmPlugins = func() wmPluginState {
@@ -41,8 +42,9 @@ var gatherWmPlugins = func() wmPluginState {
 	}
 	var roster struct {
 		Toolchain struct {
-			OK      bool     `json:"ok"`
-			Missing []string `json:"missing"`
+			OK       bool     `json:"ok"`
+			Missing  []string `json:"missing"`
+			Packages []string `json:"packages"`
 		} `json:"toolchain"`
 		Plugins []struct {
 			ID          string `json:"id"`
@@ -56,7 +58,7 @@ var gatherWmPlugins = func() wmPluginState {
 		return s
 	}
 	s.listed = true
-	s.toolchain, s.missing = roster.Toolchain.OK, roster.Toolchain.Missing
+	s.toolchain, s.missing, s.packages = roster.Toolchain.OK, roster.Toolchain.Missing, roster.Toolchain.Packages
 	for _, p := range roster.Plugins {
 		if !p.Enabled {
 			continue
@@ -102,8 +104,12 @@ func planWmPlugins(s wmPluginState, checkOnly bool, repair func() (map[string]st
 	}
 	list := strings.Join(s.stale, ", ")
 	if !s.toolchain {
+		fix := i18n.T("install the missing build tools, then Settings > Plugins > Rebuild")
+		if len(s.packages) > 0 {
+			fix = fmt.Sprintf(i18n.T("sudo dnf install %s, then Settings > Plugins > Rebuild"), strings.Join(s.packages, " "))
+		}
 		return warnRes(i18n.T("enabled plugin(s) built for another compositor build and this box cannot rebuild them (missing %s): %s"), strings.Join(s.missing, ", "), list).
-			withFix(i18n.T("sudo pacman -S --needed base-devel cmake git, then Settings > Plugins > Rebuild"))
+			withFix(fix)
 	}
 	if checkOnly {
 		return wouldRes(i18n.T("enabled plugin(s) built for another compositor build: %s"), list).

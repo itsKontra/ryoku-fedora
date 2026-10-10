@@ -8,7 +8,7 @@ import (
 // versionCompare orders two package versions ([epoch:]version[-release]) the
 // way rpm does: -1 when a is older, 0 when equal, 1 when newer. It lives in Go
 // rather than shelling out so the status check stays cheap and testable; the
-// same rules order the pacman versions a packaged Arch box reports.
+// same rules order the versions dnf reports.
 func versionCompare(a, b string) int {
 	ea, va, ra := splitEVR(a)
 	eb, vb, rb := splitEVR(b)

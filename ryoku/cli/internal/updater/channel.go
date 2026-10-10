@@ -18,13 +18,12 @@ import (
 // `ryoku status` reports how far the deployed commit (the running system) is
 // behind origin/<channel>; `ryoku update` pulls the channel in and redeploys.
 // A packaged install has no checkout, so these report "no channel" and the
-// caller falls back to the pacman view of the [ryoku] repo.
+// caller falls back to the dnf view of the RyokuCOPR repo.
 
 // ryokuChannel: the channel update tracks. A packaged box's channel is
-// authoritative -- the [ryoku] Server it points at (stable, testing, or a
-// pinned release) -- and wins over a RYOKU_CHANNEL a source box left in
+// authoritative -- the RyokuCOPR baseurl it points at -- and wins over a RYOKU_CHANNEL a source box left in
 // environment.d before it was migrated onto packages, so a migrated box
-// reports testing, not the stale unstable-dev. A source checkout follows the
+// reports copr, not the stale unstable-dev. A source checkout follows the
 // branch `ryoku track --source` persisted to environment.d, which wins over the
 // stale login env; a box that never tracked follows main.
 func ryokuChannel() string {
@@ -66,7 +65,7 @@ func deployedBase(repo string) string {
 // channelStatus reports how far the deployed commit is behind the channel:
 // the commits origin/<channel> has that the running system doesn't. ok=false
 // when there's no checkout to track or the remote has no such branch, so the
-// caller falls back to the pacman view. Fetch is best-effort and bounded so
+// caller falls back to the dnf view. Fetch is best-effort and bounded so
 // an offline or auth-walled remote never hangs a status query; on a fetch
 // failure the cached remote-tracking ref stands.
 func channelStatus() (statusReport, bool) {

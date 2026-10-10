@@ -66,8 +66,8 @@ func zenPolicyBytes() []byte {
 
 // zenInstallRoots lists the directories a Zen install may live under. The policy
 // belongs in <root>/distribution/policies.json, where it applies to every
-// profile without touching the user's own settings. The list covers the AUR
-// package (zen-browser-bin), a plain /opt drop, a per-user tarball, and whatever
+// profile without touching the user's own settings. The list covers the
+// packaged layouts under /usr/lib and /usr/lib64, a plain /opt drop, a per-user tarball, and whatever
 // dir a zen binary on PATH resolves into.
 func zenInstallRoots() []string {
 	roots := []string{

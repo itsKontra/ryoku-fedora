@@ -84,13 +84,13 @@ func TestProgressFailCarriesSnapshotAndError(t *testing.T) {
 	p.begin(pkgSteps)
 	p.setSnapshot("42")
 	p.at("packages")
-	p.fail(errors.New("pacman blew up"))
+	p.fail(errors.New("dnf blew up"))
 
 	st := readRunState(t)
 	if st.Phase != "error" {
 		t.Fatalf("fail: phase %q, want error", st.Phase)
 	}
-	if st.Error != "pacman blew up" {
+	if st.Error != "dnf blew up" {
 		t.Errorf("fail: error %q", st.Error)
 	}
 	if st.Snapshot != "42" {

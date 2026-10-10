@@ -67,25 +67,12 @@ func planShippedApps(apps []shippedApp, installed, asDep, seen map[string]bool) 
 
 // Seams: the live box's answers, replaced in tests.
 var (
-	// appPackager names the package manager the lane drives: pacman on Arch, dnf
-	// on Fedora, "" on a box with neither.
-	appPackager = func() string {
-		switch {
-		case sys.Has("pacman"):
-			return "pacman"
-		case sys.Has("dnf"):
-			return "dnf"
-		}
-		return ""
-	}
+	// hasDNF reports whether the lane has a package manager to drive.
+	hasDNF            = func() bool { return sys.Has("dnf") }
 	appInstalled      = func(pkg string) bool { return sys.PkgInstalled(pkg) }
 	appInstalledAsDep = func(pkg string) bool {
-		if appPackager() == "dnf" {
-			out, err := exec.Command("dnf", "repoquery", "-q", "--installed", "--qf", "%{reason}", pkg).Output()
-			return err == nil && strings.Contains(string(out), "Dependency")
-		}
-		// `pacman -Qdq <pkg>` succeeds only for a package installed as a dependency.
-		return exec.Command("pacman", "-Qdq", pkg).Run() == nil
+		out, err := exec.Command("dnf", "repoquery", "-q", "--installed", "--qf", "%{reason}", pkg).Output()
+		return err == nil && strings.Contains(string(out), "Dependency")
 	}
 	// Fedora has no RPM yet for some apps (installation/fedora/README.md lists the
 	// porting gaps). Those are skipped rather than warned about on every run, and
@@ -95,9 +82,6 @@ var (
 		all := map[string]bool{}
 		for _, p := range pkgs {
 			all[p] = true
-		}
-		if appPackager() != "dnf" {
-			return all
 		}
 		args := append([]string{"repoquery", "-q", "--available", "--qf", "%{name}\\n"}, pkgs...)
 		out, err := exec.Command("dnf", args...).Output()
@@ -115,34 +99,20 @@ var (
 	installShippedApps = func(pkgs []string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		args := append([]string{"pacman", "-S", "--needed", "--noconfirm"}, pkgs...)
-		if appPackager() == "dnf" {
-			args = append([]string{"dnf", "install", "-y"}, pkgs...)
-		}
+		args := append([]string{"dnf", "install", "-y"}, pkgs...)
 		_ = exec.CommandContext(ctx, "sudo", args...).Run()
 	}
 	markAppsExplicit = func(pkgs []string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		args := append([]string{"pacman", "-D", "--asexplicit", "--quiet"}, pkgs...)
-		if appPackager() == "dnf" {
-			args = append([]string{"dnf", "-y", "mark", "user"}, pkgs...)
-		}
+		args := append([]string{"dnf", "-y", "mark", "user"}, pkgs...)
 		_ = exec.CommandContext(ctx, "sudo", args...).Run()
 	}
 )
 
-// installFix is the command a user runs to land pkgs by hand.
-func installFix(pkgs []string) string {
-	if appPackager() == "dnf" {
-		return "sudo dnf install " + strings.Join(pkgs, " ")
-	}
-	return "sudo pacman -Sy && sudo pacman -S " + strings.Join(pkgs, " ")
-}
-
 func reconcileShippedApps(checkOnly bool) recResult {
-	if appPackager() == "" {
-		return okRes(i18n.T("no pacman or dnf here; shipped apps are the installer's business"))
+	if !hasDNF() {
+		return okRes(i18n.T("no dnf here; shipped apps are the installer's business"))
 	}
 	apps := shippedApps()
 	installed, asDep := map[string]bool{}, map[string]bool{}
@@ -223,10 +193,10 @@ func reconcileShippedApps(checkOnly bool) recResult {
 	switch {
 	case len(missed) > 0 && len(landed) > 0:
 		return warnRes(i18n.T("installed %s; %s did not land"), strings.Join(landed, ", "), strings.Join(missed, ", ")).
-			withFix("%s", installFix(missed))
+			withFix("sudo dnf install %s", strings.Join(missed, " "))
 	case len(missed) > 0:
 		return warnRes(i18n.T("%s could not be installed"), strings.Join(missed, ", ")).
-			withFix("%s", installFix(missed))
+			withFix("sudo dnf install %s", strings.Join(missed, " "))
 	case len(landed) > 0:
 		return fixedRes(i18n.T("installed %s (delete any of them and Ryoku will not reinstall it)"),
 			strings.Join(landed, ", "))

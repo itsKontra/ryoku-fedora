@@ -15,14 +15,14 @@ func TestCOPRChannelPreservesRepositorySecurity(t *testing.T) {
 	if err := os.WriteFile(RPMRepoFile, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := rpmChannelOfServer(rpmRepoServer()); got != ChannelCOPR {
+	if got := ChannelOfServer(RyokuServer()); got != ChannelCOPR {
 		t.Fatalf("channel = %q", got)
 	}
 	for _, channel := range []string{"stable", "testing", "v1.0.0", "../untrusted"} {
-		if rpmChannelServer(channel) != "" {
+		if ChannelServer(channel) != "" {
 			t.Fatalf("accepted unsupported channel %q", channel)
 		}
-		if err := setRPMChannel(channel); err == nil {
+		if err := SetPackagedChannel(channel); err == nil {
 			t.Fatal("changed unsupported channel")
 		}
 	}
@@ -30,7 +30,7 @@ func TestCOPRChannelPreservesRepositorySecurity(t *testing.T) {
 	if string(data) != original || !strings.Contains(string(data), "gpgcheck=1") {
 		t.Fatal("changed repository security")
 	}
-	if rpmChannelOfServer("https://other.example/fedora-44-x86_64") != "" {
+	if ChannelOfServer("https://other.example/fedora-44-x86_64") != "" {
 		t.Fatal("recognized foreign repository")
 	}
 }

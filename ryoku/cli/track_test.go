@@ -38,23 +38,6 @@ func TestParseTrackArgs(t *testing.T) {
 	}
 }
 
-func TestPackageChannelForAliases(t *testing.T) {
-	cases := map[string]string{
-		"unstable-dev":    "testing",
-		"main":            "stable",
-		"testing":         "testing",
-		"stable":          "stable",
-		"v0.55.7-beta.19": "v0.55.7-beta.19",
-		"bogus":           "",
-		"":                "",
-	}
-	for in, want := range cases {
-		if got := packageChannelFor(in); got != want {
-			t.Errorf("packageChannelFor(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 // `ryoku track <branch> --source` (either order) hands off to the local
 // bin/ryoku-track with just the branch.
 func TestTrackSourceRunsLocalScript(t *testing.T) {

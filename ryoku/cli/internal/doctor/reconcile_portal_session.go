@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"ryoku-cli/internal/sys"
+
 	i18n "ryoku-i18n"
 	wm "ryoku-wm"
 )
@@ -129,9 +131,9 @@ func portalBackendFault() recResult {
 		return warnRes(i18n.T("screen share offers no source picker: this session's portal publishes no ScreenCast interface")).
 			withFix(i18n.T("ryoku doctor --check, then reinstall the desktop portal backend"))
 	}
-	if !anyPkgInstalled(frontend.pkgs...) {
+	if !sys.PkgInstalled(frontend) {
 		return warnRes(i18n.T("screen share offers no source picker: the portal backend this desktop needs is not installed")).
-			withFix(frontend.fix)
+			withFix("sudo dnf install " + frontend)
 	}
 	return warnRes(i18n.T("screen share offers no source picker: the portal backend is installed but never published its interface")).
 		withFix(fmt.Sprintf("systemctl --user status xdg-desktop-portal-%s.service", backend))

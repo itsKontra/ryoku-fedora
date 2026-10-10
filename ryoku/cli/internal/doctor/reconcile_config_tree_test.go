@@ -42,7 +42,7 @@ func swapStartSession(t *testing.T, fn func() error) {
 // live session that already booted without it.
 
 // configTreeFixture: a packaged base that ships the given provider trees, and an
-// empty ~/.config, i.e. a box right after `pacman -S`.
+// empty ~/.config, i.e. a box right after `dnf install`.
 func configTreeFixture(t *testing.T, providers ...string) (home, base string) {
 	t.Helper()
 	home, base = t.TempDir(), t.TempDir()

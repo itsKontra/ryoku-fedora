@@ -62,7 +62,11 @@ func bootID() string {
 
 // armBootGuard is called by stage2 on a packaged box once the packages are
 // in. RYOKU_UPDATE_FROM carries the release the first stage read before dnf
-// ran; the marker is written only when the release actually changed.
+// ran; the marker is written only when the box moves off a tagged release.
+// Rolling COPR builds change the release string on nearly every update, and
+// the guard reads any boot that never keeps the shell up (a greeter left idle,
+// another desktop, a headless boot) as a failure, so arming there would send
+// healthy boxes to a snapshot.
 func armBootGuard(snapshot string) {
 	if sys.ResolveRepo() != "" {
 		return

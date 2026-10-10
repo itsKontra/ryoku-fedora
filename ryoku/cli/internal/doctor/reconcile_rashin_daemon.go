@@ -189,9 +189,8 @@ func reconcileAiUsageTimer(checkOnly bool) recResult {
 // reconcileProwlAgent surfaces a rashin box that lost its prowl binary.
 // ryoku-rashin now depends on prowl (its `index` builds the vault code map
 // and its `wire` installs Prowl's agent skills), so a box that enabled rashin
-// before that dependency shipped can run without it. `pacman -Syu` delivers it
-// going forward; this reports the gap for a box still stuck without it. Reported,
-// never auto-run: installing a package is the user's call.
+// before that dependency shipped can run without it. ryoku-extras ships it;
+// doctor fetches the same pinned extra and reports the gap if that fails.
 func reconcileProwlAgent(checkOnly bool) recResult {
 	enabled := rashinUnitEnabled()
 	present := sys.Has("prowl") || sys.Has("prowl-agent")
@@ -201,17 +200,11 @@ func reconcileProwlAgent(checkOnly bool) recResult {
 		}
 		return okRes(i18n.T("prowl is present for the rashin agent index"))
 	}
-	fix := "sudo pacman -S prowl-agent"
-	if !sys.Has("pacman") {
-		fix = "ryoku-install-extra prowl-agent"
-		if !checkOnly {
-			if installProwlAgent() {
-				return fixedRes("installed prowl-agent for rashin agent index")
-			}
-		}
+	if !checkOnly && installProwlAgent() {
+		return fixedRes(i18n.T("installed prowl-agent for rashin agent index"))
 	}
 	return warnRes(i18n.T("rashin is enabled but prowl-agent is missing; the vault code index and agent skills will not refresh")).
-		withFix("%s", fix)
+		withFix("ryoku-install-extra prowl-agent")
 }
 
 func installProwlAgent() bool { return installDesktopExtra("prowl-agent") == nil }

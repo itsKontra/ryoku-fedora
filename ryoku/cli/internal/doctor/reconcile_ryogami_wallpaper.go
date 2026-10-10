@@ -15,7 +15,7 @@ import (
 // The wallpaper backend moved from awww (a swww fork the shell drove by name) to
 // Ryogami, the in-repo daemon the shell now drives over ryogami.sock. `ryoku
 // update` pulls the ryogami package (a ryoku-desktop depend) and drops the awww
-// depend, but pacman alone leaves an existing box in a broken middle: the ryogami
+// depend, but the package update alone leaves an existing box in a broken middle: the ryogami
 // user unit is delivered but not enabled, so ryoku-session.target never owns
 // it, and a stale awww-daemon from the old session keeps a surface mapped on the
 // background layer that stacks over Ryogami's and swallows every static set. This
