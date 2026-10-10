@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Ryoku Arch commit-msg hook.
+# Ryoku commit-msg hook.
 # blocks commits with no impact label, a subject over 72 chars or ending in a
 # period, AI/generated-content attribution (including AI/bot co-author trailers;
 # human co-authors are allowed), em-dashes, or a malformed Note: release trailer.

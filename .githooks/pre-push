@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Ryoku Arch pre-push.
+# Ryoku pre-push.
 # safety net for pushes to origin:
 #   1. block force-push to main (rewriting history that users pull from)
 #   2. CI-equivalent ShellCheck over non-vendored shell files in the push

@@ -10,9 +10,9 @@
 # whose signal is `picked`; qmllint had said so.
 #
 # Types resolve against the installed Qt import path (Quickshell, Ryoku.Ui,
-# Ryoku.FrameBars, ...), so run this where those modules are installed: the
-# container-install gate after `pacman -S ryoku-desktop`, or a dev box after
-# `ryoku deploy`. Extra import roots come from RYOKU_QML_IMPORTS (colon-separated).
+# Ryoku.FrameBars, ...), so run this where those modules are installed: a box
+# with the ryoku-desktop RPM installed, or a dev box after `ryoku deploy`. Extra
+# import roots come from RYOKU_QML_IMPORTS (colon-separated).
 #
 # Usage: ryoku-dev-lint-qml <config-root>...
 set -euo pipefail

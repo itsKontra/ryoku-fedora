@@ -92,11 +92,14 @@ install required:
 
 The daemon launches each component with `qs -p`, so your own `~/.config` is never
 touched, and quickshell hot-reloads QML edits, so changes show as you save.
-On an installed system, `ryoku update` is the real system update: a snapper
-pre-snapshot, `pacman -Syu` plus the AUR, a config materialize, a shell reload,
-then a post-snapshot. `ryoku deploy` is the dev-only path that builds the Go
-binaries and the plugin and materializes from a checkout. Both leave user files
-(`hypr/user.lua`, `fish/user.fish`) untouched.
+On an installed system, `ryoku update` takes a snapper pre-snapshot, upgrades
+the Ryoku packages with dnf, hands off to the freshly installed `ryoku` to
+materialize the new config and reload the desktop, runs `ryoku doctor` to heal
+stateful drift, then takes a post-snapshot. The base system, its kernel and
+Flatpak apps stay yours to update (`sudo dnf upgrade`, `flatpak update`);
+`ryoku update --system` adds both lanes to the same run. `ryoku deploy` is the
+dev-only path that builds the Go binaries and the plugin and materializes from a
+checkout. Both leave user files (`hypr/user.lua`, `fish/user.fish`) untouched.
 
 ## Install
 

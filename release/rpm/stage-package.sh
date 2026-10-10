@@ -23,7 +23,10 @@ if [[ -d $stage/usr/lib/qt6 ]]; then
   mv "$stage/usr/lib/qt6" "$stage$libdir/qt6"
 fi
 if [[ $name == ryoku-desktop ]]; then
-  cp "$root/.rpm-release" "$stage/etc/ryoku-release"
+  # /etc/ryoku-release names the release this build is (prepare-srpms.sh writes
+  # .rpm-release); `ryoku version`, `ryoku status`, the update island and the
+  # doctor read it, and the RPM owns it so it always matches what is installed.
+  install -Dm644 "$root/.rpm-release" "$stage/etc/ryoku-release"
   rm -f "$stage/usr/share/applications/mimeapps.list"
 fi
 if [[ $name == ryoku-desktop-* ]]; then
