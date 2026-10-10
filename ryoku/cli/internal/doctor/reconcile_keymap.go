@@ -41,7 +41,11 @@ func reconcileKeymap(checkOnly bool) recResult {
 	// Compared in xkb terms, so a console keymap that spells the same layout
 	// differently (uk for gb) is not reported as drift.
 	consoleDrifted := km != "" && keyboard.ConsoleAsXkb(km) != layout
-	stale, imgPath := keyboard.BootStale()
+	boot := keyboard.BootStale()
+	stale, imgPath := boot.Stale, boot.Image
+	if !consoleDrifted && boot.Unknown() {
+		return okRes(i18n.T("keyboard layout %q matches on the session, login screen, and console; %s is not readable as this user, so the boot prompt was not checked"), layout, boot.Denied)
+	}
 	if !consoleDrifted && !stale {
 		return okRes(i18n.T("keyboard layout %q matches on the session, login screen, console, and boot prompt"), layout)
 	}
