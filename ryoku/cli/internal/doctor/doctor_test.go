@@ -401,36 +401,18 @@ func TestReconcileThemeLua(t *testing.T) {
 // table reconcileSnapper switches on.
 func TestPlanSnapper(t *testing.T) {
 	consistent := snapperState{
-		rootIsBtrfs:         true,
-		configExists:        true,
-		snapshotsExists:     true,
-		snapshotsIsSubvol:   true,
-		snapshotsMode:       0o750,
-		confdExists:         true,
-		confdContents:       "SNAPPER_CONFIGS=\"root\"\n",
-		snapperInstalled:    true,
-		pacmanInstalled:     true,
-		snapPacInstalled:    true,
-		limineInstalled:     true,
-		limineSyncInstalled: true,
-		limineSyncEnabled:   true,
+		rootIsBtrfs:       true,
+		configExists:      true,
+		snapshotsExists:   true,
+		snapshotsIsSubvol: true,
+		snapshotsMode:     0o750,
+		confdExists:       true,
+		confdContents:     "SNAPPER_CONFIGS=\"root\"\n",
+		snapperInstalled:  true,
 	}
 	withMode := func(m os.FileMode) snapperState { s := consistent; s.snapshotsMode = m; return s }
 	withConfd := func(c string) snapperState { s := consistent; s.confdContents = c; return s }
 	plainSnapshotsDir := func() snapperState { s := consistent; s.snapshotsIsSubvol = false; return s }
-	noSnapPac := func() snapperState { s := consistent; s.snapPacInstalled = false; return s }
-	nonLimine := func() snapperState {
-		s := consistent
-		s.limineInstalled, s.limineSyncInstalled, s.limineSyncEnabled = false, false, false
-		return s
-	}
-	noLimineSync := func() snapperState {
-		s := consistent
-		s.limineSyncInstalled = false
-		s.limineSyncEnabled = false
-		return s
-	}
-	syncDisabled := func() snapperState { s := consistent; s.limineSyncEnabled = false; return s }
 	withConfdPath := func(path, c string) snapperState { s := consistent; s.confdPath = path; s.confdContents = c; return s }
 
 	cases := []struct {
@@ -449,11 +431,7 @@ func TestPlanSnapper(t *testing.T) {
 		{"conf.d missing root warns inconsistent", withConfd("SNAPPER_CONFIGS=\"home\"\n"), snapperWarnInconsistent, "does not list the root config"},
 		{"sysconfig missing root warns inconsistent", withConfdPath("/etc/sysconfig/snapper", "SNAPPER_CONFIGS=\"\"\n"), snapperWarnInconsistent, "/etc/sysconfig/snapper does not list the root config"},
 		{"/.snapshots is plain dir warns inconsistent", plainSnapshotsDir(), snapperWarnInconsistent, "plain directory"},
-		{"configured but snap-pac missing recommends it", noSnapPac(), snapperWarnInconsistent, "snap-pac"},
-		{"configured without pacman does not warn snap-pac", func() snapperState { s := consistent; s.pacmanInstalled = false; s.snapPacInstalled = false; return s }(), snapperOK, ""},
-		{"configured but limine-snapper-sync missing recommends it", noLimineSync(), snapperWarnInconsistent, "limine-snapper-sync"},
-		{"sync installed but service disabled tells the exact enable", syncDisabled(), snapperWarnInconsistent, "limine-snapper-sync.service is disabled"},
-		{"non-limine box is healthy without the sync package", nonLimine(), snapperOK, ""},
+		{"config present but snapper missing recommends it", func() snapperState { s := consistent; s.snapperInstalled = false; return s }(), snapperWarnInconsistent, "snapper is not installed"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -756,156 +734,11 @@ func TestDefaultCursorIndexInheritsShipped(t *testing.T) {
 	}
 }
 
-// the limine layout reconciler's decision logic lives in planLimineLayout, a
-// pure function of an observed limineLayoutState: no real /boot, no
-// efibootmgr. the config surgery (mergeLimineConf) is exercised on literal
 // configs shaped like the old installer's shadow file and like
 // limine-mkinitcpio-hook's generated tree.
-func TestPlanLimineLayout(t *testing.T) {
-	treeConf := "timeout: 3\ndefault_entry: 2\n\n/+Ryoku\n    comment: Ryoku\n//linux\n    protocol: efi\n"
-	flatConf := "timeout: 3\ndefault_entry: 1\n\n/Ryoku Linux\n    protocol: linux\n"
-
-	cases := []struct {
-		name       string
-		in         limineLayoutState
-		want       limineLayoutOutcome
-		wantAction string // substring expected in the actions, empty when none
-	}{
-		{"no limine package skips", limineLayoutState{}, limineLayoutSkip, ""},
-		{"limine installed but no configs under /boot skips",
-			limineLayoutState{limineInstalled: true}, limineLayoutSkip, ""},
-		{"healthy tool-managed layout reads ok",
-			limineLayoutState{limineInstalled: true, espConfExists: true, espConfReadable: true, espConf: treeConf, toolEFIExists: true},
-			limineLayoutOK, ""},
-		{"shadow config must merge",
-			limineLayoutState{limineInstalled: true, espConfExists: true, espConfReadable: true, espConf: treeConf, shadowExists: true, shadowReadable: true, shadowConf: flatConf},
-			limineLayoutMigrate, "shadows the generated boot entries"},
-		{"shadow without esp conf still merges (offline box)",
-			limineLayoutState{limineInstalled: true, shadowExists: true, shadowReadable: true, shadowConf: flatConf},
-			limineLayoutMigrate, "merge"},
-		{"tree with default_entry 1 repoints the default",
-			limineLayoutState{limineInstalled: true, espConfExists: true, espConfReadable: true, espConf: strings.Replace(treeConf, "default_entry: 2", "default_entry: 1", 1)},
-			limineLayoutMigrate, "default_entry"},
-		{"legacy hand-copied binary is retired",
-			limineLayoutState{limineInstalled: true, espConfExists: true, espConfReadable: true, espConf: treeConf, legacyEFIExists: true},
-			limineLayoutMigrate, "stale hand-copied bootloader"},
-		{"unreadable configs punt to sudo",
-			limineLayoutState{limineInstalled: true, espConfExists: true},
-			limineLayoutUnreadable, ""},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			got, actions := planLimineLayout(c.in)
-			if got != c.want {
-				t.Fatalf("planLimineLayout = %d, want %d (actions=%v)", got, c.want, actions)
-			}
-			if c.wantAction == "" {
-				if len(actions) != 0 {
-					t.Errorf("unexpected actions: %v", actions)
-				}
-				return
-			}
-			joined := strings.Join(actions, " | ")
-			if !strings.Contains(joined, c.wantAction) {
-				t.Errorf("actions = %q, want one containing %q", joined, c.wantAction)
-			}
-		})
-	}
-}
-
-// mergeLimineConf must (a) never lose generated entries, (b) put the Ryoku
 // branding in charge of the globals, (c) keep foreign globals a user or the
 // tool added, and (d) pick a bootable default_entry for the resulting menu
 // shape.
-func TestMergeLimineConf(t *testing.T) {
-	shadow := `# Ryoku limine config = global look + branding only.
-timeout: 3
-default_entry: 1
-interface_branding: Ryoku Bootloader
-term_background: 171717
-
-/Ryoku Linux
-    protocol: linux
-    kernel_path: boot():/vmlinuz-linux
-
-# >>> ryoku-windows-entry (managed) >>>
-/Windows
-    comment: Boot into Windows
-    protocol: efi_chainload
-    path: uuid(abc):/EFI/Microsoft/Boot/bootmgfw.efi
-# <<< ryoku-windows-entry (managed) <<<
-`
-	tree := `### Read more at the config document
-timeout: 3
-default_entry: 2
-remember_last_entry: yes
-
-/+Ryoku
-    comment: Ryoku
-//linux
-    protocol: efi
-    path: boot():/EFI/Linux/ryoku_linux.efi
-//+Snapshots
-///ID=42 2026-07-01
-    protocol: efi
-`
-
-	t.Run("tool tree as base keeps entries and snapshots", func(t *testing.T) {
-		got := mergeLimineConf(tree, shadow)
-		for _, want := range []string{"/+Ryoku", "//+Snapshots", "interface_branding: Ryoku Bootloader", "remember_last_entry: yes", "default_entry: Ryoku/linux"} {
-			if !strings.Contains(got, want) {
-				t.Errorf("merged config missing %q:\n%s", want, got)
-			}
-		}
-		if strings.Contains(got, "/Ryoku Linux") {
-			t.Errorf("flat shadow entry leaked into the tool-managed merge:\n%s", got)
-		}
-		if strings.Count(got, "default_entry:") != 1 || strings.Count(got, "timeout:") != 1 {
-			t.Errorf("branded globals duplicated:\n%s", got)
-		}
-	})
-
-	t.Run("flat shadow as base stays bootable with default 1", func(t *testing.T) {
-		got := mergeLimineConf("", shadow)
-		for _, want := range []string{"/Ryoku Linux", "/Windows", "default_entry: 1", "# >>> ryoku-windows-entry (managed) >>>"} {
-			if !strings.Contains(got, want) {
-				t.Errorf("merged config missing %q:\n%s", want, got)
-			}
-		}
-		if strings.Contains(got, "default_entry: 2") {
-			t.Errorf("flat menu must not default past the first entry (Windows would autoboot):\n%s", got)
-		}
-	})
-}
-
-func TestStaleLimineBootNums(t *testing.T) {
-	out := `BootCurrent: 0003
-Timeout: 1 seconds
-BootOrder: 0003,0001,0000
-Boot0000* Windows Boot Manager	HD(1,GPT,aaa)/\EFI\Microsoft\Boot\bootmgfw.efi
-Boot0001* Limine	HD(1,GPT,bbb)/\EFI\limine\limine_x64.efi
-Boot0003* Ryoku	HD(1,GPT,bbb)/\EFI\limine\limine.efi
-`
-	got := staleLimineBootNums(out)
-	if len(got) != 1 || got[0] != "0003" {
-		t.Fatalf("staleLimineBootNums = %v, want [0003] (only the legacy limine.efi, never limine_x64.efi)", got)
-	}
-	if got := staleLimineBootNums(""); len(got) != 0 {
-		t.Fatalf("empty efibootmgr output must yield nothing, got %v", got)
-	}
-}
-
-func TestLimineConfProbes(t *testing.T) {
-	tree := "default_entry: 2\n/+Ryoku\n//linux\n"
-	flat := "default_entry: 1\n/Ryoku Linux\n    protocol: linux\n"
-	if !limineHasBootTree(tree) || limineHasBootTree(flat) {
-		t.Error("boot-tree probe must key on the /+ directory marker only")
-	}
-	if limineDefaultEntry(tree) != "2" || limineDefaultEntry(flat) != "1" || limineDefaultEntry("") != "" {
-		t.Error("default_entry probe misparsed")
-	}
-}
-
 // fastfetchLogoSource lifts the single logo image path out of the JSONC
 // config the reconciler keys on. it must read the value verbatim, skip a
 // "source" that only appears inside a // comment, and report absence rather
@@ -1132,7 +965,6 @@ func TestReconcileFastfetchEmblem(t *testing.T) {
 	})
 }
 
-// hasRyokuBootEntry answers the boot-critical guard: does some ACTIVE NVRAM
 // entry already boot the package-refreshed limine, so `ryoku update` may retire
 // the legacy entry / the healing reconciler can stand down? "present" means an
 // active entry (BootXXXX* ...) either loads \limine_x64.efi or carries the
@@ -1140,106 +972,13 @@ func TestReconcileFastfetchEmblem(t *testing.T) {
 // entry, inactive entries, foreign entries, and empty output must all read NOT
 // present. Fixtures mirror real efibootmgr: a header block, then one entry per
 // line with a TAB between label and device path.
-func TestHasRyokuBootEntry(t *testing.T) {
-	const header = "BootCurrent: 0004\nTimeout: 3\nBootOrder: 0004,0002\n"
-	const legacy = "Boot0003* Ryoku\tHD(1,GPT,abcd)/File(\\EFI\\limine\\limine.efi)\n"
-	cases := []struct {
-		name       string
-		efibootmgr string
-		want       bool
-	}{
-		{
-			"limine-install VenHw entry, label Limine, no file path",
-			header + "Boot0004* Limine\tVenHw(99e275e7-75a0-4b37-a2e6-c5385e6c00cb)\n",
-			true,
-		},
-		{
-			"installer Ryoku entry loading limine_x64.efi",
-			header + "Boot0002* Ryoku\tHD(1,GPT,abcd)/File(\\EFI\\limine\\limine_x64.efi)\n",
-			true,
-		},
-		{
-			"only the legacy limine.efi entry: migration owns it, not present",
-			header + legacy,
-			false,
-		},
-		{
-			"inactive limine entry only (no *): not active, not present",
-			header + "Boot0005  Limine\tVenHw(99e275e7-75a0-4b37-a2e6-c5385e6c00cb)\n",
-			false,
-		},
-		{
-			"only a foreign Windows Boot Manager entry",
-			header + "Boot0000* Windows Boot Manager\tHD(1,GPT,aaa)/File(\\EFI\\Microsoft\\Boot\\bootmgfw.efi)\n",
-			false,
-		},
-		{"empty efibootmgr output", "", false},
-	}
-	for _, c := range cases {
-		if got := hasRyokuBootEntry(c.efibootmgr); got != c.want {
-			t.Errorf("%s: hasRyokuBootEntry = %v, want %v", c.name, got, c.want)
-		}
-	}
-
-	// the legacy-only fixture is exactly what staleLimineBootNums must claim, so
-	// the layout migration (not the healing reconciler) converts it.
-	if got := staleLimineBootNums(header + legacy); len(got) != 1 || got[0] != "0003" {
-		t.Errorf("staleLimineBootNums(legacy) = %v, want [0003]", got)
-	}
-}
-
-// limineBootLabel extracts the label field of an efibootmgr line: the text
 // after BootXXXX and an optional *, up to the first TAB (space-separated
 // fallback when there is no tab). A label with spaces must survive intact
 // (run to the tab, not the first space), and a non-entry header line must yield
-// "" because isHex4(line[4:8]) fails.
-func TestLimineBootLabel(t *testing.T) {
-	cases := []struct {
-		name string
-		line string
-		want string
-	}{
-		{"limine-install label", "Boot0004* Limine\tVenHw(99e275e7-75a0-4b37-a2e6-c5385e6c00cb)", "Limine"},
-		{"installer label", "Boot0002* Ryoku\tHD(1,GPT,abcd)/File(\\EFI\\limine\\limine_x64.efi)", "Ryoku"},
-		{"spaced label runs to the tab", "Boot0000* Windows Boot Manager\tHD(1,GPT,aaa)/File(\\EFI\\Microsoft\\Boot\\bootmgfw.efi)", "Windows Boot Manager"},
-		{"space-separated fallback, no tab", "Boot0006* Limine VenHw(x)", "Limine"},
-		{"BootOrder header is not an entry", "BootOrder: 0004,0002", ""},
-		{"BootCurrent header is not an entry", "BootCurrent: 0004", ""},
-	}
-	for _, c := range cases {
-		if got := limineBootLabel(c.line); got != c.want {
-			t.Errorf("%s: limineBootLabel(%q) = %q, want %q", c.name, c.line, got, c.want)
-		}
-	}
-}
-
-// parseEspDiskPart derives the efibootmgr --disk/--part pair the boot-entry
 // writer needs. It trims all three inputs and refuses (ok=false) unless the
 // mount source is under /dev/ and both the parent-disk name and partition
 // number are non-empty; on success the disk is "/dev/"+pkname and the part is
 // the trimmed partition number.
-func TestParseEspDiskPart(t *testing.T) {
-	cases := []struct {
-		name                 string
-		source, pkname, part string
-		wantDisk, wantPart   string
-		wantOK               bool
-	}{
-		{"nvme, part has trailing newline", "/dev/nvme0n1p1", "nvme0n1", "1\n", "/dev/nvme0n1", "1", true},
-		{"sata, padded part number", "/dev/sda2", "sda", " 2 ", "/dev/sda", "2", true},
-		{"source not under /dev", "mapper/foo", "sda", "1", "", "", false},
-		{"empty pkname", "/dev/sda1", "", "1", "", "", false},
-		{"empty partition", "/dev/sda1", "sda", "", "", "", false},
-	}
-	for _, c := range cases {
-		disk, part, ok := parseEspDiskPart(c.source, c.pkname, c.part)
-		if ok != c.wantOK || disk != c.wantDisk || part != c.wantPart {
-			t.Errorf("%s: parseEspDiskPart(%q,%q,%q) = (%q,%q,%v), want (%q,%q,%v)",
-				c.name, c.source, c.pkname, c.part, disk, part, ok, c.wantDisk, c.wantPart, c.wantOK)
-		}
-	}
-}
-
 // hyprSetFollowMouse must flip only desktop.input.followMouse and preserve every
 // other field.
 func TestHyprFollowMouseRewrite(t *testing.T) {
@@ -1598,73 +1337,10 @@ func TestMigrateDockStore(t *testing.T) {
 	}
 }
 
-// limineDropFlat mirrors the installer's promote surgery: flat placeholder
 // entries go (with their indented options), default_entry moves off the tree
 // directory, globals and the /+ tree survive untouched.
-func TestLimineDropFlat(t *testing.T) {
-	conf := "timeout: 3\n" +
-		"default_entry: 1\n" +
-		"/Ryoku Linux\n" +
-		"    protocol: linux\n" +
-		"    kernel_path: boot():/vmlinuz-linux\n" +
-		"/Ryoku Linux (CachyOS)\n" +
-		"    protocol: linux\n" +
-		"/+Ryoku\n" +
-		"//linux (UKI)\n" +
-		"    protocol: efi\n"
-	out, changed := limineDropFlat(conf)
-	if !changed {
-		t.Fatal("flat placeholders present; must report a change")
-	}
-	if strings.Contains(out, "/Ryoku Linux") {
-		t.Errorf("flat entries survived:\n%s", out)
-	}
-	if strings.Contains(out, "kernel_path: boot():/vmlinuz-linux\n") {
-		t.Errorf("flat entry options survived:\n%s", out)
-	}
-	if !strings.Contains(out, "default_entry: 2") {
-		t.Errorf("default_entry not promoted past the tree directory:\n%s", out)
-	}
-	if !strings.Contains(out, "/+Ryoku") || !strings.Contains(out, "//linux (UKI)") || !strings.Contains(out, "timeout: 3") {
-		t.Errorf("tree or globals damaged:\n%s", out)
-	}
-
-	if _, changed := limineDropFlat(out); changed {
-		t.Error("promoted config must be a fixed point")
-	}
-	if !limineHasUKITree(out) || limineHasUKITree("timeout: 3\n/Ryoku Linux\n") {
-		t.Error("limineHasUKITree misreads the tree marker")
-	}
-}
-
 // 1.37+ limine-entry-tool adopts the flat placeholder as the tree root: the
 // entry must survive promotion, only default_entry moves off the directory.
-func TestLimineDropFlatAdoptedLayout(t *testing.T) {
-	conf := "default_entry: 1\n" +
-		"/Ryoku Linux\n" +
-		"    kernel_path: boot():/vmlinuz-linux\n" +
-		"\n" +
-		"  //linux\n" +
-		"  protocol: efi\n" +
-		"     //Snapshots\n"
-	out, changed := limineDropFlat(conf)
-	if !changed {
-		t.Fatal("default_entry: 1 on a directory must count as a change")
-	}
-	if !strings.Contains(out, "/Ryoku Linux") || !strings.Contains(out, "kernel_path: boot():/vmlinuz-linux") {
-		t.Errorf("adopted tree root must survive:\n%s", out)
-	}
-	if !strings.Contains(out, "default_entry: 2") {
-		t.Errorf("default_entry not moved off the directory:\n%s", out)
-	}
-	if _, changed := limineDropFlat(out); changed {
-		t.Error("promoted adopted layout must be a fixed point")
-	}
-	if !limineHasUKITree(conf) {
-		t.Error("indented //kernel children must count as a tree")
-	}
-}
-
 // The hijack the portal-routing reconciler heals: a niri-era generic
 // portals.conf routing to the gnome backend, which hangs app launches under
 // Hyprland. hyprland anywhere in the default list means the file is intent,
@@ -1903,133 +1579,9 @@ interface_branding: Ryoku Bootloader
     path: boot():/EFI/BOOT/BOOTX64.EFI
 `
 
-func TestStripLiminePlaceholderBody(t *testing.T) {
-	out := stripLiminePlaceholderBody(limineAdoptedDirty)
-	if strings.Contains(out, "kernel_path:") || strings.Contains(out, "module_path:") {
-		t.Fatalf("placeholder boot stanza not stripped from the directory:\n%s", out)
-	}
-	// the directory title and every sub-entry survive verbatim.
-	for _, want := range []string{
-		"/Ryoku Linux",
-		"  //linux",
-		"comment: Kernel version: 7.0.12",
-		"path: boot():/EFI/Linux/ryoku_linux.efi",
-		"//Snapshots",
-		"/EFI fallback",
-		"path: boot():/EFI/BOOT/BOOTX64.EFI",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("strip dropped %q:\n%s", want, out)
-		}
-	}
-	if !limineDirtyRoot(limineAdoptedDirty) {
-		t.Error("limineDirtyRoot must flag the adopted directory carrying a boot stanza")
-	}
-	if limineDirtyRoot(out) {
-		t.Error("stripped config must be clean (idempotent)")
-	}
-	if out2 := stripLiminePlaceholderBody(out); out2 != out {
-		t.Error("second strip changed the file (not idempotent)")
-	}
-}
-
-func TestStripLiminePlaceholderBodyLeavesFlatPlaceholder(t *testing.T) {
-	// offline install: "/Ryoku Linux" is a bootable leaf, not a directory (no
-	// "//" sub-entry). its boot body is legitimate and must not be touched.
-	flat := "timeout: 3\ndefault_entry: 1\n\n/Ryoku Linux\n    protocol: linux\n    kernel_path: boot():/vmlinuz-linux\n    module_path: boot():/initramfs-linux.img\n"
-	if got := stripLiminePlaceholderBody(flat); got != flat {
-		t.Errorf("flat placeholder must be left intact, got:\n%s", got)
-	}
-	if limineDirtyRoot(flat) {
-		t.Error("flat placeholder is not a dirty directory")
-	}
-}
-
-func TestPlanLimineLayoutHealsDirtyRoot(t *testing.T) {
-	st := limineLayoutState{
-		limineInstalled: true,
-		espConfExists:   true,
-		espConfReadable: true,
-		espConf:         limineAdoptedDirty,
-	}
-	outcome, actions := planLimineLayout(st)
-	if outcome != limineLayoutMigrate {
-		t.Fatalf("outcome = %v, want migrate", outcome)
-	}
-	if !strings.Contains(strings.Join(actions, "; "), "strip the leftover boot stanza") {
-		t.Errorf("plan missing the strip action: %v", actions)
-	}
-}
-
-func TestMergeLimineConfHealsAdoptedRoot(t *testing.T) {
-	merged := mergeLimineConf(limineAdoptedDirty, "")
-	if strings.Contains(merged, "kernel_path:") {
-		t.Errorf("merge left the placeholder boot stanza:\n%s", merged)
-	}
-	for _, want := range []string{
-		"default_entry: Ryoku Linux/linux", // entry path into the boot directory autoboots the kernel
-		"  //linux",
-		"interface_branding: Ryoku Bootloader",
-		"/EFI fallback",
-	} {
-		if !strings.Contains(merged, want) {
-			t.Errorf("merged config missing %q:\n%s", want, merged)
-		}
-	}
-}
-
 // TestLimineEnsureAutoboot covers the countdown-loop fix on the real adopted
 // layout: default_entry: 2 lands on the /EFI fallback (which re-launches Limine),
 // so it must become the kernel's entry path, with remember_last_entry enabled.
-func TestLimineEnsureAutoboot(t *testing.T) {
-	const conf = `timeout: 3
-default_entry: 2
-interface_branding: Ryoku Bootloader
-
-/Ryoku Linux
-  //linux
-  protocol: efi
-  path: boot():/EFI/Linux/ryoku_linux.efi
-
-     //Snapshots
-     comment: 5 / 5 snapshots
-
-/EFI fallback
-    protocol: efi
-    path: boot():/EFI/BOOT/BOOTX64.EFI
-
-/Windows
-    protocol: efi_chainload
-`
-	if p := limineFirstKernelPath(conf); p != "Ryoku Linux/linux" {
-		t.Fatalf("first kernel path = %q, want Ryoku Linux/linux", p)
-	}
-	got, changed := limineEnsureAutoboot(conf)
-	if !changed {
-		t.Fatal("expected a change: default_entry: 2 loops on the EFI fallback")
-	}
-	if !strings.Contains(got, "default_entry: Ryoku Linux/linux") {
-		t.Errorf("default_entry not repointed at the kernel path:\n%s", got)
-	}
-	if strings.Contains(got, "default_entry: 2") {
-		t.Errorf("the looping default_entry: 2 is still present:\n%s", got)
-	}
-	if !strings.Contains(got, "remember_last_entry: yes") {
-		t.Errorf("remember_last_entry not enabled:\n%s", got)
-	}
-	if again, changed2 := limineEnsureAutoboot(got); changed2 || again != got {
-		t.Error("limineEnsureAutoboot is not idempotent")
-	}
-	// a flat menu (no nested kernel) keeps default_entry: 1, the bootable placeholder.
-	const flat = "timeout: 3\ndefault_entry: 2\n\n/Ryoku Linux\n    protocol: linux\n    path: boot():/vmlinuz-linux\n"
-	if p := limineFirstKernelPath(flat); p != "" {
-		t.Errorf("flat menu should have no nested kernel path, got %q", p)
-	}
-	if fg, _ := limineEnsureAutoboot(flat); !strings.Contains(fg, "default_entry: 1") {
-		t.Errorf("flat menu should default to entry 1:\n%s", fg)
-	}
-}
-
 func TestReconcileStaleUpdateRun(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", dir)

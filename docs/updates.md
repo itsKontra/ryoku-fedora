@@ -313,20 +313,7 @@ plugin whose receipts no longer match the installed headers through the provider
 the next login, and names the toolchain to install when a box has none. Gated on
 `CapPlugins`, so a compositor with no plugin system (niri) is a no-op. See
 `docs/hyprland-plugins.md`.
-`reconcileManifest` converges the box's package set to the release's control
-manifest. It reads the channel's `manifest.json`, diffs it against the baseline
-the box last converged to (saved with the names installed at that moment), and
-installs what the release wants that this box never received, which is what
-makes a package added to a set reach every box on the next update without a hard
-depend, and heals a box that has been missing one all along. A name present at
-the baseline and gone now was deleted by the user and stays gone; a name the
-release retired is reported, never uninstalled. The deliver-once apps stay
-`reconcileShippedApps'` lane, so one update never runs two transactions over the
-same names. Best-effort: a box with no mirror or no network reports what did not
-land and the update moves on. `ryoku verify` answers the same diff read-only, so
-two machines can be compared line by line. This reconciler is the Arch build's: it
-reports `ok` on a box without pacman, where package dependencies carry the set.
-`reconcileShippedApps` runs on both builds, through pacman or dnf: it installs
+`reconcileShippedApps` runs through dnf: it installs
 each app in `ryokumanifest.Apps()` once, ledgers it, and never puts back one the
 user removed. An app no enabled repository carries yet (Fedora's porting gaps in
 `installation/fedora/README.md`) is noted and skipped, and lands on the first
@@ -477,8 +464,7 @@ island (when the channel serves the next line) and the Hub's Updates page.
 - **A package the release is made of must reach every box on update.** On
   Fedora that means a package dependency: the `ryoku-desktop` spec in
   `release/rpm/` pins its components, so a package added there arrives with the
-  next `ryoku update`. The control-manifest reconciler (`reconcileManifest`) is
-  the Arch build's mechanism and reports `ok` on a box without pacman.
+  next `ryoku update`.
 - **A removed or renamed `shell.json` key, or a changed default that must reach
   existing users, needs a `doctor` reconciler** (materialize never edits a user's
   `shell.json`). An additive key needs nothing.

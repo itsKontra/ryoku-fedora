@@ -107,25 +107,11 @@ func reconcilers() []reconciler {
 		{i18n.T("snapper configuration"), reconcileSnapper},
 		{i18n.T("snapshot read access"), reconcileSnapperAccess},
 		{i18n.T("snapshot cleanup"), reconcileSnapperCleanup},
-		{i18n.T("limine boot menu layout"), reconcileLimineLayout},
-		{i18n.T("limine boot entry"), reconcileLimineBootEntry},
-		{i18n.T("alongside boot entry"), reconcileAlongsideBootEntry},
-		{i18n.T("limine UKI boot tree"), reconcileLimineUKITree},
-		{i18n.T("limine kernel boot images"), reconcileLimineKernelImages},
-		{i18n.T("boot menu dead entries"), reconcileLimineDeadEntries},
-		{i18n.T("boot partition headroom"), reconcileBootSpace},
 		{i18n.T("boot volume writability"), reconcileBootRW},
-		{i18n.T("initramfs GPU trim"), reconcileInitramfsGPUTrim},
-		{i18n.T("limine autoboot"), reconcileLimineAutoboot},
-		{i18n.T("limine snapshot sync"), reconcileLimineOSName},
 		{i18n.T("updatedb snapshot prune"), reconcileUpdatedbPrune},
-		{i18n.T("pacman database lock"), reconcilePacmanLock},
-		{i18n.T("pacman progress bar"), reconcilePacmanCandy},
 		{i18n.T("conflicting Ryoku files"), reconcileConflictingRyokuFiles},
 		{i18n.T("stale update run-state"), reconcileStaleUpdateRun},
 		{i18n.T("stale install crypt mapper"), reconcileStaleCryptMapper},
-		{i18n.T("ryoku package channel"), reconcileRyokuChannel},
-		{i18n.T("ryoku package database"), reconcileRyokuSyncDB},
 		{i18n.T("boot guard"), reconcileBootGuard},
 		{i18n.T("update channel checkout"), reconcileUpdateChannel},
 		{i18n.T("update checkout pointer"), reconcileRepoPointer},
@@ -164,7 +150,6 @@ func reconcilers() []reconciler {
 		{i18n.T("retired system sidebar"), reconcileLegacySystemSidebar},
 		{i18n.T("stash features sidebar anchor"), reconcileStashSidebar},
 		{i18n.T("shipped app packages"), reconcileShippedApps},
-		{i18n.T("release control manifest"), reconcileManifest},
 		{i18n.T("ghostty theme include"), reconcileGhostty},
 		{i18n.T("obsidian palette snippet"), reconcileObsidianSnippet},
 		{i18n.T("flatpak app channel"), reconcileFlatpakRemote},
@@ -215,9 +200,6 @@ func reconcilers() []reconciler {
 		{i18n.T("display resolution"), reconcileDisplayModes},
 		{i18n.T("phantom Wayland output"), reconcilePhantomOutput},
 		{i18n.T("fingerprint unlock module"), reconcileFingerprintModule},
-		{i18n.T("Kepler NVIDIA recovery"), reconcileKeplerNvidia},
-		{i18n.T("NVIDIA boot reliability"), reconcileNvidiaModeset},
-		{i18n.T("NVIDIA update guard hook"), reconcileNvidiaGuardHook},
 		{i18n.T("Secure Boot signed NVIDIA driver"), reconcileNvidiaSigned},
 		{i18n.T("NVIDIA sleep units"), reconcileNvidiaSleepUnits},
 		{i18n.T("pending config (.pacnew)"), reconcilePacnew},
@@ -448,7 +430,7 @@ func reconcileSwapSubvolume(checkOnly bool) recResult {
 // ---- reconciler: snapper configuration ---------------------------------------
 
 // the snapper "root" config = the safety net behind every ryoku update: the
-// pre/post snapshot pair plus the Limine boot-menu entries that make rollback
+// pre/post snapshot pair plus the GRUB boot-menu entries that make rollback
 // work. A deploy box, an upgrade from an older release, or hand-edited drift can leave
 // it missing -- and snapper proceeds silently when it is, so the user believes
 // they have rollback when they don't. doctor restores the canonical layout on
@@ -464,7 +446,7 @@ var snapperRootConfig string
 const snapperConfdRoot = `## Path: System/Snapper
 ## Type: string
 ## Default: ""
-# Snapper configs the systemd units and pacman hooks operate on.
+# Snapper configs the systemd units operate on.
 SNAPPER_CONFIGS="root"
 `
 
@@ -499,21 +481,16 @@ const (
 // to a value so planSnapper is unit-testable without real /etc or running
 // snapper/btrfs.
 type snapperState struct {
-	rootIsBtrfs         bool
-	configExists        bool
-	optedOut            bool
-	snapshotsExists     bool
-	snapshotsIsSubvol   bool
-	snapshotsMode       os.FileMode
-	confdPath           string
-	confdExists         bool
-	confdContents       string
-	snapperInstalled    bool
-	pacmanInstalled     bool
-	snapPacInstalled    bool
-	limineInstalled     bool
-	limineSyncInstalled bool
-	limineSyncEnabled   bool
+	rootIsBtrfs       bool
+	configExists      bool
+	optedOut          bool
+	snapshotsExists   bool
+	snapshotsIsSubvol bool
+	snapshotsMode     os.FileMode
+	confdPath         string
+	confdExists       bool
+	confdContents     string
+	snapperInstalled  bool
 }
 
 // planSnapper picks the branch from observed state. pure, no IO. the
@@ -551,19 +528,7 @@ func planSnapper(s snapperState) (snapperOutcome, []string) {
 		problems = append(problems, fmt.Sprintf("%s does not list the root config (timers and hooks will skip it)", confPath))
 	}
 	if !s.snapperInstalled {
-		problems = append(problems, i18n.T("snapper is not installed; the root config exists but cannot be used (sudo pacman -S snapper)"))
-	}
-	if s.pacmanInstalled && !s.snapPacInstalled {
-		problems = append(problems, i18n.T("snap-pac is not installed, so pacman transactions are not auto-snapshotted (sudo pacman -S snap-pac)"))
-	}
-	// only meaningful under Limine; a GRUB box (converted CachyOS and the
-	// like) is healthy without it and must not warn forever.
-	if s.limineInstalled {
-		if !s.limineSyncInstalled {
-			problems = append(problems, i18n.T("limine-snapper-sync is not installed, so snapshots are not in the Limine boot menu (ryoku-pkg-aur-add limine-snapper-sync)"))
-		} else if !s.limineSyncEnabled {
-			problems = append(problems, i18n.T("limine-snapper-sync.service is disabled, so new snapshots never reach the Limine boot menu (sudo systemctl enable --now limine-snapper-sync.service)"))
-		}
+		problems = append(problems, i18n.T("snapper is not installed; the root config exists but cannot be used (sudo dnf install snapper)"))
 	}
 	if len(problems) == 0 {
 		return snapperOK, nil
@@ -576,16 +541,11 @@ func planSnapper(s snapperState) (snapperOutcome, []string) {
 // later in the create branch under sudo, like every other reconciler.
 func gatherSnapperState() snapperState {
 	s := snapperState{
-		rootIsBtrfs:         sys.IsBtrfs("/"),
-		configExists:        sys.Exists("/etc/snapper/configs/root"),
-		optedOut:            sys.Exists("/etc/ryoku/snapshots-disabled"),
-		snapperInstalled:    sys.Has("snapper"),
-		pacmanInstalled:     sys.Has("pacman"),
-		snapPacInstalled:    sys.PkgInstalled("snap-pac"),
-		limineInstalled:     sys.PkgInstalled("limine"),
-		limineSyncInstalled: sys.PkgInstalled("limine-snapper-sync"),
-		limineSyncEnabled:   sys.UnitEnabled("limine-snapper-sync.service"),
-		confdPath:           snapperGlobalConfPath(),
+		rootIsBtrfs:      sys.IsBtrfs("/"),
+		configExists:     sys.Exists("/etc/snapper/configs/root"),
+		optedOut:         sys.Exists("/etc/ryoku/snapshots-disabled"),
+		snapperInstalled: sys.Has("snapper"),
+		confdPath:        snapperGlobalConfPath(),
 	}
 	if fi, err := os.Stat("/.snapshots"); err == nil {
 		s.snapshotsExists = true
@@ -609,12 +569,8 @@ func reconcileSnapper(checkOnly bool) recResult {
 	case snapperWarnNotBtrfs:
 		return warnRes(i18n.T("root filesystem is not btrfs; snapshot and rollback are unavailable on this machine"))
 	case snapperWarnMissingPkgs:
-		fix := i18n.T("sudo pacman -S snapper snap-pac, then ryoku doctor")
-		if !sys.Has("pacman") {
-			fix = "install snapper, then ryoku doctor"
-		}
 		return warnRes(i18n.T("root is btrfs but snapper is not installed; snapshots and rollback are off")).
-			withFix(fix)
+			withFix(i18n.T("sudo dnf install snapper, then ryoku doctor"))
 	case snapperOptedOut:
 		return okRes(i18n.T("snapshots were declined at install (/etc/ryoku/snapshots-disabled); delete the marker and run `ryoku doctor` to enable them"))
 	case snapperCreate:
@@ -713,8 +669,7 @@ func snapperReadableUnprivileged() bool {
 //   - /.snapshots = btrfs subvolume, owned root:root, mode 0750.
 //   - write /etc/snapper/configs/root.
 //   - register "root" in the global snapper conf file without dropping siblings.
-//   - best-effort enable snapper-cleanup.timer (+ limine-snapper-sync.service
-//     when its unit is present).
+//   - best-effort enable snapper-cleanup.timer.
 //
 // a pre-existing plain-directory /.snapshots is left to a human: it might
 // hold user data, and the risk of rmdir clobbering it isn't worth saving the
@@ -758,13 +713,9 @@ func createSnapperRootConfig(st snapperState) recResult {
 		actions = append(actions, confPath)
 	}
 
-	// services: best-effort. a healthy install has both; an offline AUR install
-	// can be missing limine-snapper-sync, and a failure here doesn't undo the
-	// config we just wrote.
+	// services: best-effort; a failure here doesn't undo the config we just
+	// wrote.
 	_ = sys.Run("sudo", "systemctl", "enable", "--now", "snapper-cleanup.timer")
-	if sys.Exists("/usr/lib/systemd/system/limine-snapper-sync.service") {
-		_ = sys.Run("sudo", "systemctl", "enable", "--now", "limine-snapper-sync.service")
-	}
 	_ = sys.Run("sudo", "systemctl", "try-restart", "snapperd.service")
 
 	return fixedRes(i18n.T("created snapper root config: %s"), strings.Join(actions, ", "))
@@ -853,25 +804,6 @@ func markMigration(marker string) error {
 		return err
 	}
 	return os.Rename(tmpPath, marker)
-}
-
-// ---- reconciler: stale pacman lock -------------------------------------------
-
-func reconcilePacmanLock(checkOnly bool) recResult {
-	const lock = "/var/lib/pacman/db.lck"
-	if !sys.Exists(lock) {
-		return okRes(i18n.T("no stale pacman lock"))
-	}
-	if processRunning("pacman") {
-		return okRes(i18n.T("pacman is running; lock is in use"))
-	}
-	if checkOnly {
-		return wouldRes(i18n.T("stale pacman lock present (no pacman running)")).withFix("sudo rm %s", lock)
-	}
-	if err := sys.Run("sudo", "rm", "-f", lock); err != nil {
-		return failRes(i18n.T("could not remove stale lock: %v"), err).withFix("sudo rm %s", lock)
-	}
-	return fixedRes(i18n.T("removed stale pacman lock"))
 }
 
 // ---- reconciler: stale update run-state --------------------------------------
@@ -1022,110 +954,6 @@ func baseSource(s string) string {
 		s = s[:i]
 	}
 	return s
-}
-
-// ---- reconciler: ryoku package channel + keyring -----------------------------
-
-// ryokuRepoStanza is the legacy [ryoku] block. Doctor re-adds this exact block
-// when a pacnew merge or a hand-edit drops it, so a package box
-// does not silently fall off the update channel.
-const ryokuRepoStanza = "\n[ryoku]\nSigLevel = Required\nServer = " + sys.RepoBase + "/$arch\n"
-
-func reconcileRyokuChannel(checkOnly bool) recResult {
-	if !sys.PkgInstalled("ryoku-desktop") {
-		return okRes(i18n.T("not a packaged install (desktop runs from a checkout)"))
-	}
-	if !sys.Has("pacman") {
-		return okRes("pacman not used on this system")
-	}
-	conf, err := os.ReadFile("/etc/pacman.conf")
-	if err != nil {
-		return warnRes(i18n.T("could not read /etc/pacman.conf: %v"), err)
-	}
-	if !sys.PkgInstalled("ryoku-keyring") {
-		// without the trusted key a Required repo fails every fetch, and the key
-		// only comes from the package, so adding the stanza alone would not help.
-		return warnRes(i18n.T("ryoku-keyring is missing, so the [ryoku] repo cannot be trusted; updates will fail signature checks")).
-			withFix(i18n.T("sudo pacman -S ryoku-keyring, then run ryoku doctor"))
-	}
-	if strings.Contains(string(conf), "[ryoku]") {
-		// the Server line is the channel. name it, and flag a server Ryoku
-		// does not publish without touching it: a local build-repo.sh tree or
-		// a private mirror is deliberate, but it means no release reaches here.
-		switch ch := sys.ChannelOfServer(sys.RyokuServer()); {
-		case ch == sys.ChannelStable:
-			return okRes(i18n.T("ryoku channel: stable packages (named releases); `ryoku track unstable-dev` follows testing"))
-		case ch == sys.ChannelTesting:
-			return okRes(i18n.T("ryoku channel: testing packages (rebuilt on every unstable-dev push); `ryoku track main` returns to stable releases"))
-		case sys.IsReleaseTag(ch):
-			return okRes(i18n.T("ryoku channel: pinned to release %s (packages); `ryoku track main` follows releases again"), ch)
-		default:
-			return warnRes(i18n.T("the [ryoku] repo points at %s, which Ryoku does not publish; releases will not arrive from it"), sys.RyokuServer()).
-				withFix("ryoku track main")
-		}
-	}
-	// the keyring is here but the repo stanza is gone (a pacnew merge or a
-	// hand-edit dropped it): re-add it so `ryoku update` reaches the package
-	// channel again, instead of stranding the box with no way to get updates.
-	if checkOnly {
-		return wouldRes(i18n.T("ryoku-desktop is installed but the [ryoku] repo is not in pacman.conf; updates will not arrive")).
-			withFix("ryoku doctor")
-	}
-	if err := writeRootFile("/etc/pacman.conf", string(conf)+ryokuRepoStanza, "0644"); err != nil {
-		return warnRes(i18n.T("the [ryoku] repo is missing from pacman.conf and could not be re-added: %v"), err).
-			withFix(i18n.T("add the [ryoku] repo by hand (see docs/development.md)"))
-	}
-	// a reset trustdb would still fail Required even with the keyring installed;
-	// re-populating is idempotent and cheap.
-	_ = sys.Sudo("pacman-key", "--populate", "ryoku")
-	return fixedRes(i18n.T("re-added the [ryoku] repo to pacman.conf so updates arrive again"))
-}
-
-// ---- reconciler: ryoku sync database health ----------------------------------
-
-// reconcileRyokuSyncDB heals a cached [ryoku] sync db wedged against its
-// signature. The db is non-reproducible and its detached .sig is fetched fresh
-// on every refresh even when the db itself is unchanged (a 304), so any box
-// that syncs while the mirror briefly serves a db and .sig from different
-// builds caches a mismatched pair. pacman then rejects it -- "invalid or
-// corrupted database (PGP signature)" -- on every transaction, and -Sy will not
-// replace a db it thinks is current, so `pacman -S <anything>` stays wedged
-// until the cache is dropped. `ryoku update` self-heals on the spot; this
-// catches a box a user only ever drives through plain pacman. Detection is
-// read-only (`pacman -Sl` loads and verifies the cached db); the fix drops it
-// and pulls a fresh, matched pair.
-func reconcileRyokuSyncDB(checkOnly bool) recResult {
-	if !sys.PkgInstalled("ryoku-desktop") {
-		return okRes(i18n.T("not a packaged install (desktop runs from a checkout)"))
-	}
-	// a missing key is a keyring problem the channel reconciler owns; dropping
-	// the db would only refetch one that fails the same way.
-	if !sys.PkgInstalled("ryoku-keyring") || sys.RyokuServer() == "" {
-		return okRes(i18n.T("[ryoku] repo or keyring absent; nothing to verify"))
-	}
-	if !sys.Exists("/var/lib/pacman/sync/ryoku.db") {
-		return okRes(i18n.T("no cached [ryoku] sync db to check"))
-	}
-	out, err := sys.RunOut("sh", "-c", "LC_ALL=C pacman -Sl ryoku 2>&1")
-	if err == nil {
-		return okRes(i18n.T("the [ryoku] sync db loads and verifies"))
-	}
-	if !strings.Contains(out, "invalid or corrupted database") && !strings.Contains(out, "signature") {
-		// another failure (offline, transient); not the stale-signature wedge.
-		return okRes(i18n.T("the [ryoku] sync db is present; no signature wedge"))
-	}
-	if checkOnly {
-		return wouldRes(i18n.T("the cached [ryoku] sync db no longer matches its signature; every pacman transaction fails until it is refreshed")).
-			withFix("ryoku doctor")
-	}
-	if err := sys.DropRyokuSyncDB(); err != nil {
-		return failRes(i18n.T("could not drop the stale [ryoku] sync db: %v"), err).
-			withFix("sudo rm -f /var/lib/pacman/sync/ryoku.* && sudo pacman -Syy")
-	}
-	// the db is gone now, so a plain -Sy pulls a fresh, matched pair; best-effort
-	// so an offline box simply refetches on its next update.
-	_ = sys.Sudo("pacman", "-Sy", "--noconfirm")
-	return fixedRes(i18n.T("dropped the stale [ryoku] sync db so pacman refetches a matched db and signature"))
 }
 
 // ---- reconciler: Material Symbols icon font ------------------------------------
@@ -4005,10 +3833,6 @@ func anyPkgInstalled(names ...string) bool {
 		}
 	}
 	return false
-}
-
-func processRunning(name string) bool {
-	return exec.Command("pgrep", "-x", name).Run() == nil
 }
 
 func nonEmptyLines(s string) []string {
