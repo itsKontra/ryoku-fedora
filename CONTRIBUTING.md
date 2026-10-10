@@ -52,9 +52,11 @@ full set, or let the installer's deploy step do it on a fresh machine.
 
 ## Where changes go
 
-- A **package**: the right set in `system/packages/` (`base` for everyone, `dev`
-  for toolchains, `hardware` per profile, `aur` for the AUR). Prefer the official
-  repositories over the AUR when both have it.
+- A **package**: a `Requires:` in the RPM spec that owns the feature under
+  `release/rpm/` (`ryoku-desktop.spec` for everyone, a
+  `ryoku-desktop-<compositor>.spec` for one compositor), and
+  `installation/fedora/packages.list` when the ISO or an offline install needs
+  it. Prefer Fedora's repositories over a COPR when both have it.
 - A **keybind or compositor concern**: a module in the active compositor's
   config (`ryoku/hyprland/modules/` in Lua, `ryoku/niri/` in KDL), one concern
   per file. A capability the desktop must learn is a new field on the provider's

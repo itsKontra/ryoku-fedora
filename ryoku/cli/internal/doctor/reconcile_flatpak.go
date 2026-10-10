@@ -13,13 +13,14 @@ import (
 
 // ---- reconciler: the flatpak app channel ------------------------------------
 //
-// Ryoku ships the `flatpak` package in base.packages, which means it is in the
-// ISO's offline closure and installs with no network. What it does NOT ship is a
-// configured remote: until this reconciler, the only thing that ever added
-// flathub was stash-install.sh, per-user, and only while installing a .flatpak
-// bundle someone had already downloaded. So a fresh box had the client and no
-// catalogue: `flatpak install <app>` failed with nothing to search, and the
-// portable app channel the package set advertises did not exist.
+// Ryoku ships the `flatpak` package in installation/fedora/packages.list, which
+// means it is in the ISO's offline closure and installs with no network. What
+// it does NOT ship is a configured remote: until this reconciler, the only
+// thing that ever added flathub was stash-install.sh, per-user, and only while
+// installing a .flatpak bundle someone had already downloaded. So a fresh box
+// had the client and no catalogue: `flatpak install <app>` failed with nothing
+// to search, and the portable app channel the package set advertises did not
+// exist.
 //
 // Adding the remote needs the network, and an offline install must stay quiet
 // rather than warn about a thing it cannot do, so this is deliberately a no-op

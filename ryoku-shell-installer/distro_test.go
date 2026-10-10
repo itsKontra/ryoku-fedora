@@ -11,15 +11,11 @@ func TestDetectDistro(t *testing.T) {
 	for _, c := range []struct {
 		id, like, want string
 	}{
-		{"arch", "", "arch"},
-		{"cachyos", "arch", "arch"},
-		{"endeavouros", "arch", "arch"},
-		{"debian", "", "debian"},
-		{"ubuntu", "debian", "debian"},
-		{"linuxmint", "ubuntu debian", "debian"},
 		{"fedora", "", "fedora"},
-		{"nobara", "fedora", "fedora"},
-		{"bazzite", "fedora", "fedora"},
+		{"nobara", "rhel centos fedora", "fedora"},
+		{"arch", "", ""},
+		{"cachyos", "arch", ""},
+		{"ubuntu", "debian", ""},
 		{"void", "", ""},
 	} {
 		d := detectDistro(c.id, c.like)
@@ -33,119 +29,37 @@ func TestDetectDistro(t *testing.T) {
 	}
 }
 
-func TestLocalAllRenamesAndDrops(t *testing.T) {
-	in := []string{"git", "networkmanager", "fd", "matugen", "limine", "kitty"}
-	got := debianLinux.localAll(in)
-	want := []string{"git", "network-manager", "fd-find", "kitty"}
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Fatalf("localAll (debian) = %v, want %v", got, want)
-	}
-	gotFedora := fedoraLinux.localAll(in)
-	wantFedora := []string{"git", "NetworkManager", "fd-find", "kitty"}
-	if strings.Join(gotFedora, ",") != strings.Join(wantFedora, ",") {
-		t.Fatalf("localAll (fedora) = %v, want %v", gotFedora, wantFedora)
-	}
-	if archLinux.local("networkmanager") != "networkmanager" {
-		t.Error("arch must pass base.packages names through unchanged")
-	}
-}
-
-// The Arch step list is the contract that must not drift; the Debian and Fedora
-// ones swap the pacman-only steps for the source build.
-func TestStepsPerDistro(t *testing.T) {
-	ids := func(f *facts) []string {
-		e := newEngine(f, &plan{}, true, "", "")
+// The step lists are the contract that must not drift: a packaged install
+// retires a previous source deployment, a source install builds instead.
+func TestSteps(t *testing.T) {
+	ids := func(payload string) string {
+		e := newEngine(&facts{distro: fedoraLinux, homeDir: t.TempDir()}, &plan{}, true, "main", payload)
 		var out []string
 		for _, s := range e.steps {
 			out = append(out, s.id)
 		}
-		return out
+		return strings.Join(out, " ")
 	}
-
-	arch := strings.Join(ids(&facts{distro: archLinux}), " ")
-	wantArch := "legacy sysupgrade tools payload backup repo conflicts packages drivers session configs aur shell doctor verify"
-	if arch != wantArch {
-		t.Errorf("arch steps = %q, want %q", arch, wantArch)
+	if got, want := ids(""), "sysupgrade tools payload backup repo conflicts packages drivers package-migration session configs shell doctor verify"; got != want {
+		t.Errorf("package steps = %q, want %q", got, want)
 	}
-
-	deb := strings.Join(ids(&facts{distro: debianLinux}), " ")
-	wantDeb := "sysupgrade tools payload backup conflicts packages build session configs shell doctor verify"
-	if deb != wantDeb {
-		t.Errorf("debian steps = %q, want %q", deb, wantDeb)
-	}
-
-	fed := strings.Join(ids(&facts{distro: fedoraLinux}), " ")
-	wantFed := "sysupgrade tools payload backup repo conflicts packages drivers package-migration session configs shell doctor verify"
-	if fed != wantFed {
-		t.Errorf("fedora steps = %q, want %q", fed, wantFed)
+	if got, want := ids("/checkout"), "sysupgrade tools payload backup repo conflicts packages drivers build session configs shell doctor verify"; got != want {
+		t.Errorf("source steps = %q, want %q", got, want)
 	}
 }
 
 func TestInstallArgs(t *testing.T) {
-	got := strings.Join(archLinux.installArgs([]string{"git"}), " ")
-	if got != "pacman -Syu --needed --noconfirm git" {
-		t.Errorf("arch installArgs = %q", got)
+	if got := strings.Join(fedoraLinux.installArgs([]string{"git"}), " "); got != "dnf -y install --best git" {
+		t.Errorf("installArgs = %q", got)
 	}
-	got = strings.Join(debianLinux.installArgs([]string{"git"}), " ")
-	if got != "apt-get -y install git" {
-		t.Errorf("debian installArgs = %q", got)
-	}
-	got = strings.Join(debianLinux.removeArgs([]string{"dunst"}), " ")
-	if got != "apt-get -y remove dunst" {
-		t.Errorf("debian removeArgs = %q", got)
-	}
-	got = strings.Join(fedoraLinux.installArgs([]string{"git"}), " ")
-	if got != "dnf -y install --best git" {
-		t.Errorf("fedora installArgs = %q", got)
-	}
-	got = strings.Join(fedoraLinux.removeArgs([]string{"dunst"}), " ")
-	if got != "dnf -y remove dunst" {
-		t.Errorf("fedora removeArgs = %q", got)
+	if got := strings.Join(fedoraLinux.removeArgs([]string{"dunst"}), " "); got != "dnf -y remove dunst" {
+		t.Errorf("removeArgs = %q", got)
 	}
 	if got := fedoraLinux.installArgs(nil); len(got) != 0 {
-		t.Errorf("fedora installArgs(nil) = %v, want empty/nil", got)
+		t.Errorf("installArgs(nil) = %v, want empty/nil", got)
 	}
 	if got := fedoraLinux.removeArgs([]string{}); len(got) != 0 {
-		t.Errorf("fedora removeArgs([]) = %v, want empty/nil", got)
-	}
-}
-
-// desktopPacmanArgs must --overwrite the ryoku-desktop-owned paths a prior partial
-// install, a dev deploy, or the ISO installer can leave unowned (the bin helpers,
-// their polkit rules, and the Plymouth splash theme) so a resume or conversion
-// never aborts on "exists in filesystem". Dropping any path silently reintroduces
-// that outage, so pin coverage here. fromSource distros build from the payload and
-// must never carry --overwrite.
-func TestDesktopPacmanArgsAdoptsRyokuPaths(t *testing.T) {
-	args := desktopPacmanArgs(archLinux, []string{"ryoku-desktop"})
-	joined := strings.Join(args, " ")
-	if !strings.Contains(joined, "--overwrite") {
-		t.Fatalf("arch desktop install missing --overwrite: %v", args)
-	}
-	var glob string
-	for i, a := range args {
-		if a == "--overwrite" && i+1 < len(args) {
-			glob = args[i+1]
-		}
-	}
-	for _, p := range []string{
-		"/usr/bin/ryoku-dns",
-		"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules",
-		"/usr/share/plymouth/themes/ryoku/bullet.png",
-	} {
-		covered := false
-		for _, g := range strings.Split(glob, ",") {
-			if ok, _ := filepath.Match(g, p); ok {
-				covered = true
-				break
-			}
-		}
-		if !covered {
-			t.Errorf("--overwrite %q does not cover seeded path %q", glob, p)
-		}
-	}
-	if strings.Contains(strings.Join(desktopPacmanArgs(debianLinux, []string{"foo"}), " "), "--overwrite") {
-		t.Error("fromSource distro must not carry --overwrite")
+		t.Errorf("removeArgs([]) = %v, want empty/nil", got)
 	}
 }
 
@@ -157,20 +71,6 @@ func TestImmutableFedoraRejected(t *testing.T) {
 	}
 	if immutableFedora("ID=fedora\nVARIANT_ID=workstation\n") {
 		t.Fatal("rejected mutable Fedora")
-	}
-}
-
-func TestFedoraSourceDependenciesIncludeChosenProvider(t *testing.T) {
-	for _, provider := range []string{"hyprland", "niri"} {
-		e := &engine{f: &facts{distro: fedoraLinux}, p: &plan{compositor: provider}}
-		packages, err := e.sourceDependencies([]string{"polkit", "qt6-wayland"})
-		if err != nil {
-			t.Fatal(err)
-		}
-		got := " " + strings.Join(packages, " ") + " "
-		if !strings.Contains(got, " "+provider+" ") || !strings.Contains(got, " qt6-qtwayland ") || !strings.Contains(got, " polkit ") {
-			t.Fatalf("missing dependencies: %s", got)
-		}
 	}
 }
 

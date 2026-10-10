@@ -659,7 +659,7 @@ func writeBootFile(path, contents string) error {
 
 // reconcileLimineUKITree converges a limine box onto the hook-owned boot menu
 // the design always intended: /etc/default/limine ships with ENABLE_UKI=yes
-// and aur.packages carries limine-mkinitcpio-hook, but boxes installed before
+// and the AUR set carries limine-mkinitcpio-hook, but boxes installed before
 // (or without) the AUR step run on the flat "/Ryoku Linux" placeholder
 // forever. limine-snapper-sync refuses to hang the Snapshots submenu under an
 // entry with no "//<kernel>" sub-entries, so those boxes never see a rollback

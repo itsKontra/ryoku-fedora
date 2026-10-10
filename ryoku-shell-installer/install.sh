@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # ryoku-shell bootstrap: fetch and run the standalone Ryoku desktop installer
-# on an existing Arch machine. Kept deliberately dumb: every real decision
+# on an existing Fedora machine. Kept deliberately dumb: every real decision
 # lives in the ryoku-shell-install binary this script downloads.
 #
 #   curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash
@@ -57,36 +57,14 @@ main() {
 
   [[ ! -e /etc/NIXOS ]] || die "NixOS is not supported yet; use the flake instead"
 
-  local ryoku_family
-  if command -v pacman > /dev/null 2>&1; then
-    ryoku_family=arch
-  elif command -v apt-get > /dev/null 2>&1; then
-    ryoku_family=debian
-  elif command -v dnf > /dev/null 2>&1; then
-    ryoku_family=fedora
-  else
-    die "unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems"
-  fi
+  command -v dnf > /dev/null 2>&1 || die "unsupported distribution: Ryoku installs on mutable Fedora 44 and its derivatives"
   [[ $(uname -m) == x86_64 ]] || die "Ryoku ships x86_64 builds only"
   # the binary refuses non-systemd boots much later (session + services are
   # systemd units); saying it here spares Artix users the download.
   [[ -d /run/systemd/system ]] || die "this installer needs systemd (Artix and other non-systemd inits are not supported)"
   command -v curl > /dev/null 2>&1 || die "curl is required"
 
-  # warn-only on derivatives: the package manager is what actually matters.
-  if [[ -r /etc/os-release ]]; then
-    # shellcheck source=/dev/null
-    . /etc/os-release
-    case "${ID:-} ${ID_LIKE:-}" in
-      *arch*|*debian*|*fedora*) ;;
-      *) say "warning: ${PRETTY_NAME:-unknown distro} is not recognised; continuing as ${ryoku_family}" ;;
-    esac
-  fi
-  if [[ $ryoku_family == debian ]]; then
-    say "Debian detected: the desktop is built from source, which takes a few minutes"
-  elif [[ $ryoku_family == fedora ]]; then
-    say "Fedora detected: released packages are the default; --install-mode=source builds a checkout"
-  fi
+  say "Fedora detected: released packages are the default; --install-mode=source builds a checkout"
 
   local here=""
   if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then

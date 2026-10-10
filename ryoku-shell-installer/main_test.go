@@ -7,10 +7,10 @@ func TestGroupPlanItems(t *testing.T) {
 	var items []planItem
 	for _, l := range []string{
 		"Resume the previous run",
-		"NVIDIA proprietary drivers", "Switch login to SDDM", "Ryoku greeter theme",
-		"Switch to NetworkManager", "Remove rival shells", "Disable conflicting daemons",
-		"Retire the Omarchy repo", "Carry over monitor layout",
-		"AUR extras", "Developer toolchain", "fish as login shell",
+		"NVIDIA proprietary drivers", "Switch login to SDDM", "Enable SDDM login",
+		"Ryoku greeter theme", "AZERTY keyboard (French)", "Switch to NetworkManager",
+		"Remove rival shells", "Disable conflicting daemons", "Carry over monitor layout",
+		"Developer toolchain", "fish as login shell",
 	} {
 		items = append(items, planItem{label: l, on: &on})
 	}

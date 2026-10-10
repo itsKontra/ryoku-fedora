@@ -8,23 +8,14 @@ import (
 )
 
 // distro is the only place the installer knows a package manager. Every step
-// asks it for argv and for the local name of a package; nothing else branches on
-// the distribution.
-//
-// fromSource distros have no [ryoku] repository, so the desktop is built from the
-// cloned payload with ryoku/shell/deploy.sh instead of installed with pacman.
+// asks it for argv. Ryoku ships for Fedora only, so fedoraLinux is the one
+// table; anything else is refused before the engine starts.
 type distro struct {
-	id         string
-	name       string
-	fromSource bool
+	id   string
+	name string
 
-	// rename maps a base.packages (Arch) name to the local one. A missing key
-	// means the name is identical; an empty value means the package does not
-	// exist here and is skipped.
-	rename map[string]string
-
-	// build are the extra packages a fromSource install needs to compile the
-	// Go programs, the Ryoku.Blobs QML plugin, and the Hyprland plugins.
+	// build are the extra packages a source install needs to compile the Go
+	// programs, the Ryoku.Blobs QML plugin, and the Hyprland plugins.
 	build []string
 
 	installCmd []string
@@ -34,86 +25,9 @@ type distro struct {
 	queryCmd   []string
 }
 
-var archLinux = &distro{
-	id:         "arch",
-	name:       "Arch",
-	installCmd: []string{"pacman", "-Syu", "--needed", "--noconfirm"},
-	removeCmd:  []string{"pacman", "-R", "--noconfirm"},
-	updateCmd:  []string{"pacman", "-Syu", "--noconfirm"},
-	refreshCmd: []string{"pacman", "-Sy"},
-	queryCmd:   []string{"pacman", "-Qq"},
-}
-
-// Package names verified against api.ftp-master.debian.org (testing/unstable).
-var debianLinux = &distro{
-	id:         "debian",
-	name:       "Debian",
-	fromSource: true,
-	installCmd: []string{"apt-get", "-y", "install"},
-	removeCmd:  []string{"apt-get", "-y", "remove"},
-	updateCmd:  []string{"apt-get", "-y", "dist-upgrade"},
-	refreshCmd: []string{"apt-get", "update"},
-	queryCmd:   []string{"dpkg-query", "-W", "-f=${Status}"},
-	build: []string{
-		"build-essential", "cmake", "ninja-build", "pkgconf", "golang",
-		"qt6-base-dev", "qt6-declarative-dev", "qt6-multimedia-dev",
-		"qt6-shadertools-dev", "qt6-svg-dev", "qt6-5compat-dev", "qt6-wayland-dev",
-		"hyprland-dev", "libhyprutils-dev",
-	},
-	rename: map[string]string{
-		"base":                    "",
-		"base-devel":              "build-essential",
-		"bluez-utils":             "bluez",
-		"edk2-ovmf":               "ovmf",
-		"fd":                      "fd-find",
-		"github-cli":              "gh",
-		"gst-libav":               "gstreamer1.0-libav",
-		"gst-plugins-bad":         "gstreamer1.0-plugins-bad",
-		"gst-plugins-base":        "gstreamer1.0-plugins-base",
-		"gst-plugins-good":        "gstreamer1.0-plugins-good",
-		"gst-plugins-ugly":        "gstreamer1.0-plugins-ugly",
-		"inter-font":              "fonts-inter",
-		"linux-firmware":          "firmware-linux-free",
-		"linux-headers":           "linux-headers-amd64",
-		"networkmanager":          "network-manager",
-		"noto-fonts":              "fonts-noto-core",
-		"noto-fonts-cjk":          "fonts-noto-cjk",
-		"noto-fonts-emoji":        "fonts-noto-color-emoji",
-		"polkit":                  "polkitd",
-		"python":                  "python3",
-		"qemu-desktop":            "qemu-system-x86",
-		"qt6-multimedia-ffmpeg":   "qt6-multimedia-dev",
-		"rust":                    "rustc",
-		"tesseract-data-eng":      "tesseract-ocr-eng",
-		"ttf-firacode-nerd":       "fonts-firacode",
-		"ttf-hack-nerd":           "fonts-hack",
-		"ttf-jetbrains-mono-nerd": "fonts-jetbrains-mono",
-		"vulkan-icd-loader":       "libvulkan1",
-		"wpa_supplicant":          "wpasupplicant",
-		"xorg-xwayland":           "xwayland",
-
-		// Absent from Debian: skipped. matugen means no wallpaper palette,
-		// the rest are optional tools and cosmetic extras.
-		"limine":                        "",
-		"limine-mkinitcpio-hook":        "",
-		"limine-snapper-sync":           "",
-		"mkinitcpio":                    "",
-		"snap-pac":                      "",
-		"matugen":                       "",
-		"otf-space-grotesk":             "",
-		"songrec":                       "",
-		"ttf-material-symbols-variable": "",
-		"vimix-cursors":                 "",
-		"waifu2x-ncnn-vulkan":           "",
-		"yazi":                          "",
-	},
-}
-
-// Package names verified against Fedora repositories (dnf repoquery).
 var fedoraLinux = &distro{
 	id:         "fedora",
 	name:       "Fedora",
-	fromSource: true,
 	installCmd: []string{"dnf", "-y", "install", "--best"},
 	removeCmd:  []string{"dnf", "-y", "remove"},
 	updateCmd:  []string{"dnf", "-y", "upgrade"},
@@ -125,113 +39,17 @@ var fedoraLinux = &distro{
 		"qt6-qtshadertools-devel", "qt6-qtsvg-devel", "qt6-qt5compat-devel", "qt6-qtwayland-devel",
 		"wayland-devel", "wayland-protocols-devel", "ffmpeg-free-devel", "libsecret", "gnome-keyring-pam",
 	},
-	rename: map[string]string{
-		"base":                    "",
-		"base-devel":              "gcc-c++",
-		"adw-gtk-theme":           "adw-gtk3-theme",
-		"qt6-imageformats":        "qt6-qtimageformats",
-		"syntax-highlighting":     "kf6-syntax-highlighting",
-		"bluez-utils":             "bluez",
-		"docker":                  "moby-engine",
-		"edk2-ovmf":               "edk2-ovmf",
-		"fd":                      "fd-find",
-		"ffmpeg":                  "ffmpeg-free",
-		"github-cli":              "gh",
-		"gst-libav":               "gstreamer1-plugin-libav",
-		"gst-plugins-bad":         "gstreamer1-plugins-bad-free",
-		"gst-plugins-base":        "gstreamer1-plugins-base",
-		"gst-plugins-good":        "gstreamer1-plugins-good",
-		"gst-plugins-ugly":        "gstreamer1-plugins-ugly-free",
-		"imagemagick":             "ImageMagick",
-		"inter-font":              "rsms-inter-fonts",
-		"linux":                   "kernel",
-		"linux-headers":           "kernel-devel",
-		"mesa":                    "mesa-dri-drivers",
-		"networkmanager":          "NetworkManager",
-		"noto-fonts":              "google-noto-sans-fonts",
-		"noto-fonts-cjk":          "google-noto-sans-cjk-fonts",
-		"noto-fonts-emoji":        "google-noto-emoji-fonts",
-		"pipewire-audio":          "pipewire-utils",
-		"pipewire-pulse":          "pipewire-pulseaudio",
-		"polkit":                  "polkit",
-		"python":                  "python3",
-		"qemu-desktop":            "qemu-system-x86",
-		"qt5-wayland":             "qt5-qtwayland",
-		"qt6-5compat":             "qt6-qt5compat",
-		"qt6-declarative":         "qt6-qtdeclarative",
-		"qt6-multimedia":          "qt6-qtmultimedia",
-		"qt6-multimedia-ffmpeg":   "qt6-qtmultimedia",
-		"qt6-svg":                 "qt6-qtsvg",
-		"qt6-wayland":             "qt6-qtwayland",
-		"rust":                    "rust",
-		"tesseract-data-eng":      "tesseract-langpack-eng",
-		"ttf-firacode-nerd":       "fira-code-fonts",
-		"ttf-hack-nerd":           "source-foundry-hack-fonts",
-		"ttf-jetbrains-mono-nerd": "jetbrains-mono-fonts",
-		"vulkan-icd-loader":       "vulkan-loader",
-		"xorg-xwayland":           "xorg-x11-server-Xwayland",
-
-		// Absent from official Fedora repos or pacman/Arch-specific.
-		// Handled directly as zero-compile prebuilt releases (installDesktopExtras):
-		"awww":                          "awww",
-		"blesh":                         "",
-		"broadcom-bt-firmware":          "",
-		"game-devices-udev":             "",
-		"gnome-themes-extra":            "",
-		"gpu-screen-recorder":           "",
-		"limine":                        "",
-		"limine-mkinitcpio-hook":        "",
-		"limine-snapper-sync":           "",
-		"matugen":                       "",
-		"mkinitcpio":                    "",
-		"otf-space-grotesk":             "",
-		"snap-pac":                      "",
-		"songrec":                       "",
-		"spicetify-cli":                 "",
-		"spicetify-marketplace":         "",
-		"spotify-launcher":              "",
-		"ttf-maple-mono-nf":             "",
-		"ttf-material-symbols-variable": "",
-		"vimix-cursors":                 "",
-		"waifu2x-ncnn-vulkan":           "",
-		"xpadneo-dkms":                  "",
-		"zsh-history-substring-search":  "",
-	},
 }
 
 // activeDistro is set once by detectFacts; installed() reads it from the
 // detection paths that have no engine to hand.
-var activeDistro = archLinux
+var activeDistro = fedoraLinux
 
 func detectDistro(id, like string) *distro {
-	switch {
-	case id == "arch" || strings.Contains(like, "arch"):
-		return archLinux
-	case id == "debian" || strings.Contains(like, "debian"):
-		return debianLinux
-	case id == "fedora" || strings.Contains(like, "fedora"):
+	if id == "fedora" || strings.Contains(like, "fedora") {
 		return fedoraLinux
 	}
 	return nil
-}
-
-// local returns the package's name on this distro, or "" when it does not exist.
-func (d *distro) local(pkg string) string {
-	if to, ok := d.rename[pkg]; ok {
-		return to
-	}
-	return pkg
-}
-
-// localAll maps a base.packages list, dropping what this distro does not carry.
-func (d *distro) localAll(pkgs []string) []string {
-	out := make([]string, 0, len(pkgs))
-	for _, p := range pkgs {
-		if l := d.local(p); l != "" {
-			out = append(out, l)
-		}
-	}
-	return out
 }
 
 func (d *distro) installArgs(pkgs []string) []string {
@@ -250,20 +68,13 @@ func (d *distro) removeArgs(pkgs []string) []string {
 
 func (d *distro) installedPkg(pkg string) bool {
 	args := append(append([]string{}, d.queryCmd[1:]...), pkg)
-	out, err := exec.Command(d.queryCmd[0], args...).Output()
-	if err != nil {
-		return false
-	}
-	if d.id == "debian" {
-		return strings.Contains(string(out), "install ok installed")
-	}
-	return true
+	return exec.Command(d.queryCmd[0], args...).Run() == nil
 }
 
-// installed queries the detected distro. Replaces the old pacman-only helper.
+// installed queries the detected distro.
 func installed(pkg string) bool { return activeDistro.installedPkg(pkg) }
 
-// d is the engine's detected distro; archLinux until detection says otherwise.
+// d is the engine's detected distro.
 func (e *engine) d() *distro {
 	if e.f != nil && e.f.distro != nil {
 		return e.f.distro
@@ -272,7 +83,7 @@ func (e *engine) d() *distro {
 }
 
 // ryokuBin finds the ryoku CLI: /usr/bin from a package, ~/.local/bin from a
-// fromSource build. Empty when it is not installed yet.
+// source build. Empty when it is not installed yet.
 func (e *engine) ryokuBin() string {
 	cands := []string{"/usr/bin/ryoku"}
 	if e.f != nil && e.f.homeDir != "" {
@@ -297,14 +108,10 @@ func detectHostDistro() *distro {
 	}
 	id, like, _ := parseOSRelease(string(b))
 	d := detectDistro(id, like)
-	if d != nil && d.id == "fedora" {
-		if immutableFedora(string(b)) || pathExists("/run/ostree-booted") {
-			return nil
-		}
+	if d == nil || immutableFedora(string(b)) || pathExists("/run/ostree-booted") {
+		return nil
 	}
-	if d != nil {
-		activeDistro = d
-	}
+	activeDistro = d
 	return d
 }
 

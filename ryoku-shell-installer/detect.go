@@ -23,8 +23,6 @@ type facts struct {
 	distroLike string
 	distroName string
 	archX86    bool
-	pacman     bool
-	archLike   bool
 	distro     *distro
 	online     bool
 	btrfsRoot  bool
@@ -38,35 +36,30 @@ type facts struct {
 	otherNet  []string // enabled network stacks other than NetworkManager
 	nmEnabled bool
 
-	aurHelper        string
-	rivalPkgs        []string // conflicting shell packages installed
-	blockerPkgs      []string // packages that abort the pacman transaction if left
-	zshFrameworkPkgs []string // upstream oh-my-zsh installs ryoku-oh-my-zsh replaces
-	omarchyRepo      bool     // [omarchy] stanza in pacman.conf
-	omarchyMirror    bool     // mirrorlist pinned to Omarchy's package mirror
-	omarchyGuards    []string // Omarchy alpm hooks that abort any direct -Syu
-	softUnits        []string // enabled user units that fight the shell
-	niriFound        bool
-	swayFound        bool         // sway config present; sway stays as a fallback session
-	desktops         []string     // installed desktop environments (kept, never removed)
-	kdeSddmConf      bool         // KDE's sddm-kcm drop-in owns /etc/sddm.conf.d
-	monOutputs       []niriOutput // monitor intent salvaged from the old setup
-	monSource        string       // config the outputs came from (niri, GNOME, KDE, ...)
-	kbLayout         string
-	kbVariant        string
-	kbOptions        string
-	kbSource         string // config the keyboard setup came from
-	userShell        string
-	ryokuOnBox       bool // ryoku-desktop already installed
-	hostname         string
-	username         string
-	homeDir          string
-	hyprCfgDirs      []string  // pre-existing ~/.config/{hypr,quickshell,niri}
-	riceFound        []string  // known hyprland rices detected by marker paths
-	prevRun          *runState // interrupted earlier run, offered as a resume
+	rivalPkgs   []string // conflicting shell packages installed
+	blockerPkgs []string // packages that abort the desktop transaction if left
+	softUnits   []string // enabled user units that fight the shell
+	niriFound   bool
+	swayFound   bool         // sway config present; sway stays as a fallback session
+	desktops    []string     // installed desktop environments (kept, never removed)
+	kdeSddmConf bool         // KDE's sddm-kcm drop-in owns /etc/sddm.conf.d
+	monOutputs  []niriOutput // monitor intent salvaged from the old setup
+	monSource   string       // config the outputs came from (niri, GNOME, KDE, ...)
+	kbLayout    string
+	kbVariant   string
+	kbOptions   string
+	kbSource    string // config the keyboard setup came from
+	userShell   string
+	ryokuOnBox  bool // ryoku-desktop already installed
+	hostname    string
+	username    string
+	homeDir     string
+	hyprCfgDirs []string  // pre-existing ~/.config/{hypr,quickshell,niri}
+	riceFound   []string  // known hyprland rices detected by marker paths
+	prevRun     *runState // interrupted earlier run, offered as a resume
 }
 
-// rival quickshell stacks; ordered meta -> shell -> runtime so pacman removal
+// rival quickshell stacks; ordered meta -> shell -> runtime so package removal
 // never trips its own dependency checks (iNiR's conflicts model).
 var rivalShellPkgs = []string{
 	"cachyos-niri-noctalia", "noctalia-shell", "noctalia-shell-git", "noctalia-qs",
@@ -75,8 +68,8 @@ var rivalShellPkgs = []string{
 	"inir-shell", "inir-shell-git", "bms-shell-bin",
 }
 
-// installed packages that make `pacman -S --noconfirm` of the desktop set
-// abort with an unresolved conflict (pacman answers conflict prompts with No).
+// installed packages that make a non-interactive install of the desktop set
+// abort with an unresolved conflict.
 var conflictBlockerPkgs = []string{
 	"pulseaudio", "pulseaudio-alsa", "pulseaudio-bluetooth",
 	"quickshell-git", "quickshell-bin",
@@ -144,8 +137,6 @@ func has(name string) bool {
 	return false
 }
 
-func pacmanHas(pkg string) bool { return installed(pkg) }
-
 func unitEnabled(scope, unit string) bool {
 	args := []string{"is-enabled", unit}
 	if scope == "user" {
@@ -173,32 +164,6 @@ func parseOSRelease(text string) (id, like, name string) {
 	return
 }
 
-var omarchyStanzaRe = regexp.MustCompile(`(?m)^\[omarchy\]`)
-
-// true when an active Server line routes packages through Omarchy's mirror.
-func mirrorlistHasOmarchy(list string) bool {
-	for _, ln := range strings.Split(list, "\n") {
-		t := strings.TrimSpace(ln)
-		if strings.HasPrefix(t, "Server") && strings.Contains(t, "omarchy") {
-			return true
-		}
-	}
-	return false
-}
-
-// Omarchy 4 ships an alpm hook that aborts every `pacman -Syu` unless
-// OMARCHY_ALLOW_DIRECT_PACMAN is set, which stops this installer dead and would
-// keep blocking `ryoku update` after the conversion. Both hook directories are
-// searched: one left behind is one that still blocks.
-func findOmarchyGuards() []string {
-	var hooks []string
-	for _, dir := range []string{"/usr/share/libalpm/hooks", "/etc/pacman.d/hooks"} {
-		hits, _ := filepath.Glob(filepath.Join(dir, "*omarchy*guard*.hook"))
-		hooks = append(hooks, hits...)
-	}
-	return hooks
-}
-
 var x11LayoutRe = regexp.MustCompile(`X11 Layout:\s*(\S+)`)
 
 func detect() *facts {
@@ -208,8 +173,6 @@ func detect() *facts {
 		f.distroID, f.distroLike, f.distroName = parseOSRelease(string(b))
 	}
 	f.archX86 = out("uname", "-m") == "x86_64"
-	f.pacman = has("pacman")
-	f.archLike = f.distroID == "arch" || strings.Contains(f.distroLike, "arch")
 	if d := detectDistro(f.distroID, f.distroLike); d != nil {
 		activeDistro = d
 		f.distro = d
@@ -262,31 +225,9 @@ func detect() *facts {
 		}
 	}
 
-	for _, h := range []string{"yay", "paru"} {
-		if has(h) {
-			f.aurHelper = h
-			break
-		}
-	}
-
 	for _, p := range rivalShellPkgs {
 		if installed(p) {
 			f.rivalPkgs = append(f.rivalPkgs, p)
-		}
-	}
-	if f.pacman {
-		// end-4's meta packages pull the whole illogical-impulse daemon zoo;
-		// plain -R removal, same reasoning as the noctalia metas.
-		for _, p := range strings.Fields(out("pacman", "-Qq")) {
-			if strings.HasPrefix(p, "illogical-impulse-") {
-				f.rivalPkgs = append(f.rivalPkgs, p)
-			}
-		}
-		// ryoku-oh-my-zsh replaces both upstream frameworks on Arch only.
-		for _, p := range []string{"oh-my-zsh", "oh-my-zsh-git"} {
-			if pacmanHas(p) {
-				f.zshFrameworkPkgs = append(f.zshFrameworkPkgs, p)
-			}
 		}
 	}
 	for _, p := range conflictBlockerPkgs {
@@ -305,16 +246,6 @@ func detect() *facts {
 	if _, err := os.Stat("/etc/sddm.conf.d/kde_settings.conf"); err == nil {
 		f.kdeSddmConf = true
 	}
-
-	// an ex-Omarchy box keeps the [omarchy] repo and, worse, Omarchy's own
-	// mirror for core/extra; a converted machine must depend on neither.
-	if b, err := os.ReadFile("/etc/pacman.conf"); err == nil {
-		f.omarchyRepo = omarchyStanzaRe.Match(b)
-	}
-	if b, err := os.ReadFile("/etc/pacman.d/mirrorlist"); err == nil {
-		f.omarchyMirror = mirrorlistHasOmarchy(string(b))
-	}
-	f.omarchyGuards = findOmarchyGuards()
 
 	for _, unit := range softConflictUnits {
 		if unitEnabled("user", unit) {
@@ -448,35 +379,9 @@ func (f *facts) detectUcode() {
 		return
 	}
 	s := string(b)
-	distroID := ""
-	if f.distro != nil {
-		distroID = f.distro.id
-	} else if activeDistro != nil {
-		distroID = activeDistro.id
-	}
-
-	switch {
-	case strings.Contains(s, "AuthenticAMD"):
-		switch distroID {
-		case "fedora":
-			f.ucodePkg = "" // included in linux-firmware
-		case "debian":
-			f.ucodePkg = "amd64-microcode"
-		default:
-			f.ucodePkg = "amd-ucode"
-		}
-	case strings.Contains(s, "GenuineIntel"):
-		switch distroID {
-		case "fedora":
-			f.ucodePkg = "microcode_ctl"
-		case "debian":
-			f.ucodePkg = "intel-microcode"
-		default:
-			f.ucodePkg = "intel-ucode"
-		}
-	}
-	if f.ucodePkg != "" && installed(f.ucodePkg) {
-		f.ucodePkg = "" // already there, nothing to add
+	// AMD microcode ships inside linux-firmware on Fedora.
+	if strings.Contains(s, "GenuineIntel") && !installed("microcode_ctl") {
+		f.ucodePkg = "microcode_ctl"
 	}
 }
 

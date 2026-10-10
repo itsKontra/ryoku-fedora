@@ -2,23 +2,21 @@ name: Shell tool availability
 
 # blocks the "feature wired up, but its tool isn't shipped" class (see the
 # gnome-calendar / Super+G gap). every external program ProgramCheckerService
-# gates on must map to a package on the ISO, or be allow-listed as
+# gates on must be delivered by the RPM specs, or be allow-listed as
 # bring-your-own. tests/shell-tool-availability.sh.
 
 on:
   pull_request:
     paths:
-      - 'system/packages/base.packages'
-      - 'system/packages/aur.packages'
-      - 'system/packages/dev.packages'
+      - 'release/rpm/*.spec'
+      - 'ryoku/cli/internal/ryokumanifest/manifest.go'
       - 'tests/shell-tool-availability.sh'
   push:
     branches:
       - main
     paths:
-      - 'system/packages/base.packages'
-      - 'system/packages/aur.packages'
-      - 'system/packages/dev.packages'
+      - 'release/rpm/*.spec'
+      - 'ryoku/cli/internal/ryokumanifest/manifest.go'
       - 'tests/shell-tool-availability.sh'
   workflow_dispatch:
 

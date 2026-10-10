@@ -175,7 +175,7 @@ fi
 # lingers on a leftover Xorg and keeps drawing power (a video skin decodes a
 # 1440p60 clip forever). Running the greeter on Wayland like the session lets
 # SDDM own the VT and tear it down cleanly at login. weston --shell=kiosk is
-# SDDM's default kiosk compositor (base.packages ships weston); the greeter
+# SDDM's default kiosk compositor (ryoku-desktop requires weston); the greeter
 # connects to it as a separate Wayland client.
 # The greeter has no session env, so XCURSOR_* is pinned to the shipped Bibata
 # set (ryoku-cursors): without a theme Qt falls back to "default", and where that

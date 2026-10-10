@@ -133,25 +133,18 @@ func runUninstall(yes, dry bool) int {
 		return c.Run()
 	}
 
-	// 1. packages, one -R transaction; ryoku-desktop depends on the rest so
-	// pacman orders the removal itself.
+	// 1. packages, one remove transaction; ryoku-desktop depends on the rest
+	// so dnf orders the removal itself.
 	var installed []string
-	for _, p := range ryokuPkgs {
-		if activeDistro.id == "arch" && pacmanHas(p) {
-			installed = append(installed, p)
+	for _, pkg := range []string{"ryoku-desktop"} {
+		if activeDistro.installedPkg(pkg) {
+			installed = append(installed, pkg)
 		}
 	}
-	if activeDistro.id == "fedora" {
-		for _, pkg := range []string{"ryoku-desktop"} {
-			if activeDistro.installedPkg(pkg) {
-				installed = append(installed, pkg)
-			}
-		}
-		for _, provider := range compositors() {
-			pkg := "ryoku-desktop-" + provider
-			if activeDistro.installedPkg(pkg) {
-				installed = append(installed, pkg)
-			}
+	for _, provider := range compositors() {
+		pkg := "ryoku-desktop-" + provider
+		if activeDistro.installedPkg(pkg) {
+			installed = append(installed, pkg)
 		}
 	}
 	if len(installed) == 0 {
@@ -162,36 +155,19 @@ func runUninstall(yes, dry bool) int {
 		}
 	}
 
-	if activeDistro.fromSource && confirm(rd, "remove or restore artifacts recorded by this installation?", yes) {
+	if confirm(rd, "remove or restore artifacts recorded by this installation?", yes) {
 		if err := uninstallArtifacts(home, dry, run); err != nil {
 			fmt.Println("source uninstall failed: " + err.Error())
 			return 1
 		}
 	}
 
-	// 2. the [ryoku] repo stanza; original kept next to it.
-	if activeDistro.id == "fedora" && pathExists("/etc/yum.repos.d/RyokuCOPR.repo") {
+	// 2. the Ryoku repository; original kept next to it.
+	if pathExists("/etc/yum.repos.d/RyokuCOPR.repo") {
 		if confirm(rd, "disable the [RyokuCOPR] RPM repository?", yes) {
 			if err := run("sudo", "-n", "mv", "/etc/yum.repos.d/RyokuCOPR.repo", "/etc/yum.repos.d/RyokuCOPR.repo.disabled"); err != nil {
 				fmt.Println("could not disable the Ryoku repository: " + err.Error())
 				return 1
-			}
-		}
-	}
-	if b, err := os.ReadFile("/etc/pacman.conf"); err == nil && activeDistro.id == "arch" && ryokuStanzaRe.Match(b) {
-		if confirm(rd, i18n.T("drop the [ryoku] repository from /etc/pacman.conf?"), yes) {
-			stripped := stripPacmanSection(string(b), "ryoku")
-			if dry {
-				fmt.Println(i18n.T("DRYRUN: rewrite /etc/pacman.conf without [ryoku]"))
-			} else {
-				if err := run("sudo", "-n", "cp", "/etc/pacman.conf", "/etc/pacman.conf.pre-ryoku-uninstall"); err == nil {
-					c := exec.Command("sudo", "-n", "tee", "/etc/pacman.conf")
-					c.Stdin = strings.NewReader(stripped)
-					c.Stdout = nil
-					if err := c.Run(); err != nil {
-						fmt.Println(i18n.T("warning: could not rewrite /etc/pacman.conf"))
-					}
-				}
 			}
 		}
 	}

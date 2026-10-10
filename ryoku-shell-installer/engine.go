@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -23,66 +22,18 @@ import (
 	wm "ryoku-wm"
 )
 
-// line-anchored so a commented-out "#[ryoku]" stanza does not count.
-var ryokuStanzaRe = regexp.MustCompile(`(?m)^\[ryoku\]`)
-
 const defaultRepoURL = "https://github.com/itsKontra/ryoku-fedora.git"
 
 var repoURL = defaultRepoURL
 
-const pacmanStanza = `
-[ryoku]
-SigLevel = Required
-Server = https://repo.ryoku.dev/stable/$arch
-`
-
-// ryokuPkgs is the keyring plus the ryoku-desktop umbrella. The umbrella
-// version-pins and pulls every monorepo component and
-// the desktop's runtime tools (recorder, night light, dictation, OCR/QR, LED,
-// external-monitor brightness, ...) as hard depends, so installing just these
-// two is the single source of truth for the Ryoku desktop set. Everything else
-// (session, base OS, fonts) comes from base.packages via readBasePackages.
-var ryokuPkgs = []string{"ryoku-keyring", "ryoku-desktop"}
-
-// ryokuOverwriteGlob names the ryoku-desktop-owned paths that a prior partial
-// install, a dev deploy, or the ISO installer can leave unowned on disk: the
-// privileged helpers, their polkit rules, and the Plymouth splash theme. The
-// desktop transaction --overwrites them so a resume or a conversion never aborts
-// on "exists in filesystem". Mirrors the ISO installer and `ryoku update`
-// (updater.ryokuOverwriteGlob); keep the three in sync.
-const ryokuOverwriteGlob = "/usr/bin/ryoku-*," +
-	"/usr/share/polkit-1/rules.d/*ryoku*.rules," +
-	"/usr/share/plymouth/themes/ryoku/*"
-
-// bootChainSkip: base.packages entries a shell-converted box must NOT get -- it
-// already owns its bootloader, initramfs, encryption and snapshot stack, and
-// (re)installing these would rewrite its boot. Everything else in base.packages
-// installs, so a shell box matches the ISO's set with no second hand-kept list
-// to drift out of sync.
-var bootChainSkip = map[string]bool{
-	"base": true, "base-devel": true, "linux": true, "linux-firmware": true,
-	"mkinitcpio": true, "sudo": true, "btrfs-progs": true, "cryptsetup": true,
-	"dosfstools": true, "efibootmgr": true, "limine": true, "plymouth": true,
-	"snapper": true, "snap-pac": true,
-	// the limine hook packages pull limine + mkinitcpio back as depends and ship
-	// /etc/pacman.d/hooks entries that collide with a host keeping its own boot
-	// stack (Garuda's garuda-hooks owns 90-mkinitcpio-install.hook, #58).
-	"limine-mkinitcpio-hook": true, "limine-snapper-sync": true,
-}
-
-// the standard Ryoku extras, all best-effort here. ryogami (the wallpaper
-// daemon, from the [ryoku] repo) and matugen (the palette generator, from the
-// official repo) are hard ryoku-desktop depends the packages step already
-// pulled; no AUR build is needed.
-var aurPkgs = []string{"bibata-cursor-theme-bin", "localsend-bin", "voxtype-bin"}
-
-// system/packages/dev.packages; ryoku recovery builds from source and needs go.
-var devPkgs = []string{"go", "nodejs", "npm", "python", "python-pip", "python-pipx", "mise"}
+// devPkgs are the developer toolchains, the same Fedora names the ISO's
+// packages.list carries; ryoku recovery builds from source and needs golang.
+var devPkgs = []string{"golang", "rust", "cargo", "nodejs24-bin", "nodejs24-npm-bin", "python3-pip", "pipx"}
 
 var sparsePaths = []string{
 	"ryoku/lockscreen", "ryoku/assets", "ryoku/apps",
 	"system/hardware/drivers", "system/hardware/gpu", "system/hardware/input",
-	"system/packages", "release/rpm",
+	"release/rpm",
 }
 
 type plan struct {
@@ -90,10 +41,8 @@ type plan struct {
 	switchNet  bool   // disable other network stacks, enable NetworkManager
 	rivals     bool   // remove rival shell packages
 	softOff    bool   // disable conflicting user daemons
-	aur        bool   // AUR extras
 	fish       bool   // fish as login shell
-	devtools   bool   // dev.packages toolchains (go/rust/node/python; recovery needs go)
-	omarchy    bool   // retire the [omarchy] repo and mirror pin
+	devtools   bool   // developer toolchains (go/rust/node/python; recovery needs go)
 	monPins    bool   // pin the salvaged monitor layout in monitors_user.lua
 	greeter    bool   // point SDDM at the Ryoku greeter theme
 	resume     bool   // skip steps a previous interrupted run already finished
@@ -108,9 +57,7 @@ func defaultPlan(f *facts) *plan {
 		switchNet: true,
 		rivals:    true,
 		softOff:   true,
-		aur:       true,
 		fish:      !strings.HasSuffix(f.userShell, "/fish"),
-		omarchy:   f.omarchyRepo || f.omarchyMirror || len(f.omarchyGuards) > 0,
 		monPins:   len(f.monOutputs) > 0,
 		// when KDE's sddm-kcm owns sddm.conf.d the user chose that greeter
 		// look; keep it unless they opt in.
@@ -192,7 +139,6 @@ type engine struct {
 	backupDir       string
 	restorePath     string
 	prevBackups     int
-	pendingRestore  []string // undo lines queued before restore.sh exists
 	state           *runState
 
 	steps []estep
@@ -233,16 +179,13 @@ func newEngine(f *facts, p *plan, dry bool, ref, payloadOverride string) *engine
 		}
 	}
 	// repo trust comes before conflict removal on purpose: nothing gets
-	// uninstalled until the [ryoku] db has actually been fetched. legacy
-	// sources go first so the full upgrade already runs on clean mirrors.
-	pacmanOnly := map[string]bool{"legacy": true, "repo": true, "aur": true, "drivers": true}
+	// uninstalled until the Ryoku repository metadata has actually been fetched.
 	all := []estep{
-		{"legacy", i18n.T("Retiring the previous distro's package sources"), stepLegacy},
 		{"sysupgrade", i18n.T("Updating the system"), stepSysupgrade},
 		{"tools", i18n.T("Installing installer tools (git, build tools)"), stepTools},
 		{"payload", i18n.T("Fetching the Ryoku payload"), stepPayload},
 		{"backup", i18n.T("Backing up your configs"), stepBackup},
-		{"repo", i18n.T("Trusting the [ryoku] package repository"), stepRepo},
+		{"repo", i18n.T("Trusting the [ryoku] package repository"), stepFedoraRepo},
 		{"conflicts", i18n.T("Clearing conflicting shells and daemons"), stepConflicts},
 		{"packages", i18n.T("Installing the Ryoku desktop"), stepPackages},
 		{"drivers", i18n.T("Setting up GPU drivers"), stepDrivers},
@@ -250,24 +193,13 @@ func newEngine(f *facts, p *plan, dry bool, ref, payloadOverride string) *engine
 		{"package-migration", i18n.T("Retiring the previous source deployment"), stepPackageMigration},
 		{"session", i18n.T("Wiring the login session (SDDM, network)"), stepSession},
 		{"configs", i18n.T("Laying down your Ryoku configs"), stepConfigs},
-		{"aur", i18n.T("Building the AUR extras"), stepAUR},
 		{"shell", i18n.T("Switching your login shell to fish"), stepFish},
 		{"doctor", i18n.T("Converging the system (ryoku doctor)"), stepDoctor},
 		{"verify", i18n.T("Verifying the install"), stepVerify},
 	}
 	src := e.fromSource()
 	for _, s := range all {
-		if s.id == "package-migration" && (src || e.d().id != "fedora") {
-			continue
-		}
-		if (src || e.d().id != "arch") && pacmanOnly[s.id] {
-			if (s.id == "repo" || s.id == "drivers") && e.d().id == "fedora" {
-				// Fedora has native repository and hardware installation paths.
-			} else {
-				continue
-			}
-		}
-		if !src && s.id == "build" {
+		if (src && s.id == "package-migration") || (!src && s.id == "build") {
 			continue
 		}
 		e.steps = append(e.steps, s)
@@ -396,7 +328,7 @@ func (e *engine) cmd(dir string, env []string, name string, args ...string) erro
 		defer wg.Done()
 		// byte loop, not a Scanner: a Scanner stops at its buffer cap and the
 		// write side of the pipe then blocks forever. \r ends a token too, so
-		// pacman's download progress surfaces live instead of buffering until
+		// dnf's download progress surfaces live instead of buffering until
 		// each file's final newline; a panel that ticks during long downloads
 		// is the difference between "working" and "waiting for my password".
 		rd := bufio.NewReader(pr)
@@ -441,22 +373,11 @@ func (e *engine) cmd(dir string, env []string, name string, args ...string) erro
 	return nil
 }
 
-// sudoArgv: what `sudo -n` gets. Omarchy's guard hook aborts a pacman -Syu it did
-// not start, and both updateCmd and installCmd are -Syu, so until stepLegacy
-// retires the hook every package step needs the escape the guard documents.
-func sudoArgv(args []string, guarded bool) []string {
-	if !guarded || len(args) == 0 || args[0] != "pacman" {
-		return args
-	}
-	return append([]string{"env", "OMARCHY_ALLOW_DIRECT_PACMAN=1"}, args...)
-}
-
 func (e *engine) sudo(args ...string) error {
 	if len(args) == 0 {
 		return nil
 	}
-	guarded := e.f != nil && len(e.f.omarchyGuards) > 0
-	return e.cmd("", nil, "sudo", append([]string{"-n"}, sudoArgv(args, guarded)...)...)
+	return e.cmd("", nil, "sudo", append([]string{"-n"}, args...)...)
 }
 
 // sudoSh runs a fixed shell snippet as root; only static strings go in here.
@@ -480,87 +401,12 @@ func (e *engine) sudoWrite(path, content string) error {
 	return nil
 }
 
-// stripPacmanSection drops one [section] and its body from pacman.conf text.
-func stripPacmanSection(conf, section string) string {
-	var out []string
-	skip := false
-	for _, ln := range strings.Split(conf, "\n") {
-		t := strings.TrimSpace(ln)
-		if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
-			skip = t == "["+section+"]"
-		}
-		if !skip {
-			out = append(out, ln)
-		}
-	}
-	return strings.Join(out, "\n")
-}
-
 // ---- steps ----
-
-// an ex-Omarchy machine still trusts the [omarchy] repo and routes core/extra
-// through Omarchy's own mirror; a Ryoku box must depend on neither. originals
-// are kept as *.pre-ryoku and the undo lands in restore.sh.
-func stepLegacy(e *engine) error {
-	if !e.p.omarchy || (!e.f.omarchyRepo && !e.f.omarchyMirror && len(e.f.omarchyGuards) == 0) {
-		e.say(i18n.T("no previous distro package sources to retire"))
-		return nil
-	}
-	if e.f.omarchyRepo {
-		conf, err := os.ReadFile("/etc/pacman.conf")
-		if err != nil {
-			return err
-		}
-		stripped := stripPacmanSection(string(conf), "omarchy")
-		if stripped != string(conf) {
-			if err := e.sudo("cp", "/etc/pacman.conf", "/etc/pacman.conf.pre-ryoku"); err != nil {
-				return err
-			}
-			if err := e.sudoWrite("/etc/pacman.conf", stripped); err != nil {
-				return err
-			}
-			e.say(i18n.T("dropped the [omarchy] repository (original at /etc/pacman.conf.pre-ryoku)"))
-			e.pendingRestore = append(e.pendingRestore,
-				"sudo cp /etc/pacman.conf.pre-ryoku /etc/pacman.conf")
-		}
-	}
-	if e.f.omarchyMirror {
-		if err := e.sudo("cp", "/etc/pacman.d/mirrorlist", "/etc/pacman.d/mirrorlist.pre-ryoku"); err != nil {
-			return err
-		}
-		ml := "# restored by ryoku-shell-install: the previous Omarchy install pinned its\n" +
-			"# own package mirror here. original at mirrorlist.pre-ryoku; rank your own\n" +
-			"# mirrors with reflector if you want more than the worldwide CDN.\n" +
-			"Server = https://geo.mirror.pkgbuild.com/$repo/os/$arch\n"
-		if err := e.sudoWrite("/etc/pacman.d/mirrorlist", ml); err != nil {
-			return err
-		}
-		e.say(i18n.T("restored a standard Arch mirrorlist (original at /etc/pacman.d/mirrorlist.pre-ryoku)"))
-		e.pendingRestore = append(e.pendingRestore,
-			"sudo cp /etc/pacman.d/mirrorlist.pre-ryoku /etc/pacman.d/mirrorlist")
-	}
-	for _, hook := range e.f.omarchyGuards {
-		aside := hook + ".pre-ryoku"
-		if err := e.sudo("mv", hook, aside); err != nil {
-			return err
-		}
-		e.say(i18n.Tf("retired Omarchy's pacman guard hook, which aborts every -Syu (moved to %s)", aside))
-		e.pendingRestore = append(e.pendingRestore, "sudo mv "+aside+" "+hook)
-	}
-	if !e.dry && pacmanHas("omarchy-keyring") {
-		if err := e.sudo("pacman", "-R", "--noconfirm", "omarchy-keyring"); err != nil {
-			e.say(i18n.T("warning: could not remove omarchy-keyring (continuing)"))
-		}
-	}
-	return nil
-}
 
 func stepSysupgrade(e *engine) error {
 	d := e.d()
-	if d.id != "arch" {
-		if err := e.sudo(d.refreshCmd...); err != nil {
-			return err
-		}
+	if err := e.sudo(d.refreshCmd...); err != nil {
+		return err
 	}
 	return e.sudo(d.updateCmd...)
 }
@@ -568,19 +414,17 @@ func stepSysupgrade(e *engine) error {
 func stepTools(e *engine) error {
 	d := e.d()
 	pkgs := []string{"git"}
-	if e.fromSource() || d.id == "arch" {
-		pkgs = append(pkgs, d.local("base-devel"))
+	if e.fromSource() {
+		pkgs = append(pkgs, "gcc-c++")
 	}
-	if d.id == "fedora" {
-		plugin := "dnf-plugins-core"
-		if command, err := exec.LookPath(d.installCmd[0]); err == nil {
-			resolved, _ := filepath.EvalSymlinks(command)
-			if filepath.Base(resolved) == "dnf5" {
-				plugin = "dnf5-plugins"
-			}
+	plugin := "dnf-plugins-core"
+	if command, err := exec.LookPath(d.installCmd[0]); err == nil {
+		resolved, _ := filepath.EvalSymlinks(command)
+		if filepath.Base(resolved) == "dnf5" {
+			plugin = "dnf5-plugins"
 		}
-		pkgs = append(pkgs, plugin, "python3", "gnupg2")
 	}
+	pkgs = append(pkgs, plugin, "python3", "gnupg2")
 	return e.sudo(d.installArgs(pkgs)...)
 }
 
@@ -623,18 +467,20 @@ func stepPayload(e *engine) error {
 			return err
 		}
 	}
-	paths := append(append([]string{}, sparsePaths...), "release/rpm")
+	paths := append([]string{}, sparsePaths...)
+	sentinel := specPath(e.payload, "ryoku-desktop")
 	if e.fromSource() {
 		paths = []string{
-			"ryoku", "system", "bin", "ryoku-shell-installer", "release/rpm",
+			"ryoku", "system", "bin", "ryoku-shell-installer", "release/rpm", "installation/fedora",
 		}
+		sentinel = packagesListPath(e.payload)
 	}
 	if err := e.cmd(e.payload, nil, "git", append([]string{"sparse-checkout", "set"}, paths...)...); err != nil {
 		return err
 	}
 	// a cache from an older installer can come out of the update missing paths
 	// the current engine needs; a broken cache is worth less than a fresh clone.
-	if _, err := os.Stat(filepath.Join(e.payload, "system/packages/base.packages")); err != nil && !e.dry {
+	if _, err := os.Stat(sentinel); err != nil && !e.dry {
 		e.say(i18n.T("payload cache is incomplete; recloning it fresh"))
 		if err := os.RemoveAll(e.payload); err != nil {
 			return err
@@ -696,12 +542,6 @@ func stepBackup(e *engine) error {
 			return err
 		}
 	}
-	// undo lines queued by steps that ran before this file existed (legacy
-	// package-source retirement runs first).
-	for _, ln := range e.pendingRestore {
-		e.recordRestore(ln)
-	}
-	e.pendingRestore = nil
 	saveOne := func(rel string, move bool) error {
 		src := filepath.Join(e.f.homeDir, rel)
 		dst := filepath.Join(e.backupDir, rel)
@@ -795,24 +635,9 @@ func stepConflicts(e *engine) error {
 			}
 		}
 	}
-	if len(e.f.zshFrameworkPkgs) > 0 {
-		// ryoku-oh-my-zsh provides and replaces both upstream frameworks, but a
-		// plain -R under --noconfirm refuses while an installed plugin package
-		// depends on oh-my-zsh-git, and the dependency conflict then aborts the
-		// whole desktop transaction. -Rdd drops the framework alone; its plugins
-		// re-resolve against ryoku-oh-my-zsh's provides in the install step.
-		e.say(i18n.Tf("replacing %s with the Ryoku zsh framework", strings.Join(e.f.zshFrameworkPkgs, " ")))
-		if err := e.sudo(append([]string{"pacman", "-Rdd", "--noconfirm"}, e.f.zshFrameworkPkgs...)...); err != nil {
-			e.say(i18n.Tf("warning: could not remove %s; the package step may abort on a dependency conflict", strings.Join(e.f.zshFrameworkPkgs, " ")))
-		} else {
-			for _, p := range e.f.zshFrameworkPkgs {
-				e.recordRestore("sudo pacman -S --asdeps " + p)
-			}
-		}
-	}
 	if len(e.f.blockerPkgs) > 0 {
-		// pacman --noconfirm answers conflict prompts with No and aborts, so
-		// packages that conflict with the desktop set (pulseaudio vs
+		// a non-interactive install answers conflict prompts with No and
+		// aborts, so packages that conflict with the desktop set (pulseaudio vs
 		// pipewire-pulse, quickshell-git vs quickshell) must go first.
 		e.say(i18n.Tf("removing packages that block the desktop install: %s", strings.Join(e.f.blockerPkgs, " ")))
 		if err := e.sudo(e.d().removeArgs(e.f.blockerPkgs)...); err != nil {
@@ -824,98 +649,6 @@ func stepConflicts(e *engine) error {
 		}
 	}
 	return nil
-}
-
-func stepRepo(e *engine) error {
-	if e.d().id == "fedora" {
-		return stepFedoraRepo(e)
-	}
-
-	// on a box that already has ryoku-keyring, the keyring files under
-	// /usr/share/pacman/keyrings are package-owned: seeding and deleting them
-	// again would strip files out of the installed package. the trustdb is
-	// already populated, so the whole dance is unnecessary.
-	if !e.dry && pacmanHas("ryoku-keyring") {
-		e.say(i18n.T("ryoku-keyring already installed, key trust in place"))
-	} else {
-		kdir := filepath.Join(e.payload, "release/packages/ryoku-keyring")
-		kd := "/usr/share/pacman/keyrings"
-		for _, f := range []string{"ryoku.gpg", "ryoku-trusted", "ryoku-revoked"} {
-			if err := e.sudo("install", "-Dm644", filepath.Join(kdir, f), filepath.Join(kd, f)); err != nil {
-				return err
-			}
-		}
-		if err := e.sudo("pacman-key", "--populate", "ryoku"); err != nil {
-			return err
-		}
-		// drop the seeds so the ryoku-keyring package installs without a file
-		// conflict; the trustdb keeps the key (same dance as deploy.sh).
-		if err := e.sudo("rm", "-f", kd+"/ryoku.gpg", kd+"/ryoku-trusted", kd+"/ryoku-revoked"); err != nil {
-			return err
-		}
-	}
-
-	conf, err := os.ReadFile("/etc/pacman.conf")
-	if err != nil {
-		return err
-	}
-	if !ryokuStanzaRe.Match(conf) {
-		// whole-file swap, not `>>`: a crash mid-append could leave a truncated
-		// stanza that pacman rejects while a resume's regex check still sees
-		// `[ryoku]` and skips the repair. mv on the same fs commits atomically.
-		// chmod pins 0644: the new inode's mode would otherwise follow the
-		// invoking user's umask (sudo propagates it), and a umask-077 box would
-		// flip pacman.conf to 0600, breaking every non-root pacman reader,
-		// including this installer's own resume read above.
-		if err := e.sudoSh(`{ cat /etc/pacman.conf && printf '%s' '` + pacmanStanza + `'; } > /etc/pacman.conf.ryoku-new && ` +
-			`chmod 644 /etc/pacman.conf.ryoku-new && ` +
-			`mv -f /etc/pacman.conf.ryoku-new /etc/pacman.conf`); err != nil {
-			return err
-		}
-		e.say(i18n.T("added the [ryoku] repository to /etc/pacman.conf"))
-	} else {
-		e.say(i18n.T("[ryoku] repository already present in /etc/pacman.conf"))
-	}
-	// refresh right after the -Syu step, so this cannot strand a partial
-	// upgrade; it only pulls the fresh [ryoku] db.
-	return e.sudo("pacman", "-Sy")
-}
-
-// readBasePackages parses system/packages/base.packages from the payload: one
-// package per line, '#' comments and blank lines dropped, boot-chain entries
-// skipped. It is the source manifest translated for the detected distribution.
-func (e *engine) readBasePackages() ([]string, error) {
-	path := filepath.Join(e.payload, "system/packages/base.packages")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
-	}
-	var pkgs []string
-	for _, ln := range strings.Split(string(data), "\n") {
-		if i := strings.IndexByte(ln, '#'); i >= 0 {
-			ln = ln[:i]
-		}
-		ln = strings.TrimSpace(ln)
-		if ln == "" {
-			continue
-		}
-		if bootChainSkip[ln] {
-			// btrfs root: allow snapper (and snap-pac on Arch) through so
-			// ryoku doctor can configure snapshots and rollback as promised.
-			if e.f != nil && e.f.btrfsRoot && (ln == "snapper" || ln == "snap-pac") {
-				// keep it
-			} else {
-				continue
-			}
-		}
-		pkgs = append(pkgs, ln)
-	}
-	return pkgs, nil
-}
-
-func (e *engine) asusAura() bool {
-	detector := filepath.Join(e.payload, "system/hardware/input/ryoku-hw-asus-aura")
-	return exec.Command(detector).Run() == nil
 }
 
 // providerAnswers probes the installed window-manager provider. caps, not state:
@@ -931,114 +664,59 @@ func (e *engine) providerAnswers() bool {
 
 func stepPackages(e *engine) error {
 	d := e.d()
-	base, err := e.readBasePackages()
-	if err != nil {
-		if !e.dry {
-			return err
-		}
-		e.say(i18n.T("DRYRUN: payload not cloned; would read system/packages/base.packages"))
-	}
 	var pkgs []string
 	if e.fromSource() {
-		// no [ryoku] repository here: the desktop is built from the payload, so
-		// install its dependencies plus the toolchain that builds it.
-		pkgs, err = e.sourceDependencies(base)
-		if err != nil {
-			return err
-		}
-	} else if d.id == "fedora" {
-		pkgs = []string{"ryoku-desktop", "ryoku-desktop-" + e.p.compositor}
-	} else {
-		pkgs = append(append([]string{}, ryokuPkgs...), base...)
-		// name the chosen variant so pacman installs it directly instead of
-		// prompting when more than one provides ryoku-desktop-compositor.
-		pkgs = append(pkgs, "ryoku-desktop-"+e.p.compositor)
-		if e.asusAura() {
-			if d.installedPkg("tlp") {
-				e.say(i18n.T("ASUS Aura lighting skipped because TLP is installed"))
-			} else {
-				pkgs = append(pkgs, "asusctl")
+		// no packaged desktop here: it is built from the payload, so install its
+		// dependencies plus the toolchain that builds it.
+		var err error
+		if pkgs, err = e.sourceDependencies(); err != nil {
+			if !e.dry {
+				return err
 			}
+			e.say(i18n.T("DRYRUN: payload not cloned; would read the Fedora package sets"))
 		}
+	} else {
+		pkgs = []string{"ryoku-desktop", "ryoku-desktop-" + e.p.compositor}
 	}
 	if e.f.ucodePkg != "" {
-		pkgs = append(pkgs, d.local(e.f.ucodePkg))
+		pkgs = append(pkgs, e.f.ucodePkg)
 	}
 	if e.p.devtools {
-		pkgs = append(pkgs, d.localAll(devPkgs)...)
+		pkgs = append(pkgs, devPkgs...)
 	}
 	pkgs = e.dropSatisfied(pkgs)
 	if len(pkgs) == 0 {
 		return nil
 	}
-	if d.id == "arch" {
-		// a .part resumed against a mirror whose bytes moved on trips pacman's
-		// size cap on every retry; dropping resume state just costs a re-download.
-		if err := e.sudoSh(`rm -f /var/cache/pacman/pkg/*.part`); err != nil {
-			e.say(i18n.T("warning: could not clear partial downloads (continuing)"))
-		}
-	}
-	// -Syu, not -S: a resumed run holds the db its first attempt synced, and
-	// a publish in between replaces or prunes the files that db points at.
-	return e.sudo(desktopPacmanArgs(d, pkgs)...)
+	return e.sudo(d.installArgs(pkgs)...)
 }
 
-// desktopPacmanArgs builds the package transaction for stepPackages. On Arch it
-// --overwrites the ryoku-desktop-owned paths a prior partial install, a dev
-// deploy, or the ISO installer can leave unowned (ryokuOverwriteGlob), so a
-// resume or a conversion adopts them instead of aborting the whole transaction on
-// "exists in filesystem". fromSource distros build from the payload and never take
-// this path, so they keep the plain install command.
-func desktopPacmanArgs(d *distro, pkgs []string) []string {
-	args := append([]string{}, d.installCmd...)
-	if d.id == "arch" {
-		args = append(args, "--overwrite", ryokuOverwriteGlob)
-	}
-	return append(args, pkgs...)
-}
-
-// dropSatisfied keeps only what no installed provider satisfies (pacman -T
-// prints the unmet names), so a provides-conflict like qt6ct-kde cannot
-// abort the install under --noconfirm.
+// dropSatisfied keeps only what no installed package or provider satisfies, so
+// a box that already carries an alternative (tuned-ppd for
+// power-profiles-daemon, a third-party ffmpeg) is never asked to swap it.
 func (e *engine) dropSatisfied(pkgs []string) []string {
 	if e.dry || len(pkgs) == 0 {
 		return pkgs
 	}
-	if e.d().id == "fedora" {
-		var keep []string
-		for _, p := range pkgs {
-			if p == "" {
-				continue
-			}
-			if e.d().installedPkg(p) {
-				continue
-			}
-			if p == "power-profiles-daemon" && (e.d().installedPkg("tuned-ppd") || rpmProvides("ppd-service")) {
-				continue
-			}
-			if (p == "ffmpeg" || p == "ffmpeg-free") && (e.d().installedPkg("ffmpeg-free") || pathExists("/usr/bin/ffmpeg")) {
-				continue
-			}
-			if rpmProvides(p) {
-				continue
-			}
-			keep = append(keep, p)
+	var keep []string
+	for _, p := range pkgs {
+		if p == "" {
+			continue
 		}
-		if len(keep) < len(pkgs) {
-			e.say(fmt.Sprintf("%d of %d packages already satisfied on Fedora", len(pkgs)-len(keep), len(pkgs)))
+		if e.d().installedPkg(p) {
+			continue
 		}
-		return keep
+		if p == "power-profiles-daemon" && (e.d().installedPkg("tuned-ppd") || rpmProvides("ppd-service")) {
+			continue
+		}
+		if (p == "ffmpeg" || p == "ffmpeg-free") && (e.d().installedPkg("ffmpeg-free") || pathExists("/usr/bin/ffmpeg")) {
+			continue
+		}
+		if rpmProvides(p) {
+			continue
+		}
+		keep = append(keep, p)
 	}
-	if e.d().id != "arch" {
-		return pkgs
-	}
-	out, err := exec.Command("pacman", append([]string{"-T"}, pkgs...)...).Output()
-	// exit 127 aside, pacman -T exits 1 when any target is unmet; the list on
-	// stdout is the answer either way, so only a total failure falls back.
-	if len(out) == 0 && err != nil {
-		return pkgs
-	}
-	keep := filterByUnmet(pkgs, string(out))
 	if len(keep) < len(pkgs) {
 		e.say(i18n.Tf("%d of %d packages already satisfied by installed providers", len(pkgs)-len(keep), len(pkgs)))
 	}
@@ -1049,10 +727,9 @@ func rpmProvides(cap string) bool {
 	return exec.Command("rpm", "-q", "--quiet", "--whatprovides", cap).Run() == nil
 }
 
-// stepBuild is the fromSource replacement for installing ryoku-desktop: the
+// stepBuild is the source-mode replacement for installing ryoku-desktop: the
 // payload's deploy.sh already builds the Go programs, the QML modules and the
-// Ryoku.Blobs plugin, then materializes the config. It skips the Hyprland
-// compositor plugins when makepkg is absent, which is the case off Arch.
+// Ryoku.Blobs plugin, then materializes the config.
 func stepBuild(e *engine) error {
 	dir := filepath.Join(e.payload, "ryoku", "shell")
 	script := filepath.Join(dir, "deploy.sh")
@@ -1068,23 +745,6 @@ func stepBuild(e *engine) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(e.f.homeDir, ".local/state/ryoku/source-compositor"), []byte(e.p.compositor+"\n"), 0o644)
-}
-
-// filterByUnmet keeps only the names pacman -T reported as unmet.
-func filterByUnmet(pkgs []string, unmetOut string) []string {
-	unmet := map[string]bool{}
-	for _, ln := range strings.Split(strings.TrimSpace(unmetOut), "\n") {
-		if ln != "" {
-			unmet[ln] = true
-		}
-	}
-	var keep []string
-	for _, p := range pkgs {
-		if unmet[p] {
-			keep = append(keep, p)
-		}
-	}
-	return keep
 }
 
 func stepDrivers(e *engine) error {
@@ -1202,18 +862,6 @@ fi`); err != nil {
 				return err
 			}
 			e.recordRestore("sudo systemctl disable NetworkManager.service")
-		}
-		// iwd backend pin, Ryoku network policy. takes effect at the next NM
-		// restart (reboot), so the live wifi connection is never dropped.
-		// On Fedora (and systems without iwd), retain wpa_supplicant so Wi-Fi does not break.
-		if e.d().id != "fedora" && (e.d().id == "arch" || installed("iwd")) {
-			if err := e.sudoSh(`install -Dm644 /dev/stdin /etc/NetworkManager/conf.d/wifi-backend.conf <<'EOF'
-[device]
-wifi.backend=iwd
-EOF`); err != nil {
-				return err
-			}
-			e.recordRestore("sudo rm -f /etc/NetworkManager/conf.d/wifi-backend.conf")
 		}
 	} else {
 		e.say(i18n.T("keeping your current network stack"))
@@ -1420,7 +1068,7 @@ func (e *engine) installDesktopExtras() {
 	if e.dry || e.f == nil || e.f.homeDir == "" {
 		return
 	}
-	if e.d().id == "fedora" && (!e.fromSource() || e.d().installedPkg("ryoku-extras")) {
+	if !e.fromSource() || e.d().installedPkg("ryoku-extras") {
 		return
 	}
 	if runtime.GOARCH != "amd64" {
@@ -1440,53 +1088,6 @@ func (e *engine) installDesktopExtras() {
 func pathExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
-}
-
-func stepAUR(e *engine) error {
-	if !e.p.aur {
-		e.say(i18n.T("AUR extras skipped by choice; the wallpaper daemon is a package depend and is unaffected"))
-		return nil
-	}
-	helper := e.f.aurHelper
-	if helper == "" {
-		e.say(i18n.T("no AUR helper found, bootstrapping yay-bin"))
-		tmp, err := os.MkdirTemp("", "ryoku-yay-")
-		if err != nil {
-			return err
-		}
-		defer os.RemoveAll(tmp)
-		if err := e.cmd(tmp, nil, "git", "clone", "https://aur.archlinux.org/yay-bin.git"); err != nil {
-			return err
-		}
-		// build and install separately: makepkg -i runs a plain interactive
-		// sudo, which on a lapsed credential prompts on /dev/tty over the TUI
-		// and hangs there; the engine's sudo -n fails loudly instead.
-		if err := e.cmd(filepath.Join(tmp, "yay-bin"), nil, "makepkg", "--noconfirm"); err != nil {
-			return err
-		}
-		built, _ := filepath.Glob(filepath.Join(tmp, "yay-bin", "*.pkg.tar.zst"))
-		if len(built) == 0 {
-			return errors.New(i18n.T("yay-bin build produced no package"))
-		}
-		if err := e.sudo(append([]string{"pacman", "-U", "--noconfirm"}, built...)...); err != nil {
-			return err
-		}
-		helper = "yay"
-	}
-	var failed []string
-	for _, p := range aurPkgs {
-		// --sudoflags=-n, same reason: the helper's own sudo must fail into
-		// the log, never prompt over the TUI. yay and paru both take it.
-		if err := e.cmd("", nil, helper, "-S", "--needed", "--noconfirm", "--sudoflags=-n", p); err != nil {
-			failed = append(failed, p)
-			e.say(i18n.Tf("warning: AUR build failed for %s (continuing)", p))
-		}
-	}
-	if len(failed) > 0 {
-		e.say(i18n.Tf("AUR packages that did not install: %s", strings.Join(failed, " ")))
-		e.say(i18n.Tf("re-run later with: %s -S %s", helper, strings.Join(failed, " ")))
-	}
-	return nil
 }
 
 func stepFish(e *engine) error {
@@ -1532,20 +1133,12 @@ func stepVerify(e *engine) error {
 		check(e.ryokuBin() != "", i18n.T("ryoku CLI built and installed"))
 		_, err := os.Stat(filepath.Join(e.f.homeDir, ".local/bin/ryoku-shell"))
 		check(err == nil, i18n.T("ryoku-shell daemon built"))
-	} else if e.d().id == "fedora" {
+	} else {
 		conf, _ := os.ReadFile("/etc/yum.repos.d/RyokuCOPR.repo")
 		check(strings.Contains(string(conf), "[RyokuCOPR]"), "[RyokuCOPR] RPM repository configured")
 		check(e.d().installedPkg("ryoku-desktop"), "ryoku-desktop RPM installed")
 		check(e.d().installedPkg("ryoku-desktop-"+e.p.compositor), "selected provider RPM installed")
 		check(pathExists("/usr/bin/ryoku"), "packaged ryoku CLI installed")
-	} else {
-		conf, _ := os.ReadFile("/etc/pacman.conf")
-		check(strings.Contains(string(conf), "[ryoku]"), i18n.T("[ryoku] repository in /etc/pacman.conf"))
-		check(pacmanHas("ryoku-keyring"), i18n.T("ryoku-keyring package installed"))
-		check(pacmanHas("ryoku-desktop"), i18n.T("ryoku-desktop package installed"))
-		check(has("ryoku"), i18n.T("ryoku CLI on PATH"))
-		st, err := os.Stat("/usr/share/ryoku/config")
-		check(err == nil && st.IsDir(), i18n.T("base config tree at /usr/share/ryoku/config"))
 	}
 	var err error
 	cdir := wm.ConfigDir(e.p.compositor)
@@ -1564,34 +1157,15 @@ func stepVerify(e *engine) error {
 			e.say(gWarn + " " + i18n.Tf("an SDDM drop-in still selects greeter theme %s; check /etc/sddm.conf.d", theme))
 		}
 	}
-	// matugen palette generator: verified on all distros (packaged on Arch,
-	// installed via zero-compile prebuilt release on Fedora and source builds).
-	if has("matugen") {
-		check(true, i18n.T("matugen palette generator (colors follow the wallpaper)"))
-	} else if e.d().local("matugen") == "" && e.d().id == "debian" {
-		e.say(gWarn + " matugen is not packaged here: wallpaper palettes stay at their defaults")
-	} else {
-		check(false, i18n.T("matugen palette generator (colors follow the wallpaper)"))
-	}
+	// matugen comes from ryoku-extras, or its prebuilt release on a source build.
+	check(has("matugen"), i18n.T("matugen palette generator (colors follow the wallpaper)"))
 	if !has("ryogami") {
 		e.say(gWarn + " " + i18n.T("ryogami missing: the wallpaper will not paint until it installs (ryoku doctor retries it)"))
 	}
 	if e.p.devtools {
 		check(has("go"), i18n.T("go toolchain on PATH (ryoku recovery rebuilds from source)"))
 	} else {
-		hint := "sudo pacman -S go"
-		if e.d().id == "fedora" {
-			hint = "sudo dnf install golang"
-		} else if e.d().id == "debian" {
-			hint = "sudo apt-get install golang"
-		}
-		e.say(gWarn + " developer toolchain skipped: ryoku recovery needs go; install with: " + hint)
-	}
-	if e.p.omarchy {
-		conf2, _ := os.ReadFile("/etc/pacman.conf")
-		if omarchyStanzaRe.Match(conf2) {
-			e.say(gWarn + " " + i18n.T("the [omarchy] repository is still in /etc/pacman.conf"))
-		}
+		e.say(gWarn + " developer toolchain skipped: ryoku recovery needs go; install with: sudo dnf install golang")
 	}
 	if len(bad) > 0 {
 		return errors.New(i18n.Tf("%d check(s) failed: %s", len(bad), strings.Join(bad, "; ")))

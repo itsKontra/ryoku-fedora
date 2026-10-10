@@ -19,11 +19,10 @@ import (
 // module unconditionally, and the Hub's Lockscreen page only offers the sddm/sudo
 // fingerprint toggles when it is present.
 //
-// The module is AUR-only (pam-fprint-grosshack) and ships in aur.packages, but
-// that set is installed once at post-install and never revisited by
-// `ryoku update`, so a box that predates the entry -- or that skipped the AUR
-// step -- has the whole fingerprint-unlock feature wired up with the module
-// missing: fprintd's own enroll/verify (Ryoku Settings) still works, but the
+// The module is AUR-only (pam-fprint-grosshack), installed once at
+// post-install and never revisited by `ryoku update`, so a box that predates
+// the entry -- or that skipped the AUR step -- has the whole fingerprint-unlock
+// feature wired up with the module missing: fprintd's own enroll/verify (Ryoku Settings) still works, but the
 // lock and greeter silently do nothing on a touch, and PAM logs a "cannot open
 // pam_fprintd_grosshack.so / faulty module" line on every unlock attempt.
 //
@@ -31,6 +30,8 @@ import (
 // same AUR path the other backfilled packages use (reconcile_limine's
 // ryoku-pkg-aur-add). Report-only in checkOnly. Silent on a machine with no
 // reader, so a desktop is never made to build an AUR package it cannot use.
+// Fedora has no package for the module yet (installation/fedora/README.md), so
+// an RPM box with a reader is told so instead of reaching for the AUR.
 
 // fingerprintModulePath is where the grosshack PAM module lands, the exact path
 // the lock's PAM stack and the Hub probe. A var so a test can point it elsewhere.
@@ -76,6 +77,9 @@ func reconcileFingerprintModule(checkOnly bool) recResult {
 	res, install := planFingerprintModule(fingerprintReaderPresent(), sys.Exists(fingerprintModulePath), checkOnly)
 	if !install {
 		return res
+	}
+	if sys.RPMManager() != "" {
+		return noteRes(i18n.T("pam-fprint-grosshack has no Fedora package yet; touch-to-unlock at the lock and login screens stays off"))
 	}
 	if err := sys.Run("ryoku-pkg-aur-add", "pam-fprint-grosshack"); err != nil {
 		return failRes(i18n.T("could not install the fingerprint unlock module: %v"), err).

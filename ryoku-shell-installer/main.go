@@ -125,15 +125,9 @@ func buildItems(f *facts, p *plan) []planItem {
 	if len(f.softUnits) > 0 {
 		it = append(it, planItem{"Disable conflicting daemons", i18n.Tf("disables %s", strings.Join(f.softUnits, ", ")), &p.softOff, false})
 	}
-	if f.omarchyRepo || f.omarchyMirror || len(f.omarchyGuards) > 0 {
-		it = append(it, planItem{"Retire the Omarchy repo", i18n.T("drops [omarchy] from pacman.conf, restores a standard Arch mirrorlist, removes omarchy-keyring, retires the pacman guard hook that blocks -Syu"), &p.omarchy, false})
-	}
 	if len(f.monOutputs) > 0 {
 		it = append(it, planItem{"Carry over monitor layout", i18n.Tf("pins %d output(s) from your %s setup (rotation, scale, position) into monitors_user.lua", len(f.monOutputs), f.monSource), &p.monPins, false})
 	}
-	// awww is retired: the wallpaper daemon is ryogami, a hard ryoku-desktop
-	// depend the packages step pulls, not an AUR build.
-	it = append(it, planItem{"AUR extras", i18n.T("Bibata cursor, LocalSend, Voxtype"), &p.aur, false})
 	it = append(it, planItem{"Developer toolchain", i18n.T("go, rust, node, python (ISO parity); ryoku recovery rebuilds from source and needs go"), &p.devtools, false})
 	if !strings.HasSuffix(f.userShell, "/fish") {
 		it = append(it, planItem{"fish as login shell", i18n.T("Ryoku's default shell; your current one stays installed"), &p.fish, false})
@@ -148,8 +142,8 @@ var planGroups = []struct {
 	labels []string
 }{
 	{"session & hardware", []string{"Switch login to SDDM", "Enable SDDM login", "Ryoku greeter theme", "AZERTY keyboard (French)", "AZERTY keyboard (Belgian)", "Switch to NetworkManager"}},
-	{"migration & cleanup", []string{"Remove rival shells", "Disable conflicting daemons", "Retire the Omarchy repo", "Carry over monitor layout"}},
-	{"extras", []string{"AUR extras", "Developer toolchain", "fish as login shell"}},
+	{"migration & cleanup", []string{"Remove rival shells", "Disable conflicting daemons", "Carry over monitor layout"}},
+	{"extras", []string{"Developer toolchain", "fish as login shell"}},
 }
 
 // groupPlanItems inserts non-selectable header rows (on == nil) between
@@ -487,9 +481,6 @@ func (m model) viewPlan() string {
 	if f.ryokuOnBox {
 		row("ryoku", i18n.T("already installed; this run repairs and reconciles it"))
 	}
-	if f.omarchyRepo || f.omarchyMirror || len(f.omarchyGuards) > 0 {
-		row(i18n.T("previous"), i18n.T("Omarchy install detected; its repo, mirror pin and pacman guard get retired"))
-	}
 	if !f.online {
 		span(fg(cRed, gWarn+" "+i18n.T("repo.ryoku.dev unreachable, the install will fail without network")))
 	}
@@ -677,8 +668,8 @@ func runHeadless(dry bool, ref, payload, compositor string) int {
 		fmt.Println(i18n.Tf("resuming the interrupted previous run: %d step(s) already done", len(f.prevRun.Completed)))
 	}
 	// a machine-readable toggle dump: the keys are plan field names, not prose.
-	fmt.Printf("plan: sddm=%v greeter-theme=%v networkmanager=%v remove-shells=%v aur=%v fish=%v devtools=%v omarchy-cleanup=%v monitor-pins=%v azerty-fr=%v azerty-be=%v\n",
-		p.switchDM, p.greeter, p.switchNet, p.rivals, p.aur, p.fish, p.devtools, p.omarchy, p.monPins, p.azertyFR, p.azertyBE)
+	fmt.Printf("plan: sddm=%v greeter-theme=%v networkmanager=%v remove-shells=%v fish=%v devtools=%v monitor-pins=%v azerty-fr=%v azerty-be=%v\n",
+		p.switchDM, p.greeter, p.switchNet, p.rivals, p.fish, p.devtools, p.monPins, p.azertyFR, p.azertyBE)
 	e := newEngine(f, p, dry, ref, payload)
 	ev := e.runFrom(0)
 	for msg := range ev {
@@ -782,11 +773,7 @@ func main() {
 			die("unsupported distribution (immutable Fedora derivatives are not supported)")
 		}
 		e := &engine{f: &facts{distro: d}, p: &plan{compositor: chooseCompositor(*compositor)}, payload: *payload}
-		base, err := e.readBasePackages()
-		if err != nil {
-			die(err.Error())
-		}
-		pkgs, err := e.sourceDependencies(base)
+		pkgs, err := e.sourceDependencies()
 		if err != nil {
 			die(err.Error())
 		}
@@ -800,7 +787,7 @@ func main() {
 		die(i18n.T("run as your normal user, not root; sudo is used where needed"))
 	}
 	if detectHostDistro() == nil {
-		die("unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems")
+		die("unsupported distribution: Ryoku installs on mutable Fedora 44 and its derivatives")
 	}
 	if out("uname", "-m") != "x86_64" {
 		die(i18n.T("Ryoku ships x86_64 builds only"))
@@ -811,7 +798,7 @@ func main() {
 		die(i18n.T("this system does not boot with systemd (Artix or another init detected); Ryoku needs systemd and cannot install here"))
 	}
 
-	if !*uninstall && activeDistro.id == "fedora" && !sourceMode(activeDistro, installMode, *payload, *ref) {
+	if !*uninstall && !sourceMode(installMode, *payload, *ref) {
 		if _, err := fedoraRepositoryConfig(); err != nil {
 			die(err.Error())
 		}

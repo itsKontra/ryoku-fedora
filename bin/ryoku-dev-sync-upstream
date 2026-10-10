@@ -17,7 +17,7 @@ upstream_branch=main
 # Fedora owns these: a conflict keeps main and is listed for a manual port.
 fedora_owned='^(installation/fedora/|installation/tests/fedora-|installation/README\.md$|release/rpm/|\.github/workflows/(build-fedora-iso|fedora-firstboot|fedora-iso-vm|fedora-rpm|i18n|publish-copr)\.yml$|ryoku/cli/internal/sys/rpm(_test)?\.go$|ryoku-shell-installer/fedora_repo\.go$)'
 # Arch and CachyOS delivery, plus what the port retired: never comes back.
-discard='^(installation/(backend|iso|tui)/|release/(packages|repo|gradle-offline)/|system/boot/|system/packages/cachyos\.packages$|(.*/)?CHANGELOG\.md$|VERSION$|bin/ryoku-dev-verify-pkgbuild-deps$)'
+discard='^(installation/(backend|iso|tui)/|release/(packages|repo|gradle-offline)/|system/boot/|system/packages/|ryoku/cli/cmd/ryoku-manifest/|ryoku/cli/internal/ryokumanifest/generate\.go$|(.*/)?CHANGELOG\.md$|VERSION$|bin/ryoku-dev-verify-pkgbuild-deps$)'
 catalog='^ryoku/i18n/catalog/[^/]+\.json$'
 leak='pacman|yay|AUR|CachyOS|PKGBUILD|makepkg|pacstrap|archiso|mkinitcpio|limine|snapper'
 

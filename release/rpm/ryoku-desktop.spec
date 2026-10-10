@@ -41,6 +41,7 @@ Requires:       polkit
 Requires:       xdg-desktop-portal
 Requires:       xdg-desktop-portal-gtk
 Requires:       xdg-user-dirs
+Requires:       xdg-utils
 Requires:       qt6-qtwayland
 Requires:       qt5-qtwayland
 Requires:       qt6-qt5compat
