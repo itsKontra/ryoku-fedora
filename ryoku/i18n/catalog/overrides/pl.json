@@ -78,7 +78,6 @@
   "monitor": "monitor",
   "no NVIDIA GPU that the signed open driver supports": "brak GPU NVIDIA obsługiwanego przez podpisany otwarty sterownik",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "brak przypięcia renderowania do NVIDIA przy panelu innym niż NVIDIA",
-  "no pacman or dnf here; shipped apps are the installer's business": "nie ma tu pacmana ani dnf; dołączonymi aplikacjami zajmuje się instalator",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "brak migawki sprzed aktualizacji (snapper był niedostępny), więc `ryoku rollback` nie może tego cofnąć; przywróć bezpośrednio za pomocą %s",
   "no signed NVIDIA driver helper on this system": "w tym systemie brak narzędzia do podpisanego sterownika NVIDIA",
   "no theme master; colours follow the wallpaper by default": "brak wzorca motywu; kolory domyślnie podążają za tapetą",

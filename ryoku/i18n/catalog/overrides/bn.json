@@ -50,7 +50,6 @@
   "look (read-only)  boots it with changes kept in RAM; nothing on disk changes": "look (read-only)  RAM-এ পরিবর্তন রেখে এটি বুট করে; ডিস্কে কিছুই বদলায় না",
   "no NVIDIA GPU that the signed open driver supports": "স্বাক্ষরিত ওপেন ড্রাইভার সমর্থন করে এমন কোনো NVIDIA GPU নেই",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "নন-NVIDIA প্যানেলের উপর কোনো NVIDIA-first রেন্ডার পিন নেই",
-  "no pacman or dnf here; shipped apps are the installer's business": "এখানে pacman বা dnf নেই; সঙ্গে আসা অ্যাপগুলো ইনস্টলার সামলায়",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "আপডেটের আগের কোনো স্ন্যাপশট নেই (snapper অনুপলব্ধ ছিল), তাই `ryoku rollback` এটি ফিরিয়ে আনতে পারবে না; সরাসরি %s দিয়ে পুনরুদ্ধার করুন",
   "no signed NVIDIA driver helper on this system": "এই সিস্টেমে কোনো স্বাক্ষরিত NVIDIA ড্রাইভার হেল্পার নেই",
   "on and enforcing": "চালু এবং প্রয়োগকৃত",
@@ -71,7 +70,6 @@
   "set the wireless regulatory domain to %s from the system timezone, so the kernel enables 5 GHz channels again": "সিস্টেমের টাইমজোন অনুযায়ী ওয়্যারলেস নিয়ন্ত্রক ডোমেন %s এ সেট করা হয়েছে, যাতে কার্নেল আবার 5 GHz চ্যানেল চালু করে",
   "signed NVIDIA driver installed; Secure Boot is off, so no key enrollment is needed": "স্বাক্ষরিত NVIDIA ড্রাইভার ইনস্টল হয়েছে; Secure Boot বন্ধ, তাই কী নথিভুক্তির প্রয়োজন নেই",
   "source deployment has no ownership receipt; retain --install-mode=source until its local binaries and service overrides are migrated": "সোর্স ডিপ্লয়মেন্টের কোনো মালিকানা রসিদ নেই; স্থানীয় বাইনারি এবং পরিষেবা ওভাররাইড স্থানান্তর না হওয়া পর্যন্ত --install-mode=source বজায় রাখুন",
-  "sudo pacman -S xdg-desktop-portal-%s": "sudo pacman -S xdg-desktop-portal-%s",
   "sudo snapper -c root set-config ALLOW_USERS=%s SYNC_ACL=yes": "sudo snapper -c root set-config ALLOW_USERS=%s SYNC_ACL=yes",
   "sudo systemctl enable %s": "sudo systemctl enable %s",
   "sudo:        %s": "sudo:        %s",
@@ -81,7 +79,6 @@
   "the Ryoku module key awaits approval: reboot, choose Enroll MOK, and type the password ryoku": "Ryoku মডিউল কী অনুমোদনের অপেক্ষায়: রিবুট করুন, Enroll MOK বেছে নিন এবং পাসওয়ার্ড ryoku টাইপ করুন",
   "the Ryoku module key is not enrolled, so the NVIDIA driver cannot load under Secure Boot": "Ryoku মডিউল কী নথিভুক্ত নয়, তাই Secure Boot-এর অধীনে NVIDIA ড্রাইভার লোড হতে পারে না",
   "this NVIDIA GPU runs on nouveau; the Secure Boot signed driver is available": "এই NVIDIA GPU nouveau-তে চলে; Secure Boot স্বাক্ষরিত ড্রাইভার উপলব্ধ",
-  "unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems": "অসমর্থিত ডিস্ট্রিবিউশন: Ryoku Arch-ভিত্তিক, Debian-ভিত্তিক এবং Fedora-ভিত্তিক সিস্টেমে ইনস্টল হয়",
   "~/Pictures/Wallpapers/dynamic/Day": "~/Pictures/Wallpapers/dynamic/Day",
   "~/Pictures/Wallpapers/dynamic/Night": "~/Pictures/Wallpapers/dynamic/Night"
 }

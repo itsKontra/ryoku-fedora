@@ -73,7 +73,6 @@
   "localhost:": "localhost:",
   "look (read-only)  boots it with changes kept in RAM; nothing on disk changes": "look (read-only)  käynnistää sen niin, että muutokset pidetään RAM-muistissa; levyllä mikään ei muutu",
   "no NVIDIA-first render pin over a non-NVIDIA panel": "ei NVIDIA-ensin-renderöintikiinnitystä ei-NVIDIA-paneelissa",
-  "no pacman or dnf here; shipped apps are the installer's business": "täällä ei ole pacmania eikä dnf:ää; mukana tulevat sovellukset ovat asennusohjelman asia",
   "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with %s directly": "päivitystä edeltävää tilannekuvaa ei ole (snapper ei ollut käytettävissä), joten `ryoku rollback` ei voi perua tätä; palauta suoraan komennolla %s",
   "no theme master; colours follow the wallpaper by default": "ei teeman pääasetuksia; värit seuraavat oletuksena taustakuvaa",
   "on and enforcing": "päällä ja pakottava",
@@ -113,7 +112,6 @@
   "the Ryoku module key is not enrolled, so the NVIDIA driver cannot load under Secure Boot": "Ryoku-moduuliavainta ei ole rekisteröity, joten NVIDIA-ohjain ei lataudu Secure Bootin ollessa päällä",
   "the repaired volume(s): %s": "korjatut osiot: %s",
   "this NVIDIA GPU runs on nouveau; the Secure Boot signed driver is available": "tämä NVIDIA GPU käyttää nouveauta; Secure Boot -allekirjoitettu ohjain on saatavilla",
-  "unsupported distribution: Ryoku installs on Arch-based, Debian-based, and Fedora-based systems": "jakelua ei tueta: Ryoku asentuu Arch-, Debian- ja Fedora-pohjaisiin järjestelmiin",
   "warning: %s did not finish; check its output and retry the driver setup before rebooting": "varoitus: %s ei valmistunut; tarkista sen tuloste ja yritä ohjaimen asennusta uudelleen ennen uudelleenkäynnistystä",
   "⏎  ENTER": "⏎  ENTER",
   "❯ fastfetch": "❯ fastfetch"
