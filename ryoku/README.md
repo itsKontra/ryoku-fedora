@@ -49,7 +49,8 @@ desktop. See `docs/structure.md` for the repo-wide map.
 Fonts (JetBrains Mono, Noto, Inter) are `Requires:` of `ryoku-desktop`
 (`release/rpm/ryoku-desktop.spec`); the Nerd Font variants come from
 `ryoku-extras`.
-The cursor theme (Bibata) is an AUR package, selected by the Hyprland environment.
+The cursor theme (Bibata) ships in `ryoku-extras`
+(`release/rpm/ryoku-extras.spec`).
 The Go binaries (`ryoku`, `ryoku-shell`, `ryoku-hub`) and the `Ryoku.Blobs`
 plugin ship as signed Fedora RPMs from `release/rpm/`, built from source, so
 the installed target needs no build toolchain.
