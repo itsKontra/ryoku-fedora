@@ -7,9 +7,9 @@
 //
 // The manifest states intent, not versions. First-party packages are pinned to
 // the release that built them (one shared RYOKU_PKGVER, as ryoku-desktop's
-// depends already do); distribution and AUR packages are named only, because
-// the kernel and the AUR are not Ryoku's to move. That is the same two-lane
-// rule docs/updates.md states for `ryoku update`.
+// depends already do); distribution packages are named only, because Fedora
+// and its kernel are not Ryoku's to move. That is the same two-lane rule
+// docs/updates.md states for `ryoku update`.
 package ryokumanifest
 
 import "sort"
@@ -29,7 +29,6 @@ type Manifest struct {
 	Base        []string            `json:"base"`                 // every machine's distribution packages
 	Dev         []string            `json:"dev"`                  // developer toolchains
 	Hardware    map[string][]string `json:"hardware,omitempty"`   // per hardware profile
-	AUR         []string            `json:"aur"`                  // best-effort extras
 	FirstParty  []string            `json:"firstParty"`           // release/rpm/*.spec, pinned to Version
 	Compositor  map[string][]string `json:"compositor,omitempty"` // provider -> its packages, from its caps
 	Provisioned []string            `json:"provisioned"`          // apps doctor delivers once and never re-adds
@@ -52,7 +51,6 @@ func (m Manifest) Names() []string {
 	for _, section := range m.Hardware {
 		add(section...)
 	}
-	add(m.AUR...)
 	add(m.FirstParty...)
 	for _, pkgs := range m.Compositor {
 		add(pkgs...)
@@ -68,14 +66,13 @@ func (m Manifest) Names() []string {
 
 // provisionedByLane answers where a name belongs, and therefore what a missing
 // one means: base/dev/first-party/compositor names reach a packaged box through
-// `ryoku update`'s set or a hard depend (a miss there is a delivery bug), AUR
-// names arrive best-effort post-install, and provisioned names are the doctor's
-// deliver-once list, where a removal is the user's and stands.
+// `ryoku update`'s set or a hard depend (a miss there is a delivery bug), and
+// provisioned names are the doctor's deliver-once list, where a removal is the
+// user's and stands.
 const (
 	LaneBase        = "base"
 	LaneDev         = "dev"
 	LaneHardware    = "hardware"
-	LaneAUR         = "aur"
 	LaneFirstParty  = "first-party"
 	LaneCompositor  = "compositor"
 	LaneProvisioned = "provisioned"
@@ -94,8 +91,6 @@ func (m Manifest) Lane(name string) string {
 		return LaneBase
 	case contains(m.Dev, name):
 		return LaneDev
-	case contains(m.AUR, name):
-		return LaneAUR
 	}
 	for _, pkgs := range m.Compositor {
 		if contains(pkgs, name) {
