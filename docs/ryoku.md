@@ -98,3 +98,19 @@ Read `docs/structure.md` for where things live, `docs/conventions.md` for how to
 write them, `docs/ui-ux.md` for the desktop's design and motion, and
 `docs/development.md` for the deploy/test/commit loop. The cardinal rules in
 `AGENTS.md` override anything that contradicts them.
+
+## Clock format
+
+Open Ryoku Settings with Super+comma, then Global > Language & Region.
+The **24-hour time** switch applies to Ryoku's clocks, weather times,
+notification timestamps and the built-in lockscreen. Off shows 12-hour time
+with AM/PM; on shows 24-hour time. The default is 24-hour time.
+The clock controls in bar settings, the desktop clock widget and the bar
+clock's right-click shortcut change this same preference. Third-party apps
+and downloaded lockscreen themes keep their own formatting.
+
+The shell daemon persists this existing setting as
+`general.clock_format_24_h` in `shell.json`; `Ryoku.Ui.Singletons.TimeFormat`
+watches it across processes. The legacy per-surface `qsbar` / `kairos`
+`clock12h` and widgets `clock24h` values are folded into it once by
+`ryoku doctor` and no longer override it.

@@ -525,6 +525,7 @@ Rectangle {
         "adaptive": true, "smoothing": 0.5, "gain": 1.0, "peaks": false,
         "spin": 0, "x": 0, "y": 0.58, "w": 1, "h": 0.42, "grow": "up", "angle": 0, "tiltX": 0, "tiltY": 0,
         "markText": "力", "markImage": "", "markTint": true, "name": "Ryoku",
+        "general.clock_format_24_h": true,
         "reloadCover": ReloadCoverModel.empty(),
         "language": "Auto", "barStyle": "sumi", "obi": {}, "nacre": NacreConfig.defaultConfig(), "qsbar": {}, "dock": {},
         "clipboard.widthPercent": 65, "clipboard.heightPercent": 42, "clipboard.bottomPercent": 0,

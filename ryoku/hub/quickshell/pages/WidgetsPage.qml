@@ -105,7 +105,7 @@ Item {
         var m = {};
         for (var i = 0; i < pg.keys.length; i++) {
             var k = pg.keys[i];
-            m[k] = cfgA[k];
+            m[k] = k === "clock24h" ? TimeFormat.is24h : cfgA[k];
         }
         return m;
     }
@@ -117,6 +117,11 @@ Item {
     function save() {
         for (var i = 0; i < pg.keys.length; i++) {
             var k = pg.keys[i];
+            // The clock's hour cycle is the Ryoku-wide preference, not a widgets.json key.
+            if (k === "clock24h") {
+                if (pg.draft[k] !== TimeFormat.is24h) TimeFormat.set24h(pg.draft[k] === true);
+                continue;
+            }
             cfgA[k] = pg.draft[k];
         }
         cfg.writeAdapter();
@@ -290,6 +295,11 @@ Item {
                 Loader { anchors.fill: parent; sourceComponent: card.preview }
             }
         }
+    }
+
+    Connections {
+        target: TimeFormat
+        function onIs24hChanged() { if (pg.loaded) pg.onCfgLoaded(); }
     }
 
     // ── persistence: the page owns widgets.json ──────────────────────────────

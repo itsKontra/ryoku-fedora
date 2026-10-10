@@ -289,6 +289,9 @@ once every supported install has run it. `reconcileShellConfig` migrates a stale
 `reconcileLauncherLocalFrostDefault` moves only the launcher's retired shipped
 `bgBlur: 12` to the new 2 px local-frost default, then records a marker so a
 later deliberate 12 remains a user choice.
+`reconcileClockFormat` folds the bars' and desktop clock's retired 12/24-hour
+switches into `general.clock_format_24_h` once, then records a marker so a
+later choice in Ryoku Settings stands.
 `reconcileUserEdits` seeds the how-to guide and, for boxes upgraded from the
 retired adopt step, moves the tool's own user files (`hypr/user.lua`,
 `hypr/monitors_user.lua`, `kitty/user.conf`) back OUT of the overlay. Those are

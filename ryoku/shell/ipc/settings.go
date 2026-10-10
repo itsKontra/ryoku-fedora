@@ -270,7 +270,7 @@ func defaultSettings() *settings {
 	}
 	return &settings{
 		General: generalSettings{
-			ClockFormat24H:       false,
+			ClockFormat24H:       true, // Ryoku clocks have always shipped 24-hour
 			WeatherLocationQuery: locationQuery{Type: "Coordinates", Lat: 0, Lon: 0, Name: "", Country: ""},
 			TemperatureUnit:      "Metric",
 		},

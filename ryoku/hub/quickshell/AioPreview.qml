@@ -118,7 +118,7 @@ Item {
                 }
                 Text {
                     anchors.centerIn: parent
-                    text: Qt.formatTime(root.now, "HH:mm"); color: "#1a1c1f"
+                    text: TimeFormat.format(root.now); color: "#1a1c1f"
                     font.family: "Inter Display"; font.weight: Font.Black; font.pixelSize: 46; font.letterSpacing: 1
                 }
             }
@@ -199,7 +199,7 @@ Item {
                 id: tm
                 anchors.horizontalCenter: parent.horizontalCenter
                 y: 560
-                text: Qt.formatTime(root.now, "HH:mm")
+                text: TimeFormat.format(root.now)
                 color: "#eef1f8"
                 font.family: "Inter Display"; font.weight: Font.Medium
                 font.pixelSize: 30; font.letterSpacing: 4

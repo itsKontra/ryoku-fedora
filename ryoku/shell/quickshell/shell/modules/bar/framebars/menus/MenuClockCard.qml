@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Ryoku.Ui.Singletons
 import Quickshell
 import shell.services
 
@@ -52,7 +53,7 @@ Item {
                 font.weight: Font.Bold
             }
             Text {
-                text: Qt.formatTime(clock.date, "HH:mm")
+                text: TimeFormat.format(clock.date)
                 color: Theme.onSurface
                 font.family: Theme.fontPrimary
                 font.pixelSize: Theme.fontSm
