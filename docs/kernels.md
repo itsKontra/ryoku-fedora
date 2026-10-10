@@ -27,5 +27,6 @@ The kernel still moves only when you run the upgrade. Details in
 
 ## The CachyOS kernel
 
-`ryostore-install` refuses the CachyOS kernel Extras bundle on Fedora; a
-third-party kernel is outside what Ryoku ships or supports.
+`ryostore-install` refuses the CachyOS kernel Extras bundle with "the CachyOS
+kernel bundle is not supported on Fedora". A third-party kernel is outside what
+Ryoku ships or supports.

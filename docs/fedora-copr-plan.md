@@ -12,7 +12,6 @@ Use COPR to build Fedora RPMs, use DNF to install released software, and retain 
 - Installer and test independently list five dependency COPRs: `sdegler/hyprland`, `errornointernet/quickshell`, `atim/starship`, `atim/lazygit`, and `lihaohong/yazi`.
 - `ryoku-install-extra` downloads upstream binaries for `matugen`, `prowl-agent`, and `qmk_hid`, plus Bibata, Space Grotesk, Material Symbols, JetBrains Mono Nerd Font, and SpaceMono Nerd Font assets. Those binaries are not compiled from this checkout. `ryoku-extras.spec` currently bundles all of them into an RPM.
 - `ryoku/cli/internal/sys/rpm.go` expects `/etc/yum.repos.d/RyokuCOPR.repo` and repository ID `RyokuCOPR`. A normal COPR enable operation does not satisfy that contract.
-- `reconcileDevResidue` in `ryoku/cli/internal/doctor/doctor.go` identifies local binary shadows through `sys.PkgOwner` (`rpm -qf`) and matches owners starting with `ryoku` or `ryogami`. Packaged names outside those prefixes would need adding there.
 
 **COPR projects and initial support**
 
@@ -82,8 +81,6 @@ Maintainer setup: create the two projects and Fedora 44 x86_64 chroots; configur
 
 Installing a locally produced RPM using `dnf install ./package.rpm` is also valid for package testing. It preserves that local build while letting DNF resolve dependencies; it must not be confused with installing a published package by name. Keep clean-build test inputs local to the run so tests cannot silently exercise last week's COPR binaries.
 
-The installer has an explicit installation mode independent of distro (`--install-mode`, `ryoku-shell-installer/install_mode.go`); `auto` picks source mode only for a payload override, a non-`main` ref or a fork repository. When extending it, update `newEngine`, `stepPackages`, `stepConfigs`, provider checks, verification, and uninstall ownership together. Preserve source selection for developer payload/ref use and show the chosen mode clearly. Do not silently fall back to compiling if package delivery fails.
-
 Use one repository/dependency declaration for installer and Fedora tests. Preserve DNF4/DNF5 plugin detection already present in `stepTools`; the current test hardcodes `dnf5-plugins` and runs COPR setup through `dnf`, even in its DNF4 matrix. Preflight selected chroot, metadata, signatures, packages, and provider compatibility before conflict removal; errors should identify the repository/package and retry action. Required matugen delivery must not be reported as an optional-download warning.
 
 Disable direct extras downloads for package-owned payloads. For migration, use RPM file ownership plus existing installer/download receipts to retire only known Ryoku-managed local shadows. Include local QML imports, desktop entries, user service ExecStart overrides, and source tracking markers. Preserve unrelated user scripts and preserve all local artifacts when source mode remains selected. Keep `bin/ryoku-recovery`'s deliberate checkout rebuild behavior, but verify the return to packaged mode actually removes its managed shadows. `ryoku deploy`, dev-run, and source tracking must continue using local builds.
@@ -93,7 +90,7 @@ Disable direct extras downloads for package-owned payloads. For migration, use R
 1. Confirm project/chroot/toolchain choices and the release host; resolve ryotunes UI ownership and dependency package ownership.
 2. Extract source preparation, add dependency recipes, and prove every SRPM rebuilds in a clean root.
 3. Implement reusable Fedora checks, COPR submit/wait, signature-preserving output tests, and atomic channel promotion.
-4. Add the installer package mode and shared repository setup; implement mode-aware cleanup, recovery, and updater integration.
+4. Add shared repository setup; implement mode-aware cleanup, recovery, and updater integration.
 5. Validate fresh installation without a compiler, N-to-N+1 update, tag rollback, and a competing repository with a higher version. Exercise both providers and DNF versions. Verify package signatures, selected repository, service executable paths, QML imports, and preservation of user overlays.
 6. Test unavailable repos/packages, rejected signatures, failed/cancelled builds, offline recovery, and migration from the existing source install. Separately prove local edits still run after a development deploy.
 7. Run Fedora VM checks with SELinux enforcing: login, lock/unlock, portals/screen sharing, audio, SDDM, and the documented hardware cases. Record exact image, commit, RPM list, repository configuration, and logs. Container success alone does not complete graphical/SELinux acceptance.
@@ -113,6 +110,12 @@ Normal Fedora installs now select DNF packages. Explicit source mode, local
 payloads, custom repositories and non-main refs retain checkout builds.
 Migration removes only unchanged artifacts covered by the source installation
 receipt and refuses unknown shadows before removing conflicting packages.
+
+Done since the inspection: the installer has an explicit installation mode
+independent of distro (`--install-mode`, `ryoku-shell-installer/install_mode.go`),
+and `reconcileDevResidue` in `ryoku/cli/internal/doctor/doctor.go` finds local
+binary shadows through `sys.PkgOwner` (`rpm -qf`), matching owners that start
+with `ryoku` or `ryogami`.
 
 Validation used Fedora 44 x86_64 containers. All 11 SRPMs built successfully in
 clean Mock roots. Fresh niri/DNF5 and Hyprland/DNF4 installs passed with locally
