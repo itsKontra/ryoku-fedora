@@ -64,12 +64,16 @@ class Extras(unittest.TestCase):
                 info = tarfile.TarInfo('bibata_cursor-f4ccfe8a/' + name)
                 info.size = 4
                 archive.addfile(info, io.BytesIO(b'data'))
+            alias = tarfile.TarInfo('bibata_cursor-f4ccfe8a/svg/arrow.svg')
+            alias.type = tarfile.SYMTYPE
+            alias.linkname = 'left_ptr.svg'
+            archive.addfile(alias)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             with patch.object(extra, 'download', return_value=blob.getvalue()):
                 extra.install('bibata-source', root)
             source = root / 'share/ryoku-cursor-material/bibata'
-            for name in ('src/cursor_utils.py', 'svg/left_ptr.svg', 'config/render.json'):
+            for name in ('src/cursor_utils.py', 'svg/left_ptr.svg', 'svg/arrow.svg', 'config/render.json'):
                 self.assertTrue((source / name).is_file(), name)
             self.assertFalse((source / 'readme.adoc').exists())
 

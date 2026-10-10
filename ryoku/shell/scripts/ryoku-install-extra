@@ -55,6 +55,40 @@ def atomic_write(path, data, mode=0o644):
             os.unlink(name)
 
 
+def safe_members(archive):
+    for member in archive.getmembers():
+        path = Path(member.name)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError("unsafe archive path")
+        yield member, path
+
+
+def read_tree(archive):
+    """Return (content, links): every file's bytes, links resolved, plus each link's target."""
+    content = {}
+    links = {}
+    for member, path in safe_members(archive):
+        key = str(path)
+        if member.isfile():
+            content[key] = archive.extractfile(member).read()
+        elif member.issym() or member.islnk():
+            target = posixpath.normpath(posixpath.join(str(path.parent), member.linkname) if member.issym() else member.linkname)
+            if target.startswith(("/", "../")):
+                raise ValueError("unsafe archive link")
+            links[key] = target
+    # Resolve aliases in memory; seeking backwards through xz for each
+    # cursor alias would repeatedly decompress the entire archive.
+    def resolve(key, seen):
+        if key in content:
+            return content[key]
+        if key in seen or key not in links:
+            raise ValueError("broken archive link")
+        return resolve(links[key], seen | {key})
+    for key in links:
+        content[key] = resolve(key, set())
+    return content, links
+
+
 def install(name, root=None):
     version, url, digest, relative = RELEASES[name]
     root = root or Path.home() / ".local"
@@ -78,47 +112,21 @@ def install(name, root=None):
             files[relative] = archive.read("qmk_hid")
     elif name == "bibata":
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-            members = archive.getmembers()
-            content = {}
-            links = {}
-            for member in members:
-                path = Path(member.name)
-                if path.is_absolute() or ".." in path.parts:
-                    raise ValueError("unsafe archive path")
-                key = str(path)
-                if member.isfile():
-                    content[key] = archive.extractfile(member).read()
-                elif member.issym() or member.islnk():
-                    target = posixpath.normpath(posixpath.join(str(path.parent), member.linkname) if member.issym() else member.linkname)
-                    if target.startswith(("/", "../")):
-                        raise ValueError("unsafe archive link")
-                    links[key] = target
-            # Resolve aliases in memory; seeking backwards through xz for each
-            # cursor alias would repeatedly decompress the entire archive.
-            def resolve(key, seen):
-                if key in content:
-                    return content[key]
-                if key in seen or key not in links:
-                    raise ValueError("broken archive link")
-                return resolve(links[key], seen | {key})
-            for key in links:
-                content[key] = resolve(key, set())
-            for key, value in content.items():
-                destination = "share/licenses/Bibata/LICENSE" if key == "LICENSE" else str(Path(relative) / key)
-                files[destination] = value
-                if key in links:
-                    install_links[destination] = posixpath.relpath(str(Path(relative) / links[key]), str(Path(destination).parent))
+            content, links = read_tree(archive)
+        for key, value in content.items():
+            destination = "share/licenses/Bibata/LICENSE" if key == "LICENSE" else str(Path(relative) / key)
+            files[destination] = value
+            if key in links:
+                install_links[destination] = posixpath.relpath(str(Path(relative) / links[key]), str(Path(destination).parent))
     elif name == "bibata-source":
         # ryoku-cursor-material-recolor rebuilds the wallpaper cursor from this
         # tree; it needs the build script, its render config, and the SVGs.
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-            for member in archive.getmembers():
-                path = Path(member.name)
-                if path.is_absolute() or ".." in path.parts:
-                    raise ValueError("unsafe archive path")
-                inner = Path(*path.parts[1:])
-                if member.isfile() and inner.parts and inner.parts[0] in ("src", "svg", "config"):
-                    files[str(Path(relative) / inner)] = archive.extractfile(member).read()
+            content, _ = read_tree(archive)
+        for key, value in content.items():
+            inner = Path(*Path(key).parts[1:])
+            if inner.parts and inner.parts[0] in ("src", "svg", "config"):
+                files[str(Path(relative) / inner)] = value
     elif name == "space-grotesk":
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             for member in archive.namelist():
@@ -126,10 +134,7 @@ def install(name, root=None):
                     files[str(Path(relative) / Path(member).name)] = archive.read(member)
     elif name in ("jetbrains-mono-nerd-fonts", "space-mono-nerd-fonts"):
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-            for member in archive.getmembers():
-                path = Path(member.name)
-                if path.is_absolute() or ".." in path.parts:
-                    raise ValueError("unsafe archive path")
+            for member, path in safe_members(archive):
                 if member.isfile() and member.name.endswith(".ttf"):
                     files[str(Path(relative) / path.name)] = archive.extractfile(member).read()
     else:
