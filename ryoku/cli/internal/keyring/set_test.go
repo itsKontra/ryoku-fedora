@@ -76,10 +76,8 @@ func seedDefault(t *testing.T, name string) {
 }
 
 func TestSetAskConfigOnly(t *testing.T) {
-	pam := sandbox(t, bareSDDM)
+	pam := sandbox(t, fedoraSDDM)
 	useFake(t)
-	// start from a wired stack so ask has something to strip.
-	applyPAMFile(pam, ModeUnlockOnLogin)
 	if err := runSet([]string{ModeAsk}); err != nil {
 		t.Fatalf("set ask: %v", err)
 	}
@@ -87,8 +85,8 @@ func TestSetAskConfigOnly(t *testing.T) {
 		t.Fatalf("config not recorded as ask (%q, %v)", m, ok)
 	}
 	got, _ := os.ReadFile(pam)
-	if pamPresent(string(got)) {
-		t.Fatalf("ask must strip the PAM lines:\n%s", got)
+	if string(got) != bareSDDM {
+		t.Fatalf("ask must strip exactly the stock keyring lines:\n%s", got)
 	}
 }
 
@@ -170,8 +168,8 @@ func TestSetUnlockOnLoginPointsDefaultAndWires(t *testing.T) {
 		t.Fatalf("previous pointer must be backed up, got %q", bak)
 	}
 	got, _ := os.ReadFile(pam)
-	if !pamHasKeyring(string(got), "auth") || !pamHasKeyring(string(got), "session") {
-		t.Fatalf("PAM must be wired:\n%s", got)
+	if string(got) != fedoraSDDM {
+		t.Fatalf("PAM must be wired back to the stock stack:\n%s", got)
 	}
 }
 

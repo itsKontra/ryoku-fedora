@@ -12,13 +12,15 @@ import (
 
 // The pam_gnome_keyring lines that make unlock-on-login work: the auth module
 // captures the login password and unlocks (or creates) the login keyring, the
-// session module keeps the daemon started for the session. They go into the
-// SDDM stack right after the shared password-auth substack and include, the
-// same placement Fedora's stock /etc/pam.d/sddm gives its own optional
-// pam_gnome_keyring lines.
+// session module keeps the daemon started for the session. Fedora's stock
+// /etc/pam.d/sddm already ships both, dash-prefixed (skipped when the module is
+// absent), right after the password-auth substack and include. That stock form
+// is the canonical one: never-ask and ask strip it, and unlock-on-login puts
+// back exactly these lines in exactly that place, so a stock file round-trips
+// byte-for-byte and rpm never sees it as modified.
 const (
-	pamAuthLine    = "auth optional pam_gnome_keyring.so"
-	pamSessionLine = "session optional pam_gnome_keyring.so auto_start"
+	pamAuthLine    = "-auth        optional      pam_gnome_keyring.so"
+	pamSessionLine = "-session     optional      pam_gnome_keyring.so auto_start"
 )
 
 // pamFilePath is the SDDM PAM stack, or the $RYOKU_PAM_FILE fixture override so

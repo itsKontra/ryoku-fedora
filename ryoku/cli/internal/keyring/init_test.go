@@ -5,9 +5,10 @@ import (
 	"testing"
 )
 
-// A fresh box (no config, no PAM, no keyring) defaults to never-ask and seeds a
-// blank passwordless default keyring, so no app ever prompts out of the box.
-func TestInitFreshSeedsNeverAsk(t *testing.T) {
+// A box whose stack carries no keyring lines (stripped by never-ask or ask, or
+// edited by hand) and no config defaults to never-ask and seeds a blank
+// passwordless default keyring, so no app prompts.
+func TestInitUnwiredStackSeedsNeverAsk(t *testing.T) {
 	sandbox(t, bareSDDM)
 	f := useFake(t)
 	if err := runInit(nil); err != nil {
@@ -39,12 +40,11 @@ func TestInitNoopWhenConfigured(t *testing.T) {
 	}
 }
 
-// A PAM-wired box means the user chose unlock-on-login; init records that and
-// never blanks a keyring.
-func TestInitRecordsUnlockOnLoginWhenPamWired(t *testing.T) {
-	pam := sandbox(t, bareSDDM)
+// Fedora's stock stack already wires pam_gnome_keyring, so a fresh Fedora box
+// is unlock-on-login: init records that and never blanks a keyring.
+func TestInitRecordsUnlockOnLoginOnStockFedora(t *testing.T) {
+	sandbox(t, fedoraSDDM)
 	f := useFake(t)
-	applyPAMFile(pam, ModeUnlockOnLogin)
 	if err := runInit(nil); err != nil {
 		t.Fatalf("init: %v", err)
 	}

@@ -7,35 +7,18 @@ import (
 	"testing"
 )
 
-// fedoraSDDM is Fedora's stock /etc/pam.d/sddm (sddm 0.21, Fedora 44). It
-// already carries optional pam_gnome_keyring lines, so a fresh install reads as
-// unlock-on-login.
-const fedoraSDDM = `#%PAM-1.0
+// fedoraSDDM is Fedora's stock /etc/pam.d/sddm (sddm 0.21, Fedora 44), copied
+// unmodified into testdata. It already carries the optional pam_gnome_keyring
+// lines, so a fresh install reads as unlock-on-login.
+var fedoraSDDM = readTestdata("fedora-sddm")
 
-auth     [success=done ignore=ignore default=bad] pam_selinux_permit.so
-auth        substack      password-auth
--auth        optional      pam_gnome_keyring.so
--auth        optional      pam_kwallet5.so
--auth        optional      pam_kwallet.so
-auth        include       postlogin
-
-account     required      pam_nologin.so
-account     include       password-auth
-
-password    include       password-auth
-
-session     required      pam_selinux.so close
-session     required      pam_loginuid.so
--session    optional    pam_ck_connector.so
-session     required      pam_selinux.so open
-session     optional      pam_keyinit.so force revoke
-session     required      pam_namespace.so
-session     include       password-auth
--session     optional      pam_gnome_keyring.so auto_start
--session     optional      pam_kwallet5.so auto_start
--session     optional      pam_kwallet.so auto_start
-session     include       postlogin
-`
+func readTestdata(name string) string {
+	b, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
 
 // bareSDDM is fedoraSDDM with its keyring lines stripped, the stack the
 // never-ask and ask modes leave and the byte-for-byte baseline the wiring
@@ -48,6 +31,32 @@ func TestFedoraStockStackIsWired(t *testing.T) {
 	}
 	if out, missing := applyPAMText(fedoraSDDM, true); out != fedoraSDDM || len(missing) != 0 {
 		t.Fatalf("converging the stock stack must be a no-op, missing %v:\n%s", missing, out)
+	}
+}
+
+// ask (or never-ask) and then unlock-on-login must give back the stock file
+// byte-for-byte, so the package-owned stack never counts as modified.
+func TestStockStackRoundTrips(t *testing.T) {
+	stripped, _ := applyPAMText(fedoraSDDM, false)
+	if stripped != bareSDDM || pamPresent(stripped) {
+		t.Fatalf("strip must remove exactly the two keyring lines:\n%s", stripped)
+	}
+	if back, missing := applyPAMText(stripped, true); back != fedoraSDDM || len(missing) != 0 {
+		t.Fatalf("unlock-on-login must restore the stock file byte-for-byte, missing %v:\n%s", missing, back)
+	}
+
+	p := filepath.Join(t.TempDir(), "sddm")
+	if err := os.WriteFile(p, []byte(fedoraSDDM), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RYOKU_PAM_FILE", p)
+	for _, mode := range []string{ModeAsk, ModeUnlockOnLogin, ModeNeverAsk, ModeUnlockOnLogin} {
+		if err := runApplyPAM([]string{mode}); err != nil {
+			t.Fatalf("apply-pam %s: %v", mode, err)
+		}
+	}
+	if got, _ := os.ReadFile(p); string(got) != fedoraSDDM {
+		t.Fatalf("the file did not round-trip to the stock stack:\n%s", got)
 	}
 }
 

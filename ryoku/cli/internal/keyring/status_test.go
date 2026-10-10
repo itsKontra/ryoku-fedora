@@ -43,22 +43,21 @@ func TestStatusModeInference(t *testing.T) {
 	pam := filepath.Join(t.TempDir(), "sddm")
 	t.Setenv("RYOKU_PAM_FILE", pam)
 
-	// no config, no PAM lines -> never-ask (the no-prompt default).
+	// no config, keyring lines stripped -> never-ask (the no-prompt fallback).
 	os.WriteFile(pam, []byte(bareSDDM), 0o644)
 	st := gatherStatus()
 	if st.Mode != ModeNeverAsk || st.ModeSource != "inferred" {
 		t.Fatalf("bare stack should infer never-ask, got %q/%q", st.Mode, st.ModeSource)
 	}
 	if st.PamPresent {
-		t.Fatal("stock stack has no keyring lines")
+		t.Fatal("the stripped stack has no keyring lines")
 	}
 
-	// PAM lines present -> unlock-on-login.
-	wired, _ := applyPAMText(bareSDDM, true)
-	os.WriteFile(pam, []byte(wired), 0o644)
+	// Fedora's stock stack carries the lines -> unlock-on-login.
+	os.WriteFile(pam, []byte(fedoraSDDM), 0o644)
 	st = gatherStatus()
 	if st.Mode != ModeUnlockOnLogin || !st.PamPresent {
-		t.Fatalf("wired stack should infer unlock-on-login, got %q pam=%v", st.Mode, st.PamPresent)
+		t.Fatalf("the stock stack should infer unlock-on-login, got %q pam=%v", st.Mode, st.PamPresent)
 	}
 
 	// explicit config wins over inference.
