@@ -14,7 +14,6 @@ func TestDetectDistro(t *testing.T) {
 		{"fedora", "", "fedora"},
 		{"nobara", "rhel centos fedora", "fedora"},
 		{"arch", "", ""},
-		{"cachyos", "arch", ""},
 		{"ubuntu", "debian", ""},
 		{"void", "", ""},
 	} {

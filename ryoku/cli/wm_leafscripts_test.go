@@ -76,7 +76,7 @@ func TestSyncLeafScriptsSkipsPackagedBox(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("RYOKU_REPO", "")
 	t.Setenv("HOME", home)
-	// ResolveRepo falls back to ~/ryoku-arch only when a channel is recorded;
+	// ResolveRepo falls back to ~/ryoku-fedora only when a channel is recorded;
 	// an empty state dir keeps this a packaged box.
 	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local/state"))
 

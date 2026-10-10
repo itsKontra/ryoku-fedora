@@ -55,11 +55,6 @@ spawn-sh-at-startup "command -v ryoku-mic >/dev/null 2>&1 && ryoku-mic"
 // drops. A no-op when it was off or absent.
 spawn-sh-at-startup "command -v ryoku-cmd-nightlight >/dev/null 2>&1 && ryoku-cmd-nightlight restore"
 
-// Booted into a btrfs snapshot from the boot menu: offer the one-click restore.
-// niri runs no XDG autostart entries, so start it here; a normal boot detects no
-// snapshot and exits silently.
-spawn-sh-at-startup "command -v limine-snapper-restore >/dev/null 2>&1 && limine-snapper-restore --notify"
-
 // Seed voxtype's config and user service with the built-in hotkey off (the shell
 // owns Super+` and the mic wave); starts unless dictation was turned off in the Hub.
 spawn-sh-at-startup "command -v voxtype >/dev/null 2>&1 && command -v ryoku-hub >/dev/null 2>&1 && ryoku-hub voxtype ensure >/dev/null 2>&1"

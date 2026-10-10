@@ -208,7 +208,7 @@ Unavailable packages fail explicitly, with no automatic fallback to compilation.
 
 `--install-mode=auto` is the default: Fedora uses packages unless a local payload
 or a custom repository/ref was selected. `--install-mode=source` always keeps Fedora's
-checkout build. Arch and Debian retain their existing installation behavior.
+checkout build.
 Source builds continue to use locally compiled Ryoku binaries, app helpers,
 and QML modules. The bootstrap executable remains a checksummed download.
 
@@ -226,7 +226,7 @@ The bootstrap defaults to `itsKontra/ryoku-fedora`, branch `main`.
 Override both explicitly for another publisher:
 
 ```sh
-RYOKU_SHELL_REPO=https://github.com/OWNER/ryoku-arch.git \
+RYOKU_SHELL_REPO=https://github.com/OWNER/ryoku-fedora.git \
 RYOKU_SHELL_REF=BRANCH bash ryoku-shell-installer/install.sh
 ```
 

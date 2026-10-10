@@ -834,24 +834,17 @@ func stepSession(e *engine) error {
 		e.recordRestore("sudo rm -f /etc/sddm.conf.d/99-ryoku.conf /etc/sddm.conf.d/10-ryoku-wayland.conf")
 	}
 
-	// sddm/setup strips pam_gnome_keyring on purpose: a fresh Ryoku box uses a
-	// passwordless default keyring. an ex-GNOME user instead has a password
-	// protected login keyring from GDM, and without these lines every login
-	// prompts for it (stock /etc/pam.d/sddm only carries kwallet).
+	// sddm/setup (run above whenever switchDM is set) wired the SDDM keyring
+	// through `ryoku keyring apply-pam`. An ex-GNOME user's password-protected
+	// login keyring from GDM depends on it, so report what ryoku says.
 	if e.p.switchDM && hasDesktop(e.f.desktops, "GNOME") {
-		if err := e.sudoSh(`f=/etc/pam.d/sddm
-if [ -f "$f" ] && ! grep -q pam_gnome_keyring "$f"; then
-  if grep -q "password-auth" "$f"; then
-    sed -i '/auth.*password-auth/a -auth       optional    pam_gnome_keyring.so' "$f"
-    sed -i '/session.*password-auth/a -session    optional    pam_gnome_keyring.so    auto_start' "$f"
-  else
-    printf '%s\n' 'auth        optional    pam_gnome_keyring.so' 'session     optional    pam_gnome_keyring.so    auto_start' >> "$f"
-  fi
-fi`); err != nil {
-			return err
+		if e.dry {
+			e.say(i18n.T("DRYRUN: sddm/setup would wire your GNOME login keyring through ryoku keyring apply-pam"))
+		} else if ok, err := e.keyringUnlocksAtLogin(); err == nil && ok {
+			e.say(i18n.T("kept gnome-keyring auto-unlock working under SDDM (your GNOME login keyring)"))
+		} else {
+			e.say(i18n.T("warning: your GNOME login keyring will not unlock at SDDM login; run 'ryoku keyring status' to see why"))
 		}
-		e.recordRestore(`sudo sed -i '/pam_gnome_keyring\.so/d' /etc/pam.d/sddm`)
-		e.say(i18n.T("kept gnome-keyring auto-unlock working under SDDM (your GNOME login keyring)"))
 	}
 	if len(e.f.desktops) > 0 {
 		e.sayf(i18n.T("%s stays installed; pick it from the session menu at the login screen anytime"),

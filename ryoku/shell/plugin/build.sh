@@ -7,8 +7,9 @@
 # Quickshell picks it up once that dir is on QML2_IMPORT_PATH (ryoku-shell does
 # that for the surfaces it supervises). target has no build toolchain, so this
 # runs on the dev box (deploy.sh) and the ISO build host (iso/build.sh), never
-# on the installed machine. build deps: cmake, ninja, qt6-shadertools, a c++20
-# compiler, Qt6 dev files.
+# on the installed machine. build deps (Fedora names): cmake, ninja-build,
+# qt6-qtshadertools-devel, qt6-qtdeclarative-devel, qt6-qtmultimedia-devel and a
+# c++20 compiler.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -22,7 +23,7 @@ for tool in cmake ninja; do
     elif command -v apt-get >/dev/null 2>&1; then
       printf 'build.sh: error: %s is required (sudo apt-get install cmake ninja-build qt6-shadertools-dev)\n' "$tool" >&2
     else
-      printf 'build.sh: error: %s is required (sudo pacman -S cmake ninja qt6-shadertools)\n' "$tool" >&2
+      printf 'build.sh: error: %s is required (install CMake, Ninja and the Qt 6 Shader Tools; on Fedora: cmake ninja-build qt6-qtshadertools-devel)\n' "$tool" >&2
     fi
     exit 1
   }

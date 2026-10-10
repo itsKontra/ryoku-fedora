@@ -12,12 +12,15 @@ import (
 
 // The pam_gnome_keyring lines that make unlock-on-login work: the auth module
 // captures the login password and unlocks (or creates) the login keyring, the
-// session module keeps the daemon started for the session. They go into the
-// SDDM stack right after the shared system-login include, the same placement
-// Arch's own display managers use.
+// session module keeps the daemon started for the session. Fedora's stock
+// /etc/pam.d/sddm already ships both, dash-prefixed (skipped when the module is
+// absent), right after the password-auth substack and include. That stock form
+// is the canonical one: never-ask and ask strip it, and unlock-on-login puts
+// back exactly these lines in exactly that place, so a stock file round-trips
+// byte-for-byte and rpm never sees it as modified.
 const (
-	pamAuthLine    = "auth optional pam_gnome_keyring.so"
-	pamSessionLine = "session optional pam_gnome_keyring.so auto_start"
+	pamAuthLine    = "-auth        optional      pam_gnome_keyring.so"
+	pamSessionLine = "-session     optional      pam_gnome_keyring.so auto_start"
 )
 
 // pamFilePath is the SDDM PAM stack, or the $RYOKU_PAM_FILE fixture override so
@@ -34,12 +37,18 @@ func pamFilePath() string {
 // so an insert never duplicates and status can read the true state.
 func pamHasKeyring(content, kind string) bool {
 	for _, l := range strings.Split(content, "\n") {
-		f := strings.Fields(l)
-		if len(f) > 0 && (f[0] == kind || f[0] == "-"+kind) && strings.Contains(l, "pam_gnome_keyring.so") {
+		if pamKindIs(strings.Fields(l), kind) && strings.Contains(l, "pam_gnome_keyring.so") {
 			return true
 		}
 	}
 	return false
+}
+
+// pamKindIs reports whether a stack line's module type is kind. Linux-PAM
+// compares types and controls with strcasecmp, and a leading dash only makes a
+// missing module non-fatal, so "-Auth" is still an auth line.
+func pamKindIs(fields []string, kind string) bool {
+	return len(fields) > 0 && strings.EqualFold(strings.TrimPrefix(fields[0], "-"), kind)
 }
 
 // pamPresent reports whether the stack wires pam_gnome_keyring at all.
@@ -47,14 +56,15 @@ func pamPresent(content string) bool {
 	return pamHasKeyring(content, "auth") || pamHasKeyring(content, "session")
 }
 
-// insertAfterInclude puts line immediately after the `<kind> include
-// system-login` or `password-auth` anchor. Returns the new content and whether the anchor existed;
-// a missing anchor leaves the content untouched so the caller can report it.
+// insertAfterInclude puts line immediately after the `<kind> include` or
+// `substack` of password-auth. Returns the new content and whether the anchor
+// existed; a missing anchor leaves the content untouched so the caller can
+// report it.
 func insertAfterInclude(content, kind, line string) (string, bool) {
 	lines := strings.Split(content, "\n")
 	for i, l := range lines {
 		f := strings.Fields(l)
-		if len(f) >= 3 && strings.TrimPrefix(f[0], "-") == kind && (f[1] == "include" || f[1] == "substack") && (f[2] == "system-login" || f[2] == "password-auth") {
+		if len(f) >= 3 && pamKindIs(f, kind) && (strings.EqualFold(f[1], "include") || strings.EqualFold(f[1], "substack")) && f[2] == "password-auth" {
 			out := append([]string{}, lines[:i+1]...)
 			out = append(out, line)
 			out = append(out, lines[i+1:]...)
@@ -90,13 +100,13 @@ func applyPAMText(content string, want bool) (out string, missing []string) {
 	if !pamHasKeyring(out, "auth") {
 		var ok bool
 		if out, ok = insertAfterInclude(out, "auth", pamAuthLine); !ok {
-			missing = append(missing, "auth include system-login")
+			missing = append(missing, "auth password-auth")
 		}
 	}
 	if !pamHasKeyring(out, "session") {
 		var ok bool
 		if out, ok = insertAfterInclude(out, "session", pamSessionLine); !ok {
-			missing = append(missing, "session include system-login")
+			missing = append(missing, "session password-auth")
 		}
 	}
 	return out, missing
@@ -113,7 +123,7 @@ func applyPAMFile(path, mode string) error {
 	want := mode == ModeUnlockOnLogin
 	out, missing := applyPAMText(string(raw), want)
 	if len(missing) > 0 {
-		return fmt.Errorf(i18n.T("%s has no %s anchor to wire pam_gnome_keyring after"), path, strings.Join(missing, " / "))
+		return fmt.Errorf(i18n.T("%s has no %s line to wire pam_gnome_keyring after, so the keyring will not unlock at login; add the pam_gnome_keyring lines by hand"), path, strings.Join(missing, " / "))
 	}
 	if out == string(raw) {
 		return nil

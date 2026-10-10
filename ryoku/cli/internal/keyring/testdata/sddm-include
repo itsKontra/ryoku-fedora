@@ -1,0 +1,10 @@
+#%PAM-1.0
+auth        include       password-auth
+auth        include       postlogin
+
+account     include       password-auth
+password    include       password-auth
+
+session     required      pam_loginuid.so
+session     include       password-auth
+session     include       postlogin

@@ -25,7 +25,7 @@ niri serve, so the same lock runs on both.
   unlock. If the daemon is between generations, it holds a transient login1
   block until the replacement daemon publishes equivalent protection.
 - `sddm/setup` The install-time SDDM wiring: enable the service, default to the
-  graphical target, drop `pam_gnome_keyring` from the SDDM PAM stack, and make
+  graphical target, wire the login keyring through `ryoku keyring apply-pam`, and make
   sure a Hyprland wayland session exists.
 - `README.md` This file.
 

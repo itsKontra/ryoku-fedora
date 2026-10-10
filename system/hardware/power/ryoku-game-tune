@@ -73,9 +73,9 @@ log() { printf 'ryoku-game-tune: %s\n' "$*" >&2; }
 
 # ── the tunables ──────────────────────────────────────────────────────────────
 # Each is "relative/path/under/proc/sys value". A knob absent on the running
-# kernel is skipped, which is what makes one toggle work across both the Arch
-# and CachyOS kernels: CachyOS exposes more of these, and each one is applied
-# only where it exists rather than assumed.
+# kernel is skipped, which is what makes one toggle work across kernel builds:
+# the stock Fedora kernel and a custom one expose different sets, and each knob
+# is applied only where it exists rather than assumed.
 #
 #   nmi_watchdog          a per-CPU NMI on every core, for detecting hangs we are
 #                         not debugging. Pure overhead during play.

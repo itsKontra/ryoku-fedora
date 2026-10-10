@@ -144,7 +144,7 @@ func TestEnsureVaultStripsLegacyContract(t *testing.T) {
 	seeded := "# Ryoku system vault\n" +
 		"\n" +
 		"This is the shared knowledge base for every coding agent on this machine\n" +
-		"(Arch Linux, Hyprland desktop, managed by Ryoku). Read it before exploring\n" +
+		"(Fedora Linux, Hyprland desktop, managed by Ryoku). Read it before exploring\n" +
 		"the filesystem or guessing where things live.\n" +
 		"\n" +
 		"## Rules\n" +

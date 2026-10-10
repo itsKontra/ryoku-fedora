@@ -27,8 +27,6 @@ The kernel still moves only when you run the upgrade. Details in
 
 ## The CachyOS kernel
 
-The Arch build offers the CachyOS kernel as a one-click Extras bundle
-(`cachyos-kernel`). It adds a pacman repository and has no Fedora equivalent, so
-`ryostore-install` refuses it on Fedora ("the CachyOS kernel bundle is not
-supported on Fedora"). Installing a third-party kernel on Fedora by hand is
-possible, but it is outside what Ryoku ships or supports.
+`ryostore-install` refuses the CachyOS kernel Extras bundle with "the CachyOS
+kernel bundle is not supported on Fedora". A third-party kernel is outside what
+Ryoku ships or supports.

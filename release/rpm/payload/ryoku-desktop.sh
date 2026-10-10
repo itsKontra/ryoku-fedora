@@ -7,27 +7,12 @@
 #
 # RPM metadata and dependencies live in release/rpm/ryoku-desktop.spec. This
 # sourced recipe only stages the payload assembled by stage-package.sh.
-pkgver=${RYOKU_PKGVER:?stage-package.sh must set RYOKU_PKGVER}
 startdir=${startdir:?stage-package.sh must set startdir}
 pkgdir=${pkgdir:?stage-package.sh must set pkgdir}
 _repo="$startdir/../../.."
 
 package() {
   local cfg="$pkgdir/usr/share/ryoku/config"
-
-  # /etc/ryoku-release: the named state this build is. build-repo.sh exports
-  # RYOKU_RELEASE (a release tag on stable, the dev version on testing, a
-  # local-* marker for a hand build) and RYOKU_CHANNEL; `ryoku version`,
-  # `ryoku status`, the update island and the doctor read this file, and it is
-  # pacman-owned so it always names the release actually installed.
-  install -Dm644 /dev/stdin "$pkgdir/etc/ryoku-release" <<EOF
-RELEASE=${RYOKU_RELEASE:-local-$pkgver}
-NAME=$(tr -d '[:space:]' < "$_repo/CODENAME")
-CHANNEL=${RYOKU_CHANNEL:-local}
-VERSION=$pkgver
-COMMIT=$(git -C "$_repo" rev-parse HEAD 2>/dev/null || echo unknown)
-DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-EOF
 
   # --- base configs under /usr/share/ryoku/config, mirroring ~/.config -------
   # `ryoku materialize` copies this tree verbatim into the user's ~/.config.
@@ -152,7 +137,7 @@ EOF
   # the fastfetch logo the config above draws. ships beside config.jsonc so
   # `ryoku materialize` lays both together on every update; seeding it only as a
   # brand asset (installer-time) left updated machines pointing at a file they
-  # never received, and fastfetch silently fell back to the Arch logo.
+  # never received, and fastfetch silently fell back to the distro logo.
   install -Dm644 "$_repo/ryoku/assets/brand/fastfetch-emblem.png" \
     "$cfg/fastfetch/fastfetch-emblem.png"
   # wireplumber: Bluetooth codec and profile policy, materialized like every
@@ -284,9 +269,9 @@ EOF
   # AI-usage collectors + their timer: refresh the ~/.cache/{claude,codex,
   # opencode}-usage.json caches the qsbar AI pill reads. The collectors are
   # python3 stdlib-only (python is already a hard depend, for wavecap/pactl) and
-  # each no-ops when its tool/creds/db are absent. Units live in the system user
-  # generator dir so `systemctl --global enable` (the .install) can find them;
-  # the ExecStart lines already point at /usr/bin, the packaged collector path.
+  # each no-ops when its tool/creds/db are absent. The units ship in the system
+  # user unit dir, where `ryoku doctor` enables the timer for each user; the
+  # ExecStart lines already point at /usr/bin, the packaged collector path.
   install -Dm755 "$_repo/ryoku/shell/bin/claude-usage"   "$pkgdir/usr/bin/claude-usage"
   install -Dm755 "$_repo/ryoku/shell/bin/codex-usage"    "$pkgdir/usr/bin/codex-usage"
   install -Dm755 "$_repo/ryoku/shell/bin/opencode-usage" "$pkgdir/usr/bin/opencode-usage"
@@ -418,9 +403,9 @@ EOF
     "$pkgdir/usr/lib/udev/rules.d/62-ryoku-qmk-hid.rules"
 
   # Bluetooth tuning: bluez owns /etc/bluetooth/main.conf and BlueZ has no
-  # drop-in dir, so Ryoku cannot ship a copy here (pacman file conflict). The
+  # drop-in dir, so Ryoku cannot ship a copy here (an RPM file conflict). The
   # ryoku-bluetooth-tune helper (installed by the hardware glob above) sets the
-  # keys in place; the .install runs it on install + upgrade.
+  # keys in place; the spec's %post runs it on install and upgrade.
 
   # Game controllers: load uinput at boot so Steam Input and the userspace pad
   # drivers (xpadneo-dkms, game-devices-udev) can create their virtual gamepads.
@@ -444,7 +429,8 @@ EOF
   # A2DP-drop workaround (bluez#1545): a user-session unit restarts bluetooth
   # once WirePlumber is up, clearing the BlueZ 5.83+ regression where a device
   # disconnects ~1s after connecting; a scoped polkit rule lets it do so without
-  # a prompt. Enabled per-user by the .install (systemctl --global enable).
+  # a prompt. Enabled per-user by ryoku-desktop.spec %post (systemctl --global
+  # enable).
   install -Dm644 "$_repo/system/hardware/bluetooth/ryoku-bluetooth-reset.service" \
     "$pkgdir/usr/lib/systemd/user/ryoku-bluetooth-reset.service"
   install -Dm644 "$_repo/system/hardware/bluetooth/54-ryoku-bluetooth-a2dp.rules" \

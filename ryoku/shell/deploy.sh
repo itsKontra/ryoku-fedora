@@ -542,7 +542,7 @@ say "installing Ryoku.Ui module"
 # first on a dev box (~/.local/share/ryoku/i18n). Without this the shell and Hub
 # fall back to an empty language table -- the Hub's language and regional-format
 # pickers then show only Auto and the two English locales. A packaged system
-# gets the same files at /usr/share/ryoku/i18n from the ryoku-desktop PKGBUILD.
+# gets the same files at /usr/share/ryoku/i18n from the ryoku-desktop RPM.
 say "installing Ryoku i18n catalog"
 "$here/../i18n/tools/install.sh"
 
@@ -658,7 +658,7 @@ if [[ -f "$bindir/ryotunes" ]] && [[ "$(head -c 2 "$bindir/ryotunes" 2>/dev/null
     "$appshare/icons/hicolor/scalable/apps/ryotunes.svg"
   say "retired the ryotunes chromium wrapper"
 fi
-# a locally built copy from the interim makepkg path shadows the package on PATH
+# a locally built copy from an older hand build shadows the package on PATH
 if [[ -x "$bindir/ryotunes" ]] && [[ -f "$HOME/.local/share/ryoku/ryotunes.commit" ]]; then
   rm -f "$bindir/ryotunes" "$appshare/applications/ryotunes.desktop" \
     "$HOME/.local/share/ryoku/ryotunes.commit" "$appshare"/icons/hicolor/*/apps/ryotunes.png

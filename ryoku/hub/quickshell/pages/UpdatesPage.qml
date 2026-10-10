@@ -536,7 +536,7 @@ Item {
                 }
             }
 
-            // ── system packages (pacman -Syu, check-only) ──
+            // ── system packages (sudo dnf upgrade, check-only) ──
             Column {
                 width: idleCol.width
                 spacing: 0
@@ -568,11 +568,11 @@ Item {
                     }
                 }
 
-                // These come from Arch or CachyOS, not from Ryoku: `ryoku update`
+                // These come from Fedora, not from Ryoku: `ryoku update`
                 // does not move them, so the section has to name what does.
                 Text {
                     width: idleCol.width
-                    text: I18n.tr("From your distribution, kernel included. Take them with:  sudo pacman -Syu")
+                    text: I18n.tr("From Fedora, kernel included. Take them with:  sudo dnf upgrade")
                     color: Tokens.inkFaint
                     font.family: Tokens.ui; font.pixelSize: Tokens.fTiny
                     wrapMode: Text.WordWrap

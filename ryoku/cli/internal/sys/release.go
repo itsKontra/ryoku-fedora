@@ -32,7 +32,7 @@ func PackagedChannel() string { return ChannelOfServer(RyokuServer()) }
 // RPMRepoFile and never shells out to sudo in a unit test.
 func WriteRootFile(path, contents, mode string) error {
 	if writableDir(filepath.Dir(path)) {
-		return writeFileAtomic(path, contents, fileMode(mode))
+		return WriteFileAtomic(path, contents, fileMode(mode))
 	}
 	tmp, err := os.CreateTemp("", "ryoku-root-*")
 	if err != nil {
@@ -63,9 +63,9 @@ func writableDir(dir string) bool {
 	return true
 }
 
-// writeFileAtomic writes contents to path via a temp file in the same directory
+// WriteFileAtomic writes contents to path via a temp file in the same directory
 // and an atomic rename, so a reader never sees a half-written file.
-func writeFileAtomic(path, contents string, mode os.FileMode) error {
+func WriteFileAtomic(path, contents string, mode os.FileMode) error {
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".ryoku-tmp-*")
 	if err != nil {
 		return err

@@ -7,4 +7,4 @@ Exec=ryoku-shell install
 Terminal=false
 Icon=system-software-install
 Categories=System;
-Keywords=install;app;appimage;package;deb;rpm;flatpak;pacman;archive;software;
+Keywords=install;app;appimage;package;deb;rpm;flatpak;archive;software;

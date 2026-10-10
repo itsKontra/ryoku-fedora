@@ -755,12 +755,11 @@ Item {
                         width: parent.width
                         frac: {
                             const total = Math.max(1, parseInt(SysInfo.sysPackages) || 1);
-                            const mine = (parseInt(SysInfo.sysPkgExplicit) || 0) + (parseInt(SysInfo.sysPkgAur) || 0);
-                            return Math.max(0, Math.min(1, mine / total));
+                            return Math.max(0, Math.min(1, (parseInt(SysInfo.sysPkgExplicit) || 0) / total));
                         }
                     }
                     Text {
-                        text: I18n.tr("%1 EXPLICIT · %2 AUR · %3 TOTAL").arg(SysInfo.sysPkgExplicit).arg(SysInfo.sysPkgAur).arg(SysInfo.sysPackages)
+                        text: I18n.tr("%1 EXPLICIT · %2 THIRD-PARTY · %3 TOTAL").arg(SysInfo.sysPkgExplicit).arg(SysInfo.sysPkgThirdParty).arg(SysInfo.sysPackages)
                         color: Tokens.inkMuted
                         font.family: Tokens.mono
                         font.pixelSize: 10

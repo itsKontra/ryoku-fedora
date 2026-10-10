@@ -31,48 +31,70 @@ type Status struct {
 	Notes       []string      `json:"notes"`
 }
 
-// autologinConfigured scans the SDDM config for a non-empty [Autologin] User.
-// Drop-ins under sddm.conf.d win, but any file naming a user counts.
-func autologinConfigured(root string) bool {
-	files := []string{filepath.Join(root, "sddm.conf")}
-	if entries, err := os.ReadDir(filepath.Join(root, "sddm.conf.d")); err == nil {
+// autologinConfigured reports whether SDDM will autologin a user: the effective
+// [Autologin] User= is non-empty. It is the one autologin detector; the
+// installers read it from `ryoku keyring status --json` (the "autologin" field).
+//
+// It follows SDDM's ConfigReader (0.21): every file in the system directory
+// (sysDir), then every file in <root>/sddm.conf.d, each directory sorted by
+// name, then <root>/sddm.conf last, and the last value read wins. So a later
+// file with an empty User= turns autologin off. Dotfiles are skipped (QDir::Files
+// without QDir::Hidden). SDDM sorts LocaleAware; byte order matches it for the
+// usual digit- or lowercase-prefixed drop-in names.
+func autologinConfigured(sysDir, root string) bool {
+	var files []string
+	for _, dir := range []string{sysDir, filepath.Join(root, "sddm.conf.d")} {
+		if dir == "" {
+			continue
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
 		for _, e := range entries {
-			if !e.IsDir() {
-				files = append(files, filepath.Join(root, "sddm.conf.d", e.Name()))
+			if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+				files = append(files, filepath.Join(dir, e.Name()))
 			}
 		}
 	}
+	files = append(files, filepath.Join(root, "sddm.conf"))
+	user := ""
 	for _, f := range files {
-		if autologinUserSet(f) {
-			return true
+		if v, ok := autologinUser(f); ok {
+			user = v
 		}
 	}
-	return false
+	return user != ""
 }
 
-// autologinUserSet reports whether an SDDM ini file sets User= to a non-empty
-// value inside the [Autologin] section.
-func autologinUserSet(path string) bool {
+// autologinUser returns the last [Autologin] User= value a file sets, and
+// whether it sets one. It parses the way SDDM's ConfigBase::loadInternal does:
+// each line is trimmed and cut at the first '#'; a line holding '=' is an
+// assignment (key and value trimmed); otherwise "[Name]" opens a section. Section
+// and key names match exactly, case-sensitively, as SDDM looks them up, so
+// "[autologin]" or "user=" is ignored by SDDM and here alike.
+func autologinUser(path string) (string, bool) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return false
+		return "", false
 	}
-	inSection := false
+	section, user, set := "General", "", false
 	for _, l := range strings.Split(string(raw), "\n") {
 		t := strings.TrimSpace(l)
+		if i := strings.IndexByte(t, '#'); i >= 0 {
+			t = strings.TrimSpace(t[:i])
+		}
+		if k, v, ok := strings.Cut(t, "="); ok {
+			if section == "Autologin" && strings.TrimSpace(k) == "User" {
+				user, set = strings.TrimSpace(v), true
+			}
+			continue
+		}
 		if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
-			inSection = strings.EqualFold(t, "[Autologin]")
-			continue
-		}
-		if !inSection {
-			continue
-		}
-		k, v, ok := strings.Cut(t, "=")
-		if ok && strings.EqualFold(strings.TrimSpace(k), "User") && strings.TrimSpace(v) != "" {
-			return true
+			section = t[1 : len(t)-1]
 		}
 	}
-	return false
+	return user, set
 }
 
 func sddmConfRoot() string {
@@ -80,6 +102,19 @@ func sddmConfRoot() string {
 		return r
 	}
 	return "/etc"
+}
+
+// sddmSysConfDir is SDDM's system drop-in directory. A test that points
+// RYOKU_SDDM_CONF_ROOT at a fixture sees only that fixture unless it also sets
+// RYOKU_SDDM_SYS_CONF_DIR, so the host's own SDDM config never leaks in.
+func sddmSysConfDir() string {
+	if d, ok := os.LookupEnv("RYOKU_SDDM_SYS_CONF_DIR"); ok {
+		return d
+	}
+	if os.Getenv("RYOKU_SDDM_CONF_ROOT") != "" {
+		return ""
+	}
+	return "/usr/lib/sddm/sddm.conf.d"
 }
 
 func gatherStatus() Status {
@@ -90,11 +125,11 @@ func gatherStatus() Status {
 	source := "configured"
 	if !configured {
 		source = "inferred"
-		// Ryoku's default is never prompt: an unconfigured box with no PAM wiring
-		// defaults to never-ask (a blank, passwordless keyring) rather than ask
-		// (which prompts on first use). `ryoku keyring init` records this and seeds
-		// the blank keyring at first login. A PAM-wired box means the user chose
-		// unlock-on-login, so honour that.
+		// Fedora's stock SDDM stack wires pam_gnome_keyring, so an unconfigured
+		// stock box infers unlock-on-login. Only a stack without the lines
+		// (stripped by never-ask or ask, or edited) falls back to never-ask (a
+		// blank, passwordless keyring) rather than ask, which prompts on first
+		// use. `ryoku keyring init` records the inferred mode at first login.
 		if pam {
 			mode = ModeUnlockOnLogin
 		} else {
@@ -118,7 +153,7 @@ func gatherStatus() Status {
 		Mode:        mode,
 		ModeSource:  source,
 		PamPresent:  pam,
-		Autologin:   autologinConfigured(sddmConfRoot()),
+		Autologin:   autologinConfigured(sddmSysConfDir(), sddmConfRoot()),
 		DaemonAlive: daemonAlive(),
 		Keyrings:    kfs,
 	}

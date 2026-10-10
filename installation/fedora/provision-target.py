@@ -186,20 +186,6 @@ def configure_session_and_greeter(root):
     if ryoku_theme.is_dir() and not compat_theme.exists() and not compat_theme.is_symlink():
         compat_theme.symlink_to("ryoku")
 
-    pam_sddm = root / "etc/pam.d/sddm"
-    if pam_sddm.is_file():
-        lines = pam_sddm.read_text().splitlines()
-        content = "\n".join(lines)
-        if "pam_gnome_keyring.so" not in content:
-            new_lines = []
-            for line in lines:
-                new_lines.append(line)
-                if line.strip().startswith("auth") and "password-auth" in line:
-                    new_lines.append("-auth optional pam_gnome_keyring.so")
-                elif line.strip().startswith("session") and "postlogin" in line:
-                    new_lines.append("-session optional pam_gnome_keyring.so auto_start")
-            pam_sddm.write_text("\n".join(new_lines) + "\n")
-
     if shutil.which("systemctl"):
         subprocess.run(["systemctl", f"--root={root}", "enable", "sddm.service"], check=False, stderr=subprocess.DEVNULL)
         subprocess.run(["systemctl", f"--root={root}", "set-default", "graphical.target"], check=False, stderr=subprocess.DEVNULL)

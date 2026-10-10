@@ -136,7 +136,7 @@ Item {
                     width: parent.width
                     visible: pane.guest === "windows"
                     wrapMode: Text.WordWrap
-                    text: I18n.tr("Windows enables a TPM and fetches the VirtIO driver CD, attached so setup sees the disk. Secure Boot stays off (Arch ships no MS-key firmware). Grab the ISO from microsoft.com/software-download.")
+                    text: I18n.tr("Windows enables a TPM and fetches the VirtIO driver CD, attached so setup sees the disk, and turns Secure Boot on. Grab the ISO from microsoft.com/software-download.")
                     color: Tokens.inkMuted
                     font.family: Tokens.ui
                     font.pixelSize: 11

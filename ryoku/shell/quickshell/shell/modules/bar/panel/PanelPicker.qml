@@ -27,7 +27,7 @@ Item {
     readonly property color dim: Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
 
     readonly property var videoImage: ["*.mp4", "*.mkv", "*.webm", "*.mov", "*.avi", "*.m4v", "*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp", "*.gif", "*.tiff"]
-    readonly property var appFiles: ["*.AppImage", "*.pkg.tar.zst", "*.pkg.tar.xz", "*.deb", "*.rpm", "*.flatpak", "*.tar.gz", "*.tgz", "*.tar.xz", "*.tar.bz2", "*.tar.zst", "*.tar"]
+    readonly property var appFiles: ["*.AppImage", "*.deb", "*.rpm", "*.flatpak", "*.tar.gz", "*.tgz", "*.tar.xz", "*.tar.bz2", "*.tar.zst", "*.tar"]
 
     implicitHeight: 520 * root.s
 
@@ -45,6 +45,10 @@ Item {
     }
     function chosenPaths() {
         return Object.keys(root.selected);
+    }
+    // An Arch package matches the tarball filters, but the installer refuses it.
+    function refused(name) {
+        return root.mode === "install" && /\.pkg\.tar(\.|$)/i.test("" + name);
     }
     function fileGlyph(name) {
         const e = ("" + name).toLowerCase().split(".").pop();
@@ -167,8 +171,10 @@ Item {
             required property string filePath
             required property bool fileIsDir
             readonly property bool sel: !fileRow.fileIsDir && root.selected[fileRow.filePath] === true
+            readonly property bool hidden: !fileRow.fileIsDir && root.refused(fileRow.fileName)
+            visible: !fileRow.hidden
             width: ListView.view.width
-            height: 28 * root.s
+            height: fileRow.hidden ? 0 : 28 * root.s
             radius: Theme.radiusWidget
             color: fileRow.sel ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.16)
                 : rowHov.containsMouse ? Qt.rgba(Theme.onSurface.r, Theme.onSurface.g, Theme.onSurface.b, 0.08)

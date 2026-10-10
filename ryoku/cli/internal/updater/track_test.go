@@ -24,15 +24,15 @@ func packagedRepo(t *testing.T, server string) {
 	t.Cleanup(func() { sys.RPMRepoFile = old })
 }
 
-// initRyokuArchClone makes a git work tree at dir whose origin names ryoku-arch,
+// initRyokuClone makes a git work tree at dir whose origin names ryoku-fedora,
 // so ResolveRepo's fallback and a recorded pointer both accept it.
-func initRyokuArchClone(t *testing.T, dir string) {
+func initRyokuClone(t *testing.T, dir string) {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	mustGit(t, dir, "init")
-	mustGit(t, dir, "remote", "add", "origin", "https://github.com/ryoku-dev/ryoku-arch.git")
+	mustGit(t, dir, "remote", "add", "origin", "https://github.com/ryoku-dev/ryoku-fedora.git")
 }
 
 // isolateHome points HOME and the XDG roots at fresh temp dirs and clears
@@ -52,8 +52,8 @@ func isolateHome(t *testing.T) string {
 // clone, the recorded pointer to it and a RYOKU_CHANNEL=unstable-dev env file.
 func sourceCheckout(t *testing.T, home string) string {
 	t.Helper()
-	clone := filepath.Join(home, "ryoku-arch")
-	initRyokuArchClone(t, clone)
+	clone := filepath.Join(home, "ryoku-fedora")
+	initRyokuClone(t, clone)
 	if err := os.MkdirAll(sys.StateDir(), 0o755); err != nil {
 		t.Fatal(err)
 	}
