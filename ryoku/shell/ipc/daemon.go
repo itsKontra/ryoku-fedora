@@ -746,6 +746,11 @@ func tailLines(path string, n int) string {
 // supervise runs `qs -c <name>` and restarts it whenever it exits, backing off if
 // it dies immediately so a broken config does not spin the CPU.
 func (d *daemon) supervise(name string) {
+	if name == "shell" {
+		// before the first start, so a qs that cannot start still leaves the
+		// boot guard a session to count.
+		writeBootMarker("session")
+	}
 	backoff := time.Second
 	for {
 		select {

@@ -400,8 +400,9 @@ func (r *upgradeRenderer) feed(raw string) {
 			return
 		}
 	}
-	if strings.HasPrefix(trimmed, ">>> ") {
-		r.feedRPM(strings.TrimPrefix(trimmed, ">>> "))
+	// a bare ">>>" is an empty line of scriptlet output, trimmed
+	if trimmed == ">>>" || strings.HasPrefix(trimmed, ">>> ") {
+		r.feedRPM(strings.TrimSpace(strings.TrimPrefix(trimmed, ">>>")))
 		return
 	}
 	r.scriptlet = false
@@ -424,9 +425,9 @@ func (r *upgradeRenderer) feed(raw string) {
 		r.progress(trimmed)
 		return
 	case clWarn:
-		r.perm("  " + sys.Amber("! ") + sys.Dim(stripPrefix(stripPrefix(trimmed, "Warning:"), "warning:")))
+		r.perm("  " + sys.Amber("! ") + sys.Dim(stripPrefix(trimmed, "warning:")))
 	case clError:
-		r.perm("  " + sys.Red("✗ ") + stripPrefix(stripPrefix(trimmed, "Error:"), "error:"))
+		r.perm("  " + sys.Red("✗ ") + stripPrefix(trimmed, "error:"))
 		r.detail = true
 		return
 	case clConflict:
@@ -476,9 +477,11 @@ func (r *upgradeRenderer) feedRPM(msg string) {
 		r.flush()
 		r.perm("  " + sys.Amber("! ") + sys.Dim(stripPrefix(stripPrefix(msg, "[RPM]"), "warning:")))
 		return
-	case r.scriptlet:
+	// rpm's own messages end a scriptlet's output; everything else is part of it
+	case r.scriptlet && !strings.HasPrefix(msg, "[RPM]") && !strings.HasPrefix(msg, "Unpack error"):
 		return
 	}
+	r.scriptlet = false
 	l := strings.ToLower(msg)
 	switch {
 	// a failed scriptlet is reported, but rpm keeps the package and goes on.
@@ -660,8 +663,12 @@ func isNoise(s string) bool {
 	return false
 }
 
+// stripPrefix drops prefix from s, ignoring case, and trims what is left.
 func stripPrefix(s, prefix string) string {
-	return strings.TrimSpace(strings.TrimPrefix(s, prefix))
+	if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+		s = s[len(prefix):]
+	}
+	return strings.TrimSpace(s)
 }
 
 func plural(n int) string {

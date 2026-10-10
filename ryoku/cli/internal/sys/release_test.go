@@ -22,3 +22,18 @@ func TestReadReleaseParsesTheMarker(t *testing.T) {
 		t.Fatalf("missing file must read empty, got %+v", r)
 	}
 }
+
+// A rolling COPR build is not a tagged release, so the boot guard skips it.
+func TestIsReleaseTag(t *testing.T) {
+	for s, want := range map[string]bool{
+		"v0.73.0":          true,
+		"v1.0.0-rc.1":      true,
+		"v0.73.0-5-gabc12": false,
+		"0.73.0":           false,
+		"":                 false,
+	} {
+		if got := IsReleaseTag(s); got != want {
+			t.Errorf("IsReleaseTag(%q) = %v, want %v", s, got, want)
+		}
+	}
+}

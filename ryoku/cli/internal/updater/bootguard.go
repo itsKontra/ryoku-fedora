@@ -19,35 +19,39 @@ import (
 //   - stage2 arms it: pendingFile records the release the box ran before, the
 //     one it moved to, the pre-update snapshot, and the boot the update ran in.
 //   - the shell daemon records each boot that reached a Ryoku session: it
-//     writes bootOKDir/session-<uid> with the boot id when it starts the
-//     shell, and bootOKDir/ok-<uid> once the shell has stayed up past its
-//     crash window.
+//     writes bootOKDir/session-<uid> with the boot id as soon as it runs, before
+//     it tries to start the shell, and bootOKDir/ok-<uid> once the shell has
+//     stayed up past its crash window.
 //   - ryoku-boot-guard.service runs `ryoku boot-guard` early in every boot,
 //     as root. With a marker present and no ok file from a boot after the
-//     update, it counts the previous boot if a Ryoku session started in it;
-//     on the third such boot it sends the next boot, once, to the pre-update
-//     snapshot's read-only entry and leaves a notice the doctor surfaces. A
-//     boot no one logged into Ryoku from (a greeter left idle, another
-//     desktop, a headless boot) proves nothing either way and is not counted.
+//     update, it counts failed boots; on the third it sends the next boot,
+//     once, to the pre-update snapshot's read-only entry and leaves a notice
+//     the doctor surfaces.
+//
+// What counts depends on where the box came from. Leaving a tagged release,
+// every boot without an ok file counts, so a greeter, compositor or daemon
+// that never comes up is caught. Rolling COPR builds update far more often,
+// so there only a boot a Ryoku session started in counts: a boot no one logged
+// into Ryoku from (a greeter left idle, another desktop, a headless boot)
+// proves nothing either way.
 //
 // Nothing here needs the user session, so it works when the session is what
 // broke.
-const (
+const noticeFile = "/var/lib/ryoku/boot/notice.json"
+
+// The guard's marker and the session's boot markers; vars for tests.
+var (
 	pendingFile = "/var/lib/ryoku/update-pending.json"
-	noticeFile  = "/var/lib/ryoku/boot/notice.json"
+	bootOKDir   = "/var/lib/ryoku/boot"
 )
 
-// bootOKDir holds the session's boot markers; a var for tests.
-var bootOKDir = "/var/lib/ryoku/boot"
-
 type pendingUpdate struct {
-	From      string   `json:"from"`
-	To        string   `json:"to"`
-	Snapshot  string   `json:"snapshot,omitempty"`
-	ArmedBoot string   `json:"armedBoot"`
-	Boots     int      `json:"boots"`
-	Counted   []string `json:"counted,omitempty"` // the boot ids already counted
-	At        string   `json:"at"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Snapshot  string `json:"snapshot,omitempty"`
+	ArmedBoot string `json:"armedBoot"`
+	Boots     int    `json:"boots"`
+	At        string `json:"at"`
 }
 
 // bootNotice is what the doctor shows after the guard acted.
@@ -71,7 +75,7 @@ func bootID() string {
 // armBootGuard is called by stage2 on a packaged box once the packages are
 // in. RYOKU_UPDATE_FROM carries the release the first stage read before dnf
 // ran; the marker is written whenever the release changes, a rolling COPR
-// build included, since only boots that reached a Ryoku session count.
+// build included.
 func armBootGuard(snapshot string) {
 	if sys.ResolveRepo() != "" {
 		return
@@ -81,7 +85,7 @@ func armBootGuard(snapshot string) {
 	if from == "" || to == "" || from == to {
 		return
 	}
-	p := pendingUpdate{From: from, To: to, Snapshot: snapshot, ArmedBoot: bootID(), At: time.Now().UTC().Format(time.RFC3339)}
+	p := rearm(pendingUpdate{From: from, To: to, Snapshot: snapshot, ArmedBoot: bootID(), At: now()})
 	b, _ := json.MarshalIndent(p, "", "  ")
 	// earlier markers would read as boots after this update; clear them so
 	// only a boot from here on counts.
@@ -100,6 +104,31 @@ func armBootGuard(snapshot string) {
 	progress.logf(i18n.T("Boot guard armed: %s -> %s"), from, to)
 }
 
+// rearm carries an unproven earlier update into the new marker. An update
+// run to fix a broken one starts from the broken release, so the release
+// and snapshot to fall back to, and the failed boots so far, stay the
+// earlier update's.
+func rearm(p pendingUpdate) pendingUpdate {
+	prev, ok := readPending()
+	if !ok || provenAfter(prev.ArmedBoot) {
+		return p
+	}
+	p.From, p.Boots = prev.From, prev.Boots
+	if prev.Snapshot != "" {
+		p.Snapshot = prev.Snapshot
+	}
+	return p
+}
+
+func readPending() (pendingUpdate, bool) {
+	var p pendingUpdate
+	raw, err := os.ReadFile(pendingFile)
+	if err != nil || json.Unmarshal(raw, &p) != nil {
+		return p, false
+	}
+	return p, true
+}
+
 // BootGuard is `ryoku boot-guard`, run as root by ryoku-boot-guard.service.
 func BootGuard(args []string) error {
 	if os.Geteuid() != 0 {
@@ -111,12 +140,11 @@ func BootGuard(args []string) error {
 	if len(args) > 0 && args[0] == "--console" {
 		return consoleGuard()
 	}
-	raw, err := os.ReadFile(pendingFile)
-	if err != nil {
+	if _, err := os.Stat(pendingFile); err != nil {
 		return nil // nothing pending
 	}
-	var p pendingUpdate
-	if err := json.Unmarshal(raw, &p); err != nil {
+	p, ok := readPending()
+	if !ok {
 		_ = os.Remove(pendingFile)
 		return nil
 	}
@@ -124,13 +152,15 @@ func BootGuard(args []string) error {
 		fmt.Printf(i18n.T("boot guard: %s came up after the update; disarmed\n"), p.To)
 		return disarmBootGuard("")
 	}
-	failed := sessionBoots(p, bootID())
-	if len(failed) == 0 {
+	failed := 1
+	if !sys.IsReleaseTag(p.From) {
+		failed = takeSessionBoots(p.ArmedBoot, bootID())
+	}
+	if failed == 0 {
 		fmt.Printf(i18n.T("boot guard: no Ryoku session since the last boot; %s -> %s still pending\n"), p.From, p.To)
 		return nil
 	}
-	p.Boots++
-	p.Counted = append(p.Counted, failed...)
+	p.Boots += failed
 	b, _ := json.MarshalIndent(p, "", "  ")
 	_ = os.WriteFile(pendingFile, append(b, '\n'), 0o644)
 	fmt.Printf(i18n.T("boot guard: boot %d after %s -> %s without the desktop coming up\n"), p.Boots, p.From, p.To)
@@ -151,31 +181,35 @@ func provenAfter(armedBoot string) bool {
 	return false
 }
 
-// sessionBoots is the boots a Ryoku session started in since the update and
-// that are not counted yet: not the boot the update ran in, not this one (the
-// guard runs before any login, so a marker naming it is a rerun by hand).
-func sessionBoots(p pendingUpdate, current string) []string {
-	var out []string
-	for _, id := range markerBoots("session-*") {
-		if id == p.ArmedBoot || id == current || slices.Contains(p.Counted, id) || slices.Contains(out, id) {
+// takeSessionBoots counts the distinct boots a Ryoku session started in since
+// the update and removes their markers, so each is counted once. The boot the
+// update ran in never counts, and neither does this one: the guard runs before
+// any login, so a marker naming it is a rerun by hand, and is left alone.
+func takeSessionBoots(armedBoot, current string) int {
+	var seen []string
+	for path, id := range markerBoots("session-*") {
+		if id == armedBoot || id == current {
 			continue
 		}
-		out = append(out, id)
+		_ = os.Remove(path)
+		if !slices.Contains(seen, id) {
+			seen = append(seen, id)
+		}
 	}
-	return out
+	return len(seen)
 }
 
-// markerBoots reads the boot ids the markers matching pattern record.
-func markerBoots(pattern string) []string {
+// markerBoots maps each marker matching pattern to the boot id it records.
+func markerBoots(pattern string) map[string]string {
 	matches, _ := filepath.Glob(filepath.Join(bootOKDir, pattern))
-	var ids []string
+	ids := map[string]string{}
 	for _, m := range matches {
 		b, err := os.ReadFile(m)
 		if err != nil {
 			continue
 		}
 		if id := strings.TrimSpace(string(b)); id != "" {
-			ids = append(ids, id)
+			ids[m] = id
 		}
 	}
 	return ids

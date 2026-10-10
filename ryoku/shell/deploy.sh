@@ -117,7 +117,7 @@ check_renderer() {
   cat >&2 <<EOF
     Quickshell links Qt's private API, so a build made against another Qt will
     not load. The COPR package is rebuilt with Qt:
-        sudo dnf upgrade quickshell
+        sudo dnf install quickshell
     Then run this deploy again. The desktop you have now was left running.
 EOF
   return 1
@@ -649,7 +649,7 @@ stage_qylock_user() {
 # (itskontra/ryotunes, enabled by the installer with the other dependency COPRs),
 # so a dev box installs the same package users get rather than building it.
 # Installed once; dnf upgrades it with the rest of the system after that.
-# Skipped cleanly without sudo or dnf (CI).
+# Skipped cleanly without dnf, or without a sudo that can run (CI).
 # The Chromium wrapper this script once laid into ~/.local/bin is retired
 # first so it can never shadow the app.
 if [[ -f "$bindir/ryotunes" ]] && [[ "$(head -c 2 "$bindir/ryotunes" 2>/dev/null)" == '#!' ]] \
@@ -665,7 +665,11 @@ if [[ -x "$bindir/ryotunes" ]] && [[ -f "$HOME/.local/share/ryoku/ryotunes.commi
   say "retired the locally built ryotunes (the package takes over)"
 fi
 if ! rpm -q ryotunes >/dev/null 2>&1; then
-  if command -v sudo >/dev/null 2>&1 && command -v dnf >/dev/null 2>&1; then
+  if ! command -v sudo >/dev/null 2>&1 || ! command -v dnf >/dev/null 2>&1; then
+    say "skipping packaged externals (sudo or dnf not available)"
+  elif ! sudo -n true 2>/dev/null && [[ ! -t 0 ]]; then
+    say "skipping packaged externals (sudo needs a password and there is no terminal)"
+  else
     _dlog="$HOME/.cache/ryoku/deploy-dnf.log"
     mkdir -p "$(dirname "$_dlog")"
     # the redirect is the user's file, which is the intent (shellcheck SC2024 is
@@ -673,11 +677,11 @@ if ! rpm -q ryotunes >/dev/null 2>&1; then
     # shellcheck disable=SC2024
     if sudo dnf -y install ryotunes >"$_dlog" 2>&1; then
       say "ryotunes from its COPR: $(rpm -q --qf '%{VERSION}-%{RELEASE}' ryotunes 2>/dev/null)"
-    else
+    elif grep -q 'No match for argument' "$_dlog"; then
       say "  ryotunes not installed (is the itskontra/ryotunes COPR enabled?); see $_dlog"
+    else
+      say "  ryotunes not installed; see $_dlog"
     fi
-  else
-    say "skipping packaged externals (sudo or dnf not available)"
   fi
 fi
 

@@ -22,15 +22,14 @@ const bootOKDir = "/var/lib/ryoku/boot"
 // login followed by a quick logout still records it.
 const bootOKSettle = 45 * time.Second
 
-// recordBootOK marks this boot as one that reached a Ryoku session, then waits
-// for the shell to prove itself and marks the boot good. The guard counts only
-// boots with the session marker as failed, so a greeter left idle, another
+// recordBootOK waits for the shell to prove itself and marks the boot good.
+// supervise has already written the session marker; on a rolling build the
+// guard counts only boots with one as failed, so a greeter left idle, another
 // desktop or a headless boot never reads as a broken update. Best effort: a
 // missing directory (an older package) or an unwritable one leaves the guard
 // without a signal, which it treats as an unproven boot, never as a failure of
 // its own.
 func recordBootOK(exited <-chan struct{}) {
-	writeBootMarker("session")
 	select {
 	case <-exited:
 		return // died inside the window; not a good boot

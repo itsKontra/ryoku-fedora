@@ -88,6 +88,32 @@ func TestRendererKeepsSignal(t *testing.T) {
 	}
 }
 
+// A blank line inside a scriptlet's output does not end it, and rpm's own
+// errors right after the output are still shown.
+func TestRendererScriptletOutput(t *testing.T) {
+	out := renderTranscript(t, strings.Join([]string{
+		"Running transaction",
+		">>> Scriptlet output:",
+		">>> ",
+		">>> output after a blank line: mkdir failed",
+		">>> [RPM] unpacking of archive failed on file /var/spool/mail",
+		">>> Unpack error: filesystem-0:3.18-52.fc44.x86_64",
+		">>> Scriptlet output:",
+		">>> more output",
+		">>> [RPM] crypto-policies-0:20251128-3.noarch: install failed",
+	}, "\n"), false)
+	for _, noise := range []string{"after a blank", ">>>"} {
+		if strings.Contains(out, noise) {
+			t.Errorf("curated output leaked %q:\n%s", noise, out)
+		}
+	}
+	for _, want := range []string{"unpacking of archive failed", "Unpack error: filesystem", "crypto-policies-0:20251128-3.noarch: install failed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("curated output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestRendererSuccessCap(t *testing.T) {
 	out := renderTranscript(t, transcript(t, "dnf-install.txt"), true)
 	if !strings.Contains(out, "✓") || !strings.Contains(out, "2 upgraded") || !strings.Contains(out, "2 packages") {

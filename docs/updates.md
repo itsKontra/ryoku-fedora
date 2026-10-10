@@ -108,16 +108,20 @@ the package manager. Both are best effort and never fail an update.
 A packaged update that moves the box to another release, a rolling COPR build
 included, arms a boot guard:
 stage2 writes `/var/lib/ryoku/update-pending.json` (previous release, new
-release, the pre-update snapshot, the boot it ran in). `ryoku-boot-guard.service`
-runs `ryoku boot-guard` as root early in every boot, before the display
-manager, and only while that marker exists. The shell daemon records each boot
-that reached a Ryoku session when it starts the shell
-(`/var/lib/ryoku/boot/session-<uid>`, the boot id) and a good boot once the
+release, the pre-update snapshot, the boot it ran in). An update run while an
+earlier one is still unproven keeps the earlier one's previous release,
+snapshot and failed boots, so the fallback is never the broken state.
+`ryoku-boot-guard.service` runs `ryoku boot-guard` as root early in every boot,
+before the display manager, and only while that marker exists. The shell daemon
+records each boot that reached a Ryoku session as soon as it runs
+(`/var/lib/ryoku/boot/session-<uid>`, the boot id), and a good boot once the
 shell has stayed up 45 s (`/var/lib/ryoku/boot/ok-<uid>`); a good boot other
-than the one the update ran in disarms the guard. A boot with a session but no
-good boot counts as failed; a boot no one logged into Ryoku from (a greeter left
-idle, another desktop, a headless boot) is not counted. On the third failed
-boot, it sends the next boot,
+than the one the update ran in disarms the guard. Leaving a tagged release,
+every boot without a good boot counts as failed, so a greeter or compositor
+that never comes up is caught. After a rolling COPR build only a boot with a
+session counts; a boot no one logged into Ryoku from (a greeter left idle,
+another desktop, a headless boot) is not counted. On the third failed boot, it
+sends the next boot,
 once, to the pre-update snapshot's read-only look entry in the GRUB menu
 (`grub2-reboot`), never to an unattended restore, and leaves a notice
 `ryoku doctor` shows once. The notice says to run `ryoku rollback <id>` there
