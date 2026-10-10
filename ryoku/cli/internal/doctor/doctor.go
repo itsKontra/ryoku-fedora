@@ -165,6 +165,7 @@ func reconcilers() []reconciler {
 		{i18n.T("rice fastfetch emblem"), reconcileRiceEmblem},
 		{i18n.T("ryotunes"), reconcileRyotunes},
 		{i18n.T("fastfetch OS line"), reconcileFastfetchOSLine},
+		{i18n.T("fastfetch tagline"), reconcileFastfetchTagline},
 		{i18n.T("brand mark image"), reconcileBrandLogo},
 		{i18n.T("decor art"), reconcileRyodecors},
 		{i18n.T("Hyprland config integrity"), reconcileHyprlandConfig},

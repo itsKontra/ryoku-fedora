@@ -8,6 +8,7 @@ var ENGINES = {
     yt: { name: "YouTube",    url: "https://www.youtube.com/results?search_query=" },
     gh: { name: "GitHub",     url: "https://github.com/search?q=" },
     w:  { name: "Wikipedia",  url: "https://en.wikipedia.org/w/index.php?search=" },
+    fed:{ name: "Fedora Packages", url: "https://packages.fedoraproject.org/search?query=" },
     npm:{ name: "npm",        url: "https://www.npmjs.com/search?q=" }
 };
 

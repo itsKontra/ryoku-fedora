@@ -7,8 +7,8 @@ import "dnf.js" as Dnf
 import "../requeststate.js" as RequestState
 import ".."
 
-// Package provider backed by dnf (`dnf search`, see dnf.js). Routed by "/" is the actions
-// panel; packages use explicit "install "/"remove "/"search " queries (matching
+// Package provider backed by dnf (`dnf search`, see dnf.js). Routed by ">" ("/" is the
+// actions panel); packages use explicit "install "/"remove "/"search " queries (matching
 // inir) so a plain search never forks dnf. Search is async + cached; installs and
 // removes spawn a terminal because sudo needs a tty for its password prompt.
 Provider {
