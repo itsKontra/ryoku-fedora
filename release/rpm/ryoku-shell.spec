@@ -20,6 +20,8 @@ Requires:       ffmpeg-free
 Requires:       jq
 Requires:       uv
 Requires:       python3
+Requires:       librsvg2-tools
+Requires:       xcursorgen
 
 %description
 ryoku-shell, built from the shared Ryoku source and package payload recipe.

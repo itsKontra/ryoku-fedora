@@ -38,5 +38,6 @@ cp -a stage/. %{buildroot}/
 %{_bindir}/qmk_hid
 %{_datadir}/fonts/*
 %{_datadir}/icons/Bibata-*
+%{_datadir}/ryoku-cursor-material
 %{_datadir}/ryoku/extras
 %license %{_datadir}/licenses/Bibata/LICENSE
