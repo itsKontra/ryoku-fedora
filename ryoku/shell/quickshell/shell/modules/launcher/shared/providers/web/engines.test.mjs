@@ -19,6 +19,7 @@ eq(buildUrl("!yt cats", "g"), "https://www.youtube.com/results?search_query=cats
 eq(buildUrl("cats", "g"), "https://www.google.com/search?q=cats", "no bang uses default engine");
 eq(buildUrl("!zzz cats", "g"), "https://www.google.com/search?q=" + encodeURIComponent("!zzz cats"), "unknown bang falls back to default over whole text");
 eq(buildUrl("a b&c", "ddg"), "https://duckduckgo.com/?q=" + encodeURIComponent("a b&c"), "default key honored and query encoded");
+eq(buildUrl("!fed htop", "g"), "https://packages.fedoraproject.org/search?query=htop", "fed bang searches Fedora packages");
 
 eq(engineName("!gh repo", "g"), "GitHub", "engine name for a bang");
 eq(engineName("repo", "ddg"), "DuckDuckGo", "engine name for default");

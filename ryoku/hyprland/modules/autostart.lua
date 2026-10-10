@@ -63,11 +63,6 @@ hl.on("hyprland.start", function()
     -- Night light: hyprsunset is a plain process a reboot drops, so restore the
     -- warm screen when the user left it on. A no-op when it was off or absent.
     hl.exec_cmd("command -v ryoku-cmd-nightlight >/dev/null 2>&1 && ryoku-cmd-nightlight restore")
-    -- Booted into a btrfs snapshot from the Limine menu: offer the one-click
-    -- restore. limine-snapper-sync ships this as an XDG autostart entry, which
-    -- Hyprland never runs (no autostart manager), so start it here; on a normal
-    -- boot it detects no snapshot and exits silently.
-    hl.exec_cmd("command -v limine-snapper-restore >/dev/null 2>&1 && limine-snapper-restore --notify")
     -- Voxtype dictation: `ryoku-hub voxtype ensure` seeds a default config with
     -- the built-in hotkey off (the shell owns Super+` and the mic wave), installs
     -- the user service once, and starts it unless you turned dictation off in the

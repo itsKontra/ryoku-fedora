@@ -16,7 +16,7 @@ eq(routePrefix("=2+2", prefixes), { provider: "calc", query: "2+2", prefix: "=" 
 eq(routePrefix("/wifi", prefixes), { provider: "actions", query: "wifi", prefix: "/" }, "bare slash routes to actions");
 eq(routePrefix("/file report", prefixes), { provider: "find", query: "report", prefix: "/file" }, "longest match: /file routes to find, not actions");
 eq(routePrefix("/image cat", prefixes), { provider: "find", query: "cat", prefix: "/image" }, "/image routes to find with its prefix");
-eq(routePrefix(">search yay", prefixes), { provider: "packages", query: "search yay", prefix: ">" }, "package prefix keeps the subcommand in the query");
+eq(routePrefix(">search htop", prefixes), { provider: "packages", query: "search htop", prefix: ">" }, "package prefix keeps the subcommand in the query");
 eq(routePrefix("firefox", prefixes), { provider: null, query: "firefox", prefix: "" }, "no prefix is default fan-out");
 eq(routePrefix("", prefixes), { provider: null, query: "", prefix: "" }, "empty text is default with empty query");
 eq(routePrefix("= 2 + 2", prefixes), { provider: "calc", query: "2 + 2", prefix: "=" }, "prefix strips a following space");

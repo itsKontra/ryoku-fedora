@@ -23,7 +23,7 @@ const sampleFF = `{
   "modules": [
     "break",
     { "type": "title", "format": "{user-name}@{host-name}" },
-    { "type": "custom", "format": "\u001b[38;2;226;52;42m■\u001b[0m \u001b[38;2;143;135;112mRYOKU \u00b7 \u529b \u00b7 a hand-built Arch desktop\u001b[0m" },
+    { "type": "custom", "format": "\u001b[38;2;226;52;42m■\u001b[0m \u001b[38;2;143;135;112mRYOKU \u00b7 \u529b \u00b7 a hand-built Fedora desktop\u001b[0m" },
     "break",
     { "type": "custom", "format": "\u001b[38;2;226;52;42m\u2500\u2500\u001b[0m \u001b[1;38;2;243;237;225mVITALS\u001b[0m \u001b[38;2;58;46;36m\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u001b[0m" },
     { "type": "cpu", "key": "CPU" },
@@ -83,7 +83,7 @@ func TestLoadFastfetchModel(t *testing.T) {
 	if m.Accent != "226;52;42" {
 		t.Errorf("accent = %q, want 226;52;42", m.Accent)
 	}
-	if r := rowByKind(m.Rows, "tagline"); r == nil || r.Text != "RYOKU \u00b7 \u529b \u00b7 a hand-built Arch desktop" {
+	if r := rowByKind(m.Rows, "tagline"); r == nil || r.Text != "RYOKU \u00b7 \u529b \u00b7 a hand-built Fedora desktop" {
 		t.Errorf("tagline text = %+v", r)
 	}
 	if r := rowByKind(m.Rows, "header"); r == nil || r.Text != "VITALS" {
@@ -112,7 +112,7 @@ func TestBuildRoundTripStable(t *testing.T) {
 	if len(m2.Rows) != len(m.Rows) {
 		t.Fatalf("row count changed: %d -> %d", len(m.Rows), len(m2.Rows))
 	}
-	if rowByKind(m2.Rows, "tagline").Text != "RYOKU \u00b7 \u529b \u00b7 a hand-built Arch desktop" {
+	if rowByKind(m2.Rows, "tagline").Text != "RYOKU \u00b7 \u529b \u00b7 a hand-built Fedora desktop" {
 		t.Errorf("tagline drifted on round-trip")
 	}
 	if rowByKind(m2.Rows, "header").Text != "VITALS" {
@@ -129,8 +129,8 @@ func TestBuildRoundTripStable(t *testing.T) {
 }
 
 func TestBuildTaglineFormatMatchesShipped(t *testing.T) {
-	got := ffTaglineFormat("226;52;42", "RYOKU \u00b7 \u529b \u00b7 a hand-built Arch desktop")
-	want := "\x1b[38;2;226;52;42m\u25a0\x1b[0m \x1b[38;2;143;135;112mRYOKU \u00b7 \u529b \u00b7 a hand-built Arch desktop\x1b[0m"
+	got := ffTaglineFormat("226;52;42", "RYOKU \u00b7 \u529b \u00b7 a hand-built Fedora desktop")
+	want := "\x1b[38;2;226;52;42m\u25a0\x1b[0m \x1b[38;2;143;135;112mRYOKU \u00b7 \u529b \u00b7 a hand-built Fedora desktop\x1b[0m"
 	if got != want {
 		t.Errorf("tagline format:\n got %q\nwant %q", got, want)
 	}

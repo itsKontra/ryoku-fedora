@@ -3,6 +3,7 @@ package doctor
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -23,12 +24,32 @@ func kySetup(t *testing.T, pamBody string) (data, pam string) {
 	return data, pam
 }
 
-const stockSDDM = "#%PAM-1.0\n\nauth        include     system-login\n\naccount     include     system-login\n\nsession     include     system-login\n"
+// stockSDDM is Fedora's stock /etc/pam.d/sddm, the keyring package's fixture.
+// It already wires pam_gnome_keyring.
+var stockSDDM = func() string {
+	b, err := os.ReadFile(filepath.Join("..", "keyring", "testdata", "fedora-sddm"))
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}()
 
-// A bare box (no config, no PAM lines) infers ask: the reconciler records that
-// mode, then is a stable no-op.
-func TestReconcileKeyringSeedsInferredAsk(t *testing.T) {
-	kySetup(t, stockSDDM)
+// unwiredSDDM is the stock stack with its keyring lines stripped, as never-ask
+// and ask leave it.
+var unwiredSDDM = func() string {
+	var out []string
+	for _, l := range strings.Split(stockSDDM, "\n") {
+		if !strings.Contains(l, "pam_gnome_keyring.so") {
+			out = append(out, l)
+		}
+	}
+	return strings.Join(out, "\n")
+}()
+
+// A box with no config and no keyring lines infers never-ask: the reconciler
+// records that mode, then is a stable no-op.
+func TestReconcileKeyringSeedsInferredNeverAsk(t *testing.T) {
+	kySetup(t, unwiredSDDM)
 	if r := reconcileKeyring(true); r.status != recWouldFix {
 		t.Fatalf("check-only on a fresh box: status=%s detail=%q, want todo", r.status.label(), r.detail)
 	}
@@ -40,10 +61,11 @@ func TestReconcileKeyringSeedsInferredAsk(t *testing.T) {
 	}
 }
 
-// PAM lines present but no recorded mode infers unlock-on-login; the reconciler
-// records it and points the default keyring at login, then holds ok.
+// A stock Fedora box with no recorded mode infers unlock-on-login, because the
+// stock stack carries the keyring lines; the reconciler records it and points
+// the default keyring at login, then holds ok.
 func TestReconcileKeyringPointsDefaultForUnlockOnLogin(t *testing.T) {
-	data, _ := kySetup(t, stockSDDM+"auth optional pam_gnome_keyring.so\nsession optional pam_gnome_keyring.so auto_start\n")
+	data, _ := kySetup(t, stockSDDM)
 	// a stale pointer at another keyring must be repointed at login.
 	os.WriteFile(filepath.Join(data, "keyrings", "default"), []byte("Default_Keyring\n"), 0o600)
 	if r := reconcileKeyring(false); r.status != recFixed {
@@ -61,7 +83,7 @@ func TestReconcileKeyringPointsDefaultForUnlockOnLogin(t *testing.T) {
 // A recorded mode that disagrees with the root PAM stack is a warning with the
 // privileged fix command; the reconciler never edits the stack itself.
 func TestReconcileKeyringWarnsOnPamDrift(t *testing.T) {
-	_, pam := kySetup(t, stockSDDM)
+	_, pam := kySetup(t, unwiredSDDM)
 	// record unlock-on-login but leave the stack without the lines.
 	writeKeyringConfig(t, "unlock-on-login")
 	r := reconcileKeyring(false)
@@ -73,14 +95,14 @@ func TestReconcileKeyringWarnsOnPamDrift(t *testing.T) {
 	}
 	// the reconciler must not have touched the root file.
 	got, _ := os.ReadFile(pam)
-	if string(got) != stockSDDM {
+	if string(got) != unwiredSDDM {
 		t.Fatalf("reconciler edited the PAM stack; it must only warn:\n%s", got)
 	}
 }
 
 // autologin + unlock-on-login is a conflict the reconciler flags.
 func TestReconcileKeyringWarnsAutologinConflict(t *testing.T) {
-	kySetup(t, stockSDDM+"auth optional pam_gnome_keyring.so\nsession optional pam_gnome_keyring.so auto_start\n")
+	kySetup(t, stockSDDM)
 	confd := filepath.Join(os.Getenv("RYOKU_SDDM_CONF_ROOT"), "sddm.conf.d")
 	os.MkdirAll(confd, 0o755)
 	os.WriteFile(filepath.Join(confd, "autologin.conf"), []byte("[Autologin]\nUser=nero\n"), 0o644)

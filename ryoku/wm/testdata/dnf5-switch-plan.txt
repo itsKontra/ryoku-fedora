@@ -1,0 +1,86 @@
+Package                           Arch   Version                      Repository         Size
+Removing:
+ hyprland                         x86_64 0:0.56.2-2.fc44              HyprlandCOPR   66.3 MiB
+ hyprpicker                       x86_64 0:0.4.7-2.fc44               HyprlandCOPR  241.8 KiB
+ hyprpolkitagent                  x86_64 0:0.2.0-1.fc44               HyprlandCOPR  301.1 KiB
+ ryoku-desktop-hyprland           x86_64 0:0.4046-63.fc44             RyokuCOPR       4.3 MiB
+ xdg-desktop-portal-hyprland      x86_64 1:1.4.1-1.fc44               HyprlandCOPR  982.5 KiB
+Removing unused dependencies:
+ aquamarine                       x86_64 0:0.15.1-1.fc44              HyprlandCOPR    1.4 MiB
+ hyprcursor                       x86_64 0:0.1.13-2.fc44              HyprlandCOPR  697.8 KiB
+ hyprgraphics                     x86_64 0:0.5.1-5.fc44               HyprlandCOPR  232.6 KiB
+ hyprland-guiutils                x86_64 0:0.2.2-2.fc44               HyprlandCOPR  788.4 KiB
+ hyprland-qt-support              x86_64 0:0.1.0-13.fc44              HyprlandCOPR  462.4 KiB
+ hyprland-uwsm                    x86_64 0:0.56.2-2.fc44              HyprlandCOPR  202.0   B
+ hyprtoolkit                      x86_64 0:0.6.0-1.fc44               HyprlandCOPR    1.7 MiB
+ hyprwire                         x86_64 0:0.3.1-4.fc44               HyprlandCOPR  346.4 KiB
+ muParser                         x86_64 0:2.3.5-5.fc44               anaconda      563.2 KiB
+ newt                             x86_64 0:0.52.25-6.fc44             anaconda      213.4 KiB
+ nwg-panel                        noarch 0:0.10.5-6.fc44              anaconda        2.7 MiB
+ python3-cairo                    x86_64 0:1.28.0-5.fc44              anaconda      508.8 KiB
+ python3-dasbus                   noarch 0:1.7-14.fc44                anaconda      403.0 KiB
+ python3-gobject                  x86_64 0:3.56.3-1.fc44              FedoraUpdates  27.7 KiB
+ python3-i3ipc                    noarch 0:2.2.1-20.fc44              anaconda      243.6 KiB
+ python3-netifaces                x86_64 0:0.11.0-16.fc44             anaconda       41.4 KiB
+ python3-psutil                   x86_64 0:7.2.2-1.fc44               anaconda        1.4 MiB
+ python3-pyxdg                    noarch 0:0.28-1.fc44                anaconda      469.8 KiB
+ python3-six                      noarch 0:1.17.0-8.fc44              anaconda      118.0 KiB
+ python3-xlib                     noarch 0:0.33-16.fc44               anaconda        1.5 MiB
+ re2                              x86_64 2:20251105-4.fc44            anaconda      606.8 KiB
+ tomlplusplus                     x86_64 0:3.4.0-7.fc44               anaconda      266.1 KiB
+ uwsm                             noarch 0:0.24.3-1.fc44              HyprlandCOPR  560.1 KiB
+ wlr-randr                        x86_64 0:0.5.0-3.fc44               anaconda       30.5 KiB
+ wofi                             x86_64 0:1.5.3-2.fc44               anaconda      164.1 KiB
+Reinstalling:
+ gtk-layer-shell                  x86_64 0:0.10.0-1.fc44              fedora        270.0 KiB
+   replacing gtk-layer-shell      x86_64 0:0.10.0-1.fc44              anaconda      270.0 KiB
+Upgrading:
+ ryogami                          x86_64 0:0.4055-71.fc44             RyokuCOPR       5.3 MiB
+   replacing ryogami              x86_64 0:0.4046-63.fc44             RyokuCOPR       5.3 MiB
+ ryoku                            x86_64 0:0.4055-71.fc44             RyokuCOPR       9.4 MiB
+   replacing ryoku                x86_64 0:0.4046-63.fc44             RyokuCOPR       9.4 MiB
+ ryoku-blobs                      x86_64 0:0.4055-71.fc44             RyokuCOPR     222.6 KiB
+   replacing ryoku-blobs          x86_64 0:0.4046-63.fc44             RyokuCOPR     222.6 KiB
+ ryoku-desktop                    x86_64 0:0.4055-71.fc44             RyokuCOPR     295.2 MiB
+   replacing ryoku-desktop        x86_64 0:0.4046-63.fc44             RyokuCOPR     295.1 MiB
+ ryoku-extras                     x86_64 0:0.4055-71.fc44             RyokuCOPR     655.7 MiB
+   replacing ryoku-extras         x86_64 0:0.4046-63.fc44             RyokuCOPR     655.7 MiB
+ ryoku-hub                        x86_64 0:0.4055-71.fc44             RyokuCOPR       8.8 MiB
+   replacing ryoku-hub            x86_64 0:0.4046-63.fc44             RyokuCOPR       8.8 MiB
+ ryoku-palette-bridge             x86_64 0:0.4055-71.fc44             RyokuCOPR       6.6 MiB
+   replacing ryoku-palette-bridge x86_64 0:0.4046-63.fc44             RyokuCOPR       6.6 MiB
+ ryoku-rashin                     x86_64 0:0.4055-71.fc44             RyokuCOPR       9.1 MiB
+   replacing ryoku-rashin         x86_64 0:0.4046-63.fc44             RyokuCOPR       9.1 MiB
+ ryoku-shell                      x86_64 0:0.4055-71.fc44             RyokuCOPR      10.3 MiB
+   replacing ryoku-shell          x86_64 0:0.4046-63.fc44             RyokuCOPR      10.3 MiB
+ sddm-theme-ryoku                 noarch 0:0.4055-71.fc44             RyokuCOPR     210.3 KiB
+   replacing sddm-theme-ryoku     noarch 0:0.4046-63.fc44             RyokuCOPR     210.3 KiB
+Installing:
+ ryoku-desktop-niri               x86_64 0:0.4055-71.fc44             RyokuCOPR       3.7 MiB
+Installing dependencies:
+ atkmm                            x86_64 0:2.28.5-1.fc44              updates       373.7 KiB
+ cairomm                          x86_64 0:1.14.5-15.fc44             fedora        203.1 KiB
+ glibmm2.4                        x86_64 0:2.66.10-1.fc44             updates         2.9 MiB
+ gpsd-libs                        x86_64 1:3.27.5-5.fc44              updates       157.7 KiB
+ gtkmm3.0                         x86_64 0:3.24.11-1.fc44             updates         5.1 MiB
+ libdbusmenu                      x86_64 0:16.04.0-31.fc44            fedora        540.0 KiB
+ libdbusmenu-gtk3                 x86_64 0:16.04.0-31.fc44            fedora         88.3 KiB
+ libmpdclient                     x86_64 0:2.26-1.fc44                updates       189.3 KiB
+ libsigc++20                      x86_64 0:2.12.2-1.fc44              updates        92.6 KiB
+ niri                             x86_64 0:26.04-1.fc44               updates        22.9 MiB
+ pangomm                          x86_64 0:2.46.4-5.fc44              fedora        250.5 KiB
+ xdg-desktop-portal-gnome         x86_64 0:50.0-1.fc44                fedora        986.2 KiB
+ xwayland-satellite               x86_64 0:0.8.2-1.fc44               updates         4.7 MiB
+Installing weak dependencies:
+ fontawesome-6-brands-fonts       noarch 1:6.7.2-4.fc44               fedora        566.1 KiB
+ fontawesome-6-free-fonts         noarch 1:6.7.2-4.fc44               fedora          1.2 MiB
+ swaylock                         x86_64 0:1.8.6-1.fc44               updates        92.8 KiB
+ waybar                           x86_64 0:0.15.0^2.git1684389-1.fc44 HyprlandCOPR    2.7 MiB
+
+Transaction Summary:
+ Installing:        18 packages
+ Reinstalling:       1 package
+ Upgrading:         10 packages
+ Replacing:         11 packages
+ Removing:          30 packages
+

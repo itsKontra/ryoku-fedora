@@ -14,7 +14,7 @@ Column {
     Text {
         width: parent.width
         wrapMode: Text.WordWrap
-        text: I18n.tr("You've arrived. %1 is a single, hand-built desktop - one bar, one launcher, one control plane - carved on Arch and Hyprland. This is a two-minute tour of where things live and how to make it yours.").arg(Theme.brandName)
+        text: I18n.tr("You've arrived. %1 is a single, hand-built desktop - one bar, one launcher, one control plane - carved on Fedora. This is a two-minute tour of where things live and how to make it yours.").arg(Theme.brandName)
         color: Tokens.inkDim
         font.family: Tokens.ui
         font.pixelSize: Tokens.fRow
