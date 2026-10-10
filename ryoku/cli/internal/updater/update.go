@@ -164,7 +164,6 @@ func Update(args []string) error {
 	if from := sys.ReadRelease().Release; from != "" {
 		os.Setenv("RYOKU_UPDATE_FROM", from)
 	}
-	clearStalePacmanLock()
 	// Refresh first, then read the set: a rollback onto a frozen release must
 	// only ask for packages that release actually served. An ordinary update
 	// drops names the box already carries at a newer version than [ryoku]
@@ -1147,24 +1146,6 @@ func prowlDecide(onPath, packageOwned bool) prowlAction {
 		return prowlManaged
 	}
 	return prowlSelfUpdate
-}
-
-// clearStalePacmanLock runs right before the system upgrade: a db.lck left by a
-// crashed pacman would fail the very update the user is running to heal the
-// box. A lock owned by a live pacman is left alone.
-func clearStalePacmanLock() {
-	if !sys.Has("pacman") {
-		return
-	}
-	const lock = "/var/lib/pacman/db.lck"
-	if !sys.Exists(lock) {
-		return
-	}
-	if exec.Command("pgrep", "-x", "pacman").Run() == nil {
-		return
-	}
-	progress.logf(i18n.T("Removing a stale pacman lock (no pacman running)"))
-	_ = sys.Sudo("rm", "-f", lock)
 }
 
 // runFreshDoctor runs `ryoku doctor` after the new binary lands, so the
