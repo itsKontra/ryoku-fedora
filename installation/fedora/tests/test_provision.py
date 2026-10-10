@@ -455,7 +455,6 @@ class ProvisionTargetTest(unittest.TestCase):
             "ryostore-install",
             "ryoku-pkg-add",
             "ryoku-pkg-remove",
-            "ryoku-pkg-aur-add",
             "ryoku-pkg-multilib",
             "ryoku-cmd-present",
         ):

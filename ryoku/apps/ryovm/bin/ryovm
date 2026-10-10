@@ -138,32 +138,12 @@ cmd_caps() {
 }
 
 # ---- setup -----------------------------------------------------------------
-# quickemu is AUR-only on Arch; on Fedora it lives in the official repos.
 # spice-gtk-tools (spicy) and xorriso provide the console viewer and ISO builder.
 cmd_setup() {
-	if have dnf; then
-		if have ryoku-pkg-add; then
-			ryoku-pkg-add quickemu spice-gtk-tools xorriso
-		else
-			sudo dnf install -y quickemu spice-gtk-tools xorriso
-		fi
-	elif have ryoku-pkg-add; then
-		ryoku-pkg-add spice-gtk libisoburn
-	elif have apt-get; then
-		sudo apt-get install -y spice-client-gtk libisoburn quickemu
+	if have ryoku-pkg-add; then
+		ryoku-pkg-add quickemu spice-gtk-tools xorriso
 	else
-		sudo pacman -S --needed --noconfirm spice-gtk libisoburn
-	fi
-	if ! have quickemu; then
-		if have ryoku-pkg-aur-add; then
-			ryoku-pkg-aur-add quickemu
-		elif have yay; then
-			yay -S --needed --noconfirm quickemu
-		elif have paru; then
-			paru -S --needed --noconfirm quickemu
-		elif ! have dnf && ! have apt-get; then
-			die "no AUR helper found (expected yay or paru) to install quickemu"
-		fi
+		sudo dnf install -y quickemu spice-gtk-tools xorriso
 	fi
 	have quickemu || die "the install finished but quickemu is still missing; see the output above"
 	echo "Done — quickemu is installed. Close this window; ryovm lights up in a few seconds."

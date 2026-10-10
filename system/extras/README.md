@@ -16,8 +16,6 @@ Ryostore owns the catalogue, its cache, and script/plugin downloads.
 - `ryoku-pkg-remove` removes packages and unneeded dependencies through DNF.
   DNF can also remove dependent applications, so its transaction confirmation
   remains enabled in the store's terminal. Cancelling does not trigger retries.
-- `ryoku-pkg-aur-add` is a compatibility entry point for older catalogue
-  scripts. It forwards to `ryoku-pkg-add`; Fedora has no AUR build path.
 - `ryoku-pkg-multilib` checks for an x86_64 host and DNF. Fedora carries i686
   packages in its normal repositories, so no separate multilib repository
   needs enabling. Package availability is checked when installing.
