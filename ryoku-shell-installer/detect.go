@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -24,7 +25,8 @@ type facts struct {
 	distroName string
 	archX86    bool
 	distro     *distro
-	online     bool
+	online     bool // the Fedora mirrors answer; every install needs them
+	coprOnline bool // the Ryoku COPR answers; a packaged install needs it
 	btrfsRoot  bool
 
 	secureBoot bool // SecureBoot=1 and SetupMode=0 in efivars
@@ -189,12 +191,7 @@ func detect() *facts {
 	f.hostname, _ = os.Hostname()
 	f.userShell = os.Getenv("SHELL")
 
-	// repo reachability probe; the install needs the network anyway.
-	client := &http.Client{Timeout: 6 * time.Second}
-	if resp, err := client.Head("https://repo.ryoku.dev/stable/x86_64/ryoku.db"); err == nil {
-		resp.Body.Close()
-		f.online = resp.StatusCode < 500
-	}
+	f.online, f.coprOnline = probeRepositories(fedoraMirrorsURL, coprURL)
 
 	f.btrfsRoot = rootIsBtrfs()
 
@@ -399,4 +396,31 @@ func (f *facts) otherDM() string {
 func rootIsBtrfs() bool {
 	var st syscall.Statfs_t
 	return syscall.Statfs("/", &st) == nil && st.Type == 0x9123683e
+}
+
+// The hosts an install fetches from: Fedora's mirror service for every
+// package, and the COPR that release/rpm/configure-repo.py points dnf at.
+const (
+	fedoraMirrorsURL = "https://mirrors.fedoraproject.org/"
+	coprURL          = "https://download.copr.fedorainfracloud.org/results/itskontra/ryoku/"
+)
+
+// probeRepositories checks both hosts at once, so an offline box waits for one
+// timeout, not two.
+func probeRepositories(urls ...string) (bool, bool) {
+	client := &http.Client{Timeout: 6 * time.Second}
+	ok := make([]bool, len(urls))
+	var wg sync.WaitGroup
+	for i, url := range urls {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if resp, err := client.Head(url); err == nil {
+				resp.Body.Close()
+				ok[i] = resp.StatusCode < 500
+			}
+		}()
+	}
+	wg.Wait()
+	return ok[0], ok[1]
 }

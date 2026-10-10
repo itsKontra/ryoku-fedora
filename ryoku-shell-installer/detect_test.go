@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func TestParseOSRelease(t *testing.T) {
 	id, like, name := parseOSRelease("NAME=\"Nobara Linux\"\nPRETTY_NAME=\"Nobara Linux 44\"\nID=nobara\nID_LIKE=\"rhel centos fedora\"\n")
@@ -26,5 +30,19 @@ func TestSecureBootEnforcing(t *testing.T) {
 	}
 	if secureBootEnforcing(off, off) || secureBootEnforcing(nil, nil) || secureBootEnforcing([]byte{1}, nil) {
 		t.Fatal("short or zero variables must not read as enforcing")
+	}
+}
+
+// Each host is judged on its own: a dead COPR must not read as "offline", and
+// a server error is as good as down.
+func TestProbeRepositories(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer up.Close()
+	broken := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer broken.Close()
+	if fedora, copr := probeRepositories(up.URL, broken.URL); !fedora || copr {
+		t.Fatalf("probe = %v, %v; want true, false", fedora, copr)
 	}
 }

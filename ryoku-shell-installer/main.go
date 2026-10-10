@@ -482,7 +482,9 @@ func (m model) viewPlan() string {
 		row("ryoku", i18n.T("already installed; this run repairs and reconciles it"))
 	}
 	if !f.online {
-		span(fg(cRed, gWarn+" "+i18n.T("repo.ryoku.dev unreachable, the install will fail without network")))
+		span(fg(cRed, gWarn+" "+i18n.T("the Fedora mirrors are unreachable, the install will fail without network")))
+	} else if !f.coprOnline {
+		span(fg(cRed, gWarn+" "+i18n.T("the Ryoku COPR is unreachable; a packaged install will fail, a source install can still run")))
 	}
 	if f.btrfsRoot {
 		row(i18n.T("snapshots"), i18n.T("btrfs root: snapper snapshots will be configured by ryoku doctor"))
