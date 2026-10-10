@@ -26,10 +26,25 @@ done
 
 # packages: the ones the user asked for (dnf's userinstalled set), and the ones
 # not built by Fedora itself (COPR, RPM Fusion, vendor repos), told apart by the
-# RPM Vendor tag. the third-party set overlaps the explicit one.
-pkg_explicit=$(dnf repoquery --userinstalled -q 2>/dev/null | wc -l)
-pkg_third_party=$(rpm -qa --nodigest --nosignature --qf '%{NAME}\t%{VENDOR}\n' 2>/dev/null |
-    awk -F'\t' '$1 != "gpg-pubkey" && $2 != "Fedora Project"' | wc -l)
+# RPM Vendor tag. the third-party set overlaps the explicit one. both cost a
+# database read, and the dossier polls every 30s, so they are cached until the
+# rpm database or dnf's install-reason state changes.
+pkg_cache="${XDG_CACHE_HOME:-$HOME/.cache}/ryoku/profile-packages"
+pkg_key=$(stat -c '%n:%Y' /usr/lib/sysimage/rpm/rpmdb.sqlite /usr/lib/sysimage/rpm/rpmdb.sqlite-wal /usr/lib/sysimage/libdnf5/packages.toml 2>/dev/null | tr '\n' ' ')
+pkg_explicit="" pkg_third_party=""
+if [ -n "$pkg_key" ] && [ -s "$pkg_cache" ]; then
+    { IFS= read -r cached_key; read -r pkg_explicit; read -r pkg_third_party; } < "$pkg_cache"
+    [ "$cached_key" = "$pkg_key" ] || pkg_explicit=""
+fi
+if [ -z "$pkg_explicit" ] || [ -z "$pkg_third_party" ]; then
+    pkg_explicit=$(dnf repoquery --userinstalled -q 2>/dev/null | wc -l)
+    pkg_third_party=$(rpm -qa --nodigest --nosignature --qf '%{NAME}\t%{VENDOR}\n' 2>/dev/null |
+        awk -F'\t' '$1 != "gpg-pubkey" && $2 != "Fedora Project"' | wc -l)
+    if [ -n "$pkg_key" ] && mkdir -p "${pkg_cache%/*}" 2>/dev/null; then
+        printf '%s\n%s\n%s\n' "$pkg_key" "$pkg_explicit" "$pkg_third_party" > "$pkg_cache.$$" &&
+            mv -f "$pkg_cache.$$" "$pkg_cache"
+    fi
+fi
 
 # palette, comma-joined, for the swatch strip.
 palette=""

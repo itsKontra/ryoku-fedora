@@ -68,7 +68,7 @@ free | awk '/Mem:/{print int($3/$2*100)}'
 df -h / | awk 'NR==2{print $3" / "$2}'
 df / | awk 'NR==2{print int($3/($3+$4)*100)}'
 awk '{h=int($1/3600); m=int(($1%3600)/60); print h"h "m"m"}' /proc/uptime
-rpm -qa --nodigest --nosignature 2>/dev/null | wc -l
+rpm -qa --nodigest --nosignature --qf '%{NAME}\n' 2>/dev/null | grep -vcx gpg-pubkey
 printf '%s\n' "$disp_res"
 printf '%s\n' "$disp_hz"
 echo "$codename"
