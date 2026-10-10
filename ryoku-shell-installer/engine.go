@@ -27,7 +27,7 @@ const defaultRepoURL = "https://github.com/itsKontra/ryoku-fedora.git"
 var repoURL = defaultRepoURL
 
 // devPkgs are the developer toolchains, the same Fedora names the ISO's
-// packages.list carries; ryoku recovery builds from source and needs golang.
+// packages.list carries.
 var devPkgs = []string{"golang", "rust", "cargo", "nodejs24-bin", "nodejs24-npm-bin", "python3-pip", "pipx"}
 
 var sparsePaths = []string{
@@ -468,13 +468,10 @@ func stepPayload(e *engine) error {
 		}
 	}
 	paths := append([]string{}, sparsePaths...)
-	sentinel := specPath(e.payload, "ryoku-desktop")
 	if e.fromSource() {
-		paths = []string{
-			"ryoku", "system", "bin", "ryoku-shell-installer", "release/rpm", "installation/fedora",
-		}
-		sentinel = packagesListPath(e.payload)
+		paths = []string{"ryoku", "system", "bin", "ryoku-shell-installer", "release/rpm"}
 	}
+	sentinel := specPath(e.payload, "ryoku-desktop")
 	if err := e.cmd(e.payload, nil, "git", append([]string{"sparse-checkout", "set"}, paths...)...); err != nil {
 		return err
 	}

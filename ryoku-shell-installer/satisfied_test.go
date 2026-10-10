@@ -30,7 +30,7 @@ func TestDropSatisfiedFedora(t *testing.T) {
 }
 
 func TestStepPackagesAllSatisfiedNoop(t *testing.T) {
-	dir := fakePayload(t, nil, nil)
+	dir := fakePayload(t, nil)
 	f := &facts{distro: &distro{id: "fedora", name: "Fedora", installCmd: []string{"fail-if-called"}, queryCmd: []string{"true"}}}
 	e := &engine{f: f, p: &plan{compositor: "hyprland"}, payload: dir, payloadOverride: dir, dry: false}
 	if err := stepPackages(e); err != nil {

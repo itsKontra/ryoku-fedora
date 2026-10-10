@@ -1,9 +1,12 @@
 package main
 
-// dependencies.go reads the Fedora package sets a source install needs from the
+// dependencies.go reads the Fedora packages a source install needs from the
 // payload: the hard Requires of the ryoku-desktop RPM and the chosen compositor
-// variant, and the desktop sections of the ISO's packages.list. They are the
-// lists the RPM and ISO installs read, so a source box cannot drift from either.
+// variant. It is the set a packaged install pulls, so a source box cannot drift
+// from one. The ISO's packages.list is not read: its extra sections (browsers,
+// containers, virtualisation, a firewall) are the ISO's choices for a fresh
+// machine, not desktop dependencies, and they collide with what an existing box
+// already runs (moby-engine against docker-ce).
 
 import (
 	"bufio"
@@ -16,17 +19,16 @@ import (
 	wm "ryoku-wm"
 )
 
-// desktopSections are the packages.list sections a converted box takes. [base],
-// [kernel] and [bootloader] compose the ISO's own OS; an existing box already
-// owns its base system and boot chain, and reinstalling them would rewrite it.
-var desktopSections = []string{"drivers", "utilities", "services", "multimedia", "desktop"}
+// bootChain are ryoku-desktop Requires a converted box must not get: it already
+// owns its initramfs, bootloader and snapshot stack (an ext4 root, systemd-boot),
+// and installing these would bring a second one alongside it. snapper goes in
+// only on a btrfs root, where ryoku doctor configures the snapshots it promises.
+var bootChain = map[string]bool{
+	"dracut": true, "grubby": true, "grub2-tools": true, "btrfs-progs": true, "snapper": true,
+}
 
 func specPath(payload, name string) string {
 	return filepath.Join(payload, "release/rpm", name+".spec")
-}
-
-func packagesListPath(payload string) string {
-	return filepath.Join(payload, "installation/fedora/packages.list")
 }
 
 func (e *engine) sourceDependencies() ([]string, error) {
@@ -34,15 +36,16 @@ func (e *engine) sourceDependencies() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	pkgs = slices.DeleteFunc(pkgs, func(p string) bool {
+		return bootChain[p] && !(p == "snapper" && e.f.btrfsRoot)
+	})
 	return uniq(append(pkgs, e.d().build...)), nil
 }
 
 // fedoraPackages is the distribution package set behind ryoku-desktop and the
 // chosen compositor. A source install builds every Ryoku package itself, so it
 // follows Requires through each first-party spec and keeps only what a
-// distribution repository supplies. From packages.list it leaves out the other
-// compositors' packages and the RPM Fusion release packages the ISO enables but
-// a converted box keeps its own say over.
+// distribution repository supplies.
 func fedoraPackages(payload, compositor string) ([]string, error) {
 	if !slices.Contains(wm.Providers(), compositor) {
 		return nil, fmt.Errorf("unknown compositor %q", compositor)
@@ -96,26 +99,6 @@ func fedoraPackages(payload, compositor string) ([]string, error) {
 			return nil, err
 		}
 	}
-
-	skip := map[string]bool{}
-	for _, other := range wm.Providers() {
-		if other != compositor {
-			for _, n := range specs["ryoku-desktop-"+other]["Requires"] {
-				skip[n] = true
-			}
-		}
-	}
-	sections, err := readPackagesList(packagesListPath(payload))
-	if err != nil {
-		return nil, err
-	}
-	for _, s := range desktopSections {
-		for _, p := range sections[s] {
-			if !own[p] && !skip[p] && !strings.HasSuffix(p, "-release") {
-				pkgs = append(pkgs, p)
-			}
-		}
-	}
 	return uniq(pkgs), nil
 }
 
@@ -142,34 +125,6 @@ func readSpecTags(path string) (map[string][]string, error) {
 		}
 	}
 	return tags, sc.Err()
-}
-
-// readPackagesList parses installation/fedora/packages.list into its [section]
-// sets: one package per line, '#' comments and blank lines dropped.
-func readPackagesList(path string) (map[string][]string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	sections := map[string][]string{}
-	section := ""
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := sc.Text()
-		if i := strings.IndexByte(line, '#'); i >= 0 {
-			line = line[:i]
-		}
-		line = strings.TrimSpace(line)
-		switch {
-		case line == "":
-		case strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]"):
-			section = strings.Trim(line, "[]")
-		case section != "":
-			sections[section] = append(sections[section], line)
-		}
-	}
-	return sections, sc.Err()
 }
 
 func uniq(pkgs []string) []string {

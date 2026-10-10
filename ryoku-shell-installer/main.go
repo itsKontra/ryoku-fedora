@@ -772,7 +772,7 @@ func main() {
 		if d == nil {
 			die("unsupported distribution (immutable Fedora derivatives are not supported)")
 		}
-		e := &engine{f: &facts{distro: d}, p: &plan{compositor: chooseCompositor(*compositor)}, payload: *payload}
+		e := &engine{f: &facts{distro: d, btrfsRoot: rootIsBtrfs()}, p: &plan{compositor: chooseCompositor(*compositor)}, payload: *payload}
 		pkgs, err := e.sourceDependencies()
 		if err != nil {
 			die(err.Error())

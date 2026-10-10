@@ -16,10 +16,11 @@ A source install builds the desktop from the cloned payload with
 `ryoku/shell/deploy.sh`. Its dnf dependencies are read from the payload, never
 kept here: the `Requires:` of `ryoku-desktop`, the chosen
 `ryoku-desktop-<compositor>` and every first-party spec they pull in
-(`release/rpm/`), plus the desktop sections of
-`installation/fedora/packages.list`, so a source box matches a packaged or ISO
-one. `ryoku recovery` installs the same list (`--dependency-list`). Other
-distributions are refused.
+(`release/rpm/`), so a source box gets what a packaged install gets. The box
+keeps its own boot chain: dracut, grubby, grub2-tools and btrfs-progs are left
+out, and snapper goes in only on a btrfs root. The ISO's extra applications in
+`installation/fedora/packages.list` are not installed. `ryoku recovery`
+installs the same list (`--dependency-list`). Other distributions are refused.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/ryoku-shell-installer/install.sh | bash

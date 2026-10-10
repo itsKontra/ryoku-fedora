@@ -196,10 +196,7 @@ func detect() *facts {
 		f.online = resp.StatusCode < 500
 	}
 
-	var st syscall.Statfs_t
-	if syscall.Statfs("/", &st) == nil {
-		f.btrfsRoot = st.Type == 0x9123683e
-	}
+	f.btrfsRoot = rootIsBtrfs()
 
 	f.detectGPUs()
 	f.detectUcode()
@@ -397,4 +394,9 @@ func (f *facts) otherDM() string {
 		return f.currentDM
 	}
 	return ""
+}
+
+func rootIsBtrfs() bool {
+	var st syscall.Statfs_t
+	return syscall.Statfs("/", &st) == nil && st.Type == 0x9123683e
 }
