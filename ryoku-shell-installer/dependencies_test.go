@@ -130,6 +130,7 @@ func TestReadSpecTags(t *testing.T) {
 		"Requires:       a, b >= 1.2 c\n" +
 		"Requires:       %{name}-common = %{version}-%{release}\n" +
 		"Requires(post): d\n" +
+		"Recommends:     e\n" +
 		"BuildRequires:  (e or f)\n" +
 		"%if 0%{?fedora}\n%global x 1\n%endif\n" +
 		"%description\nnot a Requires: tag\n"))
@@ -139,6 +140,9 @@ func TestReadSpecTags(t *testing.T) {
 	if got, want := strings.Join(tags["Requires"], " "), "a b c ryoku-x-common d"; got != want {
 		t.Fatalf("Requires = %q, want %q", got, want)
 	}
+	if got := strings.Join(tags["Recommends"], " "); got != "e" {
+		t.Fatalf("Recommends = %q, want e", got)
+	}
 	for name, body := range map[string]string{
 		"rich dependency":     "Requires: (pipewire-pulseaudio or pulseaudio)\n",
 		"unknown macro":       "Requires: %{python3_pkgversion}-foo\n",
@@ -147,6 +151,21 @@ func TestReadSpecTags(t *testing.T) {
 	} {
 		if _, err := readSpecTags(write(body)); err == nil {
 			t.Errorf("%s: must fail, not install a guessed set", name)
+		}
+	}
+}
+
+// A packaged install excludes the boot chain the box does not already have, and
+// never an installed package, which would hide it from the solver.
+func TestBootChainExcludes(t *testing.T) {
+	stubCapabilities(t, "dracut", "grub2-tools")
+	for btrfs, want := range map[bool]string{
+		false: "--exclude=btrfs-progs,grubby,snapper",
+		true:  "--exclude=btrfs-progs,grubby",
+	} {
+		e := &engine{f: &facts{distro: fedoraLinux, btrfsRoot: btrfs}}
+		if got := strings.Join(e.bootChainExcludes(), " "); got != want {
+			t.Errorf("btrfs=%v: excludes = %q, want %q", btrfs, got, want)
 		}
 	}
 }

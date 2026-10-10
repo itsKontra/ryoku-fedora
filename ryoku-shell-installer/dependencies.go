@@ -1,8 +1,8 @@
 package main
 
 // dependencies.go reads the Fedora packages a source install needs from the
-// payload: the hard Requires of the ryoku-desktop RPM and the chosen compositor
-// variant. It is the set a packaged install pulls, so a source box cannot drift
+// payload: the Requires and Recommends of the ryoku-desktop RPM and the chosen
+// compositor variant. It is the set a packaged install pulls, so a source box cannot drift
 // from one. The ISO's packages.list is not read: its extra sections (browsers,
 // containers, virtualisation, a firewall) are the ISO's choices for a fresh
 // machine, not desktop dependencies, and they collide with what an existing box
@@ -20,12 +20,39 @@ import (
 	wm "ryoku-wm"
 )
 
-// bootChain are ryoku-desktop Requires a converted box must not get: it already
-// owns its initramfs, bootloader and snapshot stack (an ext4 root, systemd-boot),
-// and installing these would bring a second one alongside it. snapper goes in
-// only on a btrfs root, where ryoku doctor configures the snapshots it promises.
+// bootChain are ryoku-desktop Recommends a converted box must not get: it
+// already owns its initramfs, bootloader and snapshot stack (an ext4 root,
+// systemd-boot), and installing these would bring a second one alongside it.
+// snapper goes in only on a btrfs root, where ryoku doctor configures the
+// snapshots it promises.
 var bootChain = map[string]bool{
 	"dracut": true, "grubby": true, "grub2-tools": true, "btrfs-progs": true, "snapper": true,
+}
+
+func (e *engine) skipsBootChain(p string) bool {
+	return bootChain[p] && !(p == "snapper" && e.f.btrfsRoot)
+}
+
+// bootChainExcludes keeps the boot chain out of a packaged dnf install, the way
+// sourceDependencies keeps it out of a source one. Only what is not installed
+// is excluded: excluding an installed package would hide it from the solver
+// and break whatever already depends on it.
+func (e *engine) bootChainExcludes() []string {
+	provided, err := installedCapabilities()
+	if e.dry || err != nil {
+		return nil
+	}
+	var skip []string
+	for p := range bootChain {
+		if e.skipsBootChain(p) && !provided(p) {
+			skip = append(skip, p)
+		}
+	}
+	if len(skip) == 0 {
+		return nil
+	}
+	slices.Sort(skip)
+	return []string{"--exclude=" + strings.Join(skip, ",")}
 }
 
 func specPath(payload, name string) string {
@@ -37,16 +64,15 @@ func (e *engine) sourceDependencies() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	pkgs = slices.DeleteFunc(pkgs, func(p string) bool {
-		return bootChain[p] && !(p == "snapper" && e.f.btrfsRoot)
-	})
+	pkgs = slices.DeleteFunc(pkgs, e.skipsBootChain)
 	return uniq(append(pkgs, e.d().build...)), nil
 }
 
 // fedoraPackages is the distribution package set behind ryoku-desktop and the
 // chosen compositor. A source install builds every Ryoku package itself, so it
-// follows Requires through each first-party spec and keeps only what a
-// distribution repository supplies.
+// follows Requires and Recommends through each first-party spec, as dnf does
+// with weak dependencies on, and keeps only what a distribution repository
+// supplies.
 func fedoraPackages(payload, compositor string) ([]string, error) {
 	if !slices.Contains(wm.Providers(), compositor) {
 		return nil, fmt.Errorf("unknown compositor %q", compositor)
@@ -83,7 +109,7 @@ func fedoraPackages(payload, compositor string) ([]string, error) {
 		if !ok {
 			return fmt.Errorf("release/rpm has no %s.spec", name)
 		}
-		for _, r := range tags["Requires"] {
+		for _, r := range append(tags["Requires"], tags["Recommends"]...) {
 			switch {
 			case specs[r] != nil:
 				if err := walk(r); err != nil {
@@ -103,8 +129,8 @@ func fedoraPackages(payload, compositor string) ([]string, error) {
 	return uniq(pkgs), nil
 }
 
-// readSpecTags collects the package names of every Name, Provides and Requires
-// line in an RPM spec, dropping version constraints. It reads plain dependency
+// readSpecTags collects the package names of every Name, Provides, Requires and
+// Recommends line in an RPM spec, dropping version constraints. It reads plain dependency
 // lists only and refuses what it cannot evaluate (rich dependencies, macros
 // other than %{name}, conditionals, sub-packages) rather than hand dnf a
 // mangled name or silently install the wrong set.
@@ -139,7 +165,7 @@ func readSpecTags(path string) (map[string][]string, error) {
 		}
 		tag, _, _ = strings.Cut(tag, "(") // Requires(post) is still a Requires
 		switch tag {
-		case "Name", "Provides", "Requires":
+		case "Name", "Provides", "Requires", "Recommends":
 		default:
 			continue
 		}

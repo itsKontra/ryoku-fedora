@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -685,7 +686,11 @@ func stepPackages(e *engine) error {
 	if len(pkgs) == 0 {
 		return nil
 	}
-	return e.sudo(d.installArgs(pkgs)...)
+	args := d.installArgs(pkgs)
+	if !e.fromSource() {
+		args = slices.Insert(args, len(d.installCmd), e.bootChainExcludes()...)
+	}
+	return e.sudo(args...)
 }
 
 // dropSatisfied keeps only what no installed package or provider satisfies, so
