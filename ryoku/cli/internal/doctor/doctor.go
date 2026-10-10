@@ -594,13 +594,13 @@ func reconcileSnapper(checkOnly bool) recResult {
 				}
 				if len(other) > 0 {
 					return warnRes("updated %s with root, but remaining issues: %s", confPath, strings.Join(other, "; ")).
-						withFix("see https://wiki.archlinux.org/title/Snapper")
+						withFix("see man snapper-configs")
 				}
 				return fixedRes("registered root config in %s", confPath)
 			}
 		}
 		return warnRes("%s", strings.Join(problems, "; ")).
-			withFix(i18n.T("see https://wiki.archlinux.org/title/Snapper"))
+			withFix(i18n.T("see man snapper-configs"))
 	}
 	return okRes(i18n.T("snapper root config is consistent"))
 }
@@ -2545,9 +2545,9 @@ func expandTilde(p string) string {
 }
 
 // reconcileFastfetchEmblem keeps the branded fastfetch readout off the stock
-// Arch logo. config.jsonc draws a kitty-direct logo from an image file; when
+// Fedora logo. config.jsonc draws a kitty-direct logo from an image file; when
 // that file is missing fastfetch SILENTLY drops to its built-in distro logo
-// (empty stderr), so the terminal greets with Arch instead of the Ryoku emblem.
+// (empty stderr), so the terminal greets with Fedora instead of the Ryoku emblem.
 // the emblem now materializes into the config dir beside config.jsonc, but a box
 // that updated before that shipped points config.jsonc at an emblem it never
 // received. restore it from the packaged base config tree, the same file
@@ -2569,17 +2569,17 @@ func reconcileFastfetchEmblem(checkOnly bool) recResult {
 	// pre-fix package, where the cure is to pull it first.
 	base := filepath.Join(sys.BaseConfigDir(), "fastfetch", fastfetchEmblem)
 	if !sys.Exists(base) {
-		return warnRes(i18n.T("fastfetch emblem missing (%s); the readout shows the Arch logo"), dst).
+		return warnRes(i18n.T("fastfetch emblem missing (%s); the readout shows the Fedora logo"), dst).
 			withFix("ryoku update")
 	}
 	if checkOnly {
-		return wouldRes(i18n.T("fastfetch emblem missing (%s); the readout shows the Arch logo"), dst).
+		return wouldRes(i18n.T("fastfetch emblem missing (%s); the readout shows the Fedora logo"), dst).
 			withFix("ryoku materialize")
 	}
 	if err := sys.CopyFile(base, dst); err != nil {
 		return failRes(i18n.T("could not restore fastfetch emblem: %v"), err).withFix("ryoku materialize")
 	}
-	return fixedRes(i18n.T("restored the fastfetch emblem; the readout no longer falls back to the Arch logo"))
+	return fixedRes(i18n.T("restored the fastfetch emblem; the readout no longer falls back to the Fedora logo"))
 }
 
 // ---- reconciler: fastfetch OS line -------------------------------------------

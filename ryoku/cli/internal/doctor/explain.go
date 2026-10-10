@@ -40,7 +40,7 @@ func aiSystemPrompt() string {
 	if n := wm.Detect().Name; n != "" {
 		comp = "the " + n + " Wayland compositor"
 	}
-	return "You are the diagnostic brain for Ryoku, an Arch-based Linux distro running " + comp +
+	return "You are the diagnostic brain for Ryoku, a Fedora-based Linux distro running " + comp +
 		" (btrfs root with snapper; the `ryoku` CLI manages updates, snapshots, and " +
 		"config). You are given a `ryoku doctor` report: deterministic findings plus system state (btrfs, " +
 		"packages, services, journal errors, and hardware: GPU and backlight). Name the single most likely root " +
