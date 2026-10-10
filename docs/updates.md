@@ -85,6 +85,12 @@ label, a live log tail, and, on failure, the error and the pre-update snapshot),
 so the update island and the Hub's Updates page render a determinate run and a
 one-click rollback.
 
+A dnf transaction outside `ryoku update` gets its own snapper pair from the
+`ryoku` package's libdnf5 actions hook (`system/snapshots/`). While an update
+holds its pair open it writes its pid to `/run/ryoku/update-snapshot`, and the
+hook stays out of the way until that process is gone, so an update never nests
+a second pair inside its own.
+
 The metadata refresh happens before the set is read, so the update only ever
 asks for packages the repository serves now; the transaction is restricted to
 `--repo=RyokuCOPR`, so dnf takes our build of a name that also exists in the
@@ -106,20 +112,12 @@ runs `ryoku boot-guard` as root early in every boot, before the display
 manager, and only while that marker exists. The shell daemon records a good
 boot once the shell has stayed up 45 s (`/var/lib/ryoku/boot/ok-<uid>`, the boot
 id); a record from any boot other than the one the update ran in disarms the
-guard. Without one, the boot counts: on the second, the guard tracks the
-previous release back (`ryoku track <from>`, then an explicit
-reinstall of `ryoku-desktop`; the Ryoku set only, the base system untouched),
-re-materializes every user's config from it, and leaves
-a notice `ryoku doctor` shows once. On a third it turns to the pre-update
-snapshot, for the case where the packages were not what broke: under Limine it
-makes that snapshot's entry the default; on Fedora it sends the next boot, once,
-to the snapshot's read-only look entry in the GRUB menu (`grub2-reboot`), never
-to an unattended restore. The notice then says to run `ryoku rollback <id>`
-there to keep it.
-
-The second step is still the Arch build's: it runs pacman. Fedora has one
-rolling COPR channel with no release tags to track back to, so on a Fedora box
-that step fails and the guard moves on to the snapshot on the next boot.
+guard. Without one, the boot counts: on the third, it sends the next boot,
+once, to the pre-update snapshot's read-only look entry in the GRUB menu
+(`grub2-reboot`), never to an unattended restore, and leaves a notice
+`ryoku doctor` shows once. The notice says to run `ryoku rollback <id>` there
+to keep it. Fedora has one rolling COPR channel with no release tags to track
+back to, so the snapshot is the only fallback.
 `sudo ryoku boot-guard --disarm` clears a marker by hand. The `ryoku`
 package ships the unit and its tmpfiles entry; the doctor enables the unit and
 prepares the record directory on every update, so boxes installed before it get

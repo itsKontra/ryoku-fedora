@@ -159,7 +159,7 @@ func Update(args []string) error {
 	}
 
 	progress.at("packages")
-	// the release this box runs before pacman moves it; stage2 (the new
+	// the release this box runs before dnf moves it; stage2 (the new
 	// binary) reads it from the environment to arm the boot guard.
 	if from := sys.ReadRelease().Release; from != "" {
 		os.Setenv("RYOKU_UPDATE_FROM", from)
