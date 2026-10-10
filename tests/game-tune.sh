@@ -4,7 +4,7 @@
 # no real knob is touched and no root is needed. covers:
 #   - every tunable present is moved to its play value
 #   - a tunable the running kernel does not expose is skipped, not an error
-#     (this is what lets one toggle serve both the Arch and CachyOS kernels)
+#     (this is what lets one toggle serve every kernel build)
 #   - deep idle states are chosen by exit cost, so a cheap state is left enabled
 #   - restore puts back the exact prior values, not defaults
 #   - apply is idempotent: a second apply must not record the tuned values as the
@@ -80,7 +80,7 @@ want "$proc/vm/swappiness" 55 "swappiness prior value not restored"
 want "$proc/vm/swappiness" 55 "a no-op restore changed a value"
 
 # --- a kernel exposing the extra knob gets it tuned too ---------------------
-# (the CachyOS side of "one toggle, more levers where they exist")
+# ("one toggle, more levers where they exist")
 echo 1 >"$proc/kernel/sched_energy_aware"
 "$tune" apply
 want "$proc/kernel/sched_energy_aware" 0 "did not tune a knob the kernel does expose"

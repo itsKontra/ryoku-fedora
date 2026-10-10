@@ -1,7 +1,6 @@
 name: Snapshot cleanup
 
-# Snapshots piled up unbounded when snapper-cleanup never ran (its service is
-# coupled to limine-snapper-sync, which fails on a mismatched boot menu).
+# Snapshots piled up unbounded when snapper-cleanup never ran.
 # tests/snapshot-cleanup.sh drives REAL snapper on a loop-device btrfs: it
 # reproduces the runaway pile, proves `snapper cleanup number` bounds it to
 # NUMBER_LIMIT, and proves the doctor drain removes leaked timeline snapshots

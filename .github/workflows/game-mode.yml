@@ -9,7 +9,7 @@ name: Game mode
 #
 # game-tune.sh covers the privileged half against a fake /proc and cpuidle tree:
 # that every knob the kernel exposes is moved and every absent one skipped (which
-# is what lets one toggle serve both the Arch and CachyOS kernels), that deep idle
+# is what lets one toggle serve every kernel build), that deep idle
 # states are picked by exit cost so cheap ones stay enabled, that restore replays
 # the exact prior values rather than defaults, and that a second apply cannot
 # record the tuned values as the originals.

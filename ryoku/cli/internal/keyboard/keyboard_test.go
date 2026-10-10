@@ -131,25 +131,26 @@ func touch(t *testing.T, path string, when time.Time) {
 	}
 }
 
-// A fallback image is regenerated on its own schedule, so it must never be the
-// image freshness is judged against.
-func TestBootImageTimeIgnoresFallback(t *testing.T) {
+// The dracut rescue image is regenerated on its own schedule, so it must never
+// be the image freshness is judged against.
+func TestBootImageTimeIgnoresRescue(t *testing.T) {
 	dir := t.TempDir()
 	base := time.Now().Add(-2 * time.Hour)
-	touch(t, filepath.Join(dir, "ryoku_linux.efi"), base)
-	touch(t, filepath.Join(dir, "ryoku_linux-cachyos.efi"), base.Add(30*time.Minute))
-	touch(t, filepath.Join(dir, "initramfs-linux-fallback.img"), base.Add(90*time.Minute))
+	uki := "0123456789abcdef-6.18.0-200.fc44.x86_64.efi"
+	touch(t, filepath.Join(dir, "initramfs-6.17.1-300.fc44.x86_64.img"), base)
+	touch(t, filepath.Join(dir, uki), base.Add(30*time.Minute))
+	touch(t, filepath.Join(dir, "initramfs-0-rescue-0123456789abcdef.img"), base.Add(90*time.Minute))
 
 	orig := BootImageGlobs
 	BootImageGlobs = []string{filepath.Join(dir, "*.efi"), filepath.Join(dir, "initramfs-*.img")}
 	t.Cleanup(func() { BootImageGlobs = orig })
 
 	when, which := BootImageTime()
-	if filepath.Base(which) != "ryoku_linux-cachyos.efi" {
-		t.Errorf("picked %q, want the newest non-fallback image", filepath.Base(which))
+	if filepath.Base(which) != uki {
+		t.Errorf("picked %q, want the newest non-rescue image", filepath.Base(which))
 	}
 	if !when.Equal(base.Add(30 * time.Minute)) {
-		t.Errorf("time = %v, want the newest non-fallback mtime", when)
+		t.Errorf("time = %v, want the newest non-rescue mtime", when)
 	}
 }
 
@@ -158,13 +159,13 @@ func TestBootImageTimeIgnoresFallback(t *testing.T) {
 func TestBootStaleWhenVconsoleIsNewer(t *testing.T) {
 	dir := t.TempDir()
 	base := time.Now().Add(-time.Hour)
-	img := filepath.Join(dir, "ryoku_linux.efi")
+	img := filepath.Join(dir, "initramfs-6.17.1-300.fc44.x86_64.img")
 	vc := filepath.Join(dir, "vconsole.conf")
 	touch(t, img, base)
 	touch(t, vc, base.Add(10*time.Minute))
 
 	origG, origV := BootImageGlobs, VconsolePath
-	BootImageGlobs = []string{filepath.Join(dir, "*.efi")}
+	BootImageGlobs = []string{filepath.Join(dir, "initramfs-*.img")}
 	VconsolePath = vc
 	t.Cleanup(func() { BootImageGlobs, VconsolePath = origG, origV })
 
@@ -172,7 +173,7 @@ func TestBootStaleWhenVconsoleIsNewer(t *testing.T) {
 	if !stale {
 		t.Error("a boot image older than vconsole.conf must read as stale")
 	}
-	if filepath.Base(got) != "ryoku_linux.efi" {
+	if filepath.Base(got) != "initramfs-6.17.1-300.fc44.x86_64.img" {
 		t.Errorf("image = %q", got)
 	}
 
@@ -189,7 +190,7 @@ func TestBootStaleWhenVconsoleIsNewer(t *testing.T) {
 func TestReadReportsDriftOnAFrenchBox(t *testing.T) {
 	dir := t.TempDir()
 	base := time.Now().Add(-time.Hour)
-	img := filepath.Join(dir, "ryoku_linux.efi")
+	img := filepath.Join(dir, "initramfs-6.17.1-300.fc44.x86_64.img")
 	vc := filepath.Join(dir, "vconsole.conf")
 	x11 := filepath.Join(dir, "00-keyboard.conf")
 	touch(t, img, base)
@@ -204,7 +205,7 @@ func TestReadReportsDriftOnAFrenchBox(t *testing.T) {
 	}
 
 	og, ov, ox := BootImageGlobs, VconsolePath, X11Path
-	BootImageGlobs = []string{filepath.Join(dir, "*.efi")}
+	BootImageGlobs = []string{filepath.Join(dir, "initramfs-*.img")}
 	VconsolePath, X11Path = vc, x11
 	t.Cleanup(func() { BootImageGlobs, VconsolePath, X11Path = og, ov, ox })
 

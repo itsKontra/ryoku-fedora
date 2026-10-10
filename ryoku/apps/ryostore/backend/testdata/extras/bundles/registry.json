@@ -5,7 +5,7 @@
       "id": "demo",
       "name": "Demo",
       "description": "A demo bundle.",
-      "sources": "pacman / script",
+      "sources": "dnf / script",
       "preview": "assets/hero.png",
       "screenshots": ["assets/a.png", "https://cdn.example/b.png"],
       "path": "bundles/demo",

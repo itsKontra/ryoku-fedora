@@ -4,7 +4,7 @@
 # commands, optional-tier items are skipped in a whole-bundle install, and a
 # plugin install places the plugin without enabling it (install never activates).
 # The actuator prepends $HOME/.local/bin to PATH, so the fakes live there and
-# HOME is a temp dir; no network, no pacman, no real shell, no real ryostore.
+# HOME is a temp dir; no network, no dnf, no real shell, no real ryostore.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$here/.."
@@ -63,12 +63,6 @@ case "\$1 \$2" in
     esac ;;
 esac
 exit 0
-EOF
-
-# fake pacman: nothing installed, nothing official -> packages route to the AUR.
-cat >"$bin/pacman" <<'EOF'
-#!/usr/bin/env bash
-exit 1
 EOF
 
 chmod +x "$bin"/*

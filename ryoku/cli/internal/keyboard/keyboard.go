@@ -194,15 +194,16 @@ func SystemLocale() string {
 // BootImageGlobs is a package var so a test can point it at a temp dir.
 var BootImageGlobs = []string{"/boot/EFI/Linux/*.efi", "/boot/initramfs-*.img"}
 
-// BootImageTime is the newest non-fallback boot image and its mtime. A fallback
-// image is regenerated on its own schedule, so it never speaks for freshness.
+// BootImageTime is the newest non-rescue boot image and its mtime. dracut's
+// rescue image is regenerated on its own schedule, so it never speaks for
+// freshness.
 func BootImageTime() (time.Time, string) {
 	var newest time.Time
 	var which string
 	for _, g := range BootImageGlobs {
 		paths, _ := filepath.Glob(g)
 		for _, p := range paths {
-			if strings.Contains(p, "fallback") {
+			if strings.Contains(filepath.Base(p), "-rescue-") {
 				continue
 			}
 			fi, err := os.Stat(p)
