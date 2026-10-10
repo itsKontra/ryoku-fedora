@@ -8,18 +8,10 @@
 #   main          build from the stable branch
 #   unstable-dev  build from the bleeding edge (at your own risk)
 #
-#   curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-track | bash -s -- unstable-dev
+#   curl -fsSL https://raw.githubusercontent.com/itsKontra/ryoku-fedora/main/bin/ryoku-track | bash -s -- unstable-dev
 set -euo pipefail
 
-if [[ -z ${1:-} ]]; then
-  if command -v dnf >/dev/null 2>&1; then
-    CHANNEL="main"
-  else
-    CHANNEL="unstable-dev"
-  fi
-else
-  CHANNEL="$1"
-fi
+CHANNEL="${1:-main}"
 case "$CHANNEL" in
   main | unstable-dev) ;;
   -h | --help)
@@ -30,12 +22,8 @@ case "$CHANNEL" in
   *) echo "ryoku-track: unknown channel '$CHANNEL' (use: main or unstable-dev)" >&2; exit 1 ;;
 esac
 
-REPO="$HOME/ryoku-arch"
-REPO_URL="${RYOKU_TRACK_URL:-https://github.com/ryoku-dev/ryoku-arch.git}"
-if command -v dnf >/dev/null 2>&1 || [[ -d $HOME/ryoku-fedora ]]; then
-  REPO="$HOME/ryoku-fedora"
-  REPO_URL="${RYOKU_TRACK_URL:-https://github.com/itsKontra/ryoku-fedora.git}"
-fi
+REPO="$HOME/ryoku-fedora"
+REPO_URL="${RYOKU_TRACK_URL:-https://github.com/itsKontra/ryoku-fedora.git}"
 say() { printf '\n==> %s\n' "$*"; }
 
 if [[ $CHANNEL == unstable-dev ]]; then
@@ -45,21 +33,17 @@ else
 fi
 
 say "Installing build tools and matugen"
-if command -v pacman >/dev/null 2>&1; then
-  sudo pacman -S --needed --noconfirm git go cmake ninja qt6-shadertools wayland base-devel matugen
-elif command -v dnf >/dev/null 2>&1; then
-  sudo dnf install -y git golang cmake ninja-build qt6-qtshadertools-devel wayland-devel gcc-c++ matugen
-fi
+sudo dnf install -y git golang cmake ninja-build qt6-qtshadertools-devel wayland-devel gcc-c++ matugen
 
 say "Fetching the Ryoku source ($CHANNEL) into $REPO"
 if [[ -d $REPO/.git ]]; then
-  # Never hijack an unrelated repo that happens to sit at ~/ryoku-arch: the reset
-  # below is destructive, so bail unless origin already points at a ryoku-arch
-  # remote (an official clone or a fork).
+  # Never hijack an unrelated repo that happens to sit at ~/ryoku-fedora: the
+  # reset below is destructive, so bail unless origin already points at a
+  # ryoku-fedora remote (an official clone or a fork).
   cur=$(git -C "$REPO" remote get-url origin 2>/dev/null || true)
   case "$cur" in
-    *ryoku-arch*) ;;
-    *) echo "ryoku-track: $REPO is a git repo but its origin ($cur) is not ryoku-arch; move it aside and re-run." >&2; exit 1 ;;
+    *ryoku-fedora*) ;;
+    *) echo "ryoku-track: $REPO is a git repo but its origin ($cur) is not ryoku-fedora; move it aside and re-run." >&2; exit 1 ;;
   esac
   git -C "$REPO" remote set-url origin "$REPO_URL" 2>/dev/null || true
   git -C "$REPO" fetch origin "$CHANNEL"

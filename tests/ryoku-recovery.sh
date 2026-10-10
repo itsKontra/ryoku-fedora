@@ -10,7 +10,7 @@
 # in place onto main, consolidating the retired data-root checkouts beside it
 # so the update loop cannot re-strand the box.
 #
-# case 2 is the clean box with no prior checkout: clones ~/ryoku-arch clean.
+# case 2 is the clean box with no prior checkout: clones ~/ryoku-fedora clean.
 #
 # case 3 is a recorded source installation pointing at a fork/ref: recovery
 # preserves the user's recorded remote and branch instead of forcing upstream main.
@@ -38,13 +38,12 @@ git_q() { git -c init.defaultBranch=main -c user.name=t -c user.email=t@t -c adv
 origin="$work/origin.git"
 seed="$work/seed"
 git_q init -q "$seed"
-mkdir -p "$seed/ryoku/shell" "$seed/system/packages"
+mkdir -p "$seed/ryoku/shell"
 cat >"$seed/ryoku/shell/deploy.sh" <<'EOF'
 #!/usr/bin/env bash
 printf 'deployed-from %s\n' "$(cd "$(dirname "$0")/../.." && pwd -P)" >"${RYOKU_TEST_MARKER:?}"
 EOF
 chmod +x "$seed/ryoku/shell/deploy.sh"
-echo "# packages" >"$seed/system/packages/base.packages"
 git_q -C "$seed" add -A
 git_q -C "$seed" commit -qm "main seed"
 git_q -C "$seed" checkout -q -b unstable-dev
@@ -66,26 +65,24 @@ check() {
 absent() { if [[ ! -e $1 && ! -L $1 ]]; then echo "  ok: $2"; else echo "::error::FAIL: $2" >&2; fail=1; fi; }
 present() { if [[ -e $1 || -L $1 ]]; then echo "  ok: $2"; else echo "::error::FAIL: $2" >&2; fail=1; fi; }
 
-# case 1: the box's tracked checkout (~/ryoku-arch, what `ryoku track` clones
+# case 1: the box's tracked checkout (~/ryoku-fedora, what `ryoku track` clones
 # and sys.ResolveRepo tracks) is stranded on unstable-dev while RYOKU_CHANNEL is
 # leaked to unstable-dev, and retired data-root checkouts still sit beside it.
-# recovery must drag ~/ryoku-arch back to main in place and consolidate the
+# recovery must drag ~/ryoku-fedora back to main in place and consolidate the
 # stray data-root trees so `ryoku update` can never re-strand the box.
 home1="$work/home1"
-checkout_name=ryoku-arch
-if command -v dnf >/dev/null 2>&1; then checkout_name=ryoku-fedora; fi
-arch1="$home1/$checkout_name"
+checkout1="$home1/ryoku-fedora"
 data1="$home1/.local/share/ryoku"
 mkdir -p "$home1/.local/lib" "$data1"
-git_q clone -q "$origin" "$arch1"
-git_q -C "$arch1" checkout -q unstable-dev
+git_q clone -q "$origin" "$checkout1"
+git_q -C "$checkout1" checkout -q unstable-dev
 # the old updater stash-pops before switching = tree can land dirty or
 # conflicted. dirty it on purpose so the test proves the rescue forces past.
-echo "stray local edit" >>"$arch1/system/packages/base.packages"
-echo "stray" >"$arch1/stray-untracked"
-ln -s "$arch1/lib/runtime-env.sh" "$home1/.local/lib/runtime-env.sh" # dangling bridge
+echo "stray local edit" >>"$checkout1/ryoku/shell/deploy.sh"
+echo "stray" >"$checkout1/stray-untracked"
+ln -s "$checkout1/lib/runtime-env.sh" "$home1/.local/lib/runtime-env.sh" # dangling bridge
 # retired data-root checkouts the pre-rewrite ISO left behind; recovery drops
-# them so only ~/ryoku-arch remains for update and recovery to track.
+# them so only ~/ryoku-fedora remains for update and recovery to track.
 git_q clone -q "$origin" "$data1/repo"
 mkdir -p "$data1/dev-switch"
 # an unrelated checkout the box keeps under its data root. consolidation is
@@ -100,30 +97,30 @@ HOME="$home1" XDG_DATA_HOME="$home1/.local/share" \
   RYOKU_RECOVERY_FORCE=1 RYOKU_TEST_MARKER="$work/marker1" \
   "$RECOVERY" --yes --no-packages >/dev/null
 
-check "$(git_q -C "$arch1" rev-parse --abbrev-ref HEAD)" "main" \
+check "$(git_q -C "$checkout1" rev-parse --abbrev-ref HEAD)" "main" \
   "tracked checkout repaired in place onto main despite RYOKU_CHANNEL=unstable-dev"
-check "$(sed -n 's/^deployed-from //p' "$work/marker1" 2>/dev/null)" "$(cd "$arch1" && pwd -P)" \
+check "$(sed -n 's/^deployed-from //p' "$work/marker1" 2>/dev/null)" "$(cd "$checkout1" && pwd -P)" \
   "deploy ran from the repaired in-place checkout"
-absent "$arch1/UNSTABLE_MARKER" "unstable-dev content cleaned from the checkout"
+absent "$checkout1/UNSTABLE_MARKER" "unstable-dev content cleaned from the checkout"
 absent "$home1/.local/lib/runtime-env.sh" "dangling pre-rewrite runtime-env bridge removed"
-check "$(git_q -C "$arch1" status --porcelain)" "" \
+check "$(git_q -C "$checkout1" status --porcelain)" "" \
   "rescue forces a dirty stranded checkout clean"
 absent "$data1/repo" "retired data-root checkout consolidated away"
 absent "$data1/dev-switch" "retired dev-switch checkout consolidated away"
 present "$data1/keep/.git" "unrelated data-root checkout preserved (consolidation is scoped, not a data-root wipe)"
 check "$(git_q -C "$data1/keep" rev-parse --abbrev-ref HEAD)" "unstable-dev" \
-  "preserved checkout left untouched (recovery resets only the tracked ~/ryoku-arch)"
+  "preserved checkout left untouched (recovery resets only the tracked ~/ryoku-fedora)"
 
-# case 2: clean machine, no prior checkout. clones ~/ryoku-arch on main.
+# case 2: clean machine, no prior checkout. clones ~/ryoku-fedora on main.
 home2="$work/home2"
-arch2="$home2/$checkout_name"
+checkout2="$home2/ryoku-fedora"
 HOME="$home2" XDG_DATA_HOME="$home2/.local/share" \
   XDG_STATE_HOME="$home2/.local/state" XDG_CONFIG_HOME="$home2/.config" \
   RYOKU_RECOVERY_URL="$origin" RYOKU_CHANNEL="unstable-dev" \
   RYOKU_RECOVERY_FORCE=1 RYOKU_TEST_MARKER="$work/marker2" \
   "$RECOVERY" --yes --no-packages >/dev/null
 
-check "$(git_q -C "$arch2" rev-parse --abbrev-ref HEAD)" "main" \
+check "$(git_q -C "$checkout2" rev-parse --abbrev-ref HEAD)" "main" \
   "clean machine clones the distro checkout on main"
 
 # A recorded source installation follows its own fork/ref, including recovery.
@@ -143,10 +140,9 @@ check "$(git_q -C "$repo3" rev-parse --abbrev-ref HEAD)" "unstable-dev" \
 check "$(git_q -C "$repo3" remote get-url origin)" "$origin" \
   "source recovery preserves the recorded origin"
 
-if command -v dnf >/dev/null 2>&1 && ! command -v pacman >/dev/null 2>&1; then
 # Dependency resolution/repair failure must precede the destructive reset.
-# This fixture uses a missing dependency resolver directory and never invokes
-# a package manager, so it is safe on any test host.
+# Without dnf, or with dnf and no dependency resolver directory, recovery stops
+# before any package manager runs, so this is safe on any test host.
 home4="$work/home4"
 mkdir -p "$home4/.config/ryoku/user_edits"
 printf 'keep me\n' > "$home4/.config/ryoku/user_edits/keep"
@@ -161,16 +157,13 @@ fi
 present "$home4/.config/ryoku/user_edits/keep" "failed repair preserves user configuration"
 absent "$work/marker4" "failed repair never deploys"
 
-fi
-
 # Package detection must use dnf even when rpm is unavailable.
 cat > "$work/fakebin/dnf" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$*" > "$RYOKU_DNF_QUERY"
 [ "$*" = '-q list --installed ryoku-desktop' ]
 EOF
-printf '#!/bin/sh\nexit 1\n' > "$work/fakebin/pacman"
-chmod +x "$work/fakebin/dnf" "$work/fakebin/pacman"
+chmod +x "$work/fakebin/dnf"
 home5="$work/home5"
 state5="$home5/.local/state/ryoku"
 mkdir -p "$state5"
