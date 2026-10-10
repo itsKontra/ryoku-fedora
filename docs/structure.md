@@ -158,8 +158,7 @@ System-level definition installed into the target.
 - `extras/` the helpers behind the Hub's Extras section, shipped to `/usr/bin` by
   `ryoku-desktop`: `ryostore-install` (installs, removes, and reports the
   optional bundles from the `ryostore` catalogue), the `ryoku-pkg-*` routing
-  wrappers (repo, remove, multilib, and the legacy AUR name, which routes to
-  dnf on Fedora), and `ryoku-cmd-present`.
+  wrappers (add, remove, multilib), and `ryoku-cmd-present`.
 - `packages/` the package manifests used to define and audit the desktop and
   hardware package closure.
 - `bootmenu/` the GRUB boot menu, shipped by `ryoku-desktop`: the Ryoku theme
