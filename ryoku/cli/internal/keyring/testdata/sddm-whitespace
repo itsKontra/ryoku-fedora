@@ -1,0 +1,6 @@
+#%PAM-1.0
+  Auth	Substack	password-auth  	
+auth        include       postlogin
+# session include password-auth
+-Session    INCLUDE       password-auth	
+session     include       postlogin

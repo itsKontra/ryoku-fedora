@@ -1,0 +1,8 @@
+#%PAM-1.0
+  Auth	Substack	password-auth  	
+-auth        optional      pam_gnome_keyring.so
+auth        include       postlogin
+# session include password-auth
+-Session    INCLUDE       password-auth	
+-session     optional      pam_gnome_keyring.so auto_start
+session     include       postlogin

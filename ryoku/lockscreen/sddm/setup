@@ -8,11 +8,9 @@
 #
 #   1. enable sddm.service
 #   2. default systemd target = graphical
-#   3. wire /etc/pam.d/sddm for the shipped keyring mode: unlock-on-login by
-#      default (pam_gnome_keyring unlocks the login keyring with the login
-#      password at sign-in, so the desktop stops prompting), or never-ask under
-#      autologin (strip the lines; there is no login password for PAM to reuse,
-#      and the keyring seeds a blank default on first use via the Hub/CLI).
+#   3. wire /etc/pam.d/sddm for the shipped keyring mode through
+#      `ryoku keyring apply-pam`: unlock-on-login, or never-ask under
+#      SDDM autologin, where there is no login password for PAM to reuse.
 #   4. make sure the configured compositor's wayland session exists so SDDM can launch it
 #
 # the greeter THEME itself is installed by install-qylock. this script only
@@ -31,7 +29,7 @@ for arg in "$@"; do
   case "$arg" in
     --dry-run) RYOKU_DRYRUN=1 ;;
     -h | --help)
-      sed -n '2,21p' "$0"
+      sed -n '2,23p' "$0"
       exit 0
       ;;
     *)
@@ -68,7 +66,7 @@ write_root() {
   printf '%s\n' "$content" | "${PRIV[@]}" tee "$path" >/dev/null
 }
 
-PAM_FILE="/etc/pam.d/sddm"
+PAM_FILE="${RYOKU_PAM_FILE:-/etc/pam.d/sddm}"
 SESSION_DIR="/usr/share/wayland-sessions"
 
 # --- 1. enable the service ---------------------------------------------------
@@ -83,53 +81,51 @@ priv systemctl enable sddm.service
 echo "  setting default target -> graphical.target"
 priv systemctl set-default graphical.target
 
-# --- 3. wire pam_gnome_keyring for the shipped keyring mode ------------------
-# Fresh installs ship unlock-on-login: the desktop never prompts and the store
-# stays encrypted at rest. Under autologin there is no login password for PAM to
-# reuse, so we ship never-ask (strip the lines) instead; the blank default
-# keyring is seeded lazily by the Hub/CLI, never by this root installer -- a
-# root process must not create files in the user's home. `ryoku keyring set`
-# lets the user change this later.
-sddm_autologin() {
-  local f
-  for f in /etc/sddm.conf /etc/sddm.conf.d/*; do
-    [[ -f $f ]] || continue
-    awk '
-      /^\[/ { sec = $0 }
-      sec == "[Autologin]" && /^[[:space:]]*User[[:space:]]*=/ {
-        split($0, kv, "="); gsub(/[[:space:]]/, "", kv[2]); if (kv[2] != "") found = 1
-      }
-      END { exit(found ? 0 : 1) }
-    ' "$f" && return 0
-  done
+# --- 3. wire the login keyring into the SDDM PAM stack ----------------------
+# The ryoku CLI owns this, so there is one implementation: `ryoku keyring
+# status --json` detects SDDM autologin, and `ryoku keyring apply-pam`
+# converges the stack (Fedora's stock lines for unlock-on-login, stripped for
+# never-ask under autologin). The blank never-ask keyring is seeded later by
+# `ryoku keyring init` in the user's session, never here: a root process must
+# not create files in the user's home. Every installer path puts ryoku on PATH
+# before this runs (the ryoku package, or deploy.sh into ~/.local/bin); a manual
+# `sudo setup` from a dev checkout loses ~/.local/bin to sudo's secure_path,
+# hence SUDO_USER.
+ryoku_bin() {
+  local home
+  if command -v ryoku 2>/dev/null; then
+    return 0
+  fi
+  if [[ -n ${SUDO_USER:-} ]]; then
+    home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+    if [[ -x $home/.local/bin/ryoku ]]; then
+      printf '%s\n' "$home/.local/bin/ryoku"
+      return 0
+    fi
+  fi
   return 1
 }
 
-# Fedora's stock /etc/pam.d/sddm already carries these two lines, so this only
-# restores a stack that never-ask stripped. It writes them exactly as Fedora
-# ships them, after the same password-auth lines, so the file returns to the
-# packaged bytes. ryoku keyring apply-pam uses the same form.
-wire_keyring_pam() {
-  if ! grep -qE '^[[:space:]]*-?auth.*pam_gnome_keyring\.so' "$PAM_FILE"; then
-    priv sed -i '/^auth[[:space:]]\+substack[[:space:]]\+password-auth$/a -auth        optional      pam_gnome_keyring.so' "$PAM_FILE"
-  fi
-  if ! grep -qE '^[[:space:]]*-?session.*pam_gnome_keyring\.so' "$PAM_FILE"; then
-    priv sed -i '/^session[[:space:]]\+include[[:space:]]\+password-auth$/a -session     optional      pam_gnome_keyring.so auto_start' "$PAM_FILE"
-  fi
+keyring_warn() {
+  echo "  WARNING: $1, so the login keyring may not unlock at sign-in;" >&2
+  echo "  WARNING: fix it, then run: sudo ryoku keyring apply-pam <unlock-on-login|never-ask>" >&2
 }
 
-if [[ -f $PAM_FILE ]]; then
-  if sddm_autologin; then
-    echo "  autologin configured: shipping never-ask (stripping pam_gnome_keyring)"
-    if grep -q 'pam_gnome_keyring\.so' "$PAM_FILE"; then
-      priv sed -i '/pam_gnome_keyring\.so/d' "$PAM_FILE"
-    fi
-  else
-    echo "  shipping unlock-on-login (wiring pam_gnome_keyring into $PAM_FILE)"
-    wire_keyring_pam
-  fi
-else
+if [[ ! -f $PAM_FILE ]]; then
   echo "  note: $PAM_FILE not present yet; nothing to wire"
+elif ! ryoku=$(ryoku_bin); then
+  keyring_warn "the ryoku CLI is not installed"
+elif ! keyring_status=$("$ryoku" keyring status --json); then
+  keyring_warn "ryoku keyring status failed"
+else
+  keyring_mode=unlock-on-login
+  if grep -Eq '"autologin":[[:space:]]*true' <<<"$keyring_status"; then
+    keyring_mode=never-ask
+  fi
+  echo "  wiring the login keyring: ryoku keyring apply-pam $keyring_mode"
+  if ! priv env RYOKU_PAM_FILE="$PAM_FILE" "$ryoku" keyring apply-pam "$keyring_mode"; then
+    keyring_warn "ryoku keyring apply-pam $keyring_mode failed (see above)"
+  fi
 fi
 
 # --- 4. make sure the configured compositor's wayland session exists ---------

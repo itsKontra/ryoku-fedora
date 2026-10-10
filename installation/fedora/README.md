@@ -19,7 +19,7 @@ sysroot from Anaconda's `%post --nochroot --erroronfail`:
    - Writes SDDM theme and session drop-in `/etc/sddm.conf.d/99-ryoku.conf`,
      selecting `Current=ryoku` and `Session=hyprland.desktop`.
    - Sets the default cursor fallback to `Bibata-Modern-Ice` in `/usr/share/icons/default/index.theme`.
-   - Wires `pam_gnome_keyring.so` into `/etc/pam.d/sddm` for unlock-on-login.
+   - Leaves Fedora's stock `/etc/pam.d/sddm` alone: it already unlocks the keyring at login.
    - Enables `sddm.service` and sets `graphical.target` as default.
 3. **Base System Services**: Enables `NetworkManager.service`, `firewalld.service`,
    `bluetooth.service`, and `ryoku-wifi-regdom.service` offline, plus `ryoku-bluetooth-reset.service` globally for user sessions.

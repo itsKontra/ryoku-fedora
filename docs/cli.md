@@ -163,8 +163,9 @@ no-op once you have chosen a mode, and never destroys a pre-existing encrypted
 keyring (it records the policy and points you at `set --reset` instead).
 
 `ryoku keyring status [--json]` reports the configured (or, when unset, inferred)
-mode, whether `/etc/pam.d/sddm` carries `pam_gnome_keyring`, whether autologin is
-configured, whether the keyring daemon is running, and each keyring file's format
+mode, whether `/etc/pam.d/sddm` carries `pam_gnome_keyring`, whether SDDM autologin is
+configured (read in SDDM's own order, so the last file to set `[Autologin] User=`
+wins), whether the keyring daemon is running, and each keyring file's format
 (encrypted, plaintext, or absent). `ryoku keyring set <mode>` records the choice
 in `~/.config/ryoku/keyring.json`, converges the keyring files over D-Bus, and
 escalates the root PAM edit through `pkexec` (`--convert` rekeys an encrypted
