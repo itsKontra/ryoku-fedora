@@ -55,7 +55,7 @@ func TestStepPackagesAllSatisfiedNoop(t *testing.T) {
 	stubCapabilities(t)
 	dir := fakePayload(t, nil)
 	f := &facts{distro: &distro{id: "fedora", name: "Fedora", installCmd: []string{"fail-if-called"}, queryCmd: []string{"true"}}}
-	e := &engine{f: f, p: &plan{compositor: "hyprland"}, payload: dir, payloadOverride: dir, dry: false}
+	e := &engine{f: f, p: &plan{compositor: compositors()[0]}, payload: dir, payloadOverride: dir, dry: false}
 	if err := stepPackages(e); err != nil {
 		t.Errorf("stepPackages when all satisfied should return nil without running installCmd, got %v", err)
 	}

@@ -46,11 +46,12 @@ func fakePayload(t *testing.T, desktop []string) string {
 func TestFedoraPackagesFromSpecs(t *testing.T) {
 	dir := fakePayload(t,
 		[]string{"ryoku-shell = %{version}-%{release}", "ryoku-desktop-compositor", "quickshell", "kitty >= 0.40"})
-	got, err := fedoraPackages(dir, "hyprland")
+	provider := compositors()[0]
+	got, err := fedoraPackages(dir, provider)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "uv quickshell kitty hyprland"; strings.Join(got, " ") != want {
+	if want := "uv quickshell kitty " + provider; strings.Join(got, " ") != want {
 		t.Fatalf("fedoraPackages = %q, want %q", strings.Join(got, " "), want)
 	}
 	if _, err := fedoraPackages(dir, "sway"); err == nil {
@@ -67,7 +68,7 @@ func TestFedoraSourceDependenciesFromRepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for provider, other := range map[string]string{"hyprland": "niri", "niri": "hyprland"} {
+	for _, provider := range compositors() {
 		e := &engine{f: &facts{distro: fedoraLinux}, p: &plan{compositor: provider}, payload: payload}
 		pkgs, err := e.sourceDependencies()
 		if err != nil {
@@ -79,9 +80,15 @@ func TestFedoraSourceDependenciesFromRepo(t *testing.T) {
 				t.Errorf("%s: missing %s", provider, want)
 			}
 		}
-		for _, bad := range []string{other, "ryoku-desktop", "ryoku-extras", "ryogami", "ryoku-desktop-compositor", "glibc", "kernel", "grub2-efi-x64", "rpmfusion-free-release",
+		var others []string
+		for _, other := range compositors() {
+			if other != provider {
+				others = append(others, other)
+			}
+		}
+		for _, bad := range append(others, "ryoku-desktop", "ryoku-extras", "ryogami", "ryoku-desktop-compositor", "glibc", "kernel", "grub2-efi-x64", "rpmfusion-free-release",
 			"moby-engine", "firewalld", "chromium", "linux-firmware",
-			"dracut", "grubby", "grub2-tools", "btrfs-progs", "snapper"} {
+			"dracut", "grubby", "grub2-tools", "btrfs-progs", "snapper") {
 			if strings.Contains(got, " "+bad+" ") {
 				t.Errorf("%s: must not install %s", provider, bad)
 			}
