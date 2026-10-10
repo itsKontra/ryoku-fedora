@@ -1,6 +1,6 @@
 package main
 
-// ryoku-shell-install: put the Ryoku desktop on an existing Arch machine, no
+// ryoku-shell-install: put the Ryoku desktop on an existing Fedora machine, no
 // ISO. Interactive bubbletea TUI by default; --yes runs the same engine
 // headless. --dry-run prints every command instead of running it.
 
@@ -35,14 +35,13 @@ type planItem struct {
 type model struct {
 	w, h  int
 	frame int
-	state string // scan, ack, plan, install, done, failed
+	state string // scan, plan, install, done, failed
 
-	f        *facts
-	p        *plan
-	items    []planItem
-	sel      int
-	confirm  bool
-	ackInput string // typed acknowledgement on gated distros (manjaro)
+	f       *facts
+	p       *plan
+	items   []planItem
+	sel     int
+	confirm bool
 
 	eng     *engine
 	events  chan any
@@ -204,11 +203,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.items = groupPlanItems(buildItems(m.f, m.p))
 		m.sel = firstToggle(m.items)
-		if needsManjaroAck(m.f) {
-			m.state = "ack"
-		} else {
-			m.state = "plan"
-		}
+		m.state = "plan"
 		return m, nil
 	case evStep:
 		m.stepIdx = msg.idx
@@ -244,7 +239,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) onKey(k string) (tea.Model, tea.Cmd) {
 	if k == "ctrl+c" {
-		// quitting mid-install abandons a live root pacman transaction; make
+		// quitting mid-install abandons a live root dnf transaction; make
 		// that a deliberate double-press, not a slip.
 		if m.state == "install" && !m.intAsk {
 			m.intAsk = true
@@ -256,24 +251,6 @@ func (m model) onKey(k string) (tea.Model, tea.Cmd) {
 		m.intAsk = false
 	}
 	switch m.state {
-	case "ack":
-		switch k {
-		case "esc":
-			return m, tea.Quit
-		case "enter":
-			if strings.EqualFold(strings.TrimSpace(m.ackInput), "manjaro") {
-				m.state = "plan"
-			}
-		case "backspace":
-			if len(m.ackInput) > 0 {
-				m.ackInput = m.ackInput[:len(m.ackInput)-1]
-			}
-		default:
-			if len(k) == 1 && len(m.ackInput) < 16 {
-				m.ackInput += k
-			}
-		}
-		return m, nil
 	case "plan":
 		if m.confirm {
 			switch k {
@@ -350,8 +327,6 @@ func (m model) View() tea.View {
 	switch m.state {
 	case "scan":
 		body = m.viewScan()
-	case "ack":
-		body = m.viewAck()
 	case "plan":
 		body = m.viewPlan()
 	case "install":
@@ -380,8 +355,6 @@ func (m model) View() tea.View {
 
 func (m model) footer() string {
 	switch m.state {
-	case "ack":
-		return keyHint(i18n.T("type manjaro + enter"), i18n.T("accept the risk")) + hintSep() + keyHint("esc", i18n.T("quit"))
 	case "plan":
 		if m.confirm {
 			return keyHint("y", i18n.T("install")) + hintSep() + keyHint("n", i18n.T("back"))
@@ -419,23 +392,6 @@ func (m model) header(sub string) string {
 func (m model) viewScan() string {
 	sp := spinFrames[m.frame%len(spinFrames)]
 	return m.header(fg(cBrand, sp) + " " + fg(cText, i18n.T("inspecting this machine…")))
-}
-
-// viewAck is the Manjaro gate: a hard warning that must be typed through.
-// the [ryoku] repo is built against Arch current and Manjaro stable trails it
-// by weeks; the resulting partial-upgrade breakage would look like Ryoku's
-// fault, so consent has to be explicit.
-func (m model) viewAck() string {
-	iw := clamp(m.w-14, 56, 90)
-	var b strings.Builder
-	b.WriteString(bold(cYell, gWarn+" "+i18n.Tf("Manjaro detected: %s", m.f.distroName)) + "\n\n")
-	b.WriteString(sty().Foreground(cText).Width(iw).Render(i18n.T("The [ryoku] repository is built against Arch current. Manjaro stable ships Arch packages 1 to 4 weeks late, so installing can leave the Qt stack half-upgraded: the shell then fails to start, or unrelated apps break.")) + "\n\n")
-	b.WriteString(fg(cText, i18n.T("This setup is unsupported; breakage lands on you.")) + "\n\n")
-	b.WriteString(fg(cSub, i18n.T("Type manjaro and press enter to accept the risk, esc to quit.")) + "\n\n")
-	b.WriteString(fg(cSub, "> ") + fg(cText, m.ackInput) + fg(cBrand, "_") + "\n")
-	box := sty().Border(borderDouble()).BorderForeground(cYell).Padding(1, 2).
-		Render(padLines(strings.TrimRight(b.String(), "\n"), iw))
-	return m.header(box)
 }
 
 func (m model) viewPlan() string {
@@ -652,12 +608,6 @@ func (m model) viewFailed() string {
 func runHeadless(dry bool, ref, payload, compositor string) int {
 	fmt.Println(bold(cBrand, "ryoku-shell-install") + fg(cSub, " "+i18n.T("(headless)")))
 	f := detect()
-	if needsManjaroAck(f) {
-		fmt.Println(bold(cYell, i18n.T("refusing to install on Manjaro non-interactively.")))
-		fmt.Println(i18n.T("the [ryoku] repo is built against Arch current; Manjaro stable trails it by weeks and partial upgrades can break the Qt stack."))
-		fmt.Println(i18n.T("run without --yes to read the warning, or set RYOKU_ALLOW_MANJARO=1 to accept the risk here."))
-		return 1
-	}
 	p := defaultPlan(f)
 	if compositor != "" {
 		p.compositor = compositor
@@ -726,7 +676,7 @@ func primeSudo() {
 
 func sudoKeepalive() {
 	// 20s survives sudoers with timestamp_timeout down to half a minute; a
-	// lapsed credential turns every nested sudo (yay, makepkg, the driver
+	// lapsed credential turns every nested sudo (dnf, the driver
 	// scripts) into a password prompt written straight over the TUI.
 	for range time.Tick(20 * time.Second) {
 		_ = exec.Command("sudo", "-n", "-v").Run()
@@ -748,7 +698,7 @@ func main() {
 	dry := flag.Bool("dry-run", false, i18n.T("print every command instead of running it"))
 	uninstall := flag.Bool("uninstall", false, i18n.T("remove the ryoku packages and restore the backup chain"))
 	ref := flag.String("ref", envOr("RYOKU_SHELL_REF", "main"), i18n.T("ryoku-fedora git ref for the payload"))
-	payload := flag.String("payload", os.Getenv("RYOKU_SHELL_PAYLOAD"), i18n.T("use a local ryoku-arch checkout as the payload"))
+	payload := flag.String("payload", os.Getenv("RYOKU_SHELL_PAYLOAD"), i18n.T("use a local Ryoku checkout as the payload"))
 	compositor := flag.String("compositor", "", i18n.T("window manager to install: hyprland or niri (default hyprland)"))
 	flag.StringVar(&repoURL, "repo", envOr("RYOKU_SHELL_REPO", repoURL), i18n.T("git repository URL for the installer payload"))
 	dependencyList := flag.Bool("dependency-list", false, "print host source dependencies without installing")
@@ -794,10 +744,10 @@ func main() {
 	if out("uname", "-m") != "x86_64" {
 		die(i18n.T("Ryoku ships x86_64 builds only"))
 	}
-	// the whole engine leans on systemctl; Artix and other non-systemd spins
-	// pass the pacman check but every session/service step would fail.
+	// the whole engine leans on systemctl; every session and service step
+	// fails without it.
 	if !systemdBooted() {
-		die(i18n.T("this system does not boot with systemd (Artix or another init detected); Ryoku needs systemd and cannot install here"))
+		die(i18n.T("this system does not boot with systemd; Ryoku needs systemd and cannot install here"))
 	}
 
 	if !*uninstall && !sourceMode(installMode, *payload, *ref) {
@@ -830,12 +780,6 @@ func main() {
 	if m, ok := fm.(model); ok && m.exitReboot {
 		_ = exec.Command("systemctl", "reboot").Run()
 	}
-}
-
-// needsManjaroAck: Manjaro gets a hard warning with typed consent (TUI) or a
-// refusal (--yes); RYOKU_ALLOW_MANJARO=1 waves both through.
-func needsManjaroAck(f *facts) bool {
-	return f.distroID == "manjaro" && os.Getenv("RYOKU_ALLOW_MANJARO") != "1"
 }
 
 // chooseCompositor validates a --compositor pick against the shipped variants,

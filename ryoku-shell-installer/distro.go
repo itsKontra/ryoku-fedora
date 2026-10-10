@@ -59,11 +59,14 @@ func (d *distro) installArgs(pkgs []string) []string {
 	return append(append([]string{}, d.installCmd...), pkgs...)
 }
 
+// removeArgs takes the named packages out without autoremoving what they
+// pulled in: niri under a rival shell meta must survive as a fallback session.
 func (d *distro) removeArgs(pkgs []string) []string {
 	if len(pkgs) == 0 {
 		return nil
 	}
-	return append(append([]string{}, d.removeCmd...), pkgs...)
+	args := append(append([]string{}, d.removeCmd...), "--no-autoremove")
+	return append(args, pkgs...)
 }
 
 func (d *distro) installedPkg(pkg string) bool {

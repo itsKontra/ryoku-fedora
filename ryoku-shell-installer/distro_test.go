@@ -52,7 +52,7 @@ func TestInstallArgs(t *testing.T) {
 	if got := strings.Join(fedoraLinux.installArgs([]string{"git"}), " "); got != "dnf -y install --best git" {
 		t.Errorf("installArgs = %q", got)
 	}
-	if got := strings.Join(fedoraLinux.removeArgs([]string{"dunst"}), " "); got != "dnf -y remove dunst" {
+	if got := strings.Join(fedoraLinux.removeArgs([]string{"dunst"}), " "); got != "dnf -y remove --no-autoremove dunst" {
 		t.Errorf("removeArgs = %q", got)
 	}
 	if got := fedoraLinux.installArgs(nil); len(got) != 0 {

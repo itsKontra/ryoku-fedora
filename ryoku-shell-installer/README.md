@@ -88,12 +88,8 @@ followed) beats niri beats sway, then KDE (`kxkbrc`,
 `kwinoutputconfig.json`), then GNOME (gsettings input-sources,
 `monitors.xml`), then `localectl`.
 
-Safety gates: non-systemd systems (Artix and friends) are refused outright.
-With Secure Boot enforcing, the NVIDIA toggle is forced off and locked,
-because Arch kernels reject unsigned DKMS modules and the driver script
-denylists nouveau; sign with sbctl or disable Secure Boot, then re-run.
-Manjaro requires a typed acknowledgement in the TUI and is refused under
-`--yes` unless `RYOKU_ALLOW_MANJARO=1` is set.
+Safety gates: systems that do not boot with systemd, immutable (ostree)
+Fedora derivatives, and anything other than x86_64 are refused outright.
 
 Lifecycle: an interrupted run records its completed steps in
 `~/.local/state/ryoku/shell-install-state.json`; the next run offers a
