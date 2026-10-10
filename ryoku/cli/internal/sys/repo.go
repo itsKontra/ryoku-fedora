@@ -34,23 +34,17 @@ func ResolveRepo() string {
 			return p
 		}
 	}
-	// Fallback to the ~/ryoku-arch clone for a lost or broken recorded pointer,
+	// Fallback to the ~/ryoku-fedora clone for a lost or broken recorded pointer,
 	// but only when the box still opts into source tracking (a recorded
 	// RYOKU_CHANNEL): a box migrated onto packages leaves the clone on disk
 	// deliberately and must never have it resurrected as the update source.
 	if TrackedChannel() == "" {
 		return ""
 	}
-	candidates := []string{"ryoku-arch"}
-	if RPMManager() != "" {
-		candidates = []string{"ryoku-fedora"}
-	}
-	for _, name := range candidates {
-		track := filepath.Join(Home(), name)
-		if _, err := RunOut("git", "-C", track, "rev-parse", "--git-dir"); err == nil {
-			if url, e := RunOut("git", "-C", track, "remote", "get-url", "origin"); e == nil && (strings.Contains(url, "ryoku-arch") || strings.Contains(url, "ryoku-fedora")) {
-				return track
-			}
+	track := filepath.Join(Home(), "ryoku-fedora")
+	if _, err := RunOut("git", "-C", track, "rev-parse", "--git-dir"); err == nil {
+		if url, e := RunOut("git", "-C", track, "remote", "get-url", "origin"); e == nil && strings.Contains(url, "ryoku-fedora") {
+			return track
 		}
 	}
 	return ""
@@ -91,7 +85,7 @@ func SourceTracked() bool {
 
 // RetireSourceTracking stops a box taking its updates from a source checkout:
 // it drops the recorded repo pointer and the RYOKU_CHANNEL line from both
-// environment.d and the compositor's user config. The ~/ryoku-arch clone is left on disk (the
+// environment.d and the compositor's user config. The ~/ryoku-fedora clone is left on disk (the
 // user's data); ResolveRepo's fallback is gated on the tracked channel this
 // clears, so the clone is not re-adopted. Clearing the running session env is
 // the caller's job: it needs a live user manager this package must not assume.

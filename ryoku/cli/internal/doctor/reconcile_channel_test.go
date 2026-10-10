@@ -82,11 +82,11 @@ func TestReconcileUpdateChannelSwitchesToTrackedBranch(t *testing.T) {
 	}
 }
 
-// mkRyokuArch makes a git work tree at dst whose origin path contains
-// "ryoku-arch", so isRyokuArchTree accepts it.
-func mkRyokuArch(t *testing.T, root, dst string) {
+// mkRyoku makes a git work tree at dst whose origin path contains
+// "ryoku-fedora", so isRyokuTree accepts it.
+func mkRyoku(t *testing.T, root, dst string) {
 	t.Helper()
-	origin := filepath.Join(root, "ryoku-arch.git")
+	origin := filepath.Join(root, "ryoku-fedora.git")
 	if out, err := exec.Command("git", "init", "--bare", "-b", "main", origin).CombinedOutput(); err != nil {
 		t.Fatalf("init bare: %v\n%s", err, out)
 	}
@@ -107,7 +107,7 @@ func mkRyokuArch(t *testing.T, root, dst string) {
 func TestReconcileRepoPointerDesymlinks(t *testing.T) {
 	t.Setenv("RYOKU_REPO", "")
 	root := t.TempDir()
-	t.Setenv("HOME", filepath.Join(root, "home")) // no ~/ryoku-arch: isolate the de-symlink
+	t.Setenv("HOME", filepath.Join(root, "home")) // no ~/ryoku-fedora: isolate the de-symlink
 	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
 	state := sys.StateDir()
 	target := filepath.Join(root, "devswitch", "state", "ryoku")
@@ -134,7 +134,7 @@ func TestReconcileRepoPointerDesymlinks(t *testing.T) {
 	}
 }
 
-// A stale pointer beside a healthy ~/ryoku-arch checkout is repointed.
+// A stale pointer beside a healthy ~/ryoku-fedora checkout is repointed.
 func TestReconcileRepoPointerRepoints(t *testing.T) {
 	t.Setenv("RYOKU_REPO", "")
 	root := t.TempDir()
@@ -152,12 +152,8 @@ func TestReconcileRepoPointerRepoints(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(state, "repo"), []byte("/gone\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	name := "ryoku-arch"
-	if sys.RPMManager() != "" {
-		name = "ryoku-fedora"
-	}
-	track := filepath.Join(home, name)
-	mkRyokuArch(t, root, track)
+	track := filepath.Join(home, "ryoku-fedora")
+	mkRyoku(t, root, track)
 	// the box still opts into source tracking (a recorded RYOKU_CHANNEL), so a
 	// lost pointer self-heals to the clone.
 	writeTrackedChannel(t, home, "unstable-dev")
@@ -173,7 +169,7 @@ func TestReconcileRepoPointerRepoints(t *testing.T) {
 }
 
 // A box migrated onto packages carries no tracked channel and left its
-// ~/ryoku-arch clone on disk deliberately; the pointer reconciler must not
+// ~/ryoku-fedora clone on disk deliberately; the pointer reconciler must not
 // re-adopt it, or the doctor would undo the migration.
 func TestReconcileRepoPointerLeavesMigratedClone(t *testing.T) {
 	t.Setenv("RYOKU_REPO", "")
@@ -189,8 +185,8 @@ func TestReconcileRepoPointerLeavesMigratedClone(t *testing.T) {
 	if err := os.MkdirAll(state, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	track := filepath.Join(home, "ryoku-arch")
-	mkRyokuArch(t, root, track) // the clone is present but not tracked
+	track := filepath.Join(home, "ryoku-fedora")
+	mkRyoku(t, root, track) // the clone is present but not tracked
 	if r := reconcileRepoPointer(false); r.status != recOK {
 		t.Fatalf("got %s (%s), want ok (clone left alone)", r.status.label(), r.detail)
 	}
@@ -212,7 +208,7 @@ func writeTrackedChannel(t *testing.T, home, ch string) {
 	}
 }
 
-// A real state dir whose pointer is a healthy ryoku-arch checkout is left alone.
+// A real state dir whose pointer is a healthy ryoku-fedora checkout is left alone.
 func TestReconcileRepoPointerHealthy(t *testing.T) {
 	t.Setenv("RYOKU_REPO", "")
 	root := t.TempDir()
@@ -226,8 +222,8 @@ func TestReconcileRepoPointerHealthy(t *testing.T) {
 	if err := os.MkdirAll(state, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	track := filepath.Join(home, "ryoku-arch")
-	mkRyokuArch(t, root, track)
+	track := filepath.Join(home, "ryoku-fedora")
+	mkRyoku(t, root, track)
 	if err := os.WriteFile(filepath.Join(state, "repo"), []byte(track+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

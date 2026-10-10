@@ -12,7 +12,7 @@ import (
 
 // reconcileUpdateChannel heals a box moved between update channels with
 // `ryoku track`. track records the channel in ~/.config/environment.d/ryoku.conf
-// and checks that branch out in the update checkout (~/ryoku-arch). A toggled or
+// and checks that branch out in the update checkout (~/ryoku-fedora). A toggled or
 // half-finished switch can leave the checkout on a different branch than the
 // recorded channel; `ryoku update` then measures the running system against the
 // wrong branch and shows updates that never clear (and can redeploy a mismatched
@@ -52,7 +52,7 @@ func reconcileUpdateChannel(checkOnly bool) recResult {
 
 // reconcileRepoPointer unsticks a box whose update-checkout record broke: it
 // converts a symlinked state dir (the retired dev-switch layout) to a real
-// directory and repoints a stale repo pointer at the ~/ryoku-arch checkout.
+// directory and repoints a stale repo pointer at the ~/ryoku-fedora checkout.
 // Packaged installs carry no pointer, so the repoint needs a real checkout.
 func reconcileRepoPointer(checkOnly bool) recResult {
 	state := sys.StateDir()
@@ -75,26 +75,12 @@ func reconcileRepoPointer(checkOnly bool) recResult {
 	if b, err := os.ReadFile(repoFile); err == nil {
 		recorded = strings.TrimSpace(string(b))
 	}
-	trackCandidates := []string{"ryoku-arch"}
-	if sys.RPMManager() != "" {
-		trackCandidates = []string{"ryoku-fedora"}
-	}
-	var track string
-	for _, name := range trackCandidates {
-		candidate := filepath.Join(sys.Home(), name)
-		if isRyokuArchTree(candidate) {
-			track = candidate
-			break
-		}
-	}
-	if track == "" {
-		track = filepath.Join(sys.Home(), trackCandidates[0])
-	}
-	// Only adopt ~/ryoku-arch or ~/ryoku-fedora for a box that still opts into source tracking (a
+	track := filepath.Join(sys.Home(), "ryoku-fedora")
+	// Only adopt ~/ryoku-fedora for a box that still opts into source tracking (a
 	// recorded RYOKU_CHANNEL). A box migrated onto packages carries no tracked
 	// channel and left its clone on disk deliberately; re-adopting it would undo
 	// the migration.
-	if sys.TrackedChannel() != "" && !isRyokuArchTree(recorded) && isRyokuArchTree(track) {
+	if sys.TrackedChannel() != "" && !isRyokuTree(recorded) && isRyokuTree(track) {
 		if checkOnly {
 			what := i18n.T("missing")
 			if recorded != "" {
@@ -118,9 +104,9 @@ func reconcileRepoPointer(checkOnly bool) recResult {
 	return fixedRes(i18n.T("%s; run `ryoku update` to advance"), strings.Join(actions, "; "))
 }
 
-// isRyokuArchTree reports whether p is a git work tree whose origin is a
-// ryoku-arch or ryoku-fedora remote, so a stray unrelated repo is never adopted as the channel.
-func isRyokuArchTree(p string) bool {
+// isRyokuTree reports whether p is a git work tree whose origin is a
+// ryoku-fedora remote, so a stray unrelated repo is never adopted as the channel.
+func isRyokuTree(p string) bool {
 	if p == "" {
 		return false
 	}
@@ -128,7 +114,7 @@ func isRyokuArchTree(p string) bool {
 		return false
 	}
 	url, err := sys.RunOut("git", "-C", p, "remote", "get-url", "origin")
-	return err == nil && (strings.Contains(url, "ryoku-arch") || strings.Contains(url, "ryoku-fedora"))
+	return err == nil && strings.Contains(url, "ryoku-fedora")
 }
 
 // desymlinkStateDir turns a symlinked state dir into a real one, migrating the
