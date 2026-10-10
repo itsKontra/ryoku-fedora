@@ -1,10 +1,10 @@
 // ryoku = the user-facing CLI for the distro. one front door to updates,
 // rollback, and the shell. It is a thin dispatcher: each command is owned by
-// an internal package, orchestrating pacman / yay / snapper / materialize
+// an internal package, orchestrating dnf / snapper / materialize
 // rather than reimplementing them.
 //
 //	ryoku update            snapshot -> the Ryoku packages (or the channel) -> deploy -> reload
-//	ryoku update --system   the same, plus the distribution's own upgrade (pacman -Syu, AUR, Flatpak)
+//	ryoku update --system   the same, plus the distribution's own upgrade (dnf upgrade, Flatpak)
 //	ryoku rollback          list releases + snapshots; --to <tag> moves back to a release; [id] guides a snapshot restore
 //	ryoku snapshots         list snapper snapshots
 //	ryoku status            version, commits behind the channel, snapshot count
@@ -14,7 +14,6 @@
 //	ryoku deploy            DEV ONLY: build + materialize from a checkout
 //	ryoku recovery          last resort: reset to main + redeploy (overwrites configs)
 //	ryoku doctor            run convergent reconcilers (also runs inside update)
-//	ryoku verify            report box-vs-release-package-set drift (read-only)
 //	ryoku debug             print a shareable diagnostic bundle for bug reports
 //
 // The concerns live in their own folders: internal/updater (update, status,
@@ -78,8 +77,6 @@ func main() {
 		err = cmdPlugin(os.Args[2:])
 	case "doctor":
 		err = doctor.Run(os.Args[2:])
-	case "verify":
-		err = doctor.Verify(os.Args[2:])
 	case "debug":
 		err = doctor.Debug(os.Args[2:])
 	case "keyring":
@@ -101,7 +98,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Print(i18n.T("Usage: ryoku <command>\n\n  update         update the Ryoku packages (or channel commits), redeploy, reload\n  update --system  the same, plus your distribution's own upgrade (pacman -Syu)\n  track <chan>   packages: stable|testing|unstable-dev|main|v<tag>; add --source to build from a checkout\n  rollback       list releases and snapshots; --to <tag> puts the Ryoku set back on that release\n  rollback [id]  guide restoring snapshot <id> from the boot menu\n  snapshots      list snapper snapshots\n  status         version, commits behind the channel, snapshot count\n  version        print the running version (--branch = channel · sha)\n  materialize    lay the base configs into ~/.config (keeps your overrides)\n  reset [path]   drop a user_edits override (no path: all, -y skips confirm)\n  reload         restart the shell and reload Hyprland\n  wm <cmd>       compositor: status, use <name>, act <id>, session\n  deploy         DEV ONLY: deploy from a repo checkout (RYOKU_REPO)\n  recovery       last resort: reset to main and redeploy (overwrites configs)\n  doctor         run convergent reconcilers (idempotent stateful fixes)\n  verify         report whether this box matches the release its channel serves\n  debug          print a shareable diagnostic bundle for bug reports\n  keyring        show or set how the GNOME keyring unlocks at sign-in\n  security-key   enroll and wire a FIDO2/U2F security key for PAM\n  import <path>  bring an existing config in: scan, resolve clashes, apply (--undo)\n  plugin <cmd>   install/remove/list/validate a shell plugin from git\n"))
+	fmt.Print(i18n.T("Usage: ryoku <command>\n\n  update         update the Ryoku packages (or channel commits), redeploy, reload\n  update --system  the same, plus your distribution's own upgrade (dnf upgrade)\n  track <chan>   packages: stable|testing|unstable-dev|main|v<tag>; add --source to build from a checkout\n  rollback       list releases and snapshots; --to <tag> puts the Ryoku set back on that release\n  rollback [id]  guide restoring snapshot <id> from the boot menu\n  snapshots      list snapper snapshots\n  status         version, commits behind the channel, snapshot count\n  version        print the running version (--branch = channel · sha)\n  materialize    lay the base configs into ~/.config (keeps your overrides)\n  reset [path]   drop a user_edits override (no path: all, -y skips confirm)\n  reload         restart the shell and reload Hyprland\n  wm <cmd>       compositor: status, use <name>, act <id>, session\n  deploy         DEV ONLY: deploy from a repo checkout (RYOKU_REPO)\n  recovery       last resort: reset to main and redeploy (overwrites configs)\n  doctor         run convergent reconcilers (idempotent stateful fixes)\n  debug          print a shareable diagnostic bundle for bug reports\n  keyring        show or set how the GNOME keyring unlocks at sign-in\n  security-key   enroll and wire a FIDO2/U2F security key for PAM\n  import <path>  bring an existing config in: scan, resolve clashes, apply (--undo)\n  plugin <cmd>   install/remove/list/validate a shell plugin from git\n"))
 }
 
 func die(format string, a ...any) {

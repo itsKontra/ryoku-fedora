@@ -16,8 +16,7 @@ import (
 // reconcileBootGuard keeps ryoku-boot-guard.service enabled on a packaged box
 // (the ryoku package ships the unit; enabling it here is how boxes installed
 // before it get it, since doctor runs after every update) and surfaces the
-// guard's last notice: an update it reverted, a boot menu it repointed at the
-// pre-update snapshot, or a restore run from the snapshot boot menu. The
+// guard's last notice: a boot it sent to the pre-update snapshot, or a restore run from the snapshot boot menu. The
 // notice is a one-time report and is cleared once shown, so it never nags.
 func reconcileBootGuard(checkOnly bool) recResult {
 	if sys.ResolveRepo() != "" || !sys.PkgInstalled("ryoku-desktop") {
@@ -52,7 +51,7 @@ func reconcileBootGuard(checkOnly bool) recResult {
 	}
 	fix := "sudo systemctl enable ryoku-boot-guard.service && sudo systemd-tmpfiles --create /usr/lib/tmpfiles.d/ryoku.conf"
 	if checkOnly {
-		return wouldRes(i18n.T("%s, so a failed update is not reverted automatically"), strings.Join(problems, "; ")).withFix(fix)
+		return wouldRes(i18n.T("%s, so a failed update does not fall back to its snapshot"), strings.Join(problems, "; ")).withFix(fix)
 	}
 	if err := sys.Sudo("systemctl", "enable", "ryoku-boot-guard.service"); err != nil {
 		return failRes(i18n.T("could not enable ryoku-boot-guard.service: %v"), err).withFix(fix)
@@ -60,7 +59,7 @@ func reconcileBootGuard(checkOnly bool) recResult {
 	if err := sys.Sudo("systemd-tmpfiles", "--create", "/usr/lib/tmpfiles.d/ryoku.conf"); err != nil || !bootOKWritable() {
 		return failRes(i18n.T("could not prepare /var/lib/ryoku/boot: %v"), err).withFix(fix)
 	}
-	return fixedRes(i18n.T("enabled the boot guard; a packaged update that cannot boot twice is reverted"))
+	return fixedRes(i18n.T("enabled the boot guard; a packaged update that fails to boot opens its pre-update snapshot"))
 }
 
 // bootOKWritable reports whether this user can drop a boot record where the

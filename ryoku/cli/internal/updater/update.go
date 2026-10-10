@@ -148,7 +148,6 @@ func Update(args []string) error {
 		rashinReindex()
 		prowlRefresh()
 		progress.at("doctor")
-		offerSnapperHelpers()
 		runFreshDoctor()
 		progress.at("finalize")
 		snapperPost(pre, "ryoku-update")
@@ -160,12 +159,11 @@ func Update(args []string) error {
 	}
 
 	progress.at("packages")
-	// the release this box runs before pacman moves it; stage2 (the new
+	// the release this box runs before dnf moves it; stage2 (the new
 	// binary) reads it from the environment to arm the boot guard.
 	if from := sys.ReadRelease().Release; from != "" {
 		os.Setenv("RYOKU_UPDATE_FROM", from)
 	}
-	clearStalePacmanLock()
 	// Refresh first, then read the set: a rollback onto a frozen release must
 	// only ask for packages that release actually served. An ordinary update
 	// drops names the box already carries at a newer version than [ryoku]
@@ -826,7 +824,6 @@ func updateStage2(pre string, withSystem bool) error {
 	prowlRefresh()
 
 	progress.at("doctor")
-	offerSnapperHelpers()
 	runFreshDoctor()
 
 	progress.at("finalize")
@@ -1151,122 +1148,6 @@ func prowlDecide(onPath, packageOwned bool) prowlAction {
 	return prowlSelfUpdate
 }
 
-// clearStalePacmanLock mirrors doctor's reconcilePacmanLock right before the
-// system upgrade: a db.lck left by a crashed pacman would fail the very update
-// the user is running to heal the box. A lock owned by a live pacman is left
-// alone. Composed from sys primitives, same reason as snapHelpers below.
-func clearStalePacmanLock() {
-	if !sys.Has("pacman") {
-		return
-	}
-	const lock = "/var/lib/pacman/db.lck"
-	if !sys.Exists(lock) {
-		return
-	}
-	if exec.Command("pgrep", "-x", "pacman").Run() == nil {
-		return
-	}
-	progress.logf(i18n.T("Removing a stale pacman lock (no pacman running)"))
-	_ = sys.Sudo("rm", "-f", lock)
-}
-
-// snapHelpers: the snapshot facts the offer gates on, composed from sys
-// primitives so the updater runs the same checks the doctor does without
-// importing the doctor package.
-type snapHelpers struct {
-	rootBtrfs  bool
-	snapper    bool
-	pacman     bool
-	snapPac    bool
-	limineSync bool
-	limine     bool
-}
-
-func gatherSnapHelpers() snapHelpers {
-	return snapHelpers{
-		rootBtrfs:  sys.IsBtrfs("/"),
-		snapper:    sys.Has("snapper"),
-		pacman:     sys.Has("pacman"),
-		snapPac:    sys.PkgInstalled("snap-pac"),
-		limineSync: sys.PkgInstalled("limine-snapper-sync"),
-		limine:     sys.PkgInstalled("limine"),
-	}
-}
-
-// wantedSnapperHelpers: which snapshot helpers to offer, given the facts. pure,
-// so the gating (no snapshots without btrfs + snapper; limine-snapper-sync only
-// under Limine) is unit-testable without touching /etc or pacman.
-func wantedSnapperHelpers(h snapHelpers) []string {
-	if !h.rootBtrfs || !h.snapper {
-		return nil
-	}
-	var want []string
-	if h.pacman && !h.snapPac {
-		want = append(want, "snap-pac")
-	}
-	if !h.limineSync && h.limine {
-		want = append(want, "limine-snapper-sync")
-	}
-	return want
-}
-
-// offerSnapperHelpers: ask before installing the missing helpers, then
-// install whoever was picked. snap-pac = a snapshot on every pacman txn;
-// limine-snapper-sync, on a Limine box, puts those snapshots in the boot
-// menu. together = the rollback safety net behind every `ryoku update`.
-// opt-in + best-effort: Skip (or no answer) leaves them for `ryoku doctor`
-// to keep recommending, and a failed install never aborts the update.
-func offerSnapperHelpers() {
-	want := wantedSnapperHelpers(gatherSnapHelpers())
-	if len(want) == 0 {
-		return
-	}
-	var blurbs []string
-	for _, p := range want {
-		switch p {
-		case "snap-pac":
-			blurbs = append(blurbs, i18n.T("auto-snapshot every update"))
-		case "limine-snapper-sync":
-			blurbs = append(blurbs, i18n.T("snapshots in the boot menu"))
-		}
-	}
-	detail := strings.Join(want, " + ") + i18n.T(" back the rollback safety net (") + strings.Join(blurbs, ", ") + ")."
-	if !askInstall(i18n.T("Enable snapshot helpers?"), detail, want) {
-		fmt.Printf(i18n.T("==> Snapshot helpers skipped (%s); ryoku doctor keeps recommending them\n"), strings.Join(want, ", "))
-		return
-	}
-	fmt.Printf(i18n.T("==> Installing snapshot helpers: %s\n"), strings.Join(want, ", "))
-	for _, p := range want {
-		tool := "ryoku-pkg-add"
-		if p == "limine-snapper-sync" {
-			tool = "ryoku-pkg-aur-add"
-		}
-		if err := sys.Run(tool, p); err != nil {
-			fmt.Fprintf(os.Stderr, i18n.T("warning: installing %s failed: %v\n"), p, err)
-		}
-	}
-}
-
-// askInstall: consent for installing pkgs. hub-launched update
-// (RYOKU_UPDATE_UI=hub) -> ask through the run-state prompt and wait.
-// plain terminal -> y/N. non-interactive -> decline.
-func askInstall(title, detail string, pkgs []string) bool {
-	if os.Getenv("RYOKU_UPDATE_UI") == "hub" {
-		publishPrompt("snapper-helpers", title, detail, []string{"Install", "Skip"})
-		choice, ok := awaitAnswer(120 * time.Second)
-		progress.publish("running") // clear the prompt; resume the step view
-		return ok && choice == "Install"
-	}
-	if sys.StdinIsTTY() {
-		fmt.Printf(i18n.T("%s install %s? [y/N] "), title, strings.Join(pkgs, ", "))
-		var resp string
-		_, _ = fmt.Scanln(&resp)
-		resp = strings.ToLower(strings.TrimSpace(resp))
-		return resp == "y" || resp == "yes"
-	}
-	return false
-}
-
 // runFreshDoctor runs `ryoku doctor` after the new binary lands, so the
 // reconcilers shipped in this release run inside the same update. same
 // command users run by hand; calling it here keeps doctor one thing instead
@@ -1387,22 +1268,7 @@ func restoreGuide(id string) error {
 		}
 	}
 	fmt.Printf(i18n.T("Restoring snapshot %s\n\n"), label)
-	if sys.RPMManager() != "" {
-		return grubRestoreGuide(id)
-	}
-	fmt.Println(i18n.T("Ryoku boots the @ subvolume directly, so a live `snapper rollback` cannot"))
-	fmt.Println(i18n.T("restore the system; the restore runs from the boot menu:"))
-	fmt.Printf(i18n.T("  1. Reboot, and in the Limine menu open Snapshots -> %s.\n"), id)
-	fmt.Println(i18n.T("  2. In that session run:  sudo limine-snapper-restore"))
-	fmt.Println(i18n.T("     (it restores the snapshot you booted, matching kernels included)"))
-	fmt.Println(i18n.T("  3. Reboot into the restored system."))
-	if !sys.PkgInstalled("limine-snapper-sync") {
-		fmt.Println()
-		fmt.Println(i18n.T("limine-snapper-sync is not installed, so snapshots are missing from the boot"))
-		fmt.Println(i18n.T("menu. Install it first:"))
-		fmt.Println("  ryoku-pkg-aur-add limine-snapper-sync && sudo systemctl enable --now limine-snapper-sync.service")
-	}
-	return nil
+	return grubRestoreGuide(id)
 }
 
 // grubRestoreGuide is the Fedora restore: the "Ryoku snapshots" GRUB submenu
@@ -1729,7 +1595,7 @@ func baseStatus() statusReport {
 // packagedStatus builds the report for a packaged install from the running and
 // available package versions. The GitHub lookups are best-effort and stubbable
 // (RYOKU_GITHUB_API), so the sha/compare/recent branching is unit-testable
-// without pacman, the same reason wantedSnapperHelpers is split out.
+// without a package manager.
 func packagedStatus(installed, latest string) statusReport {
 	// a repo view older than the running package is never an update.
 	if latest != "" && installed != "" && versionCompare(latest, installed) < 0 {
@@ -1950,6 +1816,12 @@ func Deploy(_ []string) error {
 
 // --- snapper pre/post (best-effort) ----------------------------------------
 
+// updateSnapshotMarker holds the pid of an update that owns the open snapper
+// pair, so the dnf hook (system/snapshots/ryoku-dnf-snapshot) does not nest a
+// second pair inside it. The pid survives the stage2 exec, and a dead pid
+// frees the hook again.
+const updateSnapshotMarker = "/run/ryoku/update-snapshot"
+
 func snapperPre(desc string) string {
 	if !sys.Has("snapper") {
 		fmt.Fprintln(os.Stderr, i18n.T("note: snapper not installed; skipping pre-update snapshot"))
@@ -1967,6 +1839,7 @@ func snapperPre(desc string) string {
 		fmt.Fprintf(os.Stderr, i18n.T("note: pre-update snapshot skipped: %v\n"), err)
 		return ""
 	}
+	_ = sys.WriteRootFile(updateSnapshotMarker, strconv.Itoa(os.Getpid())+"\n", "0644")
 	return strings.TrimSpace(out)
 }
 
@@ -1976,6 +1849,7 @@ func snapperPost(pre, desc string) {
 	}
 	_ = sys.Sudo("snapper", "-c", snapperConfig, "create",
 		"-t", "post", "--pre-number", pre, "-c", "number", "-d", desc)
+	_ = sys.Sudo("rm", "-f", updateSnapshotMarker)
 	// Prune here, on the path every update takes: snapper-cleanup.timer is
 	// unreliable (its service is coupled to limine-snapper-sync), so without
 	// this the pile grows unbounded. best-effort.

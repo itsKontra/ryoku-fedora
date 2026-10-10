@@ -1,0 +1,4 @@
+# libdnf5 actions plugin: a snapper pre/post pair around every dnf transaction
+# on the host, so a plain `sudo dnf upgrade` has a rollback point too.
+pre_transaction:::enabled=host-only:/usr/libexec/ryoku/ryoku-dnf-snapshot pre
+post_transaction:::enabled=host-only:/usr/libexec/ryoku/ryoku-dnf-snapshot post ${tmp.ryoku_snapper_pre}

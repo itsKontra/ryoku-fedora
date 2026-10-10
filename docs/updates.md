@@ -85,6 +85,12 @@ label, a live log tail, and, on failure, the error and the pre-update snapshot),
 so the update island and the Hub's Updates page render a determinate run and a
 one-click rollback.
 
+A dnf transaction outside `ryoku update` gets its own snapper pair from the
+`ryoku` package's libdnf5 actions hook (`system/snapshots/`). While an update
+holds its pair open it writes its pid to `/run/ryoku/update-snapshot`, and the
+hook stays out of the way until that process is gone, so an update never nests
+a second pair inside its own.
+
 The metadata refresh happens before the set is read, so the update only ever
 asks for packages the repository serves now; the transaction is restricted to
 `--repo=RyokuCOPR`, so dnf takes our build of a name that also exists in the
@@ -106,20 +112,12 @@ runs `ryoku boot-guard` as root early in every boot, before the display
 manager, and only while that marker exists. The shell daemon records a good
 boot once the shell has stayed up 45 s (`/var/lib/ryoku/boot/ok-<uid>`, the boot
 id); a record from any boot other than the one the update ran in disarms the
-guard. Without one, the boot counts: on the second, the guard tracks the
-previous release back (`ryoku track <from>`, then an explicit
-reinstall of `ryoku-desktop`; the Ryoku set only, the base system untouched),
-re-materializes every user's config from it, and leaves
-a notice `ryoku doctor` shows once. On a third it turns to the pre-update
-snapshot, for the case where the packages were not what broke: under Limine it
-makes that snapshot's entry the default; on Fedora it sends the next boot, once,
-to the snapshot's read-only look entry in the GRUB menu (`grub2-reboot`), never
-to an unattended restore. The notice then says to run `ryoku rollback <id>`
-there to keep it.
-
-The second step is still the Arch build's: it runs pacman. Fedora has one
-rolling COPR channel with no release tags to track back to, so on a Fedora box
-that step fails and the guard moves on to the snapshot on the next boot.
+guard. Without one, the boot counts: on the third, it sends the next boot,
+once, to the pre-update snapshot's read-only look entry in the GRUB menu
+(`grub2-reboot`), never to an unattended restore, and leaves a notice
+`ryoku doctor` shows once. The notice says to run `ryoku rollback <id>` there
+to keep it. Fedora has one rolling COPR channel with no release tags to track
+back to, so the snapshot is the only fallback.
 `sudo ryoku boot-guard --disarm` clears a marker by hand. The `ryoku`
 package ships the unit and its tmpfiles entry; the doctor enables the unit and
 prepares the record directory on every update, so boxes installed before it get
@@ -313,20 +311,7 @@ plugin whose receipts no longer match the installed headers through the provider
 the next login, and names the toolchain to install when a box has none. Gated on
 `CapPlugins`, so a compositor with no plugin system (niri) is a no-op. See
 `docs/hyprland-plugins.md`.
-`reconcileManifest` converges the box's package set to the release's control
-manifest. It reads the channel's `manifest.json`, diffs it against the baseline
-the box last converged to (saved with the names installed at that moment), and
-installs what the release wants that this box never received, which is what
-makes a package added to a set reach every box on the next update without a hard
-depend, and heals a box that has been missing one all along. A name present at
-the baseline and gone now was deleted by the user and stays gone; a name the
-release retired is reported, never uninstalled. The deliver-once apps stay
-`reconcileShippedApps'` lane, so one update never runs two transactions over the
-same names. Best-effort: a box with no mirror or no network reports what did not
-land and the update moves on. `ryoku verify` answers the same diff read-only, so
-two machines can be compared line by line. This reconciler is the Arch build's: it
-reports `ok` on a box without pacman, where package dependencies carry the set.
-`reconcileShippedApps` runs on both builds, through pacman or dnf: it installs
+`reconcileShippedApps` runs through dnf: it installs
 each app in `ryokumanifest.Apps()` once, ledgers it, and never puts back one the
 user removed. An app no enabled repository carries yet (Fedora's porting gaps in
 `installation/fedora/README.md`) is noted and skipped, and lands on the first
@@ -477,8 +462,7 @@ island (when the channel serves the next line) and the Hub's Updates page.
 - **A package the release is made of must reach every box on update.** On
   Fedora that means a package dependency: the `ryoku-desktop` spec in
   `release/rpm/` pins its components, so a package added there arrives with the
-  next `ryoku update`. The control-manifest reconciler (`reconcileManifest`) is
-  the Arch build's mechanism and reports `ok` on a box without pacman.
+  next `ryoku update`.
 - **A removed or renamed `shell.json` key, or a changed default that must reach
   existing users, needs a `doctor` reconciler** (materialize never edits a user's
   `shell.json`). An additive key needs nothing.

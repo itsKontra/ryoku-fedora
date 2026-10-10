@@ -30,4 +30,10 @@ package() {
   # installer to seed before the first update runs.
   install -Dm644 "$_repo/ryoku/cli/internal/doctor/snapper-root.conf" \
     "$pkgdir/usr/share/ryoku/snapper/root.conf"
+  # the dnf hook (system/snapshots): a snapper pair around every dnf
+  # transaction outside `ryoku update`, through the libdnf5 actions plugin.
+  install -Dm755 "$_repo/system/snapshots/ryoku-dnf-snapshot" \
+    "$pkgdir/usr/libexec/ryoku/ryoku-dnf-snapshot"
+  install -Dm644 "$_repo/system/snapshots/ryoku-snapper.actions" \
+    "$pkgdir/etc/dnf/libdnf5-plugins/actions.d/ryoku-snapper.actions"
 }

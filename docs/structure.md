@@ -158,8 +158,7 @@ System-level definition installed into the target.
 - `extras/` the helpers behind the Hub's Extras section, shipped to `/usr/bin` by
   `ryoku-desktop`: `ryostore-install` (installs, removes, and reports the
   optional bundles from the `ryostore` catalogue), the `ryoku-pkg-*` routing
-  wrappers (repo, remove, multilib, and the legacy AUR name, which routes to
-  dnf on Fedora), and `ryoku-cmd-present`.
+  wrappers (add, remove, multilib), and `ryoku-cmd-present`.
 - `packages/` the package manifests used to define and audit the desktop and
   hardware package closure.
 - `bootmenu/` the GRUB boot menu, shipped by `ryoku-desktop`: the Ryoku theme
@@ -167,6 +166,10 @@ System-level definition installed into the target.
   snippet, the snapper plugin and units behind `ryoku boot-menu`, and the
   `90ryoku-snapshot` dracut module that looks at or restores a snapshot from
   the initramfs. See "Snapshots in the boot menu" in `docs/updates.md`.
+- `snapshots/` the dnf hook, shipped by `ryoku`: `ryoku-snapper.actions` for
+  the libdnf5 actions plugin and `ryoku-dnf-snapshot`, which takes a snapper
+  pre/post pair around every dnf transaction that `ryoku update` is not
+  already wrapping in its own.
 - `recovery/` the console fallback when the desktop cannot start, shipped by
   `ryoku-desktop`: the `sddm.service` drop-in, `ryoku-console-fallback.service`
   (a text login on tty1 with a recovery banner), `ryoku-console-guard.service`

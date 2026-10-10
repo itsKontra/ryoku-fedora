@@ -11,6 +11,7 @@ BuildRequires:  coreutils
 BuildRequires:  findutils
 BuildRequires:  golang >= 1.26.4
 Requires:       dnf
+Requires:       libdnf5-plugin-actions
 Recommends:     snapper
 
 %description

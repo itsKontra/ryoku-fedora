@@ -1,138 +1,13 @@
 package doctor
 
-import (
-	"errors"
-	"testing"
-)
+import "testing"
 
-// idempotency lock on the NVIDIA reconciler. canonical config we write must
-// read back ok (else doctor rebuilds the initramfs every run); pre-fix or
-// missing config = "needs fixing".
-func TestNvidiaConfigOK(t *testing.T) {
-	cases := []struct {
-		name             string
-		modprobe, mkinit string
-		want             bool
-	}{
-		{"canonical config the reconciler writes", nvidiaModprobeConf, nvidiaMkinitcpioConf, true},
-		{"old install: modeset only, no nouveau blacklist", "options nvidia_drm modeset=1 fbdev=1\n", nvidiaMkinitcpioConf, false},
-		{"old install: modeset without fbdev heals", "options nvidia_drm modeset=1\nblacklist nouveau\n", nvidiaMkinitcpioConf, false},
-		{"blacklisted but nvidia modules not in the initramfs", nvidiaModprobeConf, "", false},
-		{"both drop-ins missing (readFileSafe error strings)", "(open /etc/modprobe.d/nvidia.conf: no such file or directory)", "(open /etc/mkinitcpio.conf.d/nvidia.conf: no such file or directory)", false},
-	}
-	for _, c := range cases {
-		if got := nvidiaConfigOK(c.modprobe, c.mkinit); got != c.want {
-			t.Errorf("%s: nvidiaConfigOK(...) = %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
-// idempotency lock on the guard-hook reconciler: the canonical hook must read
-// back ok (else doctor rewrites it every run), a stale/absent one must not.
-func TestNvidiaGuardHookOK(t *testing.T) {
-	cases := []struct {
-		name string
-		got  string
-		want bool
-	}{
-		{"canonical hook the reconciler writes", nvidiaGuardHook, true},
-		{"canonical hook with a trailing newline", nvidiaGuardHook + "\n", true},
-		{"pre-fix hook: blind rebuild, no kernel trigger", "[Trigger]\nType=Package\nTarget=nvidia-utils\n[Action]\nExec=/bin/sh -c 'mkinitcpio -P'\n", false},
-		{"missing hook (readFileSafe error string)", "(open /etc/pacman.d/hooks/ryoku-nvidia.hook: no such file or directory)", false},
-	}
-	for _, c := range cases {
-		if got := nvidiaGuardHookOK(c.got); got != c.want {
-			t.Errorf("%s: nvidiaGuardHookOK(...) = %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
-func TestReconcileKeplerNvidia(t *testing.T) {
-	pinKeplerHost(t, false)
-	oldPCI := nvidiaPCIOutput
-	oldInstalled := nvidia580Installed
-	oldRemoveDriver := removeKepler580
-	oldRestoreConfig := restoreKeplerNouveau
-	oldRebuild := rebuildKeplerNouveau
-	t.Cleanup(func() {
-		nvidiaPCIOutput = oldPCI
-		nvidia580Installed = oldInstalled
-		removeKepler580 = oldRemoveDriver
-		restoreKeplerNouveau = oldRestoreConfig
-		rebuildKeplerNouveau = oldRebuild
-	})
-
-	nvidiaPCIOutput = func() string {
-		return "01:00.0 VGA compatible controller: NVIDIA Corporation GK208B [GeForce GT 710]"
-	}
-	nvidia580Installed = func() bool { return true }
-
-	removed, restored, rebuilt := false, false, false
-	removeKepler580 = func() error { removed = true; return nil }
-	restoreKeplerNouveau = func() error { restored = true; return nil }
-	rebuildKeplerNouveau = func() error { rebuilt = true; return nil }
-
-	got := reconcileKeplerNvidia(false)
-	if got.status != recFixed {
-		t.Fatalf("Kepler recovery status = %v, want fixed", got.status)
-	}
-	if !removed || !restored || !rebuilt {
-		t.Fatalf("Kepler recovery removed=%t restored=%t rebuilt=%t, want all true", removed, restored, rebuilt)
-	}
-
-	removed, restored, rebuilt = false, false, false
-	nvidiaPCIOutput = func() string {
-		return "01:00.0 VGA compatible controller: NVIDIA Corporation GA107M [GeForce RTX 3050]"
-	}
-	got = reconcileKeplerNvidia(false)
-	if got.status != recOK {
-		t.Fatalf("non-Kepler recovery status = %v, want ok", got.status)
-	}
-	if removed || restored || rebuilt {
-		t.Fatalf("non-Kepler recovery changed driver=%t config=%t initramfs=%t", removed, restored, rebuilt)
-	}
-}
-
-func TestNvidiaDriverActiveForKeplerRecovery(t *testing.T) {
+func TestNvidiaDriverActiveForKepler(t *testing.T) {
 	if nvidiaDriverActiveFor(true, false, []string{"nvidia"}) {
-		t.Fatal("a removed 580xx package must not reapply the NVIDIA blacklist on Kepler")
+		t.Fatal("Kepler hardware without a driver package must not count as NVIDIA-driven")
 	}
 	if !nvidiaDriverActiveFor(true, true, []string{"nvidia"}) {
 		t.Fatal("an installed Kepler-compatible NVIDIA package must remain active")
-	}
-}
-
-func TestKepler580RemovalArgs(t *testing.T) {
-	got := kepler580RemovalArgs()
-	want := []string{"pacman", "-R", "--noconfirm", "nvidia-580xx-dkms"}
-	if len(got) != len(want) {
-		t.Fatalf("removal args = %q, want %q", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("removal args = %q, want %q", got, want)
-		}
-	}
-}
-
-func TestKeplerRemovalFailureUsesScopedRemedy(t *testing.T) {
-	pinKeplerHost(t, false)
-	oldPCI := nvidiaPCIOutput
-	oldInstalled := nvidia580Installed
-	oldRemoveDriver := removeKepler580
-	t.Cleanup(func() {
-		nvidiaPCIOutput = oldPCI
-		nvidia580Installed = oldInstalled
-		removeKepler580 = oldRemoveDriver
-	})
-	nvidiaPCIOutput = func() string { return "NVIDIA GK208B" }
-	nvidia580Installed = func() bool { return true }
-	removeKepler580 = func() error { return errors.New("blocked") }
-
-	got := reconcileKeplerNvidia(false)
-	want := "sudo pacman -R --noconfirm nvidia-580xx-dkms"
-	if got.remedy != want {
-		t.Fatalf("remedy = %q, want %q", got.remedy, want)
 	}
 }
 
@@ -201,23 +76,5 @@ func TestPlanNvidiaSleepUnits(t *testing.T) {
 
 // pinKeplerHost fixes the RPM fact the Kepler reconciler reads, so the tests
 // give the same answer on a Fedora workstation as on a CI runner.
-func pinKeplerHost(t *testing.T, rpm bool) {
-	t.Helper()
-	old := keplerHostRPM
-	t.Cleanup(func() { keplerHostRPM = old })
-	keplerHostRPM = func() bool { return rpm }
-}
-
 // An RPM box keeps its own NVIDIA driver: the reconciler touches nothing even on
 // Kepler hardware with the 580xx package present.
-func TestReconcileKeplerNvidiaLeavesRPMHostAlone(t *testing.T) {
-	pinKeplerHost(t, true)
-	oldPCI, oldInstalled, oldRemove := nvidiaPCIOutput, nvidia580Installed, removeKepler580
-	t.Cleanup(func() { nvidiaPCIOutput, nvidia580Installed, removeKepler580 = oldPCI, oldInstalled, oldRemove })
-	nvidiaPCIOutput = func() string { return "NVIDIA GK208B" }
-	nvidia580Installed = func() bool { return true }
-	removeKepler580 = func() error { t.Fatal("an RPM host must not have its driver removed"); return nil }
-	if got := reconcileKeplerNvidia(false); got.status != recOK {
-		t.Fatalf("status = %v, want ok", got.status)
-	}
-}

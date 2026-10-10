@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-# Older catalogue installers still call this name.
-echo "ryoku-pkg-aur-add: AUR is unavailable on Fedora; using enabled DNF repositories" >&2
-exec ryoku-pkg-add "$@"

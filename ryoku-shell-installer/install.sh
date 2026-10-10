@@ -60,8 +60,8 @@ main() {
   command -v dnf > /dev/null 2>&1 || die "unsupported distribution: Ryoku installs on mutable Fedora 44 and its derivatives"
   [[ $(uname -m) == x86_64 ]] || die "Ryoku ships x86_64 builds only"
   # the binary refuses non-systemd boots much later (session + services are
-  # systemd units); saying it here spares Artix users the download.
-  [[ -d /run/systemd/system ]] || die "this installer needs systemd (Artix and other non-systemd inits are not supported)"
+  # systemd units); saying it here spares the download.
+  [[ -d /run/systemd/system ]] || die "this installer needs systemd (non-systemd inits are not supported)"
   command -v curl > /dev/null 2>&1 || die "curl is required"
 
   say "Fedora detected: released packages are the default; --install-mode=source builds a checkout"

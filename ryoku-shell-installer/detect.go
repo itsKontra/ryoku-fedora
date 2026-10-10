@@ -64,20 +64,19 @@ type facts struct {
 // rival quickshell stacks; ordered meta -> shell -> runtime so package removal
 // never trips its own dependency checks (iNiR's conflicts model).
 var rivalShellPkgs = []string{
-	"cachyos-niri-noctalia", "noctalia-shell", "noctalia-shell-git", "noctalia-qs",
-	"dms-shell", "dms-shell-git", "dms-shell-greeter",
+	"noctalia-hyprland-meta", "noctalia", "noctalia-shell", "noctalia-git", "noctalia-qs",
+	"dms",
 	"caelestia-shell", "caelestia-shell-git",
-	"inir-shell", "inir-shell-git", "bms-shell-bin",
 }
 
 // installed packages that make a non-interactive install of the desktop set
 // abort with an unresolved conflict.
 var conflictBlockerPkgs = []string{
-	"pulseaudio", "pulseaudio-alsa", "pulseaudio-bluetooth",
-	"quickshell-git", "quickshell-bin",
-	// ship the same files as ryoku-cursors; left in place they file-conflict
-	// the whole desktop transaction to death
-	"bibata-cursor-theme", "bibata-cursor-theme-bin",
+	"pulseaudio", "pulseaudio-module-bluetooth",
+	"quickshell-git",
+	// ship the same Bibata icon dirs as ryoku-extras; left in place they
+	// file-conflict the whole desktop transaction to death
+	"bibata-cursor-theme", "bibata-cursor-themes",
 }
 
 // user daemons the Ryoku shell replaces (notifications, bar, wallpaper, idle,

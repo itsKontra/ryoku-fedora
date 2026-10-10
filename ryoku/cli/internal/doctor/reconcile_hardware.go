@@ -182,48 +182,14 @@ func isLaptop() bool {
 	return false
 }
 
-// ---- reconciler: NVIDIA boot reliability -------------------------------------
+// ---- NVIDIA driver detection ----------------------------------------------
 
-// reconcileNvidiaModeset backports the installer's NVIDIA reliability config
-// to a box running the proprietary/open nvidia modules but installed (or
-// last doctored) before the fix. without it, nouveau and nvidia race for the
-// card at boot, so the GPU "shows up only on some boots" -- the intermittent
-// detection failure users hit. mirrors system/hardware/drivers/nvidia.sh:
-// blacklist nouveau, force DRM modeset, load the modules early, then rebuild
-// the initramfs so it takes effect. acts ONLY when an nvidia kernel-module
-// package is installed (or the module is loaded); a box on nouveau by choice
-// has no such package and stays untouched -- blacklisting nouveau there
-// would break its display.
-
-// nvidiaModprobeConf mirrors system/hardware/drivers/nvidia.sh verbatim, so
-// a doctored box matches a fresh install.
-const nvidiaModprobeConf = `options nvidia_drm modeset=1 fbdev=1
-options nvidia NVreg_PreserveVideoMemoryAllocations=1
-blacklist nouveau
-options nouveau modeset=0
-`
-
-const nvidiaMkinitcpioConf = "MODULES=(nvidia nvidia_modeset nvidia_uvm nvidia_drm)\n"
-
-var (
-	nvidiaPCIOutput = func() string {
-		out, err := exec.Command("lspci").Output()
-		if err != nil {
-			return ""
-		}
-		return string(out)
+var nvidiaPCIOutput = func() string {
+	out, err := exec.Command("lspci").Output()
+	if err != nil {
+		return ""
 	}
-	nvidia580Installed   = func() bool { return sys.PkgInstalled("nvidia-580xx-dkms") }
-	removeKepler580      = func() error { return sys.Sudo(kepler580RemovalArgs()...) }
-	restoreKeplerNouveau = func() error {
-		return removeRootFiles("/etc/modprobe.d/nvidia.conf", "/etc/mkinitcpio.conf.d/nvidia.conf")
-	}
-	rebuildKeplerNouveau = rebuildInitramfs
-	keplerHostRPM        = func() bool { return sys.RPMManager() != "" }
-)
-
-func kepler580RemovalArgs() []string {
-	return []string{"pacman", "-R", "--noconfirm", "nvidia-580xx-dkms"}
+	return string(out)
 }
 
 func keplerGpuPresent() bool {
@@ -231,38 +197,11 @@ func keplerGpuPresent() bool {
 	return strings.Contains(pci, "nvidia") && strings.Contains(pci, "gk")
 }
 
-func reconcileKeplerNvidia(checkOnly bool) recResult {
-	if keplerHostRPM() {
-		return okRes(i18n.T("keeping the host NVIDIA driver"))
-	}
-	if !keplerGpuPresent() || !nvidia580Installed() {
-		return okRes(i18n.T("no incompatible 580xx driver on Kepler hardware"))
-	}
-	if checkOnly {
-		return wouldRes(i18n.T("Kepler hardware has nvidia-580xx-dkms, which cannot bind this GPU and leaves Nouveau blacklisted")).
-			withFix(i18n.T("ryoku doctor  (removes 580xx and restores Nouveau)"))
-	}
-	if err := removeKepler580(); err != nil {
-		return failRes(i18n.T("could not remove incompatible nvidia-580xx-dkms: %v"), err).
-			withFix("sudo pacman -R --noconfirm nvidia-580xx-dkms")
-	}
-	if err := restoreKeplerNouveau(); err != nil {
-		return failRes(i18n.T("removed 580xx but could not restore Nouveau: %v"), err).
-			withFix("sudo rm /etc/modprobe.d/nvidia.conf /etc/mkinitcpio.conf.d/nvidia.conf")
-	}
-	if err := rebuildKeplerNouveau(); err != nil {
-		return warnRes(i18n.T("restored Nouveau, but the initramfs rebuild failed: %v"), err).
-			withFix(i18n.T("ryoku doctor (retries the pending initramfs rebuild)"))
-	}
-	return fixedRes(i18n.T("removed unsupported 580xx from Kepler hardware and restored Nouveau for the next boot"))
-}
-
 // nvidiaDriverActive: does this box use the proprietary/open nvidia driver?
-// a loaded module is the clearest tell, but the bug we repair is exactly
-// that nouveau won the boot race, so the module may NOT be loaded -- fall
-// back to "an nvidia kernel-module package is installed". nvidia-utils
-// (userspace) alone is excluded: with no module to load, writing
-// MODULES=(nvidia ...) would only break the initramfs.
+// a loaded module is the clearest tell, but nouveau can win the boot race,
+// so the module may NOT be loaded -- fall back to "an nvidia kernel-module
+// package is installed". the userspace driver alone is excluded: with no
+// module to load, the sleep units have no VRAM to save.
 func nvidiaDriverActive() bool {
 	return nvidiaDriverActiveFor(keplerGpuPresent(), nvidiaDriverPackagePresent(), gpuDriversLoaded())
 }
@@ -279,206 +218,13 @@ func nvidiaDriverActiveFor(kepler, packagePresent bool, loaded []string) bool {
 	return packagePresent
 }
 
+// nvidiaDriverPackagePresent: a kernel-module package is installed, Ryoku's
+// signed modules or any RPM Fusion akmod/kmod build (open, legacy branches,
+// prebuilt per-kernel kmods).
 func nvidiaDriverPackagePresent() bool {
-	return anyPkgInstalled("nvidia-open-dkms", "nvidia-dkms", "nvidia-open", "nvidia", "nvidia-lts", "nvidia-open-lts", "nvidia-470xx-dkms", "nvidia-580xx-dkms")
-}
-
-// nvidiaConfigOK: do the modprobe + mkinitcpio drop-ins already carry the
-// reliability essentials (nouveau blacklisted, DRM modeset on, nvidia
-// modules in the initramfs)? pure, so the idempotency that keeps doctor
-// quiet on a healthy box -- and stops it rebuilding the initramfs every
-// run -- is unit-testable.
-func nvidiaConfigOK(modprobe, mkinit string) bool {
-	return strings.Contains(modprobe, "blacklist nouveau") &&
-		strings.Contains(modprobe, "nvidia_drm modeset=1 fbdev=1") &&
-		strings.Contains(mkinit, "nvidia_drm")
-}
-
-// nvidiaModuleOnDisk: modinfo finds the nvidia module for any installed
-// kernel tree, the same probe nvidia.sh gates on at install time.
-func nvidiaModuleOnDisk() bool {
-	dirs, _ := filepath.Glob("/usr/lib/modules/*")
-	for _, d := range dirs {
-		kv := filepath.Base(d)
-		if exec.Command("modinfo", "-k", kv, "nvidia").Run() == nil {
-			return true
-		}
-	}
-	return false
-}
-
-// removeRootFiles deletes root-owned files through sudo; absent files are fine.
-func removeRootFiles(paths ...string) error {
-	args := append([]string{"rm", "-f"}, paths...)
-	return sys.Sudo(args...)
-}
-
-func reconcileNvidiaModeset(checkOnly bool) recResult {
-	if sys.RPMManager() != "" {
-		return okRes(i18n.T("keeping the host NVIDIA driver and boot configuration"))
-	}
-	pending := filepath.Join(sys.StateDir(), "nvidia-initramfs-pending")
-	if sys.Exists(pending) {
-		if checkOnly {
-			return wouldRes(i18n.T("NVIDIA initramfs rebuild is pending"))
-		}
-		if err := rebuildInitramfs(); err != nil {
-			return failRes(i18n.T("NVIDIA initramfs rebuild failed: %v"), err)
-		}
-		if err := os.Remove(pending); err != nil {
-			return failRes("remove initramfs marker: %v", err)
-		}
-		return fixedRes(i18n.T("rebuilt the pending NVIDIA initramfs"))
-	}
-	markPending := func() error {
-		if err := os.MkdirAll(filepath.Dir(pending), 0o755); err != nil {
-			return err
-		}
-		return os.WriteFile(pending, []byte("pending\n"), 0o600)
-	}
-
-	if !nvidiaDriverActive() {
-		return okRes(i18n.T("no proprietary NVIDIA driver in use"))
-	}
-	needsMkinit := sys.Has("mkinitcpio") || sys.Has("limine-mkinitcpio")
-	// nouveau blacklisted with no loadable nvidia module = no driver can bind
-	// the card (the SDDM login loop). Restore nouveau so the next boot has a
-	// display; installing the matching driver is then an ordinary fix.
-	blacklist := strings.Contains(readFileSafe("/etc/modprobe.d/nvidia.conf"), "blacklist nouveau")
-	if blacklist && !nvidiaModuleOnDisk() {
-		if checkOnly {
-			return wouldRes(i18n.T("nouveau is blacklisted but no nvidia module exists for any installed kernel; the session cannot start (the SDDM login loop)")).
-				withFix(i18n.T("ryoku doctor  (restores nouveau, rebuilds the initramfs)"))
-		}
-		if err := markPending(); err != nil {
-			return failRes("record pending initramfs: %v", err)
-		}
-		toRemove := []string{"/etc/modprobe.d/nvidia.conf"}
-		if needsMkinit {
-			toRemove = append(toRemove, "/etc/mkinitcpio.conf.d/nvidia.conf")
-		}
-		if err := removeRootFiles(toRemove...); err != nil {
-			return failRes(i18n.T("could not remove the stale NVIDIA config: %v"), err).
-				withFix("sudo rm /etc/modprobe.d/nvidia.conf /etc/mkinitcpio.conf.d/nvidia.conf && sudo mkinitcpio -P")
-		}
-		if err := rebuildInitramfs(); err != nil {
-			return warnRes(i18n.T("restored nouveau, but the initramfs rebuild failed: %v"), err).
-				withFix(i18n.T("ryoku doctor (retries the pending initramfs rebuild)"))
-		}
-		_ = os.Remove(pending)
-		return fixedRes(i18n.T("no nvidia module exists for the installed kernel(s); restored nouveau and rebuilt the initramfs so the next boot can use nouveau. Install a matching driver and run ryoku doctor again to switch back"))
-	}
-	modprobe := readFileSafe("/etc/modprobe.d/nvidia.conf")
-	mkinit := readFileSafe("/etc/mkinitcpio.conf.d/nvidia.conf")
-	ok := strings.Contains(modprobe, "blacklist nouveau") &&
-		strings.Contains(modprobe, "nvidia_drm modeset=1 fbdev=1") &&
-		(!needsMkinit || strings.Contains(mkinit, "nvidia_drm"))
-	if ok {
-		return okRes(i18n.T("NVIDIA modeset + fbdev + nouveau blacklist in place"))
-	}
-	if checkOnly {
-		fix := "ryoku doctor (writes /etc/modprobe.d/nvidia.conf and rebuilds the initramfs)"
-		return wouldRes(i18n.T("NVIDIA driver in use but nouveau is not blacklisted / DRM modeset + fbdev not set; the GPU or an external display can fail to come up on some boots")).
-			withFix(fix)
-	}
-	if err := markPending(); err != nil {
-		return failRes("record pending initramfs: %v", err)
-	}
-	if err := writeRootFile("/etc/modprobe.d/nvidia.conf", nvidiaModprobeConf, "0644"); err != nil {
-		return failRes(i18n.T("could not write /etc/modprobe.d/nvidia.conf: %v"), err).
-			withFix(i18n.T("re-run with sudo access"))
-	}
-	if needsMkinit {
-		if err := writeRootFile("/etc/mkinitcpio.conf.d/nvidia.conf", nvidiaMkinitcpioConf, "0644"); err != nil {
-			return failRes(i18n.T("could not write /etc/mkinitcpio.conf.d/nvidia.conf: %v"), err).
-				withFix(i18n.T("re-run with sudo access"))
-		}
-	}
-	if err := rebuildInitramfs(); err != nil {
-		return warnRes(i18n.T("wrote the NVIDIA reliability config, but the initramfs rebuild failed: %v"), err).
-			withFix(i18n.T("ryoku doctor (retries the pending initramfs rebuild)"))
-	}
-	_ = os.Remove(pending)
-	return fixedRes(i18n.T("blacklisted nouveau, enabled NVIDIA DRM modeset, and rebuilt the initramfs"))
-}
-
-// rebuildInitramfs regenerates the boot image after a module/blacklist
-// change using the host boot-image tooling.
-func rebuildInitramfs() error {
-	for _, args := range [][]string{{"limine-mkinitcpio"}, {"mkinitcpio", "-P"}, {"dracut", "--regenerate-all", "--force"}} {
-		if sys.Has(args[0]) {
-			return sys.Sudo(args...)
-		}
-	}
-	return fmt.Errorf("no supported initramfs builder (mkinitcpio or dracut)")
-}
-
-// ---- reconciler: NVIDIA update guard hook ------------------------------------
-
-// nvidiaGuardHookPath / nvidiaGuardHook: the pacman hook that runs
-// ryoku-nvidia-guard after every kernel or NVIDIA-driver transaction. Mirrors
-// system/hardware/drivers/nvidia.sh verbatim so a doctored box matches a fresh
-// install. Its job is the SDDM login loop: a -dkms module that fails to rebuild
-// on a kernel update leaves nouveau blacklisted with no nvidia module, so no
-// driver binds the card and the Wayland session cannot start. `ryoku update`
-// heals that after the fact, but a plain `pacman -Syu` never runs doctor -- this
-// hook makes the guard run in that transaction instead.
-const nvidiaGuardHookPath = "/etc/pacman.d/hooks/ryoku-nvidia.hook"
-
-const nvidiaGuardHook = `[Trigger]
-Operation=Install
-Operation=Upgrade
-Operation=Remove
-Type=Path
-Target=usr/lib/modules/*/vmlinuz
-
-[Trigger]
-Operation=Install
-Operation=Upgrade
-Operation=Remove
-Type=Package
-Target=nvidia*
-Target=lib32-nvidia*
-Target=libva-nvidia-driver
-Target=linux-*-nvidia*
-
-[Action]
-Description=Ryoku: reconciling NVIDIA modules and the initramfs (guards the login loop)...
-When=PostTransaction
-NeedsTargets
-Exec=/usr/bin/ryoku-nvidia-guard
-`
-
-// nvidiaGuardHookOK: is the installed hook already the canonical content? pure,
-// so the idempotency (doctor stays quiet on a healthy box) is unit-testable.
-// Trailing-whitespace tolerant: readFileSafe returns an error string when the
-// file is absent, which never matches.
-func nvidiaGuardHookOK(got string) bool {
-	return strings.TrimSpace(got) == strings.TrimSpace(nvidiaGuardHook)
-}
-
-func reconcileNvidiaGuardHook(checkOnly bool) recResult {
-	if !sys.Has("ryoku-nvidia-guard") {
-		return okRes(i18n.T("NVIDIA driver repair is not managed by Ryoku"))
-	}
-	if !nvidiaDriverActive() {
-		return okRes(i18n.T("no proprietary NVIDIA driver in use"))
-	}
-	if !sys.Has("pacman") {
-		return okRes("pacman hooks not used on this system")
-	}
-	if nvidiaGuardHookOK(readFileSafe(nvidiaGuardHookPath)) {
-		return okRes(i18n.T("NVIDIA update guard hook in place"))
-	}
-	if checkOnly {
-		return wouldRes(i18n.T("the NVIDIA update guard pacman hook is missing or stale; a failed DKMS rebuild on a kernel update could strand the box at the SDDM login (the login loop)")).
-			withFix(i18n.T("ryoku doctor  (installs /etc/pacman.d/hooks/ryoku-nvidia.hook)"))
-	}
-	if err := writeRootFile(nvidiaGuardHookPath, nvidiaGuardHook, "0644"); err != nil {
-		return failRes(i18n.T("could not write %s: %v"), nvidiaGuardHookPath, err).
-			withFix(i18n.T("re-run with sudo access"))
-	}
-	return fixedRes(i18n.T("installed the NVIDIA update guard hook so a failed DKMS rebuild can't strand the login"))
+	out, err := exec.Command("rpm", "-qa", "--qf", "%{NAME}\n",
+		"ryoku-nvidia", "akmod-nvidia*", "kmod-nvidia*").Output()
+	return err == nil && strings.TrimSpace(string(out)) != ""
 }
 
 // ---- reconciler: NVIDIA Wayland autostart ------------------------------------

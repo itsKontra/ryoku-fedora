@@ -436,7 +436,7 @@ func stepPayload(e *engine) error {
 	if e.payloadOverride != "" {
 		e.payload = e.payloadOverride
 		if _, err := os.Stat(filepath.Join(e.payload, "ryoku/lockscreen/install-qylock")); err != nil && !e.dry {
-			return errors.New(i18n.Tf("payload override %s does not look like a ryoku-arch checkout", e.payload))
+			return errors.New(i18n.Tf("payload override %s does not look like a Ryoku checkout", e.payload))
 		}
 		e.say(i18n.Tf("using payload checkout %s", e.payload))
 		return nil
@@ -620,14 +620,14 @@ func stepConflicts(e *engine) error {
 		}
 	}
 	if e.p.rivals && len(e.f.rivalPkgs) > 0 {
-		// plain -R, no -ns cascade: -Rns on a meta like cachyos-niri-noctalia
-		// would drag niri itself out, and the plan promises niri survives as a
+		// no autoremove cascade: it would drag niri out with a meta like
+		// noctalia-hyprland-meta, and the plan promises niri survives as a
 		// fallback session. leftover deps become orphans doctor can report.
 		e.say(i18n.Tf("removing rival shell packages: %s", strings.Join(e.f.rivalPkgs, " ")))
-		if err := e.sudo(e.d().removeArgs(e.f.rivalPkgs)...); err != nil {
+		if err := e.sudo(e.d().removeKeepingDepsArgs(e.f.rivalPkgs)...); err != nil {
 			e.say(i18n.T("bulk removal failed, retrying one by one"))
 			for _, p := range e.f.rivalPkgs {
-				if err := e.sudo(e.d().removeArgs([]string{p})...); err != nil {
+				if err := e.sudo(e.d().removeKeepingDepsArgs([]string{p})...); err != nil {
 					e.say(i18n.Tf("warning: could not remove %s (continuing)", p))
 				}
 			}
@@ -837,7 +837,7 @@ func stepSession(e *engine) error {
 	// sddm/setup strips pam_gnome_keyring on purpose: a fresh Ryoku box uses a
 	// passwordless default keyring. an ex-GNOME user instead has a password
 	// protected login keyring from GDM, and without these lines every login
-	// prompts for it (stock Arch /etc/pam.d/sddm only carries kwallet).
+	// prompts for it (stock /etc/pam.d/sddm only carries kwallet).
 	if e.p.switchDM && hasDesktop(e.f.desktops, "GNOME") {
 		if err := e.sudoSh(`f=/etc/pam.d/sddm
 if [ -f "$f" ] && ! grep -q pam_gnome_keyring "$f"; then

@@ -35,8 +35,3 @@ func TestCmdReaderSplitsCarriageReturns(t *testing.T) {
 		t.Errorf("finals = %v, want [dl done, crlf line] (\\r\\n is one line ending)", finals)
 	}
 }
-
-// a shell-converted box keeps its own bootloader + initramfs, so the limine
-// hook packages -- which pull limine + mkinitcpio back as depends and ship
-// pacman hooks that collide with a host's own (Garuda's garuda-hooks, #58) --
-// must be filtered out of the install set alongside limine/mkinitcpio/snapper.
