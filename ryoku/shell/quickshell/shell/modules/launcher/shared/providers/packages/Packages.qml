@@ -134,7 +134,7 @@ Provider {
     }
 
     // text after ">": "search x" / "install x" / "remove x", or a bare query that
-    // defaults to search. So ">yay" searches, ">install yay" installs.
+    // defaults to search. So ">htop" searches, ">install htop" installs.
     function parseOp(text) {
         var m = String(text || "").match(/^(install|remove|search)\s+(.+)$/i);
         if (m)

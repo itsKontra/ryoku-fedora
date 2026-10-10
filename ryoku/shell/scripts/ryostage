@@ -359,7 +359,7 @@ ensure_venv() {
         uv python install 3.13 && uv venv --python 3.13 "$venv"
         [[ -x "$venv/bin/python" ]] && return 0
     fi
-    printf 'ryostage: needs Python 3.11-3.13 or uv (install it: sudo pacman -S uv)\n' >&2
+    printf 'ryostage: needs Python 3.11-3.13 or uv (install it: sudo dnf install uv)\n' >&2
     return 1
 }
 

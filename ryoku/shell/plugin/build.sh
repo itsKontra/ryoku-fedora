@@ -22,7 +22,7 @@ for tool in cmake ninja; do
     elif command -v apt-get >/dev/null 2>&1; then
       printf 'build.sh: error: %s is required (sudo apt-get install cmake ninja-build qt6-shadertools-dev)\n' "$tool" >&2
     else
-      printf 'build.sh: error: %s is required (sudo pacman -S cmake ninja qt6-shadertools)\n' "$tool" >&2
+      printf 'build.sh: error: %s is required (install CMake, Ninja and the Qt 6 Shader Tools)\n' "$tool" >&2
     fi
     exit 1
   }
