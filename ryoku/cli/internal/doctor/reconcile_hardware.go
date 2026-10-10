@@ -219,6 +219,7 @@ var (
 		return removeRootFiles("/etc/modprobe.d/nvidia.conf", "/etc/mkinitcpio.conf.d/nvidia.conf")
 	}
 	rebuildKeplerNouveau = rebuildInitramfs
+	keplerHostRPM        = func() bool { return sys.RPMManager() != "" }
 )
 
 func kepler580RemovalArgs() []string {
@@ -231,7 +232,7 @@ func keplerGpuPresent() bool {
 }
 
 func reconcileKeplerNvidia(checkOnly bool) recResult {
-	if sys.RPMManager() != "" {
+	if keplerHostRPM() {
 		return okRes(i18n.T("keeping the host NVIDIA driver"))
 	}
 	if !keplerGpuPresent() || !nvidia580Installed() {

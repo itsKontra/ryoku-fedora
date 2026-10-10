@@ -48,6 +48,7 @@ func TestNvidiaGuardHookOK(t *testing.T) {
 }
 
 func TestReconcileKeplerNvidia(t *testing.T) {
+	pinKeplerHost(t, false)
 	oldPCI := nvidiaPCIOutput
 	oldInstalled := nvidia580Installed
 	oldRemoveDriver := removeKepler580
@@ -115,6 +116,7 @@ func TestKepler580RemovalArgs(t *testing.T) {
 }
 
 func TestKeplerRemovalFailureUsesScopedRemedy(t *testing.T) {
+	pinKeplerHost(t, false)
 	oldPCI := nvidiaPCIOutput
 	oldInstalled := nvidia580Installed
 	oldRemoveDriver := removeKepler580
@@ -194,5 +196,28 @@ func TestPlanNvidiaSleepUnits(t *testing.T) {
 				t.Errorf("%s: missing[%d] = %s, want %s", c.name, i, missing[i], c.wantMissing[i])
 			}
 		}
+	}
+}
+
+// pinKeplerHost fixes the RPM fact the Kepler reconciler reads, so the tests
+// give the same answer on a Fedora workstation as on a CI runner.
+func pinKeplerHost(t *testing.T, rpm bool) {
+	t.Helper()
+	old := keplerHostRPM
+	t.Cleanup(func() { keplerHostRPM = old })
+	keplerHostRPM = func() bool { return rpm }
+}
+
+// An RPM box keeps its own NVIDIA driver: the reconciler touches nothing even on
+// Kepler hardware with the 580xx package present.
+func TestReconcileKeplerNvidiaLeavesRPMHostAlone(t *testing.T) {
+	pinKeplerHost(t, true)
+	oldPCI, oldInstalled, oldRemove := nvidiaPCIOutput, nvidia580Installed, removeKepler580
+	t.Cleanup(func() { nvidiaPCIOutput, nvidia580Installed, removeKepler580 = oldPCI, oldInstalled, oldRemove })
+	nvidiaPCIOutput = func() string { return "NVIDIA GK208B" }
+	nvidia580Installed = func() bool { return true }
+	removeKepler580 = func() error { t.Fatal("an RPM host must not have its driver removed"); return nil }
+	if got := reconcileKeplerNvidia(false); got.status != recOK {
+		t.Fatalf("status = %v, want ok", got.status)
 	}
 }
