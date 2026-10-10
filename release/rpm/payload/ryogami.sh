@@ -7,7 +7,7 @@
 # (wall-ui) is its front end.
 #
 # built from the in-repo Go module at ryoku/shell/ryogami/daemon, no tarball
-# fetched. publish CI runs makepkg inside this dir against a full checkout, so
+# fetched. stage-package.sh sources this recipe from release/rpm/payload, so
 # the repo root is three levels up; go builds into $srcdir so the source tree
 # stays untouched.
 pkgname=ryogami

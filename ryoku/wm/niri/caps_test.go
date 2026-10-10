@@ -7,10 +7,10 @@ import (
 )
 
 // The caps list is documented as "kept in step with that package's depends".
-// A satellite added to the PKGBUILD but not to this list could never be
+// A satellite added to the RPM spec but not to this list could never be
 // reclaimed on a packaged box; the variant package itself, missing from the
 // list, owns every satellite and blocks all their removal. Both drifts fail
-// here, against the real PKGBUILD.
+// here, against the real RPM spec.
 func TestReclaimListMatchesVariantDepends(t *testing.T) {
 	raw, err := os.ReadFile("../../../release/rpm/ryoku-desktop-niri.spec")
 	if err != nil {

@@ -27,8 +27,8 @@ desktop. See `docs/structure.md` for the repo-wide map.
   daemon that supervises the UI, owns wallpaper/clipboard/lock, and serves the
   control socket). `deploy.sh` and `dev-*.sh` are the live dev-loop tools.
 - `cli/` The user-facing control CLI (`ryoku`): `update`, `rollback`,
-  `snapshots`, `status`, `materialize`, and `reload`. It orchestrates pacman,
-  yay, and snapper rather than reimplementing them.
+  `snapshots`, `status`, `materialize`, and `reload`. It orchestrates dnf
+  and snapper rather than reimplementing them.
 - `hub/` Ryoku Settings, the control-center GUI (`Super + ,`): `backend/`
   (`ryoku-hub`, the Go data plane that reads the keybind legend, generates the
   Hyprland `settings.lua` override, and persists hub state as TOML) and

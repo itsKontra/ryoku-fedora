@@ -16,7 +16,7 @@ _repo="$startdir/../../.."
 build() {
   cd "$_repo/ryoku/shell/ipc" || exit
   # -mod=vendor keeps the build hermetic. godbus is vendored, so the signed-repo
-  # CI builds offline regardless of whatever GOFLAGS makepkg picked up.
+  # CI builds offline regardless of the GOFLAGS in the caller's environment.
   CGO_ENABLED=0 go build -trimpath -mod=vendor -o "$srcdir/ryoku-shell" .
   # ryoku-livewall: the C video-wallpaper daemon the shell drives. It software-
   # decodes a downscaled clip into wl_shm on a wlr background surface (no GL, so

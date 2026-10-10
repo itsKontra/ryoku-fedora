@@ -76,9 +76,10 @@ echo "  enabling sddm.service"
 priv systemctl enable sddm.service
 
 # --- 2. default to the graphical target --------------------------------------
-# a plain Arch chroot leaves default.target = multi-user.target = boots to a
-# getty, SDDM never starts. the pacman post-install hook that normally flips
-# this doesn't fire in a chroot, so set it explicitly.
+# a minimal install or a chroot can leave default.target = multi-user.target =
+# boots to a getty, SDDM never starts. the ryoku-desktop RPM's %post does not
+# flip it (installation/fedora/provision-target.py does on a fresh install), so
+# set it explicitly.
 echo "  setting default target -> graphical.target"
 priv systemctl set-default graphical.target
 

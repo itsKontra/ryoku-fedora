@@ -3,7 +3,7 @@
 # no shell autostart, no wallpaper, just the compositor's own defaults. Nothing
 # materializes on a plain package install (the installer, the dev deploy, and an
 # update on a box that already has it are the only callers), so the first login
-# after `pacman -S ryoku-desktop-<wm>` had nothing to run. This lays the packaged
+# after `dnf install ryoku-desktop-<wm>` had nothing to run. This lays the packaged
 # base config before the session's compositor reads its own tree: niri.service
 # pulls it in and orders itself after it, and it is enabled globally as a fallback
 # for sessions that are not a systemd user unit.

@@ -2,8 +2,7 @@
 
 ## Supported versions
 
-Ryoku is a rolling Linux distribution built on Arch Linux and under active
-development. Security fixes target the current development branch and the
+Ryoku is a Linux distribution built on Fedora and under active development. Security fixes target the current development branch and the
 latest release. Always reproduce a report against an up-to-date checkout or the
 most recent ISO before filing.
 

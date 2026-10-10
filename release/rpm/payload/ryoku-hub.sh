@@ -6,7 +6,7 @@
 #
 # Built from the in-repo source at ryoku/hub/backend; no tarball is fetched.
 # go build reads the committed vendor/ tree (-mod=vendor), so the signed-repo CI
-# builds with no network regardless of whatever GOFLAGS makepkg picked up.
+# builds with no network regardless of the GOFLAGS in the caller's environment.
 pkgname=ryoku-hub
 pkgver=${RYOKU_PKGVER:-0.1.0}
 pkgrel=1

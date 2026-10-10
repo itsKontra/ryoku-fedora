@@ -131,7 +131,7 @@ func repoLayout(root string) []layoutRow {
 		"ryoku":                 "the desktop: apps, hyprland (Lua), shell UI, hub, rashin, assets",
 		"system":                "machine definition: boot chain, hardware policy, package sets",
 		"installation":          "how a machine is built: TUI, backend installer, ISO",
-		"release":               "packaging: PKGBUILDs, the [ryoku] repo, keyring",
+		"release":               "packaging: RPM specs, payload recipes, COPR publishing",
 		"docs":                  "the guides",
 		"bin":                   "repo tooling and CI checks",
 		"tests":                 "standalone CI check scripts",
@@ -225,7 +225,7 @@ func writeRepoVaultDoc() error {
 	return writeVaultDoc("ryoku-repo.md", header, body)
 }
 
-// cmdRepoIndex is the generation verb used by the PKGBUILD and deploy.sh.
+// cmdRepoIndex is the generation verb used by the RPM build and deploy.sh.
 func cmdRepoIndex(root, out string) error {
 	if root == "" {
 		return fmt.Errorf("usage: ryoku-rashin repo-index <checkout-root> [out-file]")

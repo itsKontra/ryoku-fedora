@@ -12,7 +12,7 @@ Use COPR to build Fedora RPMs, use DNF to install released software, and retain 
 - Installer and test independently list five dependency COPRs: `sdegler/hyprland`, `errornointernet/quickshell`, `atim/starship`, `atim/lazygit`, and `lihaohong/yazi`.
 - `ryoku-install-extra` downloads upstream binaries for `matugen`, `prowl-agent`, and `qmk_hid`, plus Bibata, Space Grotesk, Material Symbols, JetBrains Mono Nerd Font, and SpaceMono Nerd Font assets. Those binaries are not compiled from this checkout. `ryoku-extras.spec` currently bundles all of them into an RPM.
 - `ryoku/cli/internal/sys/rpm.go` expects `/etc/yum.repos.d/RyokuCOPR.repo` and repository ID `RyokuCOPR`. A normal COPR enable operation does not satisfy that contract.
-- `reconcileDevResidue` in `ryoku/cli/internal/doctor/doctor.go` still invokes `pacman -Qoq` to identify local binary shadows. RPM migration must fix this, including packaged names such as `ryogami` that do not start with `ryoku`.
+- `reconcileDevResidue` in `ryoku/cli/internal/doctor/doctor.go` identifies local binary shadows through `sys.PkgOwner` (`rpm -qf`) and matches owners starting with `ryoku` or `ryogami`. Packaged names outside those prefixes would need adding there.
 
 **COPR projects and initial support**
 
@@ -45,7 +45,7 @@ COPR build output -> verify signatures -> test exact RPM set
 <base>/releases/<tag>/44/x86_64/
 ```
 
-Use a Fedora-specific hosting prefix and signing configuration, following the existing Arch publisher's build/test/promote structure. Preserve COPR RPM signatures; generate repository metadata for the selected set and sign `repomd.xml` with the release metadata key. Configure both trusted keys as necessary and keep `gpgcheck=1` and `repo_gpgcheck=1` for `[ryoku]`. Publish `release.json` and the release ledger used by track/status/rollback. Do not promote a partially built set: the desktop spec pins component versions exactly.
+Use a Fedora-specific hosting prefix and signing configuration, with a build, test and promote structure. Preserve COPR RPM signatures; generate repository metadata for the selected set and sign `repomd.xml` with the release metadata key. Configure both trusted keys as necessary and keep `gpgcheck=1` and `repo_gpgcheck=1` for `[ryoku]`. Publish `release.json` and the release ledger used by track/status/rollback. Do not promote a partially built set: the desktop spec pins component versions exactly.
 
 COPR's normal repository URL and ID alone cannot provide the existing channel URLs, release metadata, and durable rollback history. Its documented pruning policy also makes default build retention unsuitable for a frozen release archive. See [COPR user documentation](https://docs.copr.fedorainfracloud.org/user_documentation.html#how-long-do-you-keep-the-builds).
 
@@ -82,7 +82,7 @@ Maintainer setup: create the two projects and Fedora 44 x86_64 chroots; configur
 
 Installing a locally produced RPM using `dnf install ./package.rpm` is also valid for package testing. It preserves that local build while letting DNF resolve dependencies; it must not be confused with installing a published package by name. Keep clean-build test inputs local to the run so tests cannot silently exercise last week's COPR binaries.
 
-Implement an explicit installation mode independent of distro. Simply changing Fedora's `fromSource` boolean would enter Arch-oriented package and step paths, including keyring/driver handling. Update `newEngine`, `stepPackages`, `stepConfigs`, provider checks, verification, and uninstall ownership together. Preserve source selection for developer payload/ref use and show the chosen mode clearly. Do not silently fall back to compiling if package delivery fails.
+The installer has an explicit installation mode independent of distro (`--install-mode`, `ryoku-shell-installer/install_mode.go`); `auto` picks source mode only for a payload override, a non-`main` ref or a fork repository. When extending it, update `newEngine`, `stepPackages`, `stepConfigs`, provider checks, verification, and uninstall ownership together. Preserve source selection for developer payload/ref use and show the chosen mode clearly. Do not silently fall back to compiling if package delivery fails.
 
 Use one repository/dependency declaration for installer and Fedora tests. Preserve DNF4/DNF5 plugin detection already present in `stepTools`; the current test hardcodes `dnf5-plugins` and runs COPR setup through `dnf`, even in its DNF4 matrix. Preflight selected chroot, metadata, signatures, packages, and provider compatibility before conflict removal; errors should identify the repository/package and retry action. Required matugen delivery must not be reported as an optional-download warning.
 

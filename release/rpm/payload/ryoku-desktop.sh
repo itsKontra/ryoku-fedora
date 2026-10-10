@@ -19,7 +19,7 @@ package() {
   # RYOKU_RELEASE (a release tag on stable, the dev version on testing, a
   # local-* marker for a hand build) and RYOKU_CHANNEL; `ryoku version`,
   # `ryoku status`, the update island and the doctor read this file, and it is
-  # pacman-owned so it always names the release actually installed.
+  # owned by the RPM so it always names the release actually installed.
   install -Dm644 /dev/stdin "$pkgdir/etc/ryoku-release" <<EOF
 RELEASE=${RYOKU_RELEASE:-local-$pkgver}
 NAME=$(tr -d '[:space:]' < "$_repo/CODENAME")
@@ -152,7 +152,7 @@ EOF
   # the fastfetch logo the config above draws. ships beside config.jsonc so
   # `ryoku materialize` lays both together on every update; seeding it only as a
   # brand asset (installer-time) left updated machines pointing at a file they
-  # never received, and fastfetch silently fell back to the Arch logo.
+  # never received, and fastfetch silently fell back to the distro logo.
   install -Dm644 "$_repo/ryoku/assets/brand/fastfetch-emblem.png" \
     "$cfg/fastfetch/fastfetch-emblem.png"
   # wireplumber: Bluetooth codec and profile policy, materialized like every
@@ -418,9 +418,9 @@ EOF
     "$pkgdir/usr/lib/udev/rules.d/62-ryoku-qmk-hid.rules"
 
   # Bluetooth tuning: bluez owns /etc/bluetooth/main.conf and BlueZ has no
-  # drop-in dir, so Ryoku cannot ship a copy here (pacman file conflict). The
+  # drop-in dir, so Ryoku cannot ship a copy here (an RPM file conflict). The
   # ryoku-bluetooth-tune helper (installed by the hardware glob above) sets the
-  # keys in place; the .install runs it on install + upgrade.
+  # keys in place; the spec's %post runs it on install and upgrade.
 
   # Game controllers: load uinput at boot so Steam Input and the userspace pad
   # drivers (xpadneo-dkms, game-devices-udev) can create their virtual gamepads.
