@@ -552,6 +552,7 @@ def run_hardware_drivers(root, repo_dir=None, runner=None):
 def seed_desktop_extras(root, repo_dir=None):
     assets = {
         "bibata": "share/icons/Bibata-Modern-Ice/cursors/left_ptr",
+        "bibata-source": "share/ryoku-cursor-material/bibata/src/cursor_utils.py",
         "space-grotesk": "share/fonts/SpaceGrotesk/*.otf",
         "material-symbols": "share/fonts/MaterialSymbolsRounded.ttf",
         "jetbrains-mono-nerd-fonts": "share/fonts/JetBrainsMonoNerdFont/*.ttf",

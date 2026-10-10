@@ -55,6 +55,28 @@ class Extras(unittest.TestCase):
             self.assertTrue(alias_path.is_symlink())
             self.assertEqual(alias_path.read_bytes(), b'cursor')
 
+    def test_bibata_source_keeps_recolor_tree(self):
+        import io
+        import tarfile
+        blob = io.BytesIO()
+        with tarfile.open(fileobj=blob, mode='w:gz') as archive:
+            for name in ('src/cursor_utils.py', 'svg/left_ptr.svg', 'config/render.json', 'readme.adoc'):
+                info = tarfile.TarInfo('bibata_cursor-f4ccfe8a/' + name)
+                info.size = 4
+                archive.addfile(info, io.BytesIO(b'data'))
+            alias = tarfile.TarInfo('bibata_cursor-f4ccfe8a/svg/arrow.svg')
+            alias.type = tarfile.SYMTYPE
+            alias.linkname = 'left_ptr.svg'
+            archive.addfile(alias)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(extra, 'download', return_value=blob.getvalue()):
+                extra.install('bibata-source', root)
+            source = root / 'share/ryoku-cursor-material/bibata'
+            for name in ('src/cursor_utils.py', 'svg/left_ptr.svg', 'svg/arrow.svg', 'config/render.json'):
+                self.assertTrue((source / name).is_file(), name)
+            self.assertFalse((source / 'readme.adoc').exists())
+
     def test_exact_font_url(self):
         url = extra.RELEASES['material-symbols'][1]
         self.assertIn('Rounded%5BFILL%2CGRAD%2Copsz%2Cwght%5D.ttf', url)

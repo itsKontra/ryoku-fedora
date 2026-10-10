@@ -15,8 +15,9 @@ holding up the live update. --full does both synchronously (used when the
 toggle is first enabled, so XWayland matches from the start).
 
 Accent: the primary role in ~/.cache/ryoku/colors.json (a hex arg overrides).
-Bibata SVG source: /usr/share/ryoku-cursor-material/bibata (RYOKU_BIBATA_SRC
-overrides, for running from a checkout).
+Bibata SVG source: /usr/share/ryoku-cursor-material/bibata from ryoku-extras,
+else ~/.local/share/ryoku-cursor-material/bibata from ryoku-install-extra
+bibata-source (RYOKU_BIBATA_SRC overrides, for running from a checkout).
 """
 
 import colorsys
@@ -31,7 +32,10 @@ from pathlib import Path
 
 THEME = "Bibata-Material-Ryoku"
 HOME = Path(os.path.expanduser("~"))
-SRC = Path(os.environ.get("RYOKU_BIBATA_SRC", "/usr/share/ryoku-cursor-material/bibata"))
+BIBATA_SOURCES = (Path("/usr/share/ryoku-cursor-material/bibata"),
+                  HOME / ".local/share/ryoku-cursor-material/bibata")
+SRC = Path(os.environ.get("RYOKU_BIBATA_SRC") or next(
+    (p for p in BIBATA_SOURCES if (p / "src/cursor_utils.py").is_file()), BIBATA_SOURCES[0]))
 INSTALL = HOME / ".local/share/icons"
 CFG = HOME / ".config/ryoku/desktop.json"
 COLORS = HOME / ".cache/ryoku/colors.json"

@@ -20,6 +20,10 @@ Requires:       ffmpeg-free
 Requires:       jq
 Requires:       uv
 Requires:       python3
+Requires:       librsvg2-tools
+Requires:       xcursorgen
+# ryoku-cursor-material-recolor renders from the Bibata sources it ships.
+Requires:       ryoku-extras = %{version}-%{release}
 
 %description
 ryoku-shell, built from the shared Ryoku source and package payload recipe.

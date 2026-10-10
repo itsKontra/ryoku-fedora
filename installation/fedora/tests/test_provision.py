@@ -33,6 +33,7 @@ class ProvisionTargetTest(unittest.TestCase):
         self.write("usr/bin/ryoku", "#!/bin/sh\nexit 0\n")
         for asset in (
             "share/icons/Bibata-Modern-Ice/cursors/left_ptr",
+            "share/ryoku-cursor-material/bibata/src/cursor_utils.py",
             "share/fonts/SpaceGrotesk/regular.otf",
             "share/fonts/MaterialSymbolsRounded.ttf",
             "share/fonts/JetBrainsMonoNerdFont/regular.ttf",

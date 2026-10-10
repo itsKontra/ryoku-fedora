@@ -19,6 +19,7 @@ RELEASES = {
     "qmk-hid": ("0.1.11", "https://github.com/FrameworkComputer/qmk_hid/releases/download/v0.1.11/qmk_hid_linux_v0.1.11.zip", "57460728df3777d0abd2f2b464dea898c1fdc1cc6524ede1c2854fa9c8f027dc", "bin/qmk_hid"),
     "matugen": ("4.2.0", "https://github.com/InioX/matugen/releases/download/v4.2.0/matugen-4.2.0-x86_64.tar.gz", "a2e3b50e49ed6439999ba3c252ed04fabd98ee4e9d12e5e5dff2e66370569751", "bin/matugen"),
     "bibata": ("2.0.7", "https://github.com/ful1e5/Bibata_Cursor/releases/download/v2.0.7/Bibata.tar.xz", "172e33c4ae415278384dcecc7d1a9b7a024266bc944bc751fd86532be1cc6251", "share/icons"),
+    "bibata-source": ("f4ccfe8a", "https://github.com/rtgiskard/bibata_cursor/archive/f4ccfe8abb63fddc7b3ce51a866fd8378395cb3d.tar.gz", "32f053a4b155106e3d1305e597a409d0e7ce85aa84b0ebe31b909ffbf7e80417", "share/ryoku-cursor-material/bibata"),
     "space-grotesk": ("2.0.0", "https://github.com/floriankarsten/space-grotesk/releases/download/2.0.0/SpaceGrotesk-2.0.0.zip", "53b415577d4139248555300710bea0d268c7a5be67b93de53b716a9736cabffd", "share/fonts/SpaceGrotesk"),
     "material-symbols": ("27e9ef1d", "https://raw.githubusercontent.com/google/material-design-icons/27e9ef1dbeedc13d682fece4a58e1eda4cb0961a/variablefont/MaterialSymbolsRounded%5BFILL%2CGRAD%2Copsz%2Cwght%5D.ttf", "7f3a16d9aa1b6f367eadc1614ad27308ae2c0e91e617e2069f122afd9f0c3c58", "share/fonts/MaterialSymbolsRounded.ttf"),
     "jetbrains-mono-nerd-fonts": ("3.3.0", "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/JetBrainsMono.tar.xz", "7d171ea3884be22fc08bf1a1aee640a3dc93f031989c27f6f9ceb30a6a668de1", "share/fonts/JetBrainsMonoNerdFont"),
@@ -54,6 +55,40 @@ def atomic_write(path, data, mode=0o644):
             os.unlink(name)
 
 
+def safe_members(archive):
+    for member in archive.getmembers():
+        path = Path(member.name)
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError("unsafe archive path")
+        yield member, path
+
+
+def read_tree(archive):
+    """Return (content, links): every file's bytes, links resolved, plus each link's target."""
+    content = {}
+    links = {}
+    for member, path in safe_members(archive):
+        key = str(path)
+        if member.isfile():
+            content[key] = archive.extractfile(member).read()
+        elif member.issym() or member.islnk():
+            target = posixpath.normpath(posixpath.join(str(path.parent), member.linkname) if member.issym() else member.linkname)
+            if target.startswith(("/", "../")):
+                raise ValueError("unsafe archive link")
+            links[key] = target
+    # Resolve aliases in memory; seeking backwards through xz for each
+    # cursor alias would repeatedly decompress the entire archive.
+    def resolve(key, seen):
+        if key in content:
+            return content[key]
+        if key in seen or key not in links:
+            raise ValueError("broken archive link")
+        return resolve(links[key], seen | {key})
+    for key in links:
+        content[key] = resolve(key, set())
+    return content, links
+
+
 def install(name, root=None):
     version, url, digest, relative = RELEASES[name]
     root = root or Path.home() / ".local"
@@ -77,36 +112,21 @@ def install(name, root=None):
             files[relative] = archive.read("qmk_hid")
     elif name == "bibata":
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-            members = archive.getmembers()
-            content = {}
-            links = {}
-            for member in members:
-                path = Path(member.name)
-                if path.is_absolute() or ".." in path.parts:
-                    raise ValueError("unsafe archive path")
-                key = str(path)
-                if member.isfile():
-                    content[key] = archive.extractfile(member).read()
-                elif member.issym() or member.islnk():
-                    target = posixpath.normpath(posixpath.join(str(path.parent), member.linkname) if member.issym() else member.linkname)
-                    if target.startswith(("/", "../")):
-                        raise ValueError("unsafe archive link")
-                    links[key] = target
-            # Resolve aliases in memory; seeking backwards through xz for each
-            # cursor alias would repeatedly decompress the entire archive.
-            def resolve(key, seen):
-                if key in content:
-                    return content[key]
-                if key in seen or key not in links:
-                    raise ValueError("broken archive link")
-                return resolve(links[key], seen | {key})
-            for key in links:
-                content[key] = resolve(key, set())
-            for key, value in content.items():
-                destination = "share/licenses/Bibata/LICENSE" if key == "LICENSE" else str(Path(relative) / key)
-                files[destination] = value
-                if key in links:
-                    install_links[destination] = posixpath.relpath(str(Path(relative) / links[key]), str(Path(destination).parent))
+            content, links = read_tree(archive)
+        for key, value in content.items():
+            destination = "share/licenses/Bibata/LICENSE" if key == "LICENSE" else str(Path(relative) / key)
+            files[destination] = value
+            if key in links:
+                install_links[destination] = posixpath.relpath(str(Path(relative) / links[key]), str(Path(destination).parent))
+    elif name == "bibata-source":
+        # ryoku-cursor-material-recolor rebuilds the wallpaper cursor from this
+        # tree; it needs the build script, its render config, and the SVGs.
+        with tarfile.open(fileobj=io.BytesIO(data)) as archive:
+            content, _ = read_tree(archive)
+        for key, value in content.items():
+            inner = Path(*Path(key).parts[1:])
+            if inner.parts and inner.parts[0] in ("src", "svg", "config"):
+                files[str(Path(relative) / inner)] = value
     elif name == "space-grotesk":
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             for member in archive.namelist():
@@ -114,10 +134,7 @@ def install(name, root=None):
                     files[str(Path(relative) / Path(member).name)] = archive.read(member)
     elif name in ("jetbrains-mono-nerd-fonts", "space-mono-nerd-fonts"):
         with tarfile.open(fileobj=io.BytesIO(data)) as archive:
-            for member in archive.getmembers():
-                path = Path(member.name)
-                if path.is_absolute() or ".." in path.parts:
-                    raise ValueError("unsafe archive path")
+            for member, path in safe_members(archive):
                 if member.isfile() and member.name.endswith(".ttf"):
                     files[str(Path(relative) / path.name)] = archive.extractfile(member).read()
     else:
