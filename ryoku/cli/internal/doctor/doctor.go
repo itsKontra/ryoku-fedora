@@ -164,7 +164,7 @@ func reconcilers() []reconciler {
 		{i18n.T("fastfetch readout emblem"), reconcileFastfetchEmblem},
 		{i18n.T("rice fastfetch emblem"), reconcileRiceEmblem},
 		{i18n.T("ryotunes"), reconcileRyotunes},
-		{i18n.T("fastfetch OS line"), reconcileFastfetchOSLine},
+		{i18n.T("fastfetch config wording"), reconcileFastfetchWording},
 		{i18n.T("brand mark image"), reconcileBrandLogo},
 		{i18n.T("decor art"), reconcileRyodecors},
 		{i18n.T("Hyprland config integrity"), reconcileHyprlandConfig},
@@ -2580,51 +2580,6 @@ func reconcileFastfetchEmblem(checkOnly bool) recResult {
 		return failRes(i18n.T("could not restore fastfetch emblem: %v"), err).withFix("ryoku materialize")
 	}
 	return fixedRes(i18n.T("restored the fastfetch emblem; the readout no longer falls back to the Arch logo"))
-}
-
-// ---- reconciler: fastfetch OS line -------------------------------------------
-
-// fastfetch's OS line used to run `ryoku version`; with named releases it runs
-// `ryoku version --pretty` ("Ryoku Onogoro v0.56.3-beta.19"). config.jsonc is
-// seeded once and then owned by the box (the Hub, the store and the user edit
-// it in place), so the shipped change never reaches an existing box on its
-// own; this rewrites that one command and nothing else.
-// the shipped seed writes `2>`; a config the Hub saved carries Go's JSON
-// escape `2\u003e` for the same byte, so both spellings are the old line.
-var fastfetchOSLineOld = []string{`ryoku version 2>/dev/null`, `ryoku version 2\u003e/dev/null`}
-
-func upgradeFastfetchOSLine(raw string) (string, bool) {
-	for _, old := range fastfetchOSLineOld {
-		if strings.Contains(raw, old) {
-			return strings.Replace(raw, old, strings.Replace(old, "ryoku version ", "ryoku version --pretty ", 1), 1), true
-		}
-	}
-	return raw, false
-}
-
-func reconcileFastfetchOSLine(checkOnly bool) recResult {
-	path := filepath.Join(sys.ConfigHome(), "fastfetch", "config.jsonc")
-	raw := readFileSafe(path)
-	if raw == "" {
-		return okRes(i18n.T("no Ryoku fastfetch config"))
-	}
-	migrated, changed := upgradeFastfetchOSLine(raw)
-	if !changed {
-		return okRes(i18n.T("fastfetch's OS line names the release"))
-	}
-	if checkOnly {
-		return wouldRes(i18n.T("fastfetch's OS line predates named releases (ryoku version -> ryoku version --pretty)")).
-			withFix(i18n.T("ryoku doctor rewrites that one line"))
-	}
-	tmp := path + ".ryoku-tmp"
-	if err := os.WriteFile(tmp, []byte(migrated), 0o644); err != nil {
-		return failRes(i18n.T("could not write %s: %v"), tmp, err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return failRes(i18n.T("could not replace %s: %v"), path, err)
-	}
-	return fixedRes(i18n.T("fastfetch's OS line now names the release (ryoku version --pretty)"))
 }
 
 // ---- reconciler: rice fastfetch emblem ---------------------------------------

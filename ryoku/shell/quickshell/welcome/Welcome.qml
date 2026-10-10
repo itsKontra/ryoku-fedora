@@ -23,7 +23,7 @@ Rectangle {
     function scrim(a) { return Qt.rgba(Tokens.paper.r, Tokens.paper.g, Tokens.paper.b, a); }
 
     readonly property var steps: [
-        { "eyebrow": I18n.tr("Welcome"),          "title": I18n.tr("Welcome to %1").arg(Theme.brandName),     "subtitle": I18n.tr("%1 \u00b7 a hand-built paper-and-ink desktop on Arch and Hyprland.").arg(Theme.mark), "next": I18n.tr("Take the tour") },
+        { "eyebrow": I18n.tr("Welcome"),          "title": I18n.tr("Welcome to %1").arg(Theme.brandName),     "subtitle": I18n.tr("%1 \u00b7 a hand-built paper-and-ink desktop on Fedora.").arg(Theme.mark), "next": I18n.tr("Take the tour") },
         { "eyebrow": I18n.tr("Getting around"),   "title": I18n.tr("The keys that matter"), "subtitle": I18n.tr("A handful of shortcuts open almost everything."),                    "next": I18n.tr("Next") },
         { "eyebrow": I18n.tr("Where things live"),"title": I18n.tr("Know your desktop"),    "subtitle": I18n.tr("Four surfaces, and how to summon each one."),                          "next": I18n.tr("Next") },
         { "eyebrow": I18n.tr("Make it yours"),    "title": I18n.tr("A few quick choices"),  "subtitle": I18n.tr("Set the essentials now; the rest waits in Settings."),                 "next": I18n.tr("Next") },

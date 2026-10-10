@@ -13,7 +13,7 @@ import "../Singletons"
 // tab per plugin; above its settings sits a status card from
 // `ryoku-hub desktop plugins list`: where the copy came from, its version, whether
 // it matches the running Hyprland (a plugin is ABI-locked to the exact
-// compositor build, so an Arch bump can leave a copy that no longer loads), and
+// compositor build, so a compositor update can leave a copy that no longer loads), and
 // the actions that fix it: Rebuild here from upstream, Docs, Remove. "Add from
 // git" clones any repository with a hyprpm.toml, builds the plugin the user
 // picks, and lays it beside the bundled ones; its settings are the config keys
