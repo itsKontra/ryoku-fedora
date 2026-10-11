@@ -231,7 +231,7 @@ Item {
         Quickshell.execDetached(["ryoku-shell", "bar", "settings"]);
     }
     function openDockSettings() {
-        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "desktop", "editSection", "dock", ""]);
+        Quickshell.execDetached(["ryoku-shell", "hub", "open", "dock"]);
     }
 
     CatalogLabels { id: labels }

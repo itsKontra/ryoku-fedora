@@ -1241,6 +1241,15 @@ func migrateDockStore(raw []byte) ([]byte, bool, error) {
 	}
 	pins := appendDockPins(nil, dock["pinned"])
 	changed := len(dock["pinned"]) > 0 && !dockPinsAreCanonical(dock["pinned"], pins)
+	// Once the user has chosen pins in the shell (which already showed the
+	// retired ones), the retired stores are only cleared, never merged back.
+	chosen := string(dock["customPins"]) == "true"
+	retire := func(dst []string, raw json.RawMessage) []string {
+		if chosen {
+			return dst
+		}
+		return appendDockPins(dst, raw)
+	}
 
 	if qsbarRaw, ok := top["qsbar"]; ok {
 		qsbar, err := decodeObject(qsbarRaw)
@@ -1254,7 +1263,7 @@ func migrateDockStore(raw []byte) ([]byte, bool, error) {
 				continue
 			}
 			if want == "pinned" {
-				pins = appendDockPins(pins, value)
+				pins = retire(pins, value)
 			} else if _, exists := dock[want]; !exists {
 				dock[want] = value
 			}
@@ -1284,7 +1293,7 @@ func migrateDockStore(raw []byte) ([]byte, bool, error) {
 			// the moved pins leave [] behind rather than a missing key the
 			// next normalise would put back.
 			if oldPins := appendDockPins(nil, frameDock["pinned"]); len(oldPins) > 0 {
-				pins = appendDockPins(pins, frameDock["pinned"])
+				pins = retire(pins, frameDock["pinned"])
 				frameDock["pinned"] = json.RawMessage("[]")
 				if frame["dock"], err = json.Marshal(frameDock); err != nil {
 					return nil, false, err
@@ -1299,6 +1308,9 @@ func migrateDockStore(raw []byte) ([]byte, bool, error) {
 
 	if !changed {
 		return nil, false, nil
+	}
+	if pins == nil {
+		pins = []string{}
 	}
 	if dock["pinned"], err = json.Marshal(pins); err != nil {
 		return nil, false, err

@@ -29,7 +29,10 @@ Singleton {
     // recovers its real icon live instead of waiting for a reload.
     Connections {
         target: DesktopEntries
-        function onApplicationsChanged() { root.iconRev++; }
+        function onApplicationsChanged() {
+            root._canonical = {};
+            root.iconRev++;
+        }
     }
     // The icon index lands a moment after startup (a `ryoku-shell icons` run);
     // bump iconRev the instant it does so pins re-resolve off the fallback
@@ -62,12 +65,21 @@ Singleton {
     function plainId(value) {
         return String(value ?? "").trim().replace(/\.desktop$/i, "");
     }
+    // The desktop-database lookup is the expensive part of every dock binding,
+    // and the same few ids are asked for on each window change; remember each
+    // answer until the database itself changes.
+    property var _canonical: ({})
     function canonicalId(value) {
         const id = root.plainId(value);
         if (id.length === 0)
             return "";
+        const known = root._canonical[id];
+        if (known !== undefined)
+            return known;
         const entry = DesktopEntries.heuristicLookup(id);
-        return entry?.id ? root.plainId(entry.id) : id.toLowerCase();
+        const canonical = entry?.id ? root.plainId(entry.id) : id.toLowerCase();
+        root._canonical[id] = canonical;
+        return canonical;
     }
     function sameApp(a, b) {
         const left = root.canonicalId(a);
@@ -175,10 +187,15 @@ Singleton {
         return (d && d[key] !== undefined && d[key] !== null) ? d[key] : fallback;
     }
     function setCfg(key, value) {
+        const change = {};
+        change[key] = value;
+        root.patchCfg(change);
+    }
+    function patchCfg(change) {
         const cur = Config.dock || {};
         const next = {};
         for (const k in cur) next[k] = cur[k];
-        next[key] = value;
+        for (const k in change) next[k] = change[k];
         // A fresh object so the live look changes this frame...
         Config.dock = next;
         // ...and a settings.patch so it survives: the shell's shell.json FileView
@@ -191,7 +208,16 @@ Singleton {
         else
             cfgCtl.connected = true;
     }
-    function setPinned(array) { root.setCfg("pinned", root.normalizedPins(array)); }
+    // customPins marks a list the user chose, so emptying it leaves an empty
+    // dock instead of bringing the starter set back.
+    function setPinned(array) { root.patchCfg({ pinned: root.normalizedPins(array), customPins: true }); }
+    // The stored pin state as-is, for undo: the starter fallback is not a
+    // choice to write back.
+    function pinState() {
+        return { pinned: Array.from(root.cfg("pinned", [])), customPins: root.cfg("customPins", false) === true };
+    }
+    function restorePinState(state) { root.patchCfg({ pinned: state.pinned, customPins: state.customPins }); }
+    function resetPins() { root.restorePinState({ pinned: [], customPins: false }); }
     function movePinned(from, to) {
         const pins = root.pinnedOrStarter();
         if (from < 0 || from >= pins.length || to < 0 || to >= pins.length || from === to)
@@ -228,11 +254,18 @@ Singleton {
         onConnectionStateChanged: if (cfgCtl.connected) cfgCtl.flushQueued()
     }
 
-    // The effective pin list: the user's order, or the starter set when empty, so
-    // an unconfigured dock still shows something instead of reading as broken.
+    // The effective pin list: the user's order, or the starter set until the
+    // user has chosen pins, so an unconfigured dock still shows something
+    // instead of reading as broken. Pins still in a retired store (qsbar's
+    // dockPinned, Sumi's frameBars.dock.pinned) count as chosen until
+    // `ryoku doctor` merges them in.
     function pinnedOrStarter() {
         const p = root.normalizedPins(root.cfg("pinned", []));
-        return p.length ? p : root.normalizedPins(root.starterPins());
+        if (p.length || root.cfg("customPins", false) === true)
+            return p;
+        const retired = root.normalizedPins(Array.from(Config.qsbar?.dockPinned ?? [])
+            .concat(Array.from(Config.frameBars?.dock?.pinned ?? [])));
+        return retired.length ? retired : root.normalizedPins(root.starterPins());
     }
 
     // Desktop-entry icon, then class-as-icon-name; "" so callers can fall back.

@@ -713,7 +713,7 @@ Item {
             if (root.section === "bar")
                 return Translation.tr("Bar");
             if (root.section === "dock")
-                return PanelFamily.touchFirst ? Translation.tr("Taskbar") : Translation.tr("Dock");
+                return Translation.tr("Dock");
             if (root.section === "lock")
                 return Translation.tr("Lock screen");
             if (root.section === "style")
@@ -752,7 +752,7 @@ Item {
             return BarComponentRegistry.getComponent(root.page.substring(10))?.title ?? Translation.tr("Widget");
         if (root.page === "appearance")
             return root.section === "dock"
-                ? (PanelFamily.touchFirst ? Translation.tr("Taskbar appearance & items") : Translation.tr("Dock design & settings"))
+                ? Translation.tr("Dock design & settings")
                 : Translation.tr("Bar appearance");
         if (root.page === "widgets")
             return Translation.tr("Pinned apps & order");
@@ -772,7 +772,7 @@ Item {
         if (root.section === "bar")
             return "dock_to_bottom";
         if (root.section === "dock")
-            return PanelFamily.touchFirst ? "dock_to_bottom" : "dock";
+            return "dock";
         if (root.section === "lock")
             return "lock";
         if (root.section === "style")
@@ -945,9 +945,7 @@ Item {
                             : Translation.tr("Each screen's picture and how it sits. While this is open, drag the desktop to move the wallpaper and use the wheel or a pinch to zoom."))
                     : root.section === "bar"
                         ? Translation.tr("Drag a widget onto the bar to drop it where you want it, or open one to change how it looks.")
-                        : (PanelFamily.touchFirst
-                            ? Translation.tr("Configure taskbar appearance and items.")
-                            : Translation.tr("Pin apps, and choose how the dock itself is drawn."))
+                        : Translation.tr("Pin apps, and choose how the dock itself is drawn.")
                 font.family: Appearance.font.family.main
                 font.pixelSize: Appearance.font.pixelSize.small
                 font.weight: Font.Normal
@@ -1108,7 +1106,7 @@ Item {
                             return barRootPage;
                         }
                         if (root.page === "appearance")
-                            return PanelFamily.touchFirst ? tabletDockAppearancePage : dockAppearancePage;
+                            return dockAppearancePage;
                         if (root.page === "widgets")
                             return dockWidgetsPage;
                         if (root.page.startsWith("apps:"))
@@ -1653,7 +1651,6 @@ Item {
                 spacing: 3
 
                 EditPanelRow {
-                    visible: !PanelFamily.touchFirst
                     Layout.fillWidth: true
                     first: true
                     last: false
@@ -1664,7 +1661,6 @@ Item {
                 }
 
                 EditPanelRow {
-                    visible: !PanelFamily.touchFirst
                     Layout.fillWidth: true
                     first: false
                     last: true
@@ -1675,27 +1671,14 @@ Item {
                 }
 
                 EditPanelRow {
-                    visible: PanelFamily.touchFirst
-                    Layout.fillWidth: true
-                    first: true
-                    last: true
-                    symbol: "dock_to_bottom"
-                    title: Translation.tr("Taskbar appearance & items")
-                    subtitle: Translation.tr("Height, search pill, navigation and buttons")
-                    onActivated: root.openPage("appearance")
-                }
-
-                EditPanelRow {
                     Layout.fillWidth: true
                     Layout.topMargin: 3
                     first: true
                     last: true
                     destructive: true
                     symbol: "reset_wrench"
-                    title: PanelFamily.touchFirst ? Translation.tr("Reset the taskbar") : Translation.tr("Reset the dock")
-                    subtitle: PanelFamily.touchFirst
-                        ? Translation.tr("Restore tablet dock defaults")
-                        : Translation.tr("The pins and the order the shell ships with")
+                    title: Translation.tr("Reset the dock")
+                    subtitle: Translation.tr("The pins and the order the shell ships with")
                     trailingKind: "none"
                     onActivated: root.resetRequested("dock")
                 }
@@ -1770,11 +1753,6 @@ Item {
     Component {
         id: dockAppearancePage
         EditDockAppearancePage {}
-    }
-
-    Component {
-        id: tabletDockAppearancePage
-        EditTabletDockAppearancePage {}
     }
 
     Component {

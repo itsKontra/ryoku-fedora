@@ -1233,6 +1233,8 @@ func TestMigrateDockStore(t *testing.T) {
 		{"already migrated", `{"dock":{"enabled":true,"pinned":["kitty","org.gnome.Nautilus"]},"qsbar":{"barGapTop":3}}`, false},
 		{"pins need normalising", `{"dock":{"pinned":["kitty.desktop","Kitty"]},"qsbar":{"barGapTop":3}}`, true},
 		{"sumi pins", `{"frameBars":{"style":"sumi","dock":{"pinned":["thunar.desktop"]}},"qsbar":{"barGapTop":3}}`, true},
+		{"knobs without pins", `{"qsbar":{"dockEnabled":true,"barGapTop":3}}`, true},
+		{"pins already chosen", `{"dock":{"pinned":[],"customPins":true},"frameBars":{"dock":{"pinned":["thunar"]}},"qsbar":{"barGapTop":3}}`, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1249,6 +1251,11 @@ func TestMigrateDockStore(t *testing.T) {
 			var cfg map[string]any
 			if err := json.Unmarshal(out, &cfg); err != nil {
 				t.Fatalf("migrated JSON does not parse: %v", err)
+			}
+			if dock, _ := cfg["dock"].(map[string]any); dock != nil {
+				if _, isList := dock["pinned"].([]any); !isList {
+					t.Errorf("dock.pinned must stay a list, got %v", dock["pinned"])
+				}
 			}
 			qsbar, _ := cfg["qsbar"].(map[string]any)
 			if frame, ok := cfg["frameBars"].(map[string]any); ok {
@@ -1271,8 +1278,22 @@ func TestMigrateDockStore(t *testing.T) {
 		})
 	}
 
+	// pins-already-chosen: an empty list the user chose is not refilled from
+	// a retired store.
+	out, _, err := migrateDockStore([]byte(`{"dock":{"pinned":[],"customPins":true},"frameBars":{"dock":{"pinned":["thunar"]}}}`))
+	if err != nil {
+		t.Fatalf("migrateDockStore: %v", err)
+	}
+	var chosen map[string]any
+	if err := json.Unmarshal(out, &chosen); err != nil {
+		t.Fatalf("migrated JSON does not parse: %v", err)
+	}
+	if pins, _ := chosen["dock"].(map[string]any)["pinned"].([]any); len(pins) != 0 {
+		t.Errorf("a chosen pin list was refilled: %v", pins)
+	}
+
 	// qsbar-keys-only: every knob lands in the new dock object under its new name.
-	out, _, err := migrateDockStore([]byte(`{"qsbar":{"dockEnabled":true,"dockMagnify":false,"dockPinned":["kitty.desktop"],"dockFrost":true,"dockShadow":false}}`))
+	out, _, err = migrateDockStore([]byte(`{"qsbar":{"dockEnabled":true,"dockMagnify":false,"dockPinned":["kitty.desktop"],"dockFrost":true,"dockShadow":false}}`))
 	if err != nil {
 		t.Fatalf("migrateDockStore: %v", err)
 	}

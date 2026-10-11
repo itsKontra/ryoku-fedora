@@ -506,10 +506,12 @@ and per-monitor visibility from `ShellState`.
   shared controls are `enabled` (off by default), `design`, `edge` (`auto` =
   opposite the bar, or a fixed side), `autohide`, `size` (icon size),
   `magnify` and the `pinned` order; the Ryoku look keys are `style`, `frost`,
-  `shadow`, `labels` and `media`. The Stage Editor's Dock section is the only
-  settings surface: design cards, placement and behaviour, the Ryoku look, pin
-  ordering and the app catalogue. Bar Studio and the QS Bar's Dock route only
-  open that section. Ryoku's design places pinned apps first, then a separator
+  `shadow`, `labels` and `media`. Until `customPins` is set (any pin change
+  sets it) an empty `pinned` shows a starter set, so a fresh dock is never
+  blank and an emptied one stays empty. The Stage Editor's Dock section is the
+  only settings surface: design cards, placement and behaviour, the Ryoku look,
+  pin ordering and the app catalogue. Bar Studio, the QS Bar's Dock rail entry
+  and `ryoku-shell hub open dock` all open that section. Ryoku's design places pinned apps first, then a separator
   and running apps; autohide keeps a thin peek strip that reveals on a slow
   hover along the edge. Hovering magnifies an island, shows the app name and
   grows a live window-preview strip; left click activates, cycles or launches,

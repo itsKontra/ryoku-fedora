@@ -23,7 +23,6 @@ EditPanelSectionLabel 1.0 EditPanelSectionLabel.qml
 EditRemoveBadge 1.0 EditRemoveBadge.qml
 EditStylePage 1.0 EditStylePage.qml
 EditStylePresets 1.0 EditStylePresets.qml
-EditTabletDockAppearancePage 1.0 EditTabletDockAppearancePage.qml
 EditWallpaperFramingOverlay 1.0 EditWallpaperFramingOverlay.qml
 EditWallpaperPage 1.0 EditWallpaperPage.qml
 EditWallpaperRootPage 1.0 EditWallpaperRootPage.qml

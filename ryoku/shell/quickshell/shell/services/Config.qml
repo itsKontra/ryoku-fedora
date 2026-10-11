@@ -221,6 +221,7 @@ Singleton {
                 "autohide": true,
                 "size": 44,
                 "pinned": [],
+                "customPins": false,
                 "magnify": true,
                 "style": "islands",
                 "frost": true,

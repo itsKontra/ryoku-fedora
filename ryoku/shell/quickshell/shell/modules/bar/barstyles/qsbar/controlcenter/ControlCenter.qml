@@ -32,9 +32,8 @@ PanelWindow {
     // so an old caller never lands on nothing.
     function open(target) {
         var raw = (target === undefined || target === null) ? "" : String(target);
-        cc.route = (raw === "" || raw === "quick" || raw === "configure")
-            ? "bars" : Routes.resolve(raw);
-        cc.root.controlVisible = true;
+        if (cc.show((raw === "" || raw === "quick" || raw === "configure") ? "bars" : Routes.resolve(raw)))
+            cc.root.controlVisible = true;
     }
     function close() { cc.root.controlVisible = false }
 
@@ -44,7 +43,19 @@ PanelWindow {
     property var routeArg: null
     function go(id, arg) {
         cc.routeArg = (arg === undefined) ? null : arg;
-        cc.route = Routes.byId(id) ? id : "bars";
+        cc.show(Routes.byId(id) ? id : "bars");
+    }
+    // A route another surface owns (the dock lives in Stage Editor) hands off
+    // there instead of drawing a page; false when it did.
+    function show(id) {
+        var editor = Routes.byId(id)?.editor;
+        if (editor) {
+            cc.close();
+            Spawn.run(["ryoku-shell", "hub", "open", editor]);
+            return false;
+        }
+        cc.route = id;
+        return true;
     }
 
     readonly property var routeDef: Routes.byId(cc.route)
@@ -210,7 +221,7 @@ PanelWindow {
             root: cc.root
             tk: tk
             current: cc.route
-            onChose: (id) => cc.route = id
+            onChose: (id) => cc.show(id)
             onSearchRequested: searchOverlay.shown = true
             onHubRequested: { Spawn.run(["sh", "-c", "flock -n -o /tmp/ryoku-hub.lock qs -c hub"]); cc.close(); }
         }
@@ -294,7 +305,7 @@ PanelWindow {
                 entries: cc.searchEntries
                 onAccepted: (entry) => {
                     searchOverlay.shown = false;
-                    cc.route = entry.route;
+                    cc.show(entry.route);
                 }
                 onDismissed: searchOverlay.shown = false
             }

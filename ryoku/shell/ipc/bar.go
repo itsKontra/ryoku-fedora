@@ -1211,7 +1211,7 @@ func (d *daemon) barSettings(args []string) string {
 func defaultDock() map[string]any {
 	return map[string]any{
 		"enabled": false, "design": "ryoku", "edge": "auto", "autohide": true, "size": 44,
-		"pinned": []string{}, "magnify": true, "style": "islands", "frost": true,
+		"pinned": []string{}, "customPins": false, "magnify": true, "style": "islands", "frost": true,
 		"shadow": true, "labels": true, "media": false,
 	}
 }
@@ -1281,24 +1281,60 @@ func (d *daemon) dockSet(key string, value any) string {
 	return "ok"
 }
 
+// dockPinID strips a pin to the desktop id the shell stores: no `.desktop`
+// suffix, the id's own case kept.
+func dockPinID(app string) string {
+	id := strings.TrimSpace(app)
+	if strings.HasSuffix(strings.ToLower(id), ".desktop") {
+		id = id[:len(id)-len(".desktop")]
+	}
+	return id
+}
+
+// dockPinIndex finds the pin a CLI argument names. The shell rewrites a pin to
+// its desktop entry's id (firefox becomes org.mozilla.firefox), so a name that
+// matches no pin outright still finds one whose last id segment it is.
+func dockPinIndex(pinned []string, id string) int {
+	for i, pin := range pinned {
+		if strings.EqualFold(pin, id) {
+			return i
+		}
+	}
+	if strings.Contains(id, ".") {
+		return -1
+	}
+	for i, pin := range pinned {
+		if dot := strings.LastIndex(pin, "."); dot >= 0 && strings.EqualFold(pin[dot+1:], id) {
+			return i
+		}
+	}
+	return -1
+}
+
 func (d *daemon) dockPin(app string, add bool) string {
 	if d.settings == nil {
 		return "err dock: settings not ready"
 	}
+	id := dockPinID(app)
+	if id == "" {
+		return "err dock: an app id is required"
+	}
 	dock := d.currentDock()
 	pinned := toStringSlice(dock["pinned"])
+	at := dockPinIndex(pinned, id)
 	if add {
-		if inSet(pinned, app) {
+		if at >= 0 {
 			return "ok"
 		}
-		pinned = append(pinned, app)
+		pinned = append(pinned, id)
 	} else {
-		if !inSet(pinned, app) {
+		if at < 0 {
 			return "err dock: " + app + " is not pinned"
 		}
-		pinned = removeID(pinned, app)
+		pinned = append(pinned[:at:at], pinned[at+1:]...)
 	}
 	dock["pinned"] = pinned
+	dock["customPins"] = true
 	b, _ := json.Marshal(dock)
 	if err := d.settings.patch("dock", b); err != nil {
 		return "err dock: " + err.Error()

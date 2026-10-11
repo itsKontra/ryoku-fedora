@@ -486,6 +486,39 @@ func TestDockVerbsThroughStore(t *testing.T) {
 	}
 }
 
+// TestDockPinUsesDesktopIDs checks the CLI stores pins the way the shell and
+// doctor do, and that a short name unpins the desktop id the shell saved.
+func TestDockPinUsesDesktopIDs(t *testing.T) {
+	d := barTestDaemon(t)
+
+	if got := d.dispatch("dock pin firefox.desktop"); got != "ok" {
+		t.Fatalf("dock pin: %s", got)
+	}
+	if got := d.dispatch("dock pin Firefox"); got != "ok" {
+		t.Fatalf("re-pin under another case: %s", got)
+	}
+	dock, _ := d.frame(t)["dock"].(map[string]any)
+	if pinned := toStringSlice(dock["pinned"]); len(pinned) != 1 || pinned[0] != "firefox" {
+		t.Fatalf("pinned = %v, want [firefox]", pinned)
+	}
+	if dock["customPins"] != true {
+		t.Fatalf("a CLI pin should mark the list as chosen: %+v", dock)
+	}
+
+	dock["pinned"] = []string{"org.mozilla.firefox", "kitty"}
+	b, _ := json.Marshal(dock)
+	if err := d.settings.patch("dock", b); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.dispatch("dock unpin firefox"); got != "ok" {
+		t.Fatalf("unpin by short name: %s", got)
+	}
+	dock, _ = d.frame(t)["dock"].(map[string]any)
+	if pinned := toStringSlice(dock["pinned"]); len(pinned) != 1 || pinned[0] != "kitty" {
+		t.Fatalf("pinned = %v, want [kitty]", pinned)
+	}
+}
+
 // TestBarCatalogWithPlugin lists a topbar-capable plugin in the catalogue and
 // reports it shown when plugins.json enables it on the bar.
 func TestBarCatalogWithPlugin(t *testing.T) {

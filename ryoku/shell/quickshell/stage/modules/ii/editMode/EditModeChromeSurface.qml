@@ -582,14 +582,13 @@ PanelWindow {
             return;
         }
         if (what === "dock") {
-            const before = ShellServices.Dock.pinnedOrStarter().slice();
-            const after = ShellServices.Dock.normalizedPins(ShellServices.Dock.starterPins());
-            if (JSON.stringify(before) === JSON.stringify(after))
+            const before = ShellServices.Dock.pinState();
+            if (before.pinned.length === 0 && !before.customPins)
                 return;
-            ShellServices.Dock.setPinned(after);
+            ShellServices.Dock.resetPins();
             GlobalStates.editHistoryPush({
-                "undo": () => ShellServices.Dock.setPinned(before),
-                "redo": () => ShellServices.Dock.setPinned(after)
+                "undo": () => ShellServices.Dock.restorePinState(before),
+                "redo": () => ShellServices.Dock.resetPins()
             });
             return;
         }
