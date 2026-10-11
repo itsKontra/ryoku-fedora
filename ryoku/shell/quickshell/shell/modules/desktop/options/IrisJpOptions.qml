@@ -13,27 +13,14 @@ import inir.modules.background.widgets.japaneseTypography as Jp
 // palette and font presets apply through the upstream preset logic
 // (JapaneseTypographyPresets.js); a single value flips its group's preset to
 // "custom", exactly as the iNiR settings page does.
-Column {
+IrisOptionsBase {
     id: opts
 
-    // The Ryoku widget key the loader mounts this for (unused: the inir path is
-    // fixed for this widget, but kept so every options panel shares one API).
-    property string widget: ""
-
-    readonly property string path: "background.widgets.japaneseTypography"
-
-    width: parent ? parent.width : 0
-    spacing: Theme.s1
-
-    // ── config helpers (all reactive through the inir Config revision) ──
-    function g(key, fallback) { return Inir.Config.getNestedValue(opts.path + "." + key, fallback); }
-    function put(key, value) { Inir.Config.setNestedValue(opts.path + "." + key, value); }
+    // Presets rewrite a whole group, so they go to the shared store directly.
     function setV(key, value, group) { Inir.Config.setNestedValues(Jp.JapaneseTypographyPresets.setValue(opts.path, key, value, group)); }
     function applyComposition(preset) { Inir.Config.setNestedValues(Jp.JapaneseTypographyPresets.composition(opts.path, preset)); }
     function applyPalette(preset) { Inir.Config.setNestedValues(Jp.JapaneseTypographyPresets.palette(opts.path, preset)); }
     function applyFont(preset) { Inir.Config.setNestedValues(Jp.JapaneseTypographyPresets.font(opts.path, preset)); }
-    function cap(s) { return (s && s.length > 0) ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
-    function cycle(list, cur) { const i = list.indexOf(cur); return list[(i + 1) % list.length]; }
     function famLabel(v, sameLabel) {
         if (v === "" || v === undefined || v === null) return sameLabel;
         if (v === "serif") return "Serif";

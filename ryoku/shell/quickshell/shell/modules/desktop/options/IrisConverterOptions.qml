@@ -3,26 +3,14 @@ import QtQuick
 import ".."
 import "../Singletons"
 import Ryoku.Ui.Singletons
-import inir.modules.common as Inir
 
 // Right-click options for the vendored iRiS "Image converter" canvas widget. It
 // converts images dropped onto it; its one setting is the output format, written
 // to the widget's own inir config on the daemon's single settings path
 // (inir.background.widgets.imageConverter.selectedFormat), the store the widget
 // reads.
-Column {
+IrisOptionsBase {
     id: opts
-
-    property string widget: ""
-
-    readonly property string path: "background.widgets.imageConverter"
-
-    width: parent ? parent.width : 0
-    spacing: Theme.s1
-
-    function g(key, fallback) { return Inir.Config.getNestedValue(opts.path + "." + key, fallback); }
-    function put(key, value) { Inir.Config.setNestedValue(opts.path + "." + key, value); }
-    function cycle(list, cur) { const i = list.indexOf(cur); return list[(i + 1) % list.length]; }
 
     readonly property var _formats: ["png", "jpg", "webp", "avif", "bmp", "tiff", "pdf"]
 

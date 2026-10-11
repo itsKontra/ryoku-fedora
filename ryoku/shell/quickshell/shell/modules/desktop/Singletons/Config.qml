@@ -165,7 +165,6 @@ Singleton {
     property alias irisClockColor2:   adapter.irisClockColor2
     property alias irisClockGradient: adapter.irisClockGradient
     property alias irisClockSize:     adapter.irisClockSize
-    property alias irisClockOpts:     adapter.irisClockOpts
     property alias irisWeatherEnabled:  adapter.irisWeatherEnabled
     property alias irisWeatherScale:    adapter.irisWeatherScale
     property alias irisWeatherAnchor:   adapter.irisWeatherAnchor
@@ -178,7 +177,6 @@ Singleton {
     property alias irisWeatherColor2:   adapter.irisWeatherColor2
     property alias irisWeatherGradient: adapter.irisWeatherGradient
     property alias irisWeatherSize:     adapter.irisWeatherSize
-    property alias irisWeatherOpts:     adapter.irisWeatherOpts
     property alias irisMediaEnabled:  adapter.irisMediaEnabled
     property alias irisMediaScale:    adapter.irisMediaScale
     property alias irisMediaAnchor:   adapter.irisMediaAnchor
@@ -191,7 +189,6 @@ Singleton {
     property alias irisMediaColor2:   adapter.irisMediaColor2
     property alias irisMediaGradient: adapter.irisMediaGradient
     property alias irisMediaSize:     adapter.irisMediaSize
-    property alias irisMediaOpts:     adapter.irisMediaOpts
     property alias irisControlsEnabled:  adapter.irisControlsEnabled
     property alias irisControlsScale:    adapter.irisControlsScale
     property alias irisControlsAnchor:   adapter.irisControlsAnchor
@@ -204,7 +201,6 @@ Singleton {
     property alias irisControlsColor2:   adapter.irisControlsColor2
     property alias irisControlsGradient: adapter.irisControlsGradient
     property alias irisControlsSize:     adapter.irisControlsSize
-    property alias irisControlsOpts:     adapter.irisControlsOpts
     property alias irisMonthEnabled:  adapter.irisMonthEnabled
     property alias irisMonthScale:    adapter.irisMonthScale
     property alias irisMonthAnchor:   adapter.irisMonthAnchor
@@ -217,7 +213,6 @@ Singleton {
     property alias irisMonthColor2:   adapter.irisMonthColor2
     property alias irisMonthGradient: adapter.irisMonthGradient
     property alias irisMonthSize:     adapter.irisMonthSize
-    property alias irisMonthOpts:     adapter.irisMonthOpts
     property alias irisAgendaEnabled:  adapter.irisAgendaEnabled
     property alias irisAgendaScale:    adapter.irisAgendaScale
     property alias irisAgendaAnchor:   adapter.irisAgendaAnchor
@@ -230,7 +225,6 @@ Singleton {
     property alias irisAgendaColor2:   adapter.irisAgendaColor2
     property alias irisAgendaGradient: adapter.irisAgendaGradient
     property alias irisAgendaSize:     adapter.irisAgendaSize
-    property alias irisAgendaOpts:     adapter.irisAgendaOpts
     property alias irisTodoEnabled:  adapter.irisTodoEnabled
     property alias irisTodoScale:    adapter.irisTodoScale
     property alias irisTodoAnchor:   adapter.irisTodoAnchor
@@ -243,7 +237,6 @@ Singleton {
     property alias irisTodoColor2:   adapter.irisTodoColor2
     property alias irisTodoGradient: adapter.irisTodoGradient
     property alias irisTodoSize:     adapter.irisTodoSize
-    property alias irisTodoOpts:     adapter.irisTodoOpts
     property alias irisNotesEnabled:  adapter.irisNotesEnabled
     property alias irisNotesScale:    adapter.irisNotesScale
     property alias irisNotesAnchor:   adapter.irisNotesAnchor
@@ -256,7 +249,6 @@ Singleton {
     property alias irisNotesColor2:   adapter.irisNotesColor2
     property alias irisNotesGradient: adapter.irisNotesGradient
     property alias irisNotesSize:     adapter.irisNotesSize
-    property alias irisNotesOpts:     adapter.irisNotesOpts
     property alias irisTimersEnabled:  adapter.irisTimersEnabled
     property alias irisTimersScale:    adapter.irisTimersScale
     property alias irisTimersAnchor:   adapter.irisTimersAnchor
@@ -269,7 +261,6 @@ Singleton {
     property alias irisTimersColor2:   adapter.irisTimersColor2
     property alias irisTimersGradient: adapter.irisTimersGradient
     property alias irisTimersSize:     adapter.irisTimersSize
-    property alias irisTimersOpts:     adapter.irisTimersOpts
     property alias irisScreenEnabled:  adapter.irisScreenEnabled
     property alias irisScreenScale:    adapter.irisScreenScale
     property alias irisScreenAnchor:   adapter.irisScreenAnchor
@@ -282,7 +273,6 @@ Singleton {
     property alias irisScreenColor2:   adapter.irisScreenColor2
     property alias irisScreenGradient: adapter.irisScreenGradient
     property alias irisScreenSize:     adapter.irisScreenSize
-    property alias irisScreenOpts:     adapter.irisScreenOpts
     property alias irisVitalsEnabled:  adapter.irisVitalsEnabled
     property alias irisVitalsScale:    adapter.irisVitalsScale
     property alias irisVitalsAnchor:   adapter.irisVitalsAnchor
@@ -295,7 +285,6 @@ Singleton {
     property alias irisVitalsColor2:   adapter.irisVitalsColor2
     property alias irisVitalsGradient: adapter.irisVitalsGradient
     property alias irisVitalsSize:     adapter.irisVitalsSize
-    property alias irisVitalsOpts:     adapter.irisVitalsOpts
     property alias irisBatteryEnabled:  adapter.irisBatteryEnabled
     property alias irisBatteryScale:    adapter.irisBatteryScale
     property alias irisBatteryAnchor:   adapter.irisBatteryAnchor
@@ -308,7 +297,6 @@ Singleton {
     property alias irisBatteryColor2:   adapter.irisBatteryColor2
     property alias irisBatteryGradient: adapter.irisBatteryGradient
     property alias irisBatterySize:     adapter.irisBatterySize
-    property alias irisBatteryOpts:     adapter.irisBatteryOpts
     property alias irisWorldEnabled:  adapter.irisWorldEnabled
     property alias irisWorldScale:    adapter.irisWorldScale
     property alias irisWorldAnchor:   adapter.irisWorldAnchor
@@ -321,7 +309,6 @@ Singleton {
     property alias irisWorldColor2:   adapter.irisWorldColor2
     property alias irisWorldGradient: adapter.irisWorldGradient
     property alias irisWorldSize:     adapter.irisWorldSize
-    property alias irisWorldOpts:     adapter.irisWorldOpts
     property alias irisDateEnabled:  adapter.irisDateEnabled
     property alias irisDateScale:    adapter.irisDateScale
     property alias irisDateAnchor:   adapter.irisDateAnchor
@@ -334,7 +321,6 @@ Singleton {
     property alias irisDateColor2:   adapter.irisDateColor2
     property alias irisDateGradient: adapter.irisDateGradient
     property alias irisDateSize:     adapter.irisDateSize
-    property alias irisDateOpts:     adapter.irisDateOpts
     property alias irisProfileEnabled:  adapter.irisProfileEnabled
     property alias irisProfileScale:    adapter.irisProfileScale
     property alias irisProfileAnchor:   adapter.irisProfileAnchor
@@ -347,7 +333,6 @@ Singleton {
     property alias irisProfileColor2:   adapter.irisProfileColor2
     property alias irisProfileGradient: adapter.irisProfileGradient
     property alias irisProfileSize:     adapter.irisProfileSize
-    property alias irisProfileOpts:     adapter.irisProfileOpts
     property alias irisUptimeEnabled:  adapter.irisUptimeEnabled
     property alias irisUptimeScale:    adapter.irisUptimeScale
     property alias irisUptimeAnchor:   adapter.irisUptimeAnchor
@@ -360,7 +345,6 @@ Singleton {
     property alias irisUptimeColor2:   adapter.irisUptimeColor2
     property alias irisUptimeGradient: adapter.irisUptimeGradient
     property alias irisUptimeSize:     adapter.irisUptimeSize
-    property alias irisUptimeOpts:     adapter.irisUptimeOpts
     property alias irisNewsEnabled:  adapter.irisNewsEnabled
     property alias irisNewsScale:    adapter.irisNewsScale
     property alias irisNewsAnchor:   adapter.irisNewsAnchor
@@ -373,7 +357,6 @@ Singleton {
     property alias irisNewsColor2:   adapter.irisNewsColor2
     property alias irisNewsGradient: adapter.irisNewsGradient
     property alias irisNewsSize:     adapter.irisNewsSize
-    property alias irisNewsOpts:     adapter.irisNewsOpts
     // per-widget skin: "inir" (upstream face) | "ryoku" (additive Ryoku skin)
     property alias irisClockStyle:    adapter.irisClockStyle
     property alias irisWeatherStyle:    adapter.irisWeatherStyle
@@ -491,7 +474,6 @@ Singleton {
     property alias irisCustomImageColor2: adapter.irisCustomImageColor2
     property alias irisCustomImageGradient: adapter.irisCustomImageGradient
     property alias irisCustomImageSize: adapter.irisCustomImageSize
-    property alias irisCustomImageOpts: adapter.irisCustomImageOpts
     property alias irisCustomImageStyle: adapter.irisCustomImageStyle
     property alias irisCustomImageRadius: adapter.irisCustomImageRadius
     property alias irisCustomImagePad: adapter.irisCustomImagePad
@@ -510,7 +492,6 @@ Singleton {
     property alias irisEditorialColor2: adapter.irisEditorialColor2
     property alias irisEditorialGradient: adapter.irisEditorialGradient
     property alias irisEditorialSize: adapter.irisEditorialSize
-    property alias irisEditorialOpts: adapter.irisEditorialOpts
     property alias irisEditorialStyle: adapter.irisEditorialStyle
     property alias irisEditorialRadius: adapter.irisEditorialRadius
     property alias irisEditorialPad: adapter.irisEditorialPad
@@ -529,7 +510,6 @@ Singleton {
     property alias irisConverterColor2: adapter.irisConverterColor2
     property alias irisConverterGradient: adapter.irisConverterGradient
     property alias irisConverterSize: adapter.irisConverterSize
-    property alias irisConverterOpts: adapter.irisConverterOpts
     property alias irisConverterStyle: adapter.irisConverterStyle
     property alias irisConverterRadius: adapter.irisConverterRadius
     property alias irisConverterPad: adapter.irisConverterPad
@@ -548,7 +528,6 @@ Singleton {
     property alias irisJpColor2: adapter.irisJpColor2
     property alias irisJpGradient: adapter.irisJpGradient
     property alias irisJpSize: adapter.irisJpSize
-    property alias irisJpOpts: adapter.irisJpOpts
     property alias irisJpStyle: adapter.irisJpStyle
     property alias irisJpRadius: adapter.irisJpRadius
     property alias irisJpPad: adapter.irisJpPad
@@ -567,7 +546,6 @@ Singleton {
     property alias irisVisualizerColor2: adapter.irisVisualizerColor2
     property alias irisVisualizerGradient: adapter.irisVisualizerGradient
     property alias irisVisualizerSize: adapter.irisVisualizerSize
-    property alias irisVisualizerOpts: adapter.irisVisualizerOpts
     property alias irisVisualizerStyle: adapter.irisVisualizerStyle
     property alias irisVisualizerRadius: adapter.irisVisualizerRadius
     property alias irisVisualizerPad: adapter.irisVisualizerPad
@@ -976,7 +954,6 @@ Singleton {
             property string irisClockColor2: ""
             property bool irisClockGradient: false
             property string irisClockSize: "small"
-            property string irisClockOpts: ""
             property bool irisWeatherEnabled: false
             property real irisWeatherScale: 1.0
             property string irisWeatherAnchor: "free"
@@ -989,7 +966,6 @@ Singleton {
             property string irisWeatherColor2: ""
             property bool irisWeatherGradient: false
             property string irisWeatherSize: "small"
-            property string irisWeatherOpts: ""
             property bool irisMediaEnabled: false
             property real irisMediaScale: 1.0
             property string irisMediaAnchor: "free"
@@ -1002,7 +978,6 @@ Singleton {
             property string irisMediaColor2: ""
             property bool irisMediaGradient: false
             property string irisMediaSize: "medium"
-            property string irisMediaOpts: ""
             property bool irisControlsEnabled: false
             property real irisControlsScale: 1.0
             property string irisControlsAnchor: "free"
@@ -1015,7 +990,6 @@ Singleton {
             property string irisControlsColor2: ""
             property bool irisControlsGradient: false
             property string irisControlsSize: "medium"
-            property string irisControlsOpts: ""
             property bool irisMonthEnabled: false
             property real irisMonthScale: 1.0
             property string irisMonthAnchor: "free"
@@ -1028,7 +1002,6 @@ Singleton {
             property string irisMonthColor2: ""
             property bool irisMonthGradient: false
             property string irisMonthSize: "medium"
-            property string irisMonthOpts: ""
             property bool irisAgendaEnabled: false
             property real irisAgendaScale: 1.0
             property string irisAgendaAnchor: "free"
@@ -1041,7 +1014,6 @@ Singleton {
             property string irisAgendaColor2: ""
             property bool irisAgendaGradient: false
             property string irisAgendaSize: "medium"
-            property string irisAgendaOpts: ""
             property bool irisTodoEnabled: false
             property real irisTodoScale: 1.0
             property string irisTodoAnchor: "free"
@@ -1054,7 +1026,6 @@ Singleton {
             property string irisTodoColor2: ""
             property bool irisTodoGradient: false
             property string irisTodoSize: "medium"
-            property string irisTodoOpts: ""
             property bool irisNotesEnabled: false
             property real irisNotesScale: 1.0
             property string irisNotesAnchor: "free"
@@ -1067,7 +1038,6 @@ Singleton {
             property string irisNotesColor2: ""
             property bool irisNotesGradient: false
             property string irisNotesSize: "medium"
-            property string irisNotesOpts: ""
             property bool irisTimersEnabled: false
             property real irisTimersScale: 1.0
             property string irisTimersAnchor: "free"
@@ -1080,7 +1050,6 @@ Singleton {
             property string irisTimersColor2: ""
             property bool irisTimersGradient: false
             property string irisTimersSize: "medium"
-            property string irisTimersOpts: ""
             property bool irisScreenEnabled: false
             property real irisScreenScale: 1.0
             property string irisScreenAnchor: "free"
@@ -1093,7 +1062,6 @@ Singleton {
             property string irisScreenColor2: ""
             property bool irisScreenGradient: false
             property string irisScreenSize: "medium"
-            property string irisScreenOpts: ""
             property bool irisVitalsEnabled: false
             property real irisVitalsScale: 1.0
             property string irisVitalsAnchor: "free"
@@ -1106,7 +1074,6 @@ Singleton {
             property string irisVitalsColor2: ""
             property bool irisVitalsGradient: false
             property string irisVitalsSize: "medium"
-            property string irisVitalsOpts: ""
             property bool irisBatteryEnabled: false
             property real irisBatteryScale: 1.0
             property string irisBatteryAnchor: "free"
@@ -1119,7 +1086,6 @@ Singleton {
             property string irisBatteryColor2: ""
             property bool irisBatteryGradient: false
             property string irisBatterySize: "small"
-            property string irisBatteryOpts: ""
             property bool irisWorldEnabled: false
             property real irisWorldScale: 1.0
             property string irisWorldAnchor: "free"
@@ -1132,7 +1098,6 @@ Singleton {
             property string irisWorldColor2: ""
             property bool irisWorldGradient: false
             property string irisWorldSize: "medium"
-            property string irisWorldOpts: ""
             property bool irisDateEnabled: false
             property real irisDateScale: 1.0
             property string irisDateAnchor: "free"
@@ -1145,7 +1110,6 @@ Singleton {
             property string irisDateColor2: ""
             property bool irisDateGradient: false
             property string irisDateSize: "small"
-            property string irisDateOpts: ""
             property bool irisProfileEnabled: false
             property real irisProfileScale: 1.0
             property string irisProfileAnchor: "free"
@@ -1158,7 +1122,6 @@ Singleton {
             property string irisProfileColor2: ""
             property bool irisProfileGradient: false
             property string irisProfileSize: "medium"
-            property string irisProfileOpts: ""
             property bool irisUptimeEnabled: false
             property real irisUptimeScale: 1.0
             property string irisUptimeAnchor: "free"
@@ -1171,7 +1134,6 @@ Singleton {
             property string irisUptimeColor2: ""
             property bool irisUptimeGradient: false
             property string irisUptimeSize: "small"
-            property string irisUptimeOpts: ""
             property bool irisNewsEnabled: false
             property real irisNewsScale: 1.0
             property string irisNewsAnchor: "free"
@@ -1184,7 +1146,6 @@ Singleton {
             property string irisNewsColor2: ""
             property bool irisNewsGradient: false
             property string irisNewsSize: "medium"
-            property string irisNewsOpts: ""
             property string irisClockStyle: "inir"
             property string irisWeatherStyle: "inir"
             property string irisMediaStyle: "inir"
@@ -1299,7 +1260,6 @@ Singleton {
             property string irisCustomImageColor2: ""
             property bool irisCustomImageGradient: false
             property string irisCustomImageSize: "small"
-            property string irisCustomImageOpts: ""
             property string irisCustomImageStyle: "inir"
             property int irisCustomImageRadius: -1
             property real irisCustomImagePad: -1
@@ -1318,7 +1278,6 @@ Singleton {
             property string irisEditorialColor2: ""
             property bool irisEditorialGradient: false
             property string irisEditorialSize: "small"
-            property string irisEditorialOpts: ""
             property string irisEditorialStyle: "inir"
             property int irisEditorialRadius: -1
             property real irisEditorialPad: -1
@@ -1337,7 +1296,6 @@ Singleton {
             property string irisConverterColor2: ""
             property bool irisConverterGradient: false
             property string irisConverterSize: "small"
-            property string irisConverterOpts: ""
             property string irisConverterStyle: "inir"
             property int irisConverterRadius: -1
             property real irisConverterPad: -1
@@ -1356,7 +1314,6 @@ Singleton {
             property string irisJpColor2: ""
             property bool irisJpGradient: false
             property string irisJpSize: "small"
-            property string irisJpOpts: ""
             property string irisJpStyle: "inir"
             property int irisJpRadius: -1
             property real irisJpPad: -1
@@ -1375,7 +1332,6 @@ Singleton {
             property string irisVisualizerColor2: ""
             property bool irisVisualizerGradient: false
             property string irisVisualizerSize: "small"
-            property string irisVisualizerOpts: ""
             property string irisVisualizerStyle: "inir"
             property int irisVisualizerRadius: -1
             property real irisVisualizerPad: -1

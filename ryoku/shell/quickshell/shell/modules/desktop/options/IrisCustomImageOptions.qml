@@ -3,27 +3,14 @@ import QtQuick
 import ".."
 import "../Singletons"
 import Ryoku.Ui.Singletons
-import inir.modules.common as Inir
 
 // Right-click options for the vendored iRiS "Custom image" canvas widget. Every
 // control writes the widget's own inir config on the daemon's single settings
 // path (inir.background.widgets.customImage.*), the store the widget reads, so
 // the frame re-renders live. Custom image carries no preset logic, so each value
 // is a plain write.
-Column {
+IrisOptionsBase {
     id: opts
-
-    property string widget: ""
-
-    readonly property string path: "background.widgets.customImage"
-
-    width: parent ? parent.width : 0
-    spacing: Theme.s1
-
-    function g(key, fallback) { return Inir.Config.getNestedValue(opts.path + "." + key, fallback); }
-    function put(key, value) { Inir.Config.setNestedValue(opts.path + "." + key, value); }
-    function cap(s) { return (s && s.length > 0) ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
-    function cycle(list, cur) { const i = list.indexOf(cur); return list[(i + 1) % list.length]; }
 
     readonly property string sourceMode: opts.g("sourceMode", "file") === "folder" ? "folder" : "file"
 

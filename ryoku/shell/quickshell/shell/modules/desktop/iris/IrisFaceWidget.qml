@@ -15,7 +15,8 @@ import "../Singletons"
 // iris.appearance.frontend: "inir" draws upstream, "ryoku" adds the slot's
 // backing + geometry and, for faces (and any widget that reads the iRiS ink
 // tokens), Ryoku ink. Colour modes ride the slot's inkColorA: Auto keeps the
-// widget's own colouring, Fixed pins ink+accent, Gradient is masked by the slot.
+// widget's own colouring, Fixed pins ink+accent, Gradient is masked by the slot
+// over a Ryoku-style face (an iNiR face keeps its plate, so it is never offered).
 Item {
     id: adapter
 
@@ -33,18 +34,6 @@ Item {
 
     readonly property bool ryokuStyle: Config[adapter.prefix + "Style"] === "ryoku"
     readonly property color _override: adapter.inkColorA.length > 0 ? adapter.inkColorA : "transparent"
-
-    readonly property var _opts: {
-        const raw = Config[adapter.prefix + "Opts"] || "";
-        if (raw.length === 0)
-            return ({});
-        try {
-            const parsed = JSON.parse(raw);
-            return (parsed && typeof parsed === "object") ? parsed : ({});
-        } catch (e) {
-            return ({});
-        }
-    }
 
     readonly property int _screenW: adapter.screen ? adapter.screen.width : 1920
     readonly property int _screenH: adapter.screen ? adapter.screen.height : 1080
@@ -74,7 +63,6 @@ Item {
             sizeOverride: adapter.sizeCfg
             scaleOverride: adapter.scaleCfg
             radiusOverride: Config[adapter.prefix + "Radius"]
-            optionOverrides: adapter._opts
         }
     }
     Loader {
@@ -111,7 +99,6 @@ Item {
             // Match the slot card's resolved rounding so the Ryoku custom-image
             // surface clips its media to the same shape (Theme.radius = square).
             slotRadius: Config[adapter.prefix + "Radius"] >= 0 ? Config[adapter.prefix + "Radius"] : Theme.radius
-            optionOverrides: adapter._opts
         }
     }
 }

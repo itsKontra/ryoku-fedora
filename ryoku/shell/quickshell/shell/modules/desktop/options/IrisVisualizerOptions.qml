@@ -3,26 +3,12 @@ import QtQuick
 import ".."
 import "../Singletons"
 import Ryoku.Ui.Singletons
-import inir.modules.common as Inir
-import "../iris/IrisRoster.js" as IrisRoster
 
 // Options for the vendored iRiS Visualizer canvas widget. Its config lives in the
 // inir store under background.widgets.visualizer.*; the Ryoku skin, scale,
 // opacity, placement and lock stay in WidgetMenu's generic rows.
-Column {
+IrisOptionsBase {
     id: opts
-
-    property string widget: ""
-    readonly property var face: IrisRoster.byPrefix(opts.widget)
-    readonly property string base: "background.widgets." + (opts.face ? opts.face.id : "")
-
-    width: parent ? parent.width : 0
-    spacing: Theme.s1
-
-    function g(key, fb) { return Inir.Config.getNestedValue(opts.base + "." + key, fb); }
-    function put(key, v) { Inir.Config.setNestedValue(opts.base + "." + key, v); }
-    function cap(s) { return (s && s.length > 0) ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
-    function cycle(list, cur) { const i = list.indexOf(cur); return list[(i + 1) % list.length]; }
 
     MenuSection { label: I18n.tr("Visualiser"); gloss: "音波" }
     MenuRow {

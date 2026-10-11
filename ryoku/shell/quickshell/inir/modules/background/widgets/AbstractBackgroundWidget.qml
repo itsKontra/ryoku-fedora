@@ -2100,7 +2100,6 @@ AbstractWidget {
     property string ryokuSizeOverride: ""
     property real ryokuScaleOverride: -1
     property real ryokuRadiusOverride: -1
-    property var ryokuOptionOverrides: ({})
     readonly property color irisAccent: root.ryokuAccentOverride.a > 0 ? root.ryokuAccentOverride
         : root.ryokuStyle ? IrisStyle.text : root.irisPalette[0]
     readonly property color irisAccent2: root.ryokuAccentOverride.a > 0 ? root.ryokuAccentOverride
@@ -2180,8 +2179,6 @@ AbstractWidget {
     readonly property real irisFaceHeight: root.irisSize === "large" ? root.irisUnit * 2 + root.irisGutter : root.irisUnit
     readonly property var irisSizeLabels: ({ small: Translation.tr("Small"), medium: Translation.tr("Medium"), large: Translation.tr("Large") })
     function irisOption(key: string, fallback: var): var {
-        if (root.ryokuOptionOverrides && root.ryokuOptionOverrides[key] !== undefined)
-            return root.ryokuOptionOverrides[key]
         const value = root._readConfigKey("iris." + key)
         return value === undefined || value === null ? fallback : value
     }

@@ -1238,6 +1238,8 @@ Scope {
                             // backing. Ryoku style: the slot draws the chosen backing.
                             bg: Config[irisLoader.modelData.prefix + "Style"] === "ryoku"
                                 ? Config[irisLoader.modelData.prefix + "Bg"] : "none"
+                            selfInked: true
+                            ownsPlate: Config[irisLoader.modelData.prefix + "Style"] !== "ryoku"
                             scaleCfg: root.widgetValue(irisLoader.modelData.prefix, "Scale")
                             // per-widget geometry (Ryoku-style backing / iNiR plate radius)
                             radiusOverride: Config[irisLoader.modelData.prefix + "Radius"]

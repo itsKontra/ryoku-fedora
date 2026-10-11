@@ -39,7 +39,3 @@ function byPrefix(prefix) {
             return faces[i];
     return null;
 }
-
-function isIris(prefix) {
-    return byPrefix(prefix) !== null;
-}

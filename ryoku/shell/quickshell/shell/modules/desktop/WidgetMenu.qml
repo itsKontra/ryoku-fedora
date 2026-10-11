@@ -69,7 +69,8 @@ Item {
     readonly property bool isRyokuStyle: menu.isIris && Config[menu.scope + "Style"] === "ryoku"
     readonly property var facePresets: menu.isIris ? menu.irisFace.sizes : []
     readonly property string facePresetKey: menu.scope + "Size"
-    readonly property string curFacePreset: menu.isIris ? (Config[menu.scope + "Size"] || menu.irisFace.sizes[0]) : ""
+    readonly property string curFacePreset: menu.isIris
+        ? (Config.get(menu.facePresetKey, menu.monitor) || menu.irisFace.sizes[0]) : ""
 
     // the kanji seal each scope carries in the menu masthead (docs/ui-ux.md).
     readonly property var glosses: ({
@@ -128,7 +129,7 @@ Item {
         if (!presets || presets.length < 2)
             return;
         const current = presets.indexOf(menu.curFacePreset);
-        Config.set(menu.facePresetKey, presets[(current + 1) % presets.length]);
+        Config.setFor(menu.monitor, menu.facePresetKey, presets[(current + 1) % presets.length]);
     }
     function stepScale(direction) {
         const next = StageFunctions.EditModeLogic.steppedScale(menu.curScale, direction);

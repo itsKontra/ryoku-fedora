@@ -33,8 +33,11 @@ ColumnLayout {
 
     spacing: Math.round(12 * root.d)
 
+    // Ryoku's desktop picks the faces it hosts from widgets.json, so tiles and a
+    // count over iNiR's own enable flags would show and change nothing real.
     GridLayout {
         id: grid
+        visible: false
         Layout.fillWidth: true
         readonly property real tile: Math.round(76 * root.d)
         columns: Math.max(3, Math.floor((width + columnSpacing) / (tile + columnSpacing)))
@@ -113,11 +116,13 @@ ColumnLayout {
         spacing: Math.round(10 * root.d)
 
         IrisText {
+            visible: false
             Layout.fillWidth: true
             text: root.placed === 1 ? Translation.tr("1 widget on this screen") : Translation.tr("%1 widgets on this screen").arg(root.placed)
             color: IrisStyle.muted
             font.pixelSize: IrisStyle.typeMeta
         }
+        Item { Layout.fillWidth: true }
         IrisButton {
             implicitHeight: Math.round(30 * root.d)
             implicitWidth: arrangeRow.implicitWidth + Math.round(24 * root.d)
