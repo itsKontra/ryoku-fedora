@@ -331,7 +331,9 @@ install_rpm() {
     if [ "$tool" = rpm ]; then
       pkexec rpm -Uvh "$src" >/dev/null 2>&1; rc=$?
     else
-      pkexec ryoku-host pkg install-file "$src" >/dev/null 2>&1; rc=$?
+      # The packaged path, never PATH: pkexec resolves a bare name through the
+      # caller's PATH, where a checkout's ~/.local/bin copy is user-writable.
+      pkexec /usr/bin/ryoku-host pkg install-file "$src" >/dev/null 2>&1; rc=$?
     fi
     case "$rc" in
       0) LAST_NAME="$name"; return 0 ;;

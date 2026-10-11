@@ -56,8 +56,8 @@ else
   echo "::error::FAIL: did not report the package name; out: $(cat "$work/out")" >&2
   fail=1
 fi
-check "$(cat "$work/pkexec.log")" "ryoku-host pkg install-file $s1/foo.rpm" \
-  "rpm handed to pkexec ryoku-host pkg install-file"
+check "$(cat "$work/pkexec.log")" "/usr/bin/ryoku-host pkg install-file $s1/foo.rpm" \
+  "rpm handed to pkexec /usr/bin/ryoku-host pkg install-file"
 absent "$work/home/.local/share/ryoku-apps/foo" "rpm NOT extracted into ~/.local"
 absent "$s1/foo.rpm" "source removed from the stash after a successful install"
 if grep -qx "@AUTH" "$work/out"; then
@@ -179,7 +179,7 @@ for prc in 126 1; do
   : >"$work/pkexec.log"
   rc=0; PKEXEC_RC=$prc PATH="$fakebsd:$PATH" STASH_DIR="$s8" run_stash || rc=$?
   check "$rc" "1" "pkexec exit $prc: install exits non-zero"
-  check "$(cat "$work/pkexec.log")" "ryoku-host pkg install-file $s8/denied.rpm" "pkexec exit $prc: went through the host seam"
+  check "$(cat "$work/pkexec.log")" "/usr/bin/ryoku-host pkg install-file $s8/denied.rpm" "pkexec exit $prc: went through the host seam"
   present "$s8/denied.rpm" "pkexec exit $prc: the .rpm stays in the stash"
   absent "$work/home/.local/share/ryoku-apps/denied" "pkexec exit $prc: no payload extracted into ryoku-apps"
 done
