@@ -182,6 +182,11 @@ systemctl enable ryoku-snapshot-restored.service ryoku-snapshot-menu.path >/dev/
 [ -d /run/systemd/system ] || exit 0
 systemd-detect-virt --quiet --chroot && exit 0
 systemctl start --no-block ryoku-snapshot-menu.path ryoku-snapshot-menu.service >/dev/null 2>&1 || :
+# Re-run the seat ACL on mice and /dev/uinput already present, so the mouse
+# remapper's uaccess rule applies without a replug or reboot.
+udevadm control --reload >/dev/null 2>&1 || :
+udevadm trigger --action=change --subsystem-match=input --property-match=ID_INPUT_MOUSE=1 >/dev/null 2>&1 || :
+udevadm trigger --action=change --subsystem-match=misc --sysname-match=uinput >/dev/null 2>&1 || :
 [ -x /usr/bin/ryoku-power-cutover ] || exit 0
 /usr/bin/ryoku-power-cutover package
 

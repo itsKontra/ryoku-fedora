@@ -78,6 +78,11 @@ key-down, key-up, tap and delay steps with a repeat count. It runs asynchronousl
 and can either finish after the source button is released or cancel and release
 held keys.
 
+The daemon runs as the session user. `ryoku-desktop` ships
+`72-ryoku-mouse-uaccess.rules`, which gives the active-seat user an ACL on mouse
+evdev nodes and `/dev/uinput`; side grids are covered by the keyboard rule
+beside it. No `input` group membership is needed.
+
 ## Dependencies
 
 Beyond Hyprland, quickshell, `go` (to build `ryoku-shell`), and cmake + ninja +

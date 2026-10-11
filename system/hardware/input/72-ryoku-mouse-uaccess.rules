@@ -1,0 +1,9 @@
+# Ryoku: the shell daemon's mouse remapper (Hub > Input > Mouse) reads and grabs
+# mouse evdev nodes and replays them through a /dev/uinput clone. Grant the
+# active-seat user an ACL on both via uaccess, so it works without the broad
+# `input` group, which Fedora does not give the installed user. An MMO side grid
+# is a keyboard-class interface and is already covered by
+# 72-ryoku-keyboard-uaccess.rules. Runs after 60-input-id sets ID_INPUT_MOUSE
+# and before 73-seat-late applies the ACL (see the file number).
+SUBSYSTEM=="input", ENV{ID_INPUT_MOUSE}=="1", TAG+="uaccess"
+KERNEL=="uinput", SUBSYSTEM=="misc", TAG+="uaccess", OPTIONS+="static_node=uinput"

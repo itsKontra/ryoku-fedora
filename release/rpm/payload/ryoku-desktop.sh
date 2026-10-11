@@ -397,6 +397,10 @@ package() {
   # keyboards so it works without the broad input group (see the rule header).
   install -Dm644 "$_repo/system/hardware/input/72-ryoku-keyboard-uaccess.rules" \
     "$pkgdir/usr/lib/udev/rules.d/72-ryoku-keyboard-uaccess.rules"
+  # Mouse remapper: the daemon grabs mouse evdev nodes and writes a uinput clone.
+  # Grant the active-seat user a uaccess ACL on both (see the rule header).
+  install -Dm644 "$_repo/system/hardware/input/72-ryoku-mouse-uaccess.rules" \
+    "$pkgdir/usr/lib/udev/rules.d/72-ryoku-mouse-uaccess.rules"
   # QMK/VIA keyboard lighting: grant the seat user a uaccess ACL on a VIA board's
   # raw HID node so qmk_hid drives its RGB matrix without root (see rule header).
   install -Dm644 "$_repo/system/hardware/input/62-ryoku-qmk-hid.rules" \

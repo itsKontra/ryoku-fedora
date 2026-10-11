@@ -496,7 +496,7 @@ class ProvisionTargetTest(unittest.TestCase):
 
         # Udev
         udev_dir = self.root / "usr/lib/udev/rules.d"
-        for rule in ("90-ryoku-gpu.rules", "90-ryoku-backlight.rules", "60-ryoku-i2c.rules", "70-ryoku-maono.rules"):
+        for rule in ("90-ryoku-gpu.rules", "90-ryoku-backlight.rules", "60-ryoku-i2c.rules", "70-ryoku-maono.rules", "72-ryoku-mouse-uaccess.rules"):
             target_rule = udev_dir / rule
             self.assertTrue(target_rule.is_file(), f"Missing udev rule: {rule}")
             self.assertEqual(target_rule.stat().st_mode & 0o777, 0o644)
