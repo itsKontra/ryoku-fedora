@@ -144,6 +144,7 @@ func reconcilers() []reconciler {
 		{i18n.T("ryowalls app leftovers"), reconcileRyowallsRemoval},
 		{i18n.T("quick-settings capture tab"), reconcileCaptureModule},
 		{i18n.T("quick-settings stage tab"), reconcileStageModule},
+		{i18n.T("stage editor settings"), reconcileStageStore},
 		{i18n.T("ryostage cache"), reconcileRyostageCache},
 		{i18n.T("stage migration leftovers"), reconcileStageLeftovers},
 		{i18n.T("retired system sidebar"), reconcileLegacySystemSidebar},
