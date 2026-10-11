@@ -237,9 +237,21 @@ gboolean recover_daemon(gpointer data) {
     return G_SOURCE_REMOVE;
 }
 
+// A cancelled load (Ctrl+R mid-load, a newer navigation) or one our own policy
+// stopped (an external link handed to the browser) leaves the console as it
+// was; only a real failure means the daemon is gone.
+bool load_was_stopped(GError *error) {
+    return g_error_matches(error, WEBKIT_NETWORK_ERROR, WEBKIT_NETWORK_ERROR_CANCELLED)
+        || g_error_matches(error, WEBKIT_POLICY_ERROR,
+                           WEBKIT_POLICY_ERROR_FRAME_LOAD_INTERRUPTED_BY_POLICY_CHANGE)
+        || g_error_matches(error, WEBKIT_PLUGIN_ERROR, WEBKIT_PLUGIN_ERROR_WILL_HANDLE_LOAD);
+}
+
 gboolean load_failed(WebKitWebView *, WebKitLoadEvent, const gchar *,
-                     GError *, gpointer data) {
+                     GError *error, gpointer data) {
     auto *state = static_cast<AppState *>(data);
+    if (load_was_stopped(error))
+        return TRUE;
     if (!state->quitting && state->recovery_source == 0)
         state->recovery_source = g_idle_add(recover_daemon, state);
     return TRUE;

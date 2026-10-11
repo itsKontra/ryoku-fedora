@@ -614,11 +614,16 @@ for appdir in "$here"/../apps/*/; do
     mkdir -p "$cfg/quickshell/$appname"
     cp -a "${appdir}quickshell/." "$cfg/quickshell/$appname/"
   fi
-  if [[ -f "${appdir}CMakeLists.txt" ]] && command -v cmake >/dev/null 2>&1; then
+  # A box without the app's build deps keeps the packaged binary; a failed
+  # build must not stop the rest of the deploy.
+  if [[ -f "${appdir}CMakeLists.txt" ]] && command -v cmake >/dev/null 2>&1 && command -v ninja >/dev/null 2>&1; then
     say "building app $appname"
-    cmake -S "$appdir" -B "${appdir}build" -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
-    cmake --build "${appdir}build" >/dev/null
-    install -m755 "${appdir}build/$appname" "$bindir/$appname"
+    if cmake -S "$appdir" -B "${appdir}build" -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null \
+        && cmake --build "${appdir}build" >/dev/null; then
+      install -m755 "${appdir}build/$appname" "$bindir/$appname"
+    else
+      say "skipped app $appname: build failed (missing devel packages?)"
+    fi
   fi
   [[ -d "${appdir}quickshell" || -f "${appdir}CMakeLists.txt" ]] || continue
   for b in "${appdir}bin/"*; do [[ -f "$b" ]] && install -m755 "$b" "$bindir/$(basename "$b")"; done
