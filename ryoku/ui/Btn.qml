@@ -17,6 +17,9 @@ Rectangle {
     // have the commit's rebuild destroy its own delegate mid-tap.
     property bool stealFocus: false
     signal act()
+
+    activeFocusOnTab: armed
+    function activate() { if (armed) act() }
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
             activate();
