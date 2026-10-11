@@ -20,12 +20,13 @@ Variants {
         id: win
 
         required property var modelData
-        readonly property bool selected: root.screenName.length === 0
-            ? String(GlobalStates.focusedScreen?.name ?? "") === String(modelData?.name ?? "")
-            : root.screenName === String(modelData?.name ?? "")
+        readonly property bool selected: root.screenName.length > 0
+            && root.screenName === String(modelData?.name ?? "")
 
         screen: modelData
-        visible: win.selected && (root.open || palette.present)
+        // Stays up for the palette's close morph, never for a search another
+        // instance opened.
+        visible: win.selected && (root.open || (palette.present && !GlobalStates.searchOpen))
         color: "transparent"
         surfaceFormat.opaque: false
         exclusionMode: ExclusionMode.Ignore

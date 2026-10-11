@@ -18,17 +18,22 @@ Scope {
     property string screenName: ""
 
     // ── launcher contract (docs/launcher.md) ─────────────────────────────────
+    // One instance runs per output, all sharing searchOpen; an instance is
+    // shown only while the search it opened is still its own.
     readonly property bool shown: GlobalStates.searchOpen
+        && root.screenName.length > 0 && GlobalStates.searchOutput === root.screenName
     // Shima's internal style id remains "iris" so existing settings keep working.
     readonly property bool frameHosts: Config.barStyle === "iris"
         && (Iris.Config.options?.iris?.modules?.palette ?? true)
 
     function show(mon) {
-        root.screenName = String(mon ?? "")
+        root.screenName = String(mon ?? "") || String(GlobalStates.focusedScreen?.name ?? "")
+        GlobalStates.searchOutput = root.screenName
         GlobalStates.searchOpen = true
     }
     function hide() {
-        GlobalStates.searchOpen = false
+        if (root.shown)
+            GlobalStates.searchOpen = false
     }
     function toggle(mon) {
         root.shown ? root.hide() : root.show(mon)
@@ -45,7 +50,7 @@ Scope {
         active: !root.frameHosts
         sourceComponent: Component {
             SpotlightVariant.StandaloneSurface {
-                open: GlobalStates.searchOpen
+                open: root.shown
                 screenName: root.screenName
             }
         }
