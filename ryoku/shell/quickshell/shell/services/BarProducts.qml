@@ -11,6 +11,7 @@ Singleton {
     property var rows: []
     property string revisionKey: ""
     property var failedStyles: ({})
+    property string brokenStyle: ""
 
     function parseRows(raw) {
         try {
@@ -44,15 +45,29 @@ Singleton {
     function isBuiltin(id) {
         return !!(id && root.builtins[id]);
     }
+    // A builtin whose scene kept failing after Frame's retries: every monitor
+    // draws the sumi rail beside it until the style changes or the shell
+    // restarts, and the Hub can surface that the pick is degraded.
+    function markBroken(id) {
+        if (root.builtins[id])
+            root.brokenStyle = id;
+    }
+    // A frame-family style owns the whole desktop (island, dock, popups) from
+    // one host screen, so it must load even where the user hid the bar.
+    function isFrameFamily(id) {
+        return id === "iris";
+    }
 
 
     // Built-in folder styles ship inside the shell and resolve relative to the
     // Frame Loader, so no store install is needed. "sumi" stays the painted
-    // frame scene (empty scene url); "qsbar" is the shipped QS Bar folder and
-    // "kairos" the shipped island clock.
+    // frame scene (empty scene url); "qsbar" is the shipped QS Bar folder,
+    // "kairos" the shipped island clock and "iris" the shipped Shima frame
+    // family (the id predates the product name and stays for stored configs).
     readonly property var builtins: ({
         "qsbar": "barstyles/qsbar/Scene.qml",
-        "kairos": "barstyles/kairos/Scene.qml"
+        "kairos": "barstyles/kairos/Scene.qml",
+        "iris": "barstyles/iris/Scene.qml"
     })
 
     function sceneUrl(id) {

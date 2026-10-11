@@ -1,17 +1,35 @@
 # Bar styles
 
-Ryoku ships three bar styles, and a single key decides which one runs. The default
-is **QS Bar** (`qsbar`), a full-colour top bar. **Sumi** is the monochrome left
+Ryoku ships four bar styles, and a single key decides which one runs. The default
+is **QS Bar** (`qsbar`), a full-colour top bar. **Shima** (`iris`) is a frame
+family hosted once on the primary output: an island on any screen edge that
+morphs into whatever you clicked, with glass popups, bubbles, its own dock, a
+live Studio and its own settings overlay. **Sumi** is the monochrome left
 rail, and **Kairos** is a single island at the top centre that carries the clock:
 hovering opens it into a rolling date wheel, a track that plays adds a cover
 bubble beside it that peeks open on hover and opens the now-playing panel on a
 click (moving the pointer off it closes it again), and Super+Space grows the same
 island into its own app launcher
 (`docs/launcher.md`). Sumi is not a folder: the shell paints it from the built-in
-frame scene in `shell.qml`, so it has no scene file of its own. QS Bar and Kairos
-live under `ryoku/shell/quickshell/shell/modules/bar/barstyles/`, ship their own
-bar, and load once per monitor. Store-installed styles land under the same folder
-contract.
+frame scene in `shell.qml`, so it has no scene file of its own. QS Bar, Kairos
+and Shima live under `ryoku/shell/quickshell/shell/modules/bar/barstyles/`, ship
+their own scene, and load once per monitor. Store-installed styles land under the
+same folder contract.
+
+Shima's scene is a thin host that mounts the vendored frame family in
+`ryoku/shell/quickshell/inir/`. It is based on iNiR by snowarch
+(https://github.com/snowarch/inir) and tracks its releases through Ryoku
+upstream (the one it follows is in `inir/VERSION`). iNiR's NOTICE grants no
+rights to the names iNiR and iRiS, their logos or the Kira mascot, so Ryoku ships
+it as Shima with its own mark and no mascot, and keeps that NOTICE, the LICENSE
+and the credit in Shima's About page and the Hub's Credits. Internal names
+(`iris` ids, `Iris*` files, `inir.iris.*` keys) are unchanged so settings carry
+over. It reads the desktop only through the window-manager seam and the daemon's
+settings topic, so it runs on every compositor Ryoku supports. While Shima is
+the bar style it draws its own dock from the shared `dock` settings (the Hub's
+Bar Studio has its switch), the shell's dock steps aside, and recording goes
+through Ryoku's recorder. On Fedora its package search and update count use DNF.
+Its desktop widget faces are not drawn yet, so their settings are hidden.
 
 **QS Bar wears colour on purpose, and it is the one place the desktop does.** It
 is a Quickshell "Rise" bar ported onto Ryoku's data plane, and it keeps that

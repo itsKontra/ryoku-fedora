@@ -273,14 +273,15 @@ ShellRoot {
             // The dock: a resident per-monitor surface on the edge opposite the
             // bar. Style-agnostic, so it lives here rather than inside a bar style;
             // it is not built until the user turns it on (Hub -> Bar Studio -> Dock).
+            // Shima draws its own dock from the same settings, so this one steps aside.
             LazyLoader {
                 id: dockLoader
-                activeAsync: Dock.cfg("enabled", false)
+                activeAsync: Dock.cfg("enabled", false) && Config.barStyle !== "iris"
                 DockSurface {
                     id: perScreenDock
                     screen: perScreen.modelData
                     // Edit widgets steps the dock back so the whole desktop is the canvas.
-                    visible: Dock.cfg("enabled", false)
+                    visible: Dock.cfg("enabled", false) && Config.barStyle !== "iris"
                         && !(StageCfg.StageSession.widgets && StageCfg.StageSession.monitor === perScreen.modelData.name)
                 }
             }
@@ -747,10 +748,13 @@ ShellRoot {
     Connections {
         target: Polkit
         function onActiveChanged() {
-            if (Polkit.active)
-                ShellState.requestSurface("polkit", "", undefined);
-            else
+            // The Shima bar style draws this prompt in its own dialog.
+            if (Polkit.active) {
+                if (Config.barStyle !== "iris")
+                    ShellState.requestSurface("polkit", "", undefined);
+            } else {
                 ShellState.closeSurface("polkit", "");
+            }
         }
     }
 

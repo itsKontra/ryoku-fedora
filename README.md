@@ -311,7 +311,9 @@ independent project that shares no code with Omarchy. The Ryoku shell is custom,
 with its frame-blob rendering and some animations adapted from
 the [Caelestia shell](https://github.com/caelestia-dots/shell), and parts of the
 display configuration UI adapted from
-[DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell). Full
+[DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell). The Shima
+bar style is based on iNiR by snowarch (https://github.com/snowarch/inir), as a
+modified version. Full
 attribution and upstream links are in [`NOTICE`](NOTICE). Ryoku is released under
 the [GNU GPL v3](LICENSE).
 </content>

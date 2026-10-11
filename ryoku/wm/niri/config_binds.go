@@ -44,6 +44,11 @@ func spawnArgs(args ...string) string {
 
 func spawnSh(cmd string) string { return "spawn-sh " + kdlStr(cmd) }
 
+// shimaCloseCheck succeeds when the Shima frame (bar style id "iris") is the bar
+// style and its close confirmation is switched on, so the close bind asks the
+// shell first and otherwise falls through to niri.
+const shimaCloseCheck = `jq -e '(.barStyle // "qsbar") == "iris" and .inir.closeConfirm.enabled == true' "${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/shell.json" >/dev/null 2>&1`
+
 // defaultBinds maps each catalogue id to niri's expression of it. Compositor
 // behaviours become niri actions; app and shell launches spawn the same commands
 // (shell surfaces go through ryoku-shell, whose openSurface bus is compositor
@@ -54,7 +59,7 @@ func spawnSh(cmd string) string { return "spawn-sh " + kdlStr(cmd) }
 func defaultBinds() map[string]niriBind {
 	return map[string]niriBind{
 		// Windows
-		"window.close":      {action: "close-window", noRepeat: true},
+		"window.close":      {action: spawnSh(shimaCloseCheck + " && qs -c shell ipc call closeConfirm trigger || niri msg action close-window"), noRepeat: true},
 		"window.fullscreen": {action: "fullscreen-window"},
 		// The catalogue names this "Float or tile", which is niri's mechanic too.
 		"window.float": {action: "toggle-window-floating"},
