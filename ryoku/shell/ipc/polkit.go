@@ -226,8 +226,8 @@ func (d *daemon) startPolkit() {
 // reach polkitd before logind has marked this session the display one, and
 // polkitd rejects with "the session ... differs"; that resolves within a
 // second or two on its own. A slot held by a real second agent is not transient
-// and stays fatal, so Ryoku never fights it. A package var so tests can bound
-// the loop without a live daemon.
+// and stays fatal, so Ryoku never fights it. attempt and transient are passed
+// in so tests can drive the loop without a live polkitd.
 func (d *daemon) registerPolkitAgent(attempt func() error, transient func(error) bool) {
 	for range polkitRegisterRetries {
 		err := attempt()
