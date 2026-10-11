@@ -7,6 +7,7 @@ import Ryoku.Blobs
 import Ryoku.Ui.Singletons
 import shell.services
 import "framebars/RailGeometry.js" as RailGeometry
+import "../../services/lib/screens.js" as Screens
 
 // One monitor's frame bar. It maps four exclusive-zone background surfaces that
 // reserve the revealed bar's thickness (so tiled windows clear the rails) and a
@@ -120,7 +121,13 @@ Scope {
     PanelWindow {
         id: overlay
 
-        readonly property real s: (root.modelData ? root.modelData.height / 1080 : 1) * Math.max(0.7, Math.min(1.6, Config.fontScale))
+        // Physical panel height (Quickshell's is logical: a logical-only term
+        // shrinks the popouts and the needle panel as the display scale rises),
+        // the accessibility font scale, and this monitor's interface scale, so
+        // the popout chrome matches the rails it grows out of.
+        readonly property real s: Screens.monitorScale(root.modelData,
+            Wm.outputScale(root.modelData ? root.modelData.name : ""))
+            * Math.max(0.7, Math.min(1.6, Config.fontScale)) * root.uiScale
         readonly property var frameBars: Config.normalizedFrameBars
         // Read through `overlay.` and keep the rail host's id distinct: an id
         // shadows a same-named property in this scope, which once left every rail

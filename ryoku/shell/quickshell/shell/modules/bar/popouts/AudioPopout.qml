@@ -88,7 +88,7 @@ Item {
                 width: parent.width
                 s: root.s
                 current: root.sink
-                devices: Audio.outputs
+                devices: Audio.outputs.filter(Audio.alive)
                 listOpen: root.outDevicesOpen
                 fallbackIcon: "speaker"
                 emptyLabel: I18n.tr("No output device")
@@ -144,7 +144,7 @@ Item {
                 width: parent.width
                 s: root.s
                 current: root.source
-                devices: Audio.inputs
+                devices: Audio.inputs.filter(Audio.alive)
                 listOpen: root.inDevicesOpen
                 fallbackIcon: "mic"
                 emptyLabel: I18n.tr("No input device")
@@ -168,7 +168,7 @@ Item {
                 font.letterSpacing: 1.5
             }
             Repeater {
-                model: root.open ? Audio.streams : []
+                model: root.open ? Audio.streams.filter(Audio.alive) : []
                 delegate: AudioAppRow {
                     required property var modelData
                     width: appsCol.width
@@ -194,7 +194,7 @@ Item {
             id: capCol
             width: parent.width
             spacing: 6 * root.s
-            visible: Audio.captureStreams.length > 0
+            visible: Audio.captureStreams.filter(Audio.alive).length > 0
 
             Text {
                 width: parent.width
@@ -205,7 +205,7 @@ Item {
                 font.letterSpacing: 1.5
             }
             Repeater {
-                model: root.open ? Audio.captureStreams : []
+                model: root.open ? Audio.captureStreams.filter(Audio.alive) : []
                 delegate: AudioAppRow {
                     required property var modelData
                     width: capCol.width
