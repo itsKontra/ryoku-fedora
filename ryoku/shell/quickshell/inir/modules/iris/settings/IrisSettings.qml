@@ -211,11 +211,9 @@ PanelWindow {
         desktop: "desktop", sidebars: "places", controlCenter: "bodies", spotlight: "places", sound: "transients", notifications: "transients", player: "bodies" })
 
     function here(): var { return { section: root.section, group: root.group, advancedPage: root.advancedPage } }
-    // The dock's switch, edge and pins live in the Hub's Bar Studio, the one
-    // place every bar style reads its dock settings from.
     function openDockEditor(): void {
         GlobalStates.settingsOverlayOpen = false
-        Spawn.run(["ryoku-shell", "hub", "open", "bar-studio"])
+        Spawn.run(["qs", "-c", "shell", "ipc", "call", "desktop", "editSection", "dock", ""])
     }
     function same(a: var, b: var): bool { return a.section === b.section && a.group === b.group && a.advancedPage === b.advancedPage }
     function arrive(place: var, direction: int): void {
@@ -795,7 +793,7 @@ PanelWindow {
                         readonly property string target: studioTarget.length > 0 ? studioTarget : (root.editTargets[root.section] ?? "")
                         visible: !root.searching && root.advancedPage < 0 && target.length > 0
                         emphasized: true
-                        text: root.section === "dock" ? Translation.tr("Open Bar Studio") : Translation.tr("Customize")
+                        text: root.section === "dock" ? Translation.tr("Open Stage Editor") : Translation.tr("Customize")
                         buttonRadius: height / 2
                         onClicked: {
                             if (root.section === "dock")
@@ -869,7 +867,7 @@ PanelWindow {
                                 visible: root.browsing && root.section === "dock"
                                 Layout.alignment: Qt.AlignHCenter
                                 emphasized: true
-                                text: Translation.tr("Open dock settings in Bar Studio")
+                                text: Translation.tr("Open dock settings in Stage Editor")
                                 buttonRadius: height / 2
                                 onClicked: root.openDockEditor()
                             }

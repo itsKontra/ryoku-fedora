@@ -35,6 +35,10 @@ Item {
     property real backingOpacity: -1
     property real borderWidth: -1
     property real borderOpacity: -1
+    // A hosted face colours its own ink on any backing, and when it keeps its own
+    // plate and shadow the slot must not mask or shadow over them.
+    property bool selfInked: false
+    property bool ownsPlate: false
     property bool composing: false
     property var stageController: null
     readonly property bool stageInputBlocked: !!(slot.stageController
@@ -289,13 +293,14 @@ Item {
     // paints only the ink (text/marks), never a card; a gradient is layered on top
     // via the mask, but only for card-less widgets (calendar/music/aio keep their
     // card, so they take the solid colour, never the mask). Empty = adaptive.
-    readonly property string inkColorA: slot.bg === "none" ? (Config[slot.widget + "Color"] || "") : ""
+    readonly property string inkColorA: slot.bg === "none" || slot.selfInked
+        ? (Config[slot.widget + "Color"] || "") : ""
     readonly property string inkColorB: Config[slot.widget + "Color2"] || ""
     readonly property bool cardWidget: slot.widget === "calendar" || slot.widget === "music" || slot.widget === "aio"
     readonly property bool inkGradient: slot.inkColorA !== ""
         && (Config[slot.widget + "Gradient"] === true)
         && slot.inkColorB !== ""
-    readonly property bool inkMaskOn: slot.inkGradient && !slot.cardWidget
+    readonly property bool inkMaskOn: slot.inkGradient && !slot.cardWidget && !slot.ownsPlate
 
     // drag state. while holding (dragging, or briefly after release until
     // the config write lands) the rendered position follows the drag so it
@@ -521,7 +526,7 @@ Item {
             yScale: slot.previewFactor
         }
         layer.enabled: !slot.resizing
-            && (slot.inkMaskOn || (!Performance.shadowsDisabled && slot.bg === "none"))
+            && (slot.inkMaskOn || (!Performance.shadowsDisabled && slot.bg === "none" && !slot.ownsPlate))
         layer.smooth: true
         layer.effect: slot.inkMaskOn ? recolorFx : shadowFx
     }

@@ -30,6 +30,12 @@ surfaces. Run `ryoku-shell reload` after changing QML.
       Clock.qml              face and date dispatcher
       Clock*.qml             one clock face per file
       Date*.qml              one date treatment per file
+    iris/
+      IrisRoster.js          the hosted Shima faces: prefix, label, kind, sizes
+      IrisFaceWidget.qml     slot content for one face or canvas widget
+      Iris*Provider.qml      builds the vendored inir widget behind it
+    options/
+      <Scope>Options.qml     one Customize panel per widget (OptionsCatalog.js)
 
 The clock reads its settings directly from `Config`. `WidgetSlot` owns placement
 and the optional card, while `Clock.qml` selects the face. Enabled third-party

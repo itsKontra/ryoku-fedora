@@ -29,7 +29,11 @@ settings topic, so it runs on every compositor Ryoku supports. While Shima is
 the bar style it draws its own dock from the shared `dock` settings (the Hub's
 Bar Studio has its switch), the shell's dock steps aside, and recording goes
 through Ryoku's recorder. On Fedora its package search and update count use DNF.
-Its desktop widget faces are not drawn yet, so their settings are hidden.
+Its desktop widgets are not a canvas of their own: Ryoku's desktop hosts every
+Shima face in its `WidgetSlot` on any bar style (`modules/desktop/iris/`), each
+with an iNiR or Ryoku style. Placement, size and the Ryoku look live in
+`widgets.json`; each face's own options stay in the shared iNiR store, read per
+output first, exactly where the face reads them.
 
 **QS Bar wears colour on purpose, and it is the one place the desktop does.** It
 is a Quickshell "Rise" bar ported onto Ryoku's data plane, and it keeps that

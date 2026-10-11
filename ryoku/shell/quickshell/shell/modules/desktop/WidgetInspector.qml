@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Effects
 import "Singletons"
 import Ryoku.Ui.Singletons
+import "iris/IrisRoster.js" as IrisRoster
 import "options/OptionsCatalog.js" as OptionsCatalog
 
 // The widget inspector is one settings body with two hosts. Ordinary desktop
@@ -75,6 +76,9 @@ Item {
     function cap(s) { return (s && s.length > 0) ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
     // ── widget identity: glyph, name and kanji seal for the title row ──────
+    readonly property var irisFace: IrisRoster.byPrefix(insp.scope)
+    readonly property bool isIris: insp.irisFace !== null
+    readonly property bool isCanvas: insp.isIris && insp.irisFace.kind === "canvas"
     readonly property var builtinInfo: ({
         clock: { label: "Clock", icon: "schedule", gloss: "時計" },
         calendar: { label: "Calendar", icon: "calendar_month", gloss: "暦" },
@@ -88,9 +92,9 @@ Item {
         visualizer: { label: "Visualizer", icon: "graphic_eq", gloss: "音波" }
     })
     readonly property var _info: insp.builtinInfo[insp.scope] || null
-    readonly property string wLabel: insp._info ? insp._info.label : insp.cap(insp.scope)
-    readonly property string wIcon: insp._info ? insp._info.icon : "widgets"
-    readonly property string wGloss: insp._info ? insp._info.gloss : ""
+    readonly property string wLabel: insp.irisFace ? insp.irisFace.label : (insp._info ? insp._info.label : insp.cap(insp.scope))
+    readonly property string wIcon: insp.irisFace ? insp.irisFace.icon : (insp._info ? insp._info.icon : "widgets")
+    readonly property string wGloss: insp.irisFace ? insp.irisFace.gloss : (insp._info ? insp._info.gloss : "")
 
     // ── look / colour / shape state (the generic controls the menu shed) ──
     readonly property bool isClock: insp.scope === "clock"
@@ -103,6 +107,11 @@ Item {
     // Look tab (which writes widgets.json) would edit keys nothing reads; its
     // tabs come entirely from its options panel.
     readonly property bool isVisualizer: insp.scope === "visualizer"
+    readonly property bool isRyokuStyle: insp.isIris && Config[insp.scope + "Style"] === "ryoku"
+    // Size and scale are per-monitor keys; read them where Config.set writes them.
+    function here(key) { return Config.get(key, Config.writeMonitor); }
+    readonly property string curIrisSize: insp.isIris ? (insp.here(insp.scope + "Size") || insp.irisFace.sizes[0]) : ""
+
     readonly property var designLists: ({
         clock: ["digital", "minimal", "grand", "column", "outline", "banner", "analog", "flip", "rings", "bighour", "metal", "goodnight"],
         calendar: ["glass", "paper"],
@@ -115,17 +124,30 @@ Item {
     readonly property string designKey: insp.isCalendar || insp.isMusic || insp.isAio || insp.isDayprogress
         ? insp.scope + "Style" : insp.isShape ? insp.scope + "Kind" : insp.scope + "Design"
     readonly property string curDesign: Config[insp.designKey] ?? ""
-    readonly property bool hasDesign: insp.designLists[insp.scope] !== undefined
+    readonly property bool hasDesign: !insp.isIris && (insp.designLists[insp.scope] !== undefined)
 
     readonly property string curColor: Config[insp.scope + "Color"] || ""
     readonly property bool curGradient: Config[insp.scope + "Gradient"] === true
-    readonly property string colorMode: insp.curColor === "" ? "auto" : (insp.curGradient ? "gradient" : "solid")
+    // A Shima-style face keeps its own opaque plate, so the slot cannot mask a
+    // gradient over it; it wears the first stop as a solid ink instead.
+    readonly property bool gradientOk: !insp.isIris || insp.isRyokuStyle
+    readonly property string colorMode: insp.curColor === "" ? "auto"
+        : (insp.curGradient && insp.gradientOk ? "gradient" : "solid")
+    // The backing a Ryoku-style face is drawn with when nothing is pinned
+    // (WidgetSlot's own defaults), so the sliders start where the face is.
+    readonly property bool cardBg: (Config[insp.scope + "Bg"] || "card") === "card"
+    readonly property real defaultBacking: insp.cardBg ? 0.5 : 0.32
+    readonly property real defaultBorderOpacity: insp.cardBg ? Theme.line.a : 0.12
 
     function cycleDesign() {
         const d = insp.designLists[insp.scope];
         if (!d)
             return;
         Config.set(insp.designKey, d[(d.indexOf(Config[insp.designKey]) + 1) % d.length]);
+    }
+    function cycleIrisSize() {
+        const s = insp.irisFace.sizes;
+        Config.set(insp.scope + "Size", s[(s.indexOf(insp.curIrisSize) + 1) % s.length]);
     }
     function hexOf(c) {
         return "#" + [c.r, c.g, c.b].map(function (x) {
@@ -427,6 +449,38 @@ Item {
                         onTriggered: insp.cycleDesign()
                     }
                     MenuRow {
+                        visible: insp.isIris
+                        label: I18n.tr("Style")
+                        value: insp.isRyokuStyle ? "Ryoku" : "Original"
+                        on: insp.isRyokuStyle
+                        closeOnTrigger: false
+                        onTriggered: Config.set(insp.scope + "Style",
+                            insp.isRyokuStyle ? "inir" : "ryoku")
+                    }
+                    MenuRow {
+                        visible: insp.isIris && insp.irisFace.sizes.length > 1
+                        label: I18n.tr("Size preset")
+                        value: insp.cap(insp.curIrisSize)
+                        closeOnTrigger: false
+                        onTriggered: insp.cycleIrisSize()
+                    }
+                    Text {
+                        // Canvas widgets carry no iRiS ink token, so the Ryoku skin
+                        // only wraps them in the slot backing; their own colours
+                        // stay. State it rather than ship a dead colour picker.
+                        visible: insp.isCanvas && insp.isRyokuStyle
+                        width: parent.width
+                        leftPadding: Theme.s3
+                        rightPadding: Theme.s3
+                        topPadding: Theme.s1
+                        bottomPadding: Theme.s1
+                        wrapMode: Text.WordWrap
+                        text: I18n.tr("Ryoku style wraps this widget; it keeps its own colours")
+                        color: Theme.inkDim
+                        font.family: Theme.font
+                        font.pixelSize: Theme.fSmall
+                    }
+                    MenuRow {
                         visible: insp.isMusic
                         label: I18n.tr("Backdrop")
                         value: insp.videoLabel(Config.musicVideo)
@@ -495,7 +549,7 @@ Item {
                         visible: !insp.embedded
                         label: I18n.tr("Size")
                         from: 0.5; to: 2.5; step: 0.02
-                        value: Config[insp.scope + "Scale"] || 1
+                        value: insp.here(insp.scope + "Scale") || 1
                         valueText: Math.round(sizeSlider.value * 100) + "%"
                         onMoved: (v) => Config.setLive(insp.scope + "Scale", v)
                         onReleased: (v) => Config.set(insp.scope + "Scale", v)
@@ -510,10 +564,73 @@ Item {
                         onReleased: (v) => Config.set(insp.scope + "Opacity", v)
                     }
 
-                    MenuSection { label: I18n.tr("Colour"); gloss: "彩色" }
+                    MenuSection { visible: insp.isIris; label: I18n.tr("Shape"); gloss: "形状" }
+                    MenuRow {
+                        visible: insp.isRyokuStyle
+                        label: I18n.tr("Background")
+                        value: insp.cap(Config[insp.scope + "Bg"] || "card")
+                        closeOnTrigger: false
+                        onTriggered: {
+                            const d = ["card", "glass", "none"];
+                            Config.set(insp.scope + "Bg", d[(d.indexOf(Config[insp.scope + "Bg"] || "card") + 1) % d.length]);
+                        }
+                    }
+                    MenuSlider {
+                        id: radiusSlider
+                        visible: insp.isIris
+                        label: I18n.tr("Corner radius")
+                        from: 0; to: 120; step: 1
+                        value: Config[insp.scope + "Radius"] >= 0 ? Config[insp.scope + "Radius"] : Theme.radius
+                        valueText: Math.round(radiusSlider.value)
+                        onMoved: (v) => Config.setLive(insp.scope + "Radius", Math.round(v))
+                        onReleased: (v) => Config.set(insp.scope + "Radius", Math.round(v))
+                    }
+                    MenuSlider {
+                        id: padSlider
+                        visible: insp.isIris
+                        label: I18n.tr("Padding")
+                        from: 0; to: 48; step: 1
+                        value: Config[insp.scope + "Pad"] >= 0 ? Config[insp.scope + "Pad"] : 0
+                        valueText: Math.round(padSlider.value)
+                        onMoved: (v) => Config.setLive(insp.scope + "Pad", Math.round(v))
+                        onReleased: (v) => Config.set(insp.scope + "Pad", Math.round(v))
+                    }
+                    MenuSlider {
+                        id: borderSlider
+                        visible: insp.isRyokuStyle
+                        label: I18n.tr("Border width")
+                        from: 0; to: 4; step: 0.5
+                        value: Config[insp.scope + "Border"] >= 0 ? Config[insp.scope + "Border"] : 1
+                        valueText: borderSlider.value.toFixed(1)
+                        onMoved: (v) => Config.setLive(insp.scope + "Border", v)
+                        onReleased: (v) => Config.set(insp.scope + "Border", v)
+                    }
+                    MenuSlider {
+                        id: borderOpSlider
+                        visible: insp.isRyokuStyle
+                        label: I18n.tr("Border opacity")
+                        from: 0; to: 1; step: 0.01
+                        value: Config[insp.scope + "BorderOpacity"] >= 0 ? Config[insp.scope + "BorderOpacity"] : insp.defaultBorderOpacity
+                        valueText: Math.round(borderOpSlider.value * 100) + "%"
+                        onMoved: (v) => Config.setLive(insp.scope + "BorderOpacity", v)
+                        onReleased: (v) => Config.set(insp.scope + "BorderOpacity", v)
+                    }
+                    MenuSlider {
+                        id: backingOpSlider
+                        visible: insp.isRyokuStyle
+                        label: I18n.tr("Backing opacity")
+                        from: 0; to: 1; step: 0.01
+                        value: Config[insp.scope + "BackingOpacity"] >= 0 ? Config[insp.scope + "BackingOpacity"] : insp.defaultBacking
+                        valueText: Math.round(backingOpSlider.value * 100) + "%"
+                        onMoved: (v) => Config.setLive(insp.scope + "BackingOpacity", v)
+                        onReleased: (v) => Config.set(insp.scope + "BackingOpacity", v)
+                    }
+
+                    MenuSection { visible: !insp.isCanvas; label: I18n.tr("Colour"); gloss: "彩色" }
                     Item {
+                        visible: !insp.isCanvas
                         width: parent.width
-                        implicitHeight: colorCol.implicitHeight
+                        implicitHeight: !insp.isCanvas ? colorCol.implicitHeight : 0
                         Column {
                             id: colorCol
                             width: parent.width
@@ -522,7 +639,8 @@ Item {
                                 id: modeRow
                                 width: parent.width
                                 spacing: Theme.s1
-                                readonly property real cw: (width - 2 * Theme.s1) / 3
+                                readonly property int count: insp.gradientOk ? 3 : 2
+                                readonly property real cw: (width - (count - 1) * Theme.s1) / count
                                 MenuChip {
                                     width: modeRow.cw; height: Theme.ctlH
                                     label: I18n.tr("Auto"); selected: insp.colorMode === "auto"
@@ -534,6 +652,7 @@ Item {
                                     onClicked: insp.setColorMode("solid")
                                 }
                                 MenuChip {
+                                    visible: insp.gradientOk
                                     width: modeRow.cw; height: Theme.ctlH
                                     label: I18n.tr("Gradient"); selected: insp.colorMode === "gradient"
                                     onClicked: insp.setColorMode("gradient")
