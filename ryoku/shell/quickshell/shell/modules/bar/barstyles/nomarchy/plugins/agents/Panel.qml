@@ -470,7 +470,8 @@ Panel {
   }
 
   function launchAgent() {
-    Util.execArgv(["ryoku-shell", "ask"])
+    Util.execArgv(["bash", "-c",
+      'port=$(ryoku-rashin status --json 2>/dev/null | jq -r ".port // 3600"); exec xdg-open "http://127.0.0.1:$port"'])
     root.close()
   }
 

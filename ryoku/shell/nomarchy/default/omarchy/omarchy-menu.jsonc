@@ -12,12 +12,12 @@
   "system.lock": {"icon":"","label":"Lock","action":"omarchy-system-lock"},
   "system.suspend": {"icon":"󰒲","label":"Suspend","action":"ryoku-shell suspend"},
   "system.logout": {"icon":"󰍃","label":"Logout","action":"ryoku wm act session.exit"},
-  "system.reboot": {"icon":"󰜉","label":"Reboot","action":"systemctl reboot"},
-  "system.shutdown": {"icon":"󰐥","label":"Shutdown","action":"systemctl poweroff"},
+  "system.reboot": {"icon":"󰜉","label":"Reboot","action":"ryoku-host power reboot"},
+  "system.shutdown": {"icon":"󰐥","label":"Shutdown","action":"ryoku-host power poweroff"},
 
   "learn.keybindings": {"icon":"","label":"Keybindings","action":"omarchy-menu-keybindings"},
   "learn.ryoku": {"icon":"","label":"Ryoku","action":"xdg-open https://ryoku.dev"},
-  "learn.arch": {"icon":"󰣇","label":"Arch","action":"xdg-open https://wiki.archlinux.org/title/Main_page"},
+  "learn.fedora": {"icon":"","label":"Fedora","action":"xdg-open https://docs.fedoraproject.org/"},
 
   "trigger.emoji": {"icon":"","label":"Emoji","aliases":["emoji","emojis"],"action":"omarchy-menu-emoji"},
   "trigger.reminder": {"icon":"󰢌","label":"Reminder","aliases":["reminder"],"action":"omarchy-reminder"},

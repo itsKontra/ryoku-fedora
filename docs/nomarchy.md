@@ -35,8 +35,11 @@ omarchy plugin list [--json]
 Plugins run unsandboxed as the user. Add warns before cloning, leaves a plugin
 disabled unless enable is requested, and requires `--yes` outside a terminal.
 Update fetches and shows the diff before a fast-forward. Add, update, and enable
-ask the active window-manager provider to scan the plugin. A plugin that calls
-an API the provider cannot serve is refused with the provider's reason.
+ask the active window-manager provider to scan the plugin with
+`ryoku wm compat`. A plugin that calls an API the provider cannot serve is
+refused with the provider's reason, and a CLI without that scan blocks every
+third-party plugin rather than guessing. Adding a plugin clones its repository
+and never installs packages.
 
 ## Bar commands
 
@@ -72,14 +75,14 @@ pretending the action worked.
 | `omarchy-restart-shell`, `omarchy-refresh-shell` | `ryoku-shell reload` |
 | `omarchy-system-lock` | `ryoku-qylock-lock` |
 | `omarchy-system-logout`, `omarchy-system-wake` | `ryoku wm act session.exit` or `output.power on` |
-| `omarchy-system-reboot`, `omarchy-system-shutdown` | systemd reboot or poweroff |
+| `omarchy-system-reboot`, `omarchy-system-shutdown` | `ryoku-host power reboot` or `poweroff` |
 | `omarchy-system-sleep-lock` | qylock, then `ryoku-shell suspend` |
 | `omarchy-toggle-nightlight` | Ryoku shell night-light intent |
 | `omarchy-toggle-touchpad` | `ryoku wm act input.touchpad toggle` |
 | `omarchy-toggle-bar` | Nomarchy bar IPC |
 | `omarchy-update`, `omarchy-update-available` | `ryoku update` and `ryoku status --json` |
 | `omarchy-brightness-display` | `ryoku-cmd-brightness` or `ryoku wm act output.power` |
-| `omarchy-monitor-query`, `omarchy-monitor-scale` | Neutral `ryoku wm state` readback and `ryoku wm outputs` scale apply |
+| `omarchy-monitor-query`, `omarchy-monitor-scale` | Neutral `ryoku wm state` readback and `ryoku-hub outputs apply` scale apply |
 | `omarchy-audio-output-volume`, `omarchy-audio-input-mute` | PipeWire `wpctl` controls |
 | `omarchy-audio-output-sink`, `omarchy-audio-sink-availability`, `omarchy-audio-output-set-default`, `omarchy-audio-input-set-default`, `omarchy-audio-output-switch` | PipeWire/Pulse compatibility controls |
 | `omarchy-audio-source-switch` | Nomarchy media IPC |
@@ -91,7 +94,7 @@ pretending the action worked.
 | `omarchy-default-browser`, `omarchy-default-terminal`, `omarchy-default-editor` | XDG or Ryoku default application state |
 | `omarchy-display-text-size` | Nomarchy shell override plus live config reload |
 | `omarchy-font-list`, `omarchy-font-current`, `omarchy-font-set` | fontconfig monospace selection |
-| `omarchy-cmd-present`, `omarchy-cmd-missing`, `omarchy-pkg-present`, `omarchy-pkg-missing` | PATH and pacman probes |
+| `omarchy-cmd-present`, `omarchy-cmd-missing`, `omarchy-pkg-present`, `omarchy-pkg-missing` | PATH and `ryoku-host pkg installed` probes |
 | `omarchy-capture-screenshot`, `omarchy-capture-screenrecording` | Existing Ryoku capture actions |
 | `omarchy-weather-status`, `omarchy-weather-location` | wttr.in status and persisted weather location |
 | `omarchy-voxtype-config`, `omarchy-voxtype-status` | Ryoku voice control and status |
@@ -102,7 +105,7 @@ pretending the action worked.
 | `omarchy-clipboard-open`, `omarchy-clipboard-paste-file`, `omarchy-clipboard-paste-text` | Wayland clipboard history actions |
 | `omarchy-disk-speedtest` | Local direct-I/O read and write measurement |
 | `omarchy-tailscale-send` | Taildrop file transfer |
-| `omarchy-menu-timezone` | gum timezone picker and timedatectl |
+| `omarchy-menu-timezone` | gum picker over `ryoku-host time zones`, then `ryoku-host time set-zone` |
 | `omarchy-network-band`, `omarchy-network-password`, `omarchy-network-qr`, `omarchy-network-speedtest` | NetworkManager band control, secret sharing, QR generation, and live speed measurement |
 | `omarchy-dns` | Active NetworkManager profile DNS |
 | `omarchy-battery-low`, `omarchy-hw-display` | Ryoku battery warning and backlight selection |

@@ -41,7 +41,7 @@ notification server owns D-Bus notifications, and Ryoku Hub owns updates. The
 stock Agents panel remains available for usage and marketplace extensions that
 write into it. Account add, rename, reauthentication, switching and automatic
 switching controls are hidden when the platform capability check reports them
-unavailable. Its launch action opens Ryoku Ask, and the duplicate
+unavailable. Its launch action opens the Rāshin dashboard, and the duplicate
 starter-prompt section is not loaded. The Ryoku lock screen,
 clipboard, policy agent, idle inhibitor and night-light service replace the
 corresponding upstream plugins.
@@ -49,8 +49,8 @@ corresponding upstream plugins.
 The theme carousel remains part of Nomarchy and can be opened from Bar Studio.
 The same card opens Omarchy's plugin menu. Third-party plugins still live at
 `~/.config/omarchy/plugins/<id>/`, but every enable and load is gated by
-`ryoku wm compat <plugin-dir>`. Results are cached only while the plugin tree is
-unchanged; failures and malformed output block the plugin.
+`ryoku wm compat <plugin-dir>`. Results are cached per compositor only while
+the plugin tree is unchanged; failures and malformed output block the plugin.
 
 The stable IPC target is `nomarchy`, for example:
 

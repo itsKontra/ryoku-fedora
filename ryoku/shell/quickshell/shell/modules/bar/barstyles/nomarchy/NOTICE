@@ -23,7 +23,7 @@ Ryoku adaptations include:
   night-light and update flows;
 - the Agents panel keeps upstream usage and extension surfaces, while account
   controls stay hidden when the platform account capability reports unavailable;
-- the Agents launch action opens Ryoku Ask and the duplicate starter-prompt
+- the Agents launch action opens the Rāshin dashboard and the duplicate starter-prompt
   surface is omitted;
 - third-party plugins are fail-closed behind `ryoku wm compat <plugin-dir>`;
 - state and data paths honor XDG_STATE_HOME and XDG_DATA_HOME;

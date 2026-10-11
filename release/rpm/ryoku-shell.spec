@@ -20,6 +20,13 @@ Requires:       ffmpeg-free
 Requires:       jq
 Requires:       uv
 Requires:       python3
+# Nomarchy's omarchy-* helpers: its IPC socket client, terminal pickers, Wi-Fi
+# QR codes, notify-send, and the git clone behind `omarchy plugin add`.
+Requires:       socat
+Requires:       gum
+Requires:       qrencode
+Requires:       libnotify
+Requires:       git-core
 Requires:       librsvg2-tools
 Requires:       xcursorgen
 # ryoku-cursor-material-recolor renders from the Bibata sources it ships.

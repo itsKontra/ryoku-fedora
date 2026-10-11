@@ -24,8 +24,8 @@ as last-known usage.
 
 Rāshin owns AI credentials and accounts. The capability probe reports account
 management as unavailable, so the panel does not show add, rename,
-reauthentication, Use or Autoswitch controls. Ryoku Ask also owns prompt
-entry; the Agents panel opens Ask rather than carrying a second prompt
+reauthentication, Use or Autoswitch controls. the Rāshin dashboard also owns prompt
+entry; the Agents panel opens Rāshin rather than carrying a second prompt
 surface.
 
 The record boundary remains open to extensions. A marketplace plugin can
@@ -50,9 +50,9 @@ The bar button interactions are:
 
 - left click opens or closes the panel;
 - middle click refreshes the records;
-- right click opens Ryoku Ask.
+- right click opens the Rāshin dashboard.
 
-The hero button also opens Ryoku Ask. Arrow keys or `h`, `j`, `k`, `l` move
+The hero button also opens the Rāshin dashboard. Arrow keys or `h`, `j`, `k`, `l` move
 through available panel actions. Ctrl+Up and Ctrl+Down reorder provider
 sections. Dragging a provider mark does the same. `r` refreshes, Tab moves to
 the next bar panel and Escape closes.
