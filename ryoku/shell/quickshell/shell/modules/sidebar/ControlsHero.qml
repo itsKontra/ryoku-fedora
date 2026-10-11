@@ -218,7 +218,7 @@ Item {
 
             Text {
                 width: parent.width
-                text: Qt.formatDateTime(clock.date, I18n.tr("hh:mm"))
+                text: TimeFormat.format(clock.date)
                 textFormat: Text.PlainText
                 color: Tokens.ink
                 font.family: Tokens.display
