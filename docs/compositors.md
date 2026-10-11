@@ -132,7 +132,7 @@ change what a user sees on niri:
 actions rather than a settings row:
 
 - `nightlight.on <K>` warms the screen to a colour temperature; the provider runs
-  its own detached backend (`hyprsunset` on Hyprland, `gammastep` on niri).
+  its own detached backend (`hyprsunset` on Hyprland, `wlsunset` on niri).
 - `nightlight.off` stops that backend, and the compositor restores the gamma when
   it goes away.
 

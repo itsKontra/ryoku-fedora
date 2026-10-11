@@ -82,7 +82,11 @@ declare -A need=(
   # its own package, so neither feature relies on an Arch-only package name.
   [screen-record]=wf-recorder
   [screen-share-picker]=xdg-desktop-portal-hyprland
-  [night-light]=hyprsunset
+  # the night light's backend is the provider's: hyprsunset over Hyprland's
+  # CTM, wlsunset over wlr-gamma-control on niri. Each ships as its variant's
+  # hard depend, so both rows gate the same feature from both sides.
+  [night-light-hyprland]=hyprsunset
+  [night-light-niri]=wlsunset
   [voice-type]=wtype
   [voice-stt]=voxtype-bin
   [media-control]=playerctl

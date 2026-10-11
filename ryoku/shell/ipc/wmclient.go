@@ -77,6 +77,14 @@ func (d *daemon) onWMFrame(f wm.Frame) {
 		default:
 		}
 	}
+
+	// A hotplug (dock/undock, lid, VT resume) moves the output set. The night
+	// light self-heals from it: the compositor can revoke a running backend's
+	// gamma ownership on a connector change without telling it, which leaves
+	// the screen cold while the bar still reads on. See rearmOnOutputs.
+	if f.Kind == wm.FrameOutputs && d.nightlight != nil {
+		d.nightlight.rearmOnOutputs(f.Outputs)
+	}
 	d.publishWM()
 }
 

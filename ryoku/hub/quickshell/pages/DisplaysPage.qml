@@ -134,10 +134,14 @@ Item {
     // the nightLight capability, so a compositor with no backend shows no group.
     property bool nightOn: false
     property int nightTemp: 4000
-    // "off" | "sun": the daemon's follow-the-sun schedule, carried on the same
+    // "off" | "sun" | "clock": the daemon's schedule, carried on the same
     // frame so the switch never reads stale after a toggle from elsewhere.
+    // The clock mode warms from startAt to stopAt (minutes from midnight,
+    // wrapping midnight) on the wall clock instead of the sun.
     property string nightSchedule: "off"
     property int nightMargin: 60
+    property int nightStartAt: 22 * 60
+    property int nightStopAt: 7 * 60
 
     function applyNightFrame(line) {
         try {
@@ -146,10 +150,14 @@ Item {
                 pg.nightOn = f.on === true;
                 if (typeof f.temperature === "number" && f.temperature > 0)
                     pg.nightTemp = f.temperature;
-                if (f.schedule === "off" || f.schedule === "sun")
+                if (f.schedule === "off" || f.schedule === "sun" || f.schedule === "clock")
                     pg.nightSchedule = f.schedule;
                 if (typeof f.marginMin === "number" && f.marginMin >= 0)
                     pg.nightMargin = f.marginMin;
+                if (typeof f.startAt === "number" && f.startAt >= 0 && f.startAt < 1440)
+                    pg.nightStartAt = f.startAt;
+                if (typeof f.stopAt === "number" && f.stopAt >= 0 && f.stopAt < 1440)
+                    pg.nightStopAt = f.stopAt;
             }
         } catch (e) {}
     }
@@ -176,7 +184,9 @@ Item {
     }
     // The schedule rides the same call with its own fields: turning it on
     // applies the window immediately (the daemon ticks), and a manual toggle
-    // stays honoured until the next edge.
+    // stays honoured until the next edge. Sun and clock are exclusive: each
+    // switch turns the other off, and a time edit re-sends the window with
+    // its own mode so the daemon always knows which schedule owns it.
     function setNightSchedule(sun) {
         pg.nightSchedule = sun ? "sun" : "off";
         pg.sendNight({ schedule: pg.nightSchedule, marginMin: pg.nightMargin });
@@ -185,6 +195,55 @@ Item {
         pg.nightMargin = mins;
         if (pg.nightSchedule === "sun")
             pg.sendNight({ schedule: "sun", marginMin: mins });
+    }
+    function setNightClock(on) {
+        pg.nightSchedule = on ? "clock" : "off";
+        pg.sendNight({ schedule: pg.nightSchedule, startAt: pg.nightStartAt, stopAt: pg.nightStopAt });
+    }
+    // A clock minute of the day (0..1439) as the row's value, and as the
+    // example line under the AM/PM segments (the row shows "10:00" beside a
+    // PM switch, so the face and the meridiem read together).
+    function hourLabel(mins) {
+        var h = Math.floor(mins / 60) % 24, m = mins % 60;
+        var h12 = h % 12; if (h12 === 0) h12 = 12;
+        return h12 + ":" + (m < 10 ? "0" : "") + m;
+    }
+    function isPm(mins) { return Math.floor(mins / 60) % 24 >= 12; }
+    // The AM/PM switch jumps the meridiem, keeping the hour face and the
+    // minute: 10:00 PM becomes 10:00 AM, the way a dial works.
+    function flipMeridiem(mins) { return (mins + 720) % 1440; }
+    // The stepper edits the hour of the day (0..23); the row shows the
+    // 12-hour face, and the segments edit the meridiem, so a jump from
+    // 11 PM to 12 AM is one segment tap rather than eleven steps.
+    function hour24(mins) { return Math.floor(mins / 60) % 24; }
+    function minuteOf(mins) { return mins % 60; }
+    function setHour(mins, h) { return h * 60 + pg.minuteOf(mins); }
+    // Parse a typed time: "9", "9:30", "9:30 pm", "21:30". -1 when nonsense.
+    function parseClock(text) {
+        var m = String(text).trim().toLowerCase().match(/^(\d{1,2})(?::(\d{1,2}))?\s*([ap])m?$/);
+        if (!m)
+            return -1;
+        var h = parseInt(m[1], 10), mm = m[2] === undefined ? 0 : parseInt(m[2], 10);
+        if (mm > 59)
+            return -1;
+        if (m[3] !== undefined) {
+            if (h < 1 || h > 12)
+                return -1;
+            h = h % 12 + (m[3] === "p" ? 12 : 0);
+        } else if (h > 23) {
+            return -1;
+        }
+        return h * 60 + mm;
+    }
+    // A time edit always persists (the daemon stores the window under the
+    // live mode), so the rows work before the schedule is switched on.
+    function setNightStart(mins) {
+        pg.nightStartAt = mins;
+        pg.sendNight({ schedule: pg.nightSchedule, startAt: mins });
+    }
+    function setNightStop(mins) {
+        pg.nightStopAt = mins;
+        pg.sendNight({ schedule: pg.nightSchedule, stopAt: mins });
     }
 
     Socket {
@@ -1434,6 +1493,86 @@ Item {
                             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                             on: pg.nightSchedule === "sun"
                             onToggled: (v) => pg.setNightSchedule(v)
+                        }
+                    }
+                    // The clock schedule: fixed bed and wake hours on the wall
+                    // clock. Exclusive with FOLLOW THE SUN (each switch turns
+                    // the other off), and its rows stay live even while off so
+                    // the window can be set before it is armed.
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        divider: true
+                        label: I18n.tr("AT THE CLOCK")
+                        desc: I18n.tr("Warm the screen between the hours you choose, every night.")
+                        controlWidth: 54
+                        Sw {
+                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                            on: pg.nightSchedule === "clock"
+                            onToggled: (v) => pg.setNightClock(v)
+                        }
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        divider: true
+                        label: I18n.tr("START AT")
+                        value: pg.hourLabel(pg.nightStartAt)
+                        editableValue: true
+                        controlWidth: 174
+                        onValueCommitted: (text) => {
+                            var m = pg.parseClock(text);
+                            if (m >= 0) pg.setNightStart(m);
+                        }
+                        Row {
+                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                            spacing: Tokens.s2
+                            Seg {
+                                anchors.verticalCenter: parent.verticalCenter
+                                options: ["AM", "PM"]
+                                current: pg.isPm(pg.nightStartAt) ? "PM" : "AM"
+                                onChose: (k) => {
+                                    var pm = k === "PM";
+                                    if (pm !== pg.isPm(pg.nightStartAt))
+                                        pg.setNightStart(pg.flipMeridiem(pg.nightStartAt));
+                                }
+                            }
+                            Step {
+                                anchors.verticalCenter: parent.verticalCenter
+                                from: 0; to: 23
+                                value: pg.hour24(pg.nightStartAt)
+                                onModified: (h) => pg.setNightStart(pg.setHour(pg.nightStartAt, h))
+                            }
+                        }
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        divider: true
+                        label: I18n.tr("OFF AT")
+                        value: pg.hourLabel(pg.nightStopAt)
+                        editableValue: true
+                        controlWidth: 174
+                        onValueCommitted: (text) => {
+                            var m = pg.parseClock(text);
+                            if (m >= 0) pg.setNightStop(m);
+                        }
+                        Row {
+                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                            spacing: Tokens.s2
+                            Seg {
+                                anchors.verticalCenter: parent.verticalCenter
+                                options: ["AM", "PM"]
+                                current: pg.isPm(pg.nightStopAt) ? "PM" : "AM"
+                                onChose: (k) => {
+                                    var pm = k === "PM";
+                                    if (pm !== pg.isPm(pg.nightStopAt))
+                                        pg.setNightStop(pg.flipMeridiem(pg.nightStopAt));
+                                }
+                            }
+                            Step {
+                                anchors.verticalCenter: parent.verticalCenter
+                                from: 0; to: 23
+                                value: pg.hour24(pg.nightStopAt)
+                                onModified: (h) => pg.setNightStop(pg.setHour(pg.nightStopAt, h))
+                            }
                         }
                     }
                     SettingRow {
