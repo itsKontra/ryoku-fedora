@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	wm "ryoku-wm"
 )
 
 // The caps list is the variant package plus that package's RPM Requires, minus
@@ -46,5 +48,39 @@ func TestReclaimListMatchesVariantDepends(t *testing.T) {
 		if !want[p] {
 			t.Errorf("reclaim list names %s, which the RPM spec does not require", p)
 		}
+	}
+}
+
+// A capability the manifest claims but wm.All() omits never reaches a QML
+// consumer: the caps frame carries one boolean per All() entry, so the shell
+// reads the gate as false and the affordance silently disappears on Hyprland.
+func TestManifestIsDeliverable(t *testing.T) {
+	all := map[wm.Capability]bool{}
+	for _, c := range wm.All() {
+		all[c] = true
+	}
+	for _, c := range capsManifest {
+		if !all[c] {
+			t.Errorf("manifest claims %q but wm.All() omits it, so it never rides the caps frame", c)
+		}
+	}
+}
+
+// The launcher's frost backdrop is gated on this capability, so Hyprland must
+// claim it or every Hyprland user loses the blurred launcher.
+func TestClaimsPersistentScreenCapture(t *testing.T) {
+	c := wm.Caps{Supports: capsManifest}
+	if !c.Has(wm.CapPersistentScreenCapture) {
+		t.Error("Hyprland hosts long-lived capturing layer surfaces; the manifest must say so")
+	}
+}
+
+// The Stage Editor's canvas holds the keyboard exclusively wherever this is
+// claimed. Hyprland then hands it every click as well, and the editor's toolbar
+// and catalogue stop answering, so the manifest must keep denying it.
+func TestDeniesKeyboardGrabSharesPointer(t *testing.T) {
+	c := wm.Caps{Supports: capsManifest}
+	if c.Has(wm.CapKeyboardGrabSharesPointer) {
+		t.Error("Hyprland gives an exclusive keyboard grab the pointer too; the manifest must not claim it shares")
 	}
 }

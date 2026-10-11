@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	wm "ryoku-wm"
 )
 
 // The caps list is documented as "kept in step with that package's depends".
@@ -39,5 +41,41 @@ func TestReclaimListMatchesVariantDepends(t *testing.T) {
 		if !have[p] {
 			t.Errorf("RPM spec requires %s but the reclaim list omits it", p)
 		}
+	}
+}
+
+// A capability the manifest claims but wm.All() omits never reaches a QML
+// consumer: the caps frame carries one boolean per All() entry, so the shell
+// reads the gate as false and the affordance silently disappears.
+func TestManifestIsDeliverable(t *testing.T) {
+	all := map[wm.Capability]bool{}
+	for _, c := range wm.All() {
+		all[c] = true
+	}
+	for _, c := range capsManifest {
+		if !all[c] {
+			t.Errorf("manifest claims %q but wm.All() omits it, so it never rides the caps frame", c)
+		}
+	}
+}
+
+// niri recreates its outputs under a long-lived capturing layer surface and
+// the Qt client dies resolving the vanished screen, so the manifest must keep
+// denying this or the launcher frost comes back and takes the shell with it.
+func TestDeniesPersistentScreenCapture(t *testing.T) {
+	c := wm.Caps{Supports: capsManifest}
+	if c.Has(wm.CapPersistentScreenCapture) {
+		t.Error("niri must not claim persistent screen capture")
+	}
+}
+
+// The Stage Editor's canvas holds the keyboard exclusively only where this is
+// claimed, so Escape and the arrows reach it from the moment it opens. On
+// demand, niri hands the keyboard over only on a click and takes it back on
+// every click in the editor's toolbar.
+func TestClaimsKeyboardGrabSharesPointer(t *testing.T) {
+	c := wm.Caps{Supports: capsManifest}
+	if !c.Has(wm.CapKeyboardGrabSharesPointer) {
+		t.Error("niri routes the pointer by input region under a keyboard grab; the manifest must say so")
 	}
 }
