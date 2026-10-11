@@ -5657,7 +5657,7 @@
   "plugin %q is not installed (ryoku plugin list)": "plugin %q är inte installerad (ryoku plugin list)",
   "plugin builds not checked (no headers or the provider did not answer)": "plugin-byggen ej kontrollerade (inga headers eller leverantören svarade ej)",
   "plugin contains a symlink (%s); symlinks are not allowed": "plugin innehåller en symbolisk länk (%s); symboliska länkar är inte tillåtna",
-  "plugin:": "plugin:",
+  "plugin:": "tillägg:",
   "point default keyring at %q: %w": "peka standardnyckelring på %q: %w",
   "point default keyring at login: %w": "peka standardnyckelring på inloggning: %w",
   "point the default keyring at login": "peka standardnyckelring på inloggning",
