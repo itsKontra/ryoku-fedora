@@ -81,6 +81,19 @@ hl.window_rule({
 })
 
 hl.window_rule({
+    -- The update and rollback logs are started from Ryoku Settings itself
+    -- (UpdatesPage, and the bar's update widget), and a tiled window always
+    -- sits under a float, so the run's output hid behind the settings page
+    -- until it finished (issue 288). The launches name this GTK-valid dotted
+    -- class and this rule floats and centres the log where it can be watched.
+    name   = "float-ryoku-update",
+    match  = { class = "^dev\\.ryoku\\.update$" },
+    float  = true,
+    size   = fit(1180, 760),
+    center = true,
+})
+
+hl.window_rule({
     name   = "float-ryostore",
     match  = { title = "^(Ryostore)$" },
     float  = true,
