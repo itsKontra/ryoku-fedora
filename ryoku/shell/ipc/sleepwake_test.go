@@ -1238,34 +1238,26 @@ func TestSessionActivationReacquiresGlobalBlock(t *testing.T) {
 	<-done
 }
 
-func TestUnlockFallbackGuardReleasedOnlyByReadyOwningSession(t *testing.T) {
-	t.Setenv("XDG_SESSION_ID", "session-b")
-	cycle := &sleepCycle{
-		block: &fakeSleepInhibitor{heldState: true},
-		delay: &fakeSleepInhibitor{heldState: true},
-	}
-	cycle.setSessionActive(false)
-	d := &daemon{quit: make(chan struct{})}
-	d.setSleepCycle(cycle)
-
+// stubUnlockGuard replaces the unit and lock-client probes for one test.
+func stubUnlockGuard(t *testing.T, present, clientRunning *bool, mu *sync.Mutex) (chan string, *int) {
+	t.Helper()
 	oldActive, oldStop := qylockUnlockGuardActive, qylockUnlockGuardStop
 	oldRunning := lockProcessRunning
-	defer func() {
+	t.Cleanup(func() {
 		qylockUnlockGuardActive, qylockUnlockGuardStop = oldActive, oldStop
 		lockProcessRunning = oldRunning
-	}()
-	var mu sync.Mutex
-	present := true
-	clientRunning := true
+	})
 	stopped := make(chan string, 2)
+	probes := new(int)
 	qylockUnlockGuardActive = func(string) bool {
 		mu.Lock()
 		defer mu.Unlock()
-		return present
+		*probes++
+		return *present
 	}
 	qylockUnlockGuardStop = func(unit string) error {
 		mu.Lock()
-		present = false
+		*present = false
 		mu.Unlock()
 		stopped <- unit
 		return nil
@@ -1273,8 +1265,32 @@ func TestUnlockFallbackGuardReleasedOnlyByReadyOwningSession(t *testing.T) {
 	lockProcessRunning = func() bool {
 		mu.Lock()
 		defer mu.Unlock()
-		return clientRunning
+		return *clientRunning
 	}
+	return stopped, probes
+}
+
+func newUnlockGuardDaemon() *daemon {
+	return &daemon{quit: make(chan struct{}), unlockKick: make(chan struct{}, 1)}
+}
+
+func TestUnlockFallbackGuardReleasedOnlyByReadyOwningSession(t *testing.T) {
+	t.Setenv("XDG_SESSION_ID", "session-b")
+	oldSettle, oldLinger := unlockGuardSettle, unlockGuardLinger
+	unlockGuardSettle, unlockGuardLinger = 300*time.Millisecond, 50*time.Millisecond
+	t.Cleanup(func() { unlockGuardSettle, unlockGuardLinger = oldSettle, oldLinger })
+	d := newUnlockGuardDaemon()
+	cycle := &sleepCycle{
+		block:     &fakeSleepInhibitor{heldState: true},
+		delay:     &fakeSleepInhibitor{heldState: true},
+		activated: d.kickUnlockGuardRelease,
+	}
+	cycle.setSessionActive(false)
+
+	var mu sync.Mutex
+	present, clientRunning := true, true
+	stopped, _ := stubUnlockGuard(t, &present, &clientRunning, &mu)
+	d.setSleepCycle(cycle)
 	go d.releaseQylockUnlockGuardWhenReady()
 	defer close(d.quit)
 
@@ -1288,8 +1304,10 @@ func TestUnlockFallbackGuardReleasedOnlyByReadyOwningSession(t *testing.T) {
 	select {
 	case unit := <-stopped:
 		t.Fatalf("active daemon released the guard before qylock exited: %s", unit)
-	case <-time.After(150 * time.Millisecond):
+	case <-time.After(2 * unlockGuardSettle):
 	}
+	// qylock outlives the settle window and exits with no event of its own;
+	// a held guard must still be released.
 	mu.Lock()
 	clientRunning = false
 	mu.Unlock()
@@ -1305,9 +1323,76 @@ func TestUnlockFallbackGuardReleasedOnlyByReadyOwningSession(t *testing.T) {
 	mu.Lock()
 	present = true
 	mu.Unlock()
+	d.kickUnlockGuardRelease()
 	select {
 	case <-stopped:
 	case <-time.After(time.Second):
 		t.Fatal("unlock fallback watcher stopped after its first guard")
+	}
+}
+
+func TestUnlockGuardReleaseFollowsEventsNotAClock(t *testing.T) {
+	t.Setenv("XDG_SESSION_ID", "session-b")
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	d := newUnlockGuardDaemon()
+	sleepPhaseErr := errors.New("login1 timed out")
+	var mu sync.Mutex
+	cycle := &sleepCycle{
+		block: &fakeSleepInhibitor{heldState: true},
+		delay: &fakeSleepInhibitor{heldState: true},
+		sleepingCheck: func(context.Context) (bool, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			return false, sleepPhaseErr
+		},
+	}
+	cycle.setSessionActive(true)
+
+	present, clientRunning := false, false
+	stopped, probes := stubUnlockGuard(t, &present, &clientRunning, &mu)
+	d.setSleepCycle(cycle)
+	go d.releaseQylockUnlockGuardWhenReady()
+	defer close(d.quit)
+
+	// The published sleep guard kicks one check; with no guard there is
+	// nothing to wait for, so no later check may run without a new event.
+	probeCount := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return *probes
+	}
+	deadline := time.Now().Add(time.Second)
+	for probeCount() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(10 * unlockGuardRetry)
+	if idle := probeCount(); idle != 1 {
+		t.Fatalf("idle unlocked session probed the unlock guard %d times, want only the startup check", idle)
+	}
+
+	for _, want := range []string{"err unlock-prepare", "ok"} {
+		mu.Lock()
+		present = true
+		if want == "ok" {
+			sleepPhaseErr = nil
+		}
+		mu.Unlock()
+		if got := d.dispatch("unlock-prepare session session-b"); !strings.HasPrefix(got, want) {
+			t.Fatalf("dispatch(unlock-prepare) = %q, want %s", got, want)
+		}
+		select {
+		case unit := <-stopped:
+			if unit != "ryoku-qylock-unlock-guard-session-b.service" {
+				t.Fatalf("released %q, want this daemon's session guard", unit)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("unlock prepare answering %q did not release the unlock guard", want)
+		}
+	}
+
+	settled := probeCount()
+	time.Sleep(10 * unlockGuardRetry)
+	if after := probeCount(); after != settled {
+		t.Fatalf("released guard kept being probed: %d more checks", after-settled)
 	}
 }

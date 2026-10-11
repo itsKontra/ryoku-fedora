@@ -165,7 +165,8 @@ type daemon struct {
 	keypress      *keypressManager         // evdev key stream while the overlay is enabled
 	sun           *sunState                // latest weather sunrise/sunset window
 	sleepMu       sync.RWMutex
-	sleep         *sleepCycle // coordinated login1 suspend transaction; guarded by sleepMu
+	sleep         *sleepCycle   // coordinated login1 suspend transaction; guarded by sleepMu
+	unlockKick    chan struct{} // coalescing wake for the qylock unlock-guard release
 	suspendReqMu  sync.Mutex
 	suspendReq    map[string]*suspendRequest
 }
@@ -252,6 +253,9 @@ func (d *daemon) setSleepCycle(cycle *sleepCycle) {
 	d.sleepMu.Lock()
 	d.sleep = cycle
 	d.sleepMu.Unlock()
+	if cycle != nil {
+		d.kickUnlockGuardRelease()
+	}
 }
 
 func runDaemon() error {
@@ -301,6 +305,7 @@ func runDaemon() error {
 		stageSig:    make(chan struct{}, 1),
 		ledsSig:     make(chan struct{}, 1),
 		widgetSig:   make(chan struct{}, 1),
+		unlockKick:  make(chan struct{}, 1),
 		quit:        make(chan struct{}),
 		gateWant:    map[string]bool{},
 		gateWake:    map[string]chan struct{}{},
@@ -1172,6 +1177,9 @@ func (d *daemon) dispatch(line string) string {
 		}
 		return lockSession()
 	case "unlock-prepare":
+		// A refused prepare may still unlock through proof.sh with the guard
+		// up, so every answer kicks the release, not only "ok".
+		defer d.kickUnlockGuardRelease()
 		if len(args) != 2 || args[0] != "session" {
 			return "err unlock-prepare: expected session <id>"
 		}

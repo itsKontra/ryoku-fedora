@@ -179,6 +179,7 @@ type sleepCycle struct {
 	disconnected    <-chan struct{}
 	sessionPath     dbus.ObjectPath
 	activeCheck     func(context.Context) (bool, error)
+	activated       func()
 	blockCleared    func(context.Context) (bool, error)
 	activeMu        sync.RWMutex
 	active          bool
@@ -206,7 +207,11 @@ func (s *sleepCycle) setSessionActive(active bool) {
 		s.inactiveSecured = false
 	}
 	s.activeMu.Unlock()
-	if !active {
+	if active {
+		if s.activated != nil {
+			s.activated()
+		}
+	} else {
 		s.stopWake()
 	}
 }
@@ -896,6 +901,7 @@ func (d *daemon) connectSleepGuard() (_ *connectedSleepGuard, err error) {
 		block:        block,
 		lock:         ensureSessionLocked,
 		wake:         d.holdAwake,
+		activated:    d.kickUnlockGuardRelease,
 		lighting:     applyWakeLighting,
 		retryProtect: make(chan struct{}, 1),
 		disconnected: conn.Context().Done(),
@@ -1053,34 +1059,92 @@ func (d *daemon) superviseSleepWake() {
 var (
 	qylockUnlockGuardActive = hostUserServiceActive
 	qylockUnlockGuardStop   = stopHostUserService
+
+	unlockGuardRetry  = 100 * time.Millisecond
+	unlockGuardSettle = 10 * time.Second
+	unlockGuardLinger = time.Second
 )
 
+type unlockGuardState int
+
+const (
+	unlockGuardGone unlockGuardState = iota
+	unlockGuardHeld
+	unlockGuardUndecided
+)
+
+// kickUnlockGuardRelease wakes the release watcher. Every guard is started by
+// ryoku-qylock-unlock-prepare, which then always asks this daemon, so an
+// unlock-prepare answer, a session turning active, and a freshly published
+// sleep guard (covering a guard a daemon restart left behind) are the only
+// moments a guard can become releasable.
+func (d *daemon) kickUnlockGuardRelease() {
+	select {
+	case d.unlockKick <- struct{}{}:
+	default:
+	}
+}
+
+// releaseQylockUnlockGuardWhenReady sleeps until a kick. A held guard is then
+// retried until qylock exits, however long that takes, slowing to
+// unlockGuardLinger after the settle window; an undecided check (no ready
+// sleep guard or inactive session yet) is retried only inside the window.
 func (d *daemon) releaseQylockUnlockGuardWhenReady() {
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
+	retry := time.NewTimer(unlockGuardRetry)
+	retry.Stop()
+	defer retry.Stop()
+	var settleBy time.Time
 	for {
 		select {
 		case <-d.quit:
 			return
-		case <-ticker.C:
-			cycle := d.currentSleepCycle()
-			if cycle == nil || !cycle.ready() || !cycle.sessionActive() ||
-				lockProcessRunning() {
-				continue
+		case <-d.unlockKick:
+			settleBy = time.Now().Add(unlockGuardSettle)
+		case <-retry.C:
+		}
+		settling := time.Now().Before(settleBy)
+		switch d.releaseQylockUnlockGuard() {
+		case unlockGuardHeld:
+			if settling {
+				retry.Reset(unlockGuardRetry)
+			} else {
+				retry.Reset(unlockGuardLinger)
 			}
-			session := lockSessionID()
-			if session == "" {
-				continue
+		case unlockGuardUndecided:
+			if settling {
+				retry.Reset(unlockGuardRetry)
 			}
-			unit := "ryoku-qylock-unlock-guard-" + session + ".service"
-			if !qylockUnlockGuardActive(unit) {
-				continue
-			}
-			if err := qylockUnlockGuardStop(unit); err != nil {
-				log.Printf("ryoku-shell: release qylock unlock sleep guard: %v", err)
-			}
+		default:
+			retry.Stop()
+			settleBy = time.Time{}
 		}
 	}
+}
+
+// releaseQylockUnlockGuard stops this session's unlock guard once qylock has
+// exited. The unit is asked about before any process scan so an unlocked
+// session without a guard never walks /proc.
+func (d *daemon) releaseQylockUnlockGuard() unlockGuardState {
+	cycle := d.currentSleepCycle()
+	if cycle == nil || !cycle.ready() || !cycle.sessionActive() {
+		return unlockGuardUndecided
+	}
+	session := lockSessionID()
+	if session == "" {
+		return unlockGuardUndecided
+	}
+	unit := "ryoku-qylock-unlock-guard-" + session + ".service"
+	if !qylockUnlockGuardActive(unit) {
+		return unlockGuardGone
+	}
+	if lockProcessRunning() {
+		return unlockGuardHeld
+	}
+	if err := qylockUnlockGuardStop(unit); err != nil {
+		log.Printf("ryoku-shell: release qylock unlock sleep guard: %v", err)
+		return unlockGuardHeld
+	}
+	return unlockGuardGone
 }
 
 // startSleepWake keeps one protected login1 connection published to IPC. A
