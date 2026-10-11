@@ -306,6 +306,10 @@ Singleton {
     // launcher variant share it, so one morph answers Super+Space, the island
     // search bubble and the dock's launcher alike.
     property bool searchOpen: false
+    // The output a standalone Spotlight host opened the palette on. Ryoku's
+    // launcher keeps one instance per output, so only the one that opened the
+    // search draws it, on the output it was asked for.
+    property string searchOutput: ""
 
     // User-configured fallback for singular panels such as wallpaper pickers.
     // Empty string uses the first available Quickshell screen.

@@ -103,6 +103,9 @@ var builtinWindowRules = []struct {
 	// The Rashin companion window (ryoku/apps/rashin-app) opens as a floating
 	// 1280x820 sheet, centred, like the Hyprland float-rashin-app rule.
 	{"^Rashin$", []string{"open-floating true", "default-column-width { fixed 1280; }", "default-window-height { fixed 820; }"}},
+	// Floating windows open centred. Their own screen-fit maximums clamp these
+	// designed sizes before niri places them on smaller outputs.
+	{"^Welcome to Ryoku$", []string{"open-floating true", "default-column-width { fixed 1180; }", "default-window-height { fixed 760; }"}},
 }
 
 // writeOpacityRules emits the global opacity as a matchless window-rule and the
