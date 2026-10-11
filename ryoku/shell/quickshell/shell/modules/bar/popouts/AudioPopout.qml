@@ -194,7 +194,7 @@ Item {
             id: capCol
             width: parent.width
             spacing: 6 * root.s
-            visible: Audio.captureStreams.length > 0
+            visible: Audio.captureStreams.filter(Audio.alive).length > 0
 
             Text {
                 width: parent.width

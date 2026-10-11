@@ -65,7 +65,7 @@ Item {
         MicroLabel {
             label: I18n.tr("Apps")
             s: root.s
-            visible: root.open && Audio.streams.length > 0
+            visible: root.open && Audio.streams.filter(Audio.alive).length > 0
         }
         Repeater {
             model: root.open ? Audio.streams.filter(Audio.alive) : []
