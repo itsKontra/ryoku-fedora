@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -92,5 +93,33 @@ func TestReconcileStageStoreWritesInPlace(t *testing.T) {
 	again := reconcileStageStore(false)
 	if again.status == recFixed {
 		t.Fatal("second run rewrote an already-seeded store")
+	}
+}
+
+// TestStageModelDefaultsMatchShell pins the doctor's seed to the two tables it
+// mirrors: the shell's stage Config.defaultModels and the daemon's
+// defaultStageModels. They live in modules that share no package, so a
+// default changed in one place must fail here rather than seed a model the
+// daemon never cuts with.
+func TestStageModelDefaultsMatchShell(t *testing.T) {
+	read := func(rel string) string {
+		b, err := os.ReadFile(filepath.Join("..", "..", "..", rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	qml := read("shell/quickshell/shell/modules/stage/Singletons/Config.qml")
+	daemon := read("shell/ipc/stage.go")
+	daemonField := map[string]string{"draft": "Draft", "standard": "Standard", "fine": "Fine"}
+	for tier, model := range stageModelDefaults {
+		qmlRe := regexp.MustCompile(`defaultModels: \(\{[^}]*\b` + tier + `: "([^"]+)"`)
+		if m := qmlRe.FindStringSubmatch(qml); m == nil || m[1] != model {
+			t.Errorf("shell Config.defaultModels.%s = %v, doctor seeds %q", tier, m, model)
+		}
+		goRe := regexp.MustCompile(`(?s)func defaultStageModels\(\).*?\b` + daemonField[tier] + `:\s*"([^"]+)"`)
+		if m := goRe.FindStringSubmatch(daemon); m == nil || m[1] != model {
+			t.Errorf("daemon defaultStageModels.%s = %v, doctor seeds %q", daemonField[tier], m, model)
+		}
 	}
 }

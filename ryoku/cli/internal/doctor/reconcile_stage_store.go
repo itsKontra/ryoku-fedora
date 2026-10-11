@@ -47,8 +47,10 @@ func reconcileStageStore(checkOnly bool) recResult {
 	return fixedRes(i18n.T("seeded the Stage Editor's model and grid keys in stage.json"))
 }
 
-// stageModelDefaults mirrors the shell's stage Config adapter and the daemon's
-// defaultStageModels: the model each quality tier cuts with out of the box.
+// stageModelDefaults mirrors the shell's stage Config.defaultModels and the
+// daemon's defaultStageModels: the model each quality tier cuts with out of
+// the box. The two Go modules share no package, so the copies are pinned by
+// TestStageModelDefaultsMatchShell.
 var stageModelDefaults = map[string]string{
 	"draft":    "u2netp",
 	"standard": "u2netp",

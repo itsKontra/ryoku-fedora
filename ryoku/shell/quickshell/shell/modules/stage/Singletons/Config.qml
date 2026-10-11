@@ -16,6 +16,11 @@ import Quickshell.Io
 Singleton {
     id: root
 
+    // The model each quality tier cuts with out of the box. The daemon
+    // (ryoku/shell/ipc stage.go) and the doctor's stage.json seed keep the Go
+    // side of this table.
+    readonly property var defaultModels: ({ draft: "u2netp", standard: "u2netp", fine: "birefnet-general-lite" })
+
     property alias quality: adapter.quality
     property alias models: adapter.models
     property alias edge: adapter.edge
@@ -162,7 +167,7 @@ Singleton {
         JsonAdapter {
             id: adapter
             property string quality: "draft"
-            property var models: ({ draft: "u2netp", standard: "u2netp", fine: "birefnet-general-lite" })
+            property var models: Object.assign({}, root.defaultModels)
             property real edge: 0.15
             property real shadow: 0.0
             property int shadowAngle: 90

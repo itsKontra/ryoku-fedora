@@ -50,7 +50,7 @@ Singleton {
         return null;
     }
     function defaultModelId(q) {
-        return q === "fine" ? "birefnet-general-lite" : "u2netp";
+        return Config.defaultModels[q] || Config.defaultModels.draft;
     }
     function selectedModelId(q, choices) {
         const selected = choices && typeof choices[q] === "string" ? choices[q] : "";
