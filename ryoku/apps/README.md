@@ -35,8 +35,9 @@ These are full applications, not `~/.config` seeds. Two shapes live here:
 
 - a **Quickshell app** ships its `quickshell/` tree as `qs -c <name>`
   (`ryovm`, `ryostore`);
-- a **compiled Qt app** builds from a `CMakeLists.txt` to `/usr/bin/<name>`.
-  The packaging supports it; nothing uses it today.
+- a **compiled app** builds from a `CMakeLists.txt` to `/usr/bin/<name>`
+  (`rashin-app`, the Rashin companion window: a GTK3 + WebKitGTK host for the
+  console `ryoku-rashin` serves).
 
 The music app lives in [Ryotunes](https://github.com/ryoku-dev/ryotunes), with a
 native Quickshell client and libmpv daemon. It ships as an RPM from its own
@@ -99,11 +100,11 @@ the binary name.
 | Path                | Ships as                                                     |
 | ------------------- | ------------------------------------------------------------ |
 | `quickshell/`       | the package stages it under `/usr/share/ryoku/config/quickshell/<name>/` and `ryoku materialize` lays it at `~/.config/quickshell/<name>/`, where it runs as `qs -c <name>` |
-| `quickshell/logo.svg` | the launcher icon, installed as `<name>.svg`                |
+| `quickshell/logo.svg` or `logo.svg` | the launcher icon, installed as `<name>.svg` |
 | `<name>.desktop`    | `/usr/share/applications/`, carrying the `flock` line         |
 | `bin/*`             | one `/usr/bin` entry per file                                 |
 | `<helper>/go.mod`   | a Go helper, built to the binary its `module` line names      |
-| `CMakeLists.txt`    | a compiled Qt app at `/usr/bin/<name>`                        |
+| `CMakeLists.txt`    | a compiled app at `/usr/bin/<name>`                           |
 
 The loop only looks at a directory holding `quickshell/` or `CMakeLists.txt`.
 Anything else is invisible to it and needs its own install lines.

@@ -4,63 +4,66 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Ryoku.Ui.Singletons
+import "lib/chatstate.js" as ChatState
 
-// Needle: resident state of the Super+S chat, held in a singleton (not the
-// sidebar body) so the thread and any in-flight answer survive a close/reopen;
-// a new chat starts only after idleResetMs away. Turns run `ryoku-rashin chat`,
-// streaming the shared hermes session as JSONL.
+// Needle: the Ask bar's live window onto the one shared agent session.
+// A single resident `ryoku-rashin chat --follow` process proxies /ws/chat both
+// ways; every server frame feeds the pure v3 reducer (lib/chatstate.js) and the
+// projected state drives a ListModel the view binds to. Because the session is
+// shared, a turn started from the launcher or the dashboard shows here too,
+// and a shell reload just reconnects and replays. No per-turn process, no reset.
+// The bridge starts the first time a surface connects, never at login.
 Singleton {
     id: root
 
-    // How long the sidebar must be gone before reopening starts a new chat.
-    readonly property int idleResetMs: 10 * 60 * 1000
-
     readonly property alias convo: messages
+
+    // Projected reducer state the view reads.
     property bool busy: false
-    // Index of the agent bubble the live stream is filling.
-    property int liveIdx: -1
-    // Wall-clock ms of the last open/close/turn; drives the idle reset.
-    property double lastSeen: 0
-    // Session model picker: the models hermes offers, and the current one.
+    property string activity: ""          // working-strip label ("" = idle)
+    property string bannerState: "starting"
     property var models: []
     property string currentModel: ""
-    // The active chat backend's display name (Hermes, Oh My Pi, ...), shown on
-    // the chip when the agent advertises no model, so it never shows a stale one.
     property string currentAgent: ""
-    // All chat-capable agents (id, name, available, recommended, active) for the
-    // "what's answering" picker; switching agent is a live backend change.
+    property var commands: []
+    property var sessions: []
+    property var usage: null
+    // The live session's id, so the history drawer can mark where you are.
+    property string currentSession: ""
+    // Approvals with no tool row yet (a permission that arrived before its
+    // tool_call), rendered as trailing cards.
+    property var standalonePerms: []
+
+    // Recent quick asks (the launcher's \resume history), newest first. The
+    // Ask bar's history drawer reads this; it reloads when an ask completes.
+    property var recentAsks: []
+    // Resolved fast-lane state (`backend --json`): provider, model, label,
+    // available providers, and whether asks fall back to the session lane.
+    property var quickLane: null
+
+    // All chat-capable agents (agent --json) for the "what's answering" picker.
     property var backends: []
-    // Whether the needle can actually answer (agent configured or a direct
-    // provider resolves). Starts true so a working box never flashes the
-    // first-run setup prompt while status loads.
+    // Whether an agent is configured at all; starts true so a working box never
+    // flashes the first-run setup prompt while status loads.
     property bool ready: true
 
-    // Emitted whenever the transcript changes so the view can scroll to end.
     signal touched()
 
-    function noteOpened() {
-        if (!busy && messages.count > 0 && lastSeen > 0 && (Date.now() - lastSeen) > root.idleResetMs)
-            root.newChat();
-        root.lastSeen = Date.now();
-        root.loadModels();
-        root.loadReady();
-        root.loadBackends();
-    }
+    // The reducer state; replaced (never mutated) on every frame.
+    property var _state: ChatState.initialState()
+    // Outbound messages queued until the follow process has started its stdin.
+    property var _outbox: []
+    property bool _started: false
+    property bool _wanted: false
 
-    function noteClosed() {
-        root.lastSeen = Date.now();
-    }
+    // ---- outbound (all client messages are one stdin line) -------------------
 
-    // A new chat clears the transcript AND resets the hermes session, so the
-    // next turn starts with no memory of the last one.
-    function newChat() {
-        if (root.busy)
-            root.cancel();
-        Quickshell.execDetached(["ryoku-rashin", "chat", "--new"]);
-        messages.clear();
-        root.liveIdx = -1;
-        root.lastSeen = Date.now();
-        root.touched();
+    function _send(obj) {
+        var line = JSON.stringify(obj) + "\n";
+        if (root._started)
+            follow.write(line);
+        else
+            root._outbox.push(line);
     }
 
     function send(text, imagePaths) {
@@ -68,81 +71,52 @@ Singleton {
         var imgs = imagePaths || [];
         if ((q.length === 0 && imgs.length === 0) || root.busy)
             return;
-        messages.append({ who: "user", body: q, imagesJson: JSON.stringify(imgs),
-            working: "", streaming: false, failed: false, activityJson: "[]", permJson: "" });
-        root._run(q, imgs);
-    }
-
-    // Re-run the last question, replacing its answer (regenerate / retry).
-    function regenerate() {
-        if (root.busy || messages.count < 2)
+        if (imgs.length === 0) {
+            root._sendUser(q, [], []);
             return;
-        var lastIdx = messages.count - 1;
-        if (messages.get(lastIdx).who !== "agent")
-            return;
-        var uIdx = -1;
-        for (var i = lastIdx - 1; i >= 0; i--) {
-            if (messages.get(i).who === "user") { uIdx = i; break; }
         }
-        if (uIdx < 0)
-            return;
-        var u = messages.get(uIdx);
-        var imgs = [];
-        try { imgs = JSON.parse(u.imagesJson) || []; } catch (e) {}
-        messages.remove(lastIdx);
-        root._run(String(u.body), imgs);
-    }
-
-    // Append the agent bubble and start the turn (shared by send + regenerate).
-    function _run(q, imgs) {
-        messages.append({ who: "agent", body: "", imagesJson: "[]",
-            working: I18n.tr("waking the needle"), streaming: true, failed: false, activityJson: "[]", permJson: "" });
-        root.liveIdx = messages.count - 1;
-        root.busy = true;
-        root.lastSeen = Date.now();
+        // QML cannot base64 a file, so the daemon encodes the attachments and we
+        // fold the result into the user message it hands back.
+        encodeProc.pendingText = q;
+        encodeProc.pendingPaths = imgs.slice();
         var cmd = ["ryoku-rashin", "chat"];
         for (var i = 0; i < imgs.length; i++) {
-            cmd.push("--image");
+            cmd.push("--encode-image");
             cmd.push(String(imgs[i]));
         }
-        if (q.length > 0)
-            cmd.push(q);
-        chatProc.command = cmd;
-        chatProc.running = true;
-        root.touched();
+        encodeProc.command = cmd;
+        encodeProc.running = true;
     }
 
-    function cancel() {
-        chatProc.running = false;
-        Quickshell.execDetached(["ryoku-rashin", "chat", "--cancel"]);
-        if (root.liveIdx >= 0 && root.liveIdx < messages.count && messages.get(root.liveIdx).streaming) {
-            messages.setProperty(root.liveIdx, "working", "");
-            messages.setProperty(root.liveIdx, "streaming", false);
-            if (messages.get(root.liveIdx).body.length === 0) {
-                messages.setProperty(root.liveIdx, "failed", true);
-                messages.setProperty(root.liveIdx, "body", I18n.tr("cancelled"));
-            }
-        }
-        root.busy = false;
-        root.liveIdx = -1;
-        root.lastSeen = Date.now();
+    // The daemon sends user_text to every client but the author, so the bar
+    // shows its own question the way the dashboard does: locally, as it sends.
+    function _sendUser(text, images, paths) {
+        root._send(images.length > 0 ? { type: "user", text: text, images: images } : { type: "user", text: text });
+        root._state = ChatState.applyEvent(root._state, { type: "user", text: text, images: paths });
+        root._project();
     }
 
-    function copyText(t) {
-        Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | wl-copy", "_", String(t)]);
+    function cancel() { root._send({ type: "cancel" }); }
+    function newChat() { root._send({ type: "new" }); }
+    function switchSession(id) { if (id) root._send({ type: "load", sessionId: String(id) }); }
+    function loadSessions() { root._send({ type: "history" }); }
+
+    function setModel(id) {
+        if (!id || id === root.currentModel)
+            return;
+        root.currentModel = String(id);
+        root._send({ type: "set_model", modelId: String(id) });
     }
 
-    function openDashboard() {
-        Spawn.run(["xdg-open", "http://127.0.0.1:3600/#/chat"]);
+    // Answer the approval the agent is waiting on; an empty option declines.
+    function answerPermission(requestId, optionId) {
+        if (!requestId)
+            return;
+        root._send({ type: "permission", requestId: String(requestId), optionId: String(optionId || "") });
     }
 
-    function loadModels() { modelsProc.running = true; }
-    function loadReady() { readyProc.running = true; }
-    function loadBackends() { backendsProc.running = true; }
-
-    // Switch the chat backend (agent) live: the daemon drops its session so the
-    // next turn runs the chosen agent. Reflect the pick at once; the turn's
-    // models event then confirms the model (or none) the agent exposes.
+    // Switch the chat backend live: the daemon drops its session, then the
+    // follow stream delivers fresh state and models frames.
     function setBackend(id) {
         if (!id)
             return;
@@ -155,175 +129,210 @@ Singleton {
         backendsReload.restart();
     }
 
-    function setModel(id) {
-        if (!id || id === root.currentModel)
-            return;
-        root.currentModel = String(id);
-        Quickshell.execDetached(["ryoku-rashin", "chat", "--set-model", String(id)]);
+    function copyText(t) {
+        Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | wl-copy", "_", String(t)]);
     }
 
-    // Answer the approval hermes is waiting on; an empty option declines it.
-    function answerPermission(optionId) {
-        var i = root.liveIdx;
-        if (i < 0 || i >= messages.count || messages.get(i).permJson.length === 0)
-            return;
-        var req;
-        try { req = JSON.parse(messages.get(i).permJson); } catch (e) { return; }
-        messages.setProperty(i, "permJson", "");
-        messages.setProperty(i, "working", optionId ? I18n.tr("approved, continuing") : I18n.tr("declined"));
-        Quickshell.execDetached(["ryoku-rashin", "chat", "--perm", String(req.id), String(optionId || "")]);
+    // Start the resident bridge; every chat surface calls this as it appears.
+    function connect() {
+        root._wanted = true;
+        if (!follow.running && !followRestart.running)
+            follow.running = true;
     }
 
-    // Append or update (tools are keyed by id) an activity item on message i.
-    function _pushActivity(i, item) {
-        var arr = [];
-        try { arr = JSON.parse(messages.get(i).activityJson) || []; } catch (e) { arr = []; }
-        if (item.k === "tool" && item.id.length > 0) {
-            for (var j = 0; j < arr.length; j++) {
-                if (arr[j].k === "tool" && arr[j].id === item.id) {
-                    arr[j] = item;
-                    messages.setProperty(i, "activityJson", JSON.stringify(arr));
-                    return;
+    function noteOpened() {
+        root.loadReady();
+        root.loadBackends();
+        root.loadRecentAsks();
+        root.loadQuickLane();
+        root.connect();
+    }
+
+    function noteClosed() {}
+
+    function loadRecentAsks() { recentProc.running = true; }
+
+    // Point the fast ask lane at a provider (`backend <provider>`); the config
+    // lands a moment later, so re-read the resolved state once it settles and
+    // refresh the history so the drawer's lane markers follow the switch.
+    function setQuickLane(provider) {
+        if (!provider)
+            return;
+        Quickshell.execDetached(["ryoku-rashin", "backend", String(provider)]);
+        backendReload.restart();
+    }
+
+    function loadQuickLane() { backendProc.running = true; }
+
+    // ---- inbound (frame -> reducer -> projection) ----------------------------
+
+    function _frame(line) {
+        var f;
+        try {
+            f = JSON.parse(String(line));
+        } catch (e) {
+            return;
+        }
+        if (!f || !f.type)
+            return;
+        followRestart.interval = 400;
+        root._state = ChatState.applyEvent(root._state, f);
+        root._project();
+    }
+
+    function _project() {
+        var st = root._state;
+        root.busy = st.busy === true;
+        // An open approval is what the turn waits on, whatever ran last.
+        root.activity = (st.permissions || []).length > 0 && st.busy ? I18n.tr("waiting for your approval") : (st.activity || "");
+        root.models = st.models || [];
+        root.currentModel = st.currentModel || "";
+        if (st.agent && st.agent.length > 0)
+            root.currentAgent = st.agent;
+        root.commands = st.commands || [];
+        root.sessions = st.history || [];
+        root.usage = st.usage;
+        root.currentSession = st.session && st.session.id ? String(st.session.id) : "";
+        root.bannerState = st.banner ? String(st.banner.state || "") : "";
+        var items = st.items || [];
+        var perms = st.permissions || [];
+        root._sync(items, perms);
+        root.standalonePerms = root._standalone(items, perms);
+        root.touched();
+    }
+
+    function _permForTool(perms, id) {
+        for (var i = 0; i < perms.length; i++)
+            if (perms[i].toolId && perms[i].toolId === id)
+                return perms[i];
+        return null;
+    }
+
+    // A ListModel row for one reducer item; every row carries the full role set
+    // so the model's schema stays consistent across msg and tool rows.
+    function _rowFull(it, perms, last) {
+        var row = {
+            kind: it.kind, key: String(it.id),
+            role: "", body: "", thought: "", open: false, live: false, cont: false, failed: false, imagesJson: "[]",
+            toolId: "", title: "", tkind: "", status: "", input: "", output: "",
+            diffsJson: "[]", auto: false, permJson: ""
+        };
+        if (it.kind === "tool") {
+            row.toolId = String(it.id);
+            row.title = it.title || "";
+            row.tkind = it.kind2 || "";
+            row.status = it.status || "pending";
+            row.input = it.input || "";
+            row.output = it.output || "";
+            row.diffsJson = JSON.stringify(it.diffs || []);
+            row.auto = it.auto === true;
+            var perm = root._permForTool(perms, it.id);
+            row.permJson = perm ? JSON.stringify(perm) : "";
+        } else {
+            row.role = it.role || "agent";
+            row.body = it.text || "";
+            row.thought = it.thought || "";
+            row.open = it.open === true;
+            // Only the newest open segment is being written right now.
+            row.live = row.open && last;
+            row.cont = it.cont === true;
+            row.failed = it.failed === true;
+            row.imagesJson = JSON.stringify(it.images || []);
+        }
+        return row;
+    }
+
+    // Reconcile the ListModel to the reducer's items: v3 events only ever append
+    // an item, mutate the open agent message, mutate a tool by id, or clear on
+    // replay, so this is a cheap tail-diff that keeps delegates (and their scroll
+    // and selection) stable while a chunk streams in.
+    function _sync(items, perms) {
+        var n = items.length;
+        if (n < messages.count)
+            messages.clear();
+        for (var i = 0; i < n; i++) {
+            var row = root._rowFull(items[i], perms, i === n - 1);
+            if (i < messages.count) {
+                var cur = messages.get(i);
+                if (cur.key !== row.key) {
+                    messages.set(i, row);
+                } else {
+                    for (var k in row)
+                        if (cur[k] !== row[k])
+                            messages.setProperty(i, k, row[k]);
                 }
+            } else {
+                messages.append(row);
             }
         }
-        if (item.k === "thought" && arr.length > 0 && arr[arr.length - 1].k === "thought") {
-            arr[arr.length - 1].text += item.text;
-            messages.setProperty(i, "activityJson", JSON.stringify(arr));
-            return;
-        }
-        arr.push(item);
-        messages.setProperty(i, "activityJson", JSON.stringify(arr));
     }
 
-    // A finished turn: any tool still pending really did complete.
-    function _finishActivity(i) {
-        var arr = [];
-        try { arr = JSON.parse(messages.get(i).activityJson) || []; } catch (e) { return; }
-        var changed = false;
-        for (var j = 0; j < arr.length; j++) {
-            if (arr[j].k === "tool" && arr[j].status !== "completed" && arr[j].status !== "failed") {
-                arr[j].status = "completed";
-                changed = true;
-            }
-        }
-        if (changed)
-            messages.setProperty(i, "activityJson", JSON.stringify(arr));
+    function _standalone(items, perms) {
+        var toolIds = ({});
+        for (var i = 0; i < items.length; i++)
+            if (items[i].kind === "tool")
+                toolIds[items[i].id] = true;
+        var out = [];
+        for (var j = 0; j < perms.length; j++)
+            if (!perms[j].toolId || !toolIds[perms[j].toolId])
+                out.push(perms[j]);
+        return out;
     }
 
     ListModel { id: messages }
 
+    // The one resident bridge. It stays connected across turns and reconnects on
+    // its own; it exits only if it crashes, and then we bring it back, waiting
+    // longer each time it dies without a frame so a missing binary cannot spin.
     Process {
-        id: chatProc
+        id: follow
+        command: ["ryoku-rashin", "chat", "--follow"]
+        stdinEnabled: true
         stdout: SplitParser {
             splitMarker: "\n"
-            onRead: (line) => {
-                if (root.liveIdx < 0 || root.liveIdx >= messages.count)
-                    return;
-                var i = root.liveIdx;
-                var f;
-                try {
-                    f = JSON.parse(String(line));
-                } catch (e) {
-                    return;
-                }
-                if (!f || !f.type)
-                    return;
-                switch (f.type) {
-                case "working":
-                    messages.setProperty(i, "working", String(f.label || ""));
-                    break;
-                case "thought":
-                    root._pushActivity(i, { k: "thought", text: String(f.text || "") });
-                    if (messages.get(i).working.length > 0)
-                        messages.setProperty(i, "working", "");
-                    root.touched();
-                    break;
-                case "tool":
-                    root._pushActivity(i, { k: "tool", id: String(f.id || ""), title: String(f.title || ""), kind: String(f.kind || ""), status: String(f.status || "") });
-                    if (messages.get(i).working.length > 0)
-                        messages.setProperty(i, "working", "");
-                    root.touched();
-                    break;
-                case "delta":
-                    messages.setProperty(i, "body", messages.get(i).body + String(f.text || ""));
-                    if (messages.get(i).working.length > 0)
-                        messages.setProperty(i, "working", "");
-                    root.touched();
-                    break;
-                case "perm":
-                    messages.setProperty(i, "working", I18n.tr("waiting for approval: %1").arg(String(f.title || "")));
-                    messages.setProperty(i, "permJson", JSON.stringify({ id: String(f.requestId || ""), title: String(f.title || ""), options: f.options || [] }));
-                    root.touched();
-                    break;
-                case "models":
-                    root.models = f.models || [];
-                    root.currentModel = f.current ? String(f.current) : "";
-                    root.currentAgent = f.agent ? String(f.agent) : "";
-                    break;
-                case "done":
-                    var imgs = f.images || [];
-                    if (imgs.length > 0)
-                        messages.setProperty(i, "imagesJson", JSON.stringify(imgs));
-                    if (messages.get(i).body.length === 0 && imgs.length === 0) {
-                        messages.setProperty(i, "body", I18n.tr("(no response)"));
-                        messages.setProperty(i, "failed", true);
-                    }
-                    root._finishActivity(i);
-                    messages.setProperty(i, "working", "");
-                    messages.setProperty(i, "streaming", false);
-                    root.busy = false;
-                    root.liveIdx = -1;
-                    root.lastSeen = Date.now();
-                    root.touched();
-                    break;
-                case "error":
-                    if (messages.get(i).body.length === 0)
-                        messages.setProperty(i, "body", String(f.message || I18n.tr("failed")));
-                    messages.setProperty(i, "failed", true);
-                    messages.setProperty(i, "working", "");
-                    messages.setProperty(i, "streaming", false);
-                    root.busy = false;
-                    root.liveIdx = -1;
-                    root.lastSeen = Date.now();
-                    root.touched();
-                    break;
-                }
-            }
+            onRead: (line) => root._frame(line)
         }
-        onExited: (code) => {
-            if (root.liveIdx >= 0 && root.liveIdx < messages.count && messages.get(root.liveIdx).streaming) {
-                messages.setProperty(root.liveIdx, "working", "");
-                messages.setProperty(root.liveIdx, "streaming", false);
-                if (messages.get(root.liveIdx).body.length === 0) {
-                    messages.setProperty(root.liveIdx, "failed", true);
-                    messages.setProperty(root.liveIdx, "body", code === 0 ? I18n.tr("no answer") : I18n.tr("chat failed"));
-                }
-            }
-            root.busy = false;
-            root.liveIdx = -1;
-            root.lastSeen = Date.now();
-            root.touched();
+        onStarted: {
+            root._started = true;
+            for (var i = 0; i < root._outbox.length; i++)
+                follow.write(root._outbox[i]);
+            root._outbox = [];
+        }
+        onExited: () => {
+            root._started = false;
+            if (root._wanted)
+                followRestart.restart();
+        }
+    }
+    Timer {
+        id: followRestart
+        interval: 400
+        onTriggered: {
+            followRestart.interval = Math.min(followRestart.interval * 2, 30000);
+            if (!follow.running)
+                follow.running = true;
         }
     }
 
+    // Attachment encoding: the daemon returns {type:"images", images:[...]} and
+    // we send the user message that carries them.
     Process {
-        id: modelsProc
-        command: ["ryoku-rashin", "chat", "--models"]
+        id: encodeProc
+        property string pendingText: ""
+        property var pendingPaths: []
         stdout: SplitParser {
             splitMarker: "\n"
             onRead: (line) => {
                 var f;
                 try { f = JSON.parse(String(line)); } catch (e) { return; }
-                if (f && f.type === "models") {
-                    root.models = f.models || [];
-                    root.currentModel = f.current ? String(f.current) : "";
-                    root.currentAgent = f.agent ? String(f.agent) : "";
-                }
+                if (f && f.type === "images")
+                    root._sendUser(encodeProc.pendingText, f.images || [], encodeProc.pendingPaths);
             }
         }
     }
 
+    // First-run readiness: whether any agent is configured. Independent of the
+    // live stream so a box with no agent still shows the setup prompt.
     Process {
         id: readyProc
         command: ["ryoku-rashin", "status", "--json"]
@@ -336,6 +345,41 @@ Singleton {
                     root.ready = f.ready;
             }
         }
+    }
+    function loadReady() { readyProc.running = true; }
+
+    Process {
+        id: recentProc
+        command: ["ryoku-rashin", "ask", "--recent"]
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: (line) => {
+                var arr;
+                try { arr = JSON.parse(String(line)); } catch (e) { return; }
+                if (Array.isArray(arr))
+                    root.recentAsks = arr;
+            }
+        }
+    }
+
+    Process {
+        id: backendProc
+        command: ["ryoku-rashin", "backend", "--json"]
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: (line) => {
+                var f;
+                try { f = JSON.parse(String(line)); } catch (e) { return; }
+                if (f && f.available)
+                    root.quickLane = f;
+                root.loadRecentAsks();
+            }
+        }
+    }
+    Timer {
+        id: backendReload
+        interval: 400
+        onTriggered: root.loadQuickLane()
     }
 
     Process {
@@ -351,75 +395,20 @@ Singleton {
             }
         }
     }
+    function loadBackends() { backendsProc.running = true; }
 
-    // After a live switch the config lands a moment later; refresh the active
-    // marker in the picker once it has settled.
+    // After a live agent switch the config lands a moment later; refresh the
+    // active marker in the picker once it settles.
     Timer {
         id: backendsReload
         interval: 300
         onTriggered: root.loadBackends()
     }
 
-    // Restore the conversation the persistent daemon session still holds, so a
-    // shell reload lands the sidebar back on its thread. Text only; new turns
-    // carry full activity. Only runs while the transcript is still empty.
-    Process {
-        id: historyProc
-        command: ["ryoku-rashin", "chat", "--history"]
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: (line) => {
-                var f;
-                try { f = JSON.parse(String(line)); } catch (e) { return; }
-                if (!f || f.type !== "history" || !f.messages || messages.count > 0)
-                    return;
-                for (var i = 0; i < f.messages.length; i++) {
-                    var m = f.messages[i];
-                    messages.append({ who: String(m.who), body: String(m.body),
-                        imagesJson: "[]", working: "", streaming: false, failed: false, activityJson: "[]", permJson: "" });
-                }
-                root.touched();
-            }
-        }
+    Component.onCompleted: {
+        root.loadReady();
+        root.loadBackends();
+        root.loadRecentAsks();
+        root.loadQuickLane();
     }
-    function loadHistory() { if (messages.count === 0 && !historyProc.running) historyProc.running = true; }
-
-    // Past conversations, for the session drawer. `--sessions` lists them;
-    // switching loads one server-side, then loadHistory rebuilds the view.
-    property var sessions: []
-    Process {
-        id: sessionsProc
-        command: ["ryoku-rashin", "chat", "--sessions"]
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: (line) => {
-                var f;
-                try { f = JSON.parse(String(line)); } catch (e) { return; }
-                if (f && f.type === "sessions" && f.sessions)
-                    root.sessions = f.sessions;
-            }
-        }
-    }
-    function loadSessions() { if (!sessionsProc.running) sessionsProc.running = true; }
-
-    Process {
-        id: loadProc
-        onExited: {
-            root.busy = false;
-            root.liveIdx = -1;
-            historyProc.running = true; // repopulate from the now-current session
-        }
-    }
-    function switchSession(id) {
-        if (root.busy)
-            root.cancel();
-        messages.clear();
-        root.liveIdx = -1;
-        loadProc.command = ["ryoku-rashin", "chat", "--load", String(id)];
-        loadProc.running = true;
-        root.lastSeen = Date.now();
-        root.touched();
-    }
-
-    Component.onCompleted: root.loadHistory()
 }

@@ -270,6 +270,8 @@ func defaultBinds() map[string]wayfireBind {
 
 		// Shell
 		"shell.launcher":          {key: "shell_launcher", cmd: "ryoku-shell launcher"},
+		"shell.ask":               {key: "shell_ask", cmd: "ryoku-shell ask"},
+		"shell.rashin":            {key: "shell_rashin", cmd: "ryoku-summon Rashin flock -n -o /tmp/rashin-app.lock rashin-app"},
 		"shell.cheatsheet":        {key: "shell_cheatsheet", cmd: "pkill -x -f 'qs -c keys' 2>/dev/null || " + wm.QmlEnv + " flock -n -o /tmp/ryoku-keys.lock qs -c keys"},
 		"shell.lock":              {key: "shell_lock", cmd: "ryoku-shell lock"},
 		"shell.quicksettings":     {key: "shell_quicksettings", cmd: "ryoku-shell quicksettings"},

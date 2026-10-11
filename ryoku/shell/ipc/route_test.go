@@ -20,6 +20,9 @@ func TestRoute(t *testing.T) {
 		{"menu stash", "shell", "shell", "openSurface"},
 		{"install", "shell", "shell", "openSurface"},
 		{"compress", "shell", "shell", "openSurface"},
+		{"ask", "shell", "shell", "openSurface"},
+		{"ask chat", "shell", "shell", "openSurface"},
+		{"ask tools", "shell", "shell", "openSurface"},
 		{"bar-toggle", "shell", "shell", "openSurface"},
 		{"visualizer-place", "shell", "shell", "openSurface"},
 		{"quicksettings", "shell", "shell", "openSurface"},
@@ -120,7 +123,7 @@ func TestDispatchSurfaceRouting(t *testing.T) {
 	stubShellIpc(t, calls)
 
 	d := &daemon{sup: map[string]bool{"shell": true}, activeMon: "DP-1"}
-	for _, command := range []string{"bar", "bar left", "bar sideways toggle", "menu", "menu bogus"} {
+	for _, command := range []string{"bar", "bar left", "bar sideways toggle", "menu", "menu bogus", "ask web", "ask chat extra"} {
 		if got := d.dispatch(command); got == "ok" {
 			t.Errorf("dispatch(%q) = ok, want rejection", command)
 		}
@@ -152,14 +155,17 @@ func TestDispatchSurfaceRouting(t *testing.T) {
 }
 
 // The file-picker tool verbs open the stash sidebar straight onto their picker,
-// so install-app.desktop and compress-video.desktop reach the right surface.
+// so install-app.desktop and compress-video.desktop reach the right surface;
+// the Ask verbs land on the requested Ask mode.
 func TestDispatchFilePickerTools(t *testing.T) {
-	calls := make(chan string, 2)
+	calls := make(chan string, 4)
 	stubShellIpc(t, calls)
 	d := &daemon{sup: map[string]bool{"shell": true}, activeMon: "DP-1"}
 	for verb, want := range map[string]string{
-		"install":  "openSurface DP-1 stash#install",
-		"compress": "openSurface DP-1 stash#compress",
+		"install":   "openSurface DP-1 stash#install",
+		"compress":  "openSurface DP-1 stash#compress",
+		"ask chat":  "openSurface DP-1 ask#chat",
+		"ask tools": "openSurface DP-1 ask#tools",
 	} {
 		if got := d.dispatch(verb); got != "ok" {
 			t.Fatalf("dispatch(%q) = %q, want ok", verb, got)
@@ -189,6 +195,7 @@ func TestDispatchSurfaceVerbs(t *testing.T) {
 		"screenshot":         "openSurface DP-1 quick-settings#capture",
 		"compress":           "openSurface DP-1 stash#compress",
 		"install":            "openSurface DP-1 stash#install",
+		"ask":                "openSurface DP-1 ask",
 	}
 	calls := make(chan string, 1)
 	stubShellIpc(t, calls)

@@ -59,6 +59,9 @@ func TestPatchRejectsInvalidSchemaValues(t *testing.T) {
 		{"border too high", "theme.attributes.sizing.border_width", `999`, "out of range"},
 		{"margin negative", "notifications.popup_window_margins", `-5`, "out of range"},
 		{"min height too high", "bars.top_bar.minimum_height", `9000`, "out of range"},
+		{"bad ask enabled type", "ask.bubble.enabled", `1`, "cannot unmarshal"},
+		{"bad ask screen type", "ask.bubble.screen", `42`, "cannot unmarshal"},
+		{"unknown ask key", "ask.bubble.nope", `true`, "unknown setting"},
 		{"empty theme", "theme.theme", `""`, "must not be empty"},
 	}
 	for _, c := range cases {
@@ -92,6 +95,10 @@ func TestPatchClampsFloatStrengths(t *testing.T) {
 		{"theme.attributes.window_opacity", "-1", 0},
 		{"theme.motion.scale", "9", 3},
 		{"theme.motion.scale", "0.1", 0.25},
+		{"ask.bubble.x", "4", 1},
+		{"ask.bubble.x", "-2", 0},
+		{"ask.bubble.y", "3", 1},
+		{"ask.bubble.y", "-1", 0},
 	}
 	for _, c := range cases {
 		t.Run(c.path+"="+c.val, func(t *testing.T) {
@@ -117,6 +124,8 @@ func TestPatchAcceptsValidSchemaValues(t *testing.T) {
 		{"theme.attributes.sizing.border_width", `15`},
 		{"menus.clock_menu.position", `"Right"`},
 		{"bars.top_bar.left_widgets", `["Clock","Battery"]`},
+		{"ask.bubble.enabled", `true`},
+		{"ask.bubble.screen", `"DP-2"`},
 	}
 	for _, st := range steps {
 		if err := s.patch(st.path, rm(st.val)); err != nil {
@@ -136,6 +145,12 @@ func TestPatchAcceptsValidSchemaValues(t *testing.T) {
 	ws, ok := frameGet(t, frame, "bars.top_bar.left_widgets").([]any)
 	if !ok || len(ws) != 2 || ws[0] != "Clock" || ws[1] != "Battery" {
 		t.Fatalf("left_widgets = %v, want [Clock Battery]", ws)
+	}
+	if got := frameGet(t, frame, "ask.bubble.enabled"); got != true {
+		t.Fatalf("ask.bubble.enabled = %v, want true", got)
+	}
+	if got := frameGet(t, frame, "ask.bubble.screen"); got != "DP-2" {
+		t.Fatalf("ask.bubble.screen = %v, want DP-2", got)
 	}
 }
 
@@ -359,7 +374,7 @@ func TestMalformedFileFirstLoad(t *testing.T) {
 		if len(s.raw) != len(contractKeys) {
 			t.Fatalf("first-load fallback carried %d top-level keys, want %d (schema only)", len(s.raw), len(contractKeys))
 		}
-		for _, k := range []string{"general", "theme", "bars", "menus", "notifications", "wallpaper", "batteryAlerts", "controls"} {
+		for _, k := range []string{"general", "theme", "bars", "menus", "notifications", "wallpaper", "batteryAlerts", "controls", "ask"} {
 			if _, ok := s.raw[k]; !ok {
 				t.Fatalf("first-load fallback missing schema namespace %q", k)
 			}
