@@ -508,7 +508,11 @@ Scope {
                     root.barStyleRetries++;
                     barStyleReload.restart();
                 } else {
-                    Qt.callLater(BarProducts.markBroken, style);
+                    // The deferred mark must not land on a style picked since.
+                    Qt.callLater(() => {
+                        if (Config.barStyle === style)
+                            BarProducts.markBroken(style);
+                    });
                 }
             } else {
                 Qt.callLater(BarProducts.fail, style);
