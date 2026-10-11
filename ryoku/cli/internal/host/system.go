@@ -4,10 +4,12 @@ import "regexp"
 
 var keymapPattern = regexp.MustCompile(`^[A-Za-z0-9_+.-]+$`)
 
-// Time reads and sets the system time zone through timedated, which asks
-// polkit itself, so the caller does not escalate.
+// Time lists, reads and sets the system time zone through timedated, which
+// asks polkit itself, so the caller does not escalate.
 func (a *App) Time(args []string) int {
 	switch {
+	case len(args) == 1 && args[0] == "zones":
+		return commandExit(a.run("timedatectl", "list-timezones"))
 	case len(args) == 1 && args[0] == "zone":
 		return commandExit(a.run("timedatectl", "show", "-p", "Timezone", "--value"))
 	case len(args) == 2 && args[0] == "set-zone":

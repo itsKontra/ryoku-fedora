@@ -37,8 +37,8 @@ case $name in
   omarchy-restart-shell|omarchy-refresh-shell) exec ryoku-shell reload ;;
   omarchy-system-lock) exec ryoku-qylock-lock ;;
   omarchy-system-logout) exec ryoku wm act session.exit ;;
-  omarchy-system-reboot) exec systemctl reboot ;;
-  omarchy-system-shutdown) exec systemctl poweroff ;;
+  omarchy-system-reboot) exec ryoku-host power reboot ;;
+  omarchy-system-shutdown) exec ryoku-host power poweroff ;;
   omarchy-system-sleep-lock) ryoku-qylock-lock; exec ryoku-shell suspend ;;
   omarchy-system-wake) exec ryoku wm act output.power on ;;
   omarchy-toggle-nightlight) exec ryoku-shell call nightlight.toggle '{}' ;;
@@ -104,9 +104,7 @@ case $name in
     state=$(ryoku wm state)
     [[ -n $output ]] || output=$(jq -r '.focusedOutput // (.outputs[] | select(.focused) | .name)' <<<"$state")
     [[ -n $output && $output != null ]] || { echo 'omarchy-monitor-scale: no focused output' >&2; exit 1; }
-    layout=$(mktemp)
-    trap 'rm -f "$layout"' EXIT
-    jq --arg output "$output" --argjson scale "$scale" '
+    layout=$(jq -c --arg output "$output" --argjson scale "$scale" '
       [.outputs[] | {
         name,
         enabled: (.disabled != true),
@@ -120,8 +118,8 @@ case $name in
         colorMode,
         sdrBrightness
       } | if .name == $output then .scale = $scale else . end]
-    ' <<<"$state" >"$layout"
-    ryoku wm outputs "$layout"
+    ' <<<"$state")
+    exec ryoku-hub outputs apply "$layout"
     ;;
   omarchy-file-select)
     title='Select file'; mode=--file-selection; multiple=; directory=; while (($#)); do case $1 in --title) title=${2:-}; shift 2;; --multiple) multiple=--multiple; shift;; --directory) directory=--directory; shift;; --extensions) shift 2;; *) echo "omarchy-file-select: unknown option $1" >&2; exit 2;; esac; done
@@ -159,8 +157,8 @@ case $name in
     ;;
   omarchy-cmd-present) command -v "${1:-}" >/dev/null 2>&1 ;;
   omarchy-cmd-missing) ! command -v "${1:-}" >/dev/null 2>&1 ;;
-  omarchy-pkg-present) pacman -Q "${1:-}" >/dev/null 2>&1 ;;
-  omarchy-pkg-missing) ! pacman -Q "${1:-}" >/dev/null 2>&1 ;;
+  omarchy-pkg-present) ryoku-host pkg installed "${1:-}" >/dev/null 2>&1 ;;
+  omarchy-pkg-missing) ! ryoku-host pkg installed "${1:-}" >/dev/null 2>&1 ;;
   omarchy-capture-screenshot) exec ryoku-shell screenshot ;;
   omarchy-capture-screenrecording) if (($#)); then exec ryoku-shell record "$@"; else exec ryoku-shell screenshot; fi ;;
   omarchy-menu-emoji|omarchy-menu-emoji-insert) exec omarchy-shell nomarchy toggle omarchy.emojis '{}' ;;

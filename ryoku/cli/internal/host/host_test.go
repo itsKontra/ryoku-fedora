@@ -195,6 +195,7 @@ func TestPowerTimeKeymap(t *testing.T) {
 		{"power", "suspend"},
 		{"time", "set-zone", "Europe/Vienna"},
 		{"time", "zone"},
+		{"time", "zones"},
 		{"keymap", "set", "de", "nodeadkeys"},
 	} {
 		if code := app.Execute(args); code != ExitOK {
@@ -206,6 +207,7 @@ func TestPowerTimeKeymap(t *testing.T) {
 		"ryoku-shell suspend",
 		"timedatectl set-timezone Europe/Vienna",
 		"timedatectl show -p Timezone --value",
+		"timedatectl list-timezones",
 		"localectl set-x11-keymap de  nodeadkeys ",
 	}
 	if got := strings.Join(runner.commands, "\n"); got != strings.Join(want, "\n") {

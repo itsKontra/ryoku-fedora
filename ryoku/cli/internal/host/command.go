@@ -33,6 +33,7 @@ Packages (Fedora package names):
 System settings:
   power <poweroff|reboot|suspend>
   time zone
+  time zones
   time set-zone <Area/City>
   keymap set <layout> [variant] [options]
 

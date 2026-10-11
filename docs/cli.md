@@ -128,8 +128,9 @@ backend, systemd and dnf/rpm, built on the CLI's own rpm primitives.
   the user manager, reload units, raise the boot reload cover (best effort),
   run `ryoku-power-cutover session-start-logged` and, only when that succeeds,
   restart the portals.
-- `power poweroff|reboot`, `time zone|set-zone` and `keymap set` go through
-  systemd, timedated and localed, which ask polkit themselves. `power suspend`
+- `power poweroff|reboot`, `time zone|zones|set-zone` and `keymap set` go
+  through systemd, timedated and localed, which ask polkit themselves. `time
+  zones` prints the sorted IANA zone list. `power suspend`
   runs `ryoku-shell suspend`, the shell daemon's lock-then-sleep transaction:
   the daemon's own sleep block would deny a bare `systemctl suspend`.
   Hibernate is not offered, since nothing owns a safe hibernate transaction yet.
