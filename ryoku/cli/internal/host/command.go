@@ -31,7 +31,7 @@ Packages (Fedora package names):
   pkg owner <path>
 
 System settings:
-  power <poweroff|reboot|suspend|hibernate>
+  power <poweroff|reboot|suspend>
   time zone
   time set-zone <Area/City>
   keymap set <layout> [variant] [options]

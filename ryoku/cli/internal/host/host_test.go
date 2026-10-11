@@ -192,6 +192,7 @@ func TestPowerTimeKeymap(t *testing.T) {
 	app, _ := testApp(runner, nil)
 	for _, args := range [][]string{
 		{"power", "reboot"},
+		{"power", "suspend"},
 		{"time", "set-zone", "Europe/Vienna"},
 		{"time", "zone"},
 		{"keymap", "set", "de", "nodeadkeys"},
@@ -202,6 +203,7 @@ func TestPowerTimeKeymap(t *testing.T) {
 	}
 	want := []string{
 		"systemctl reboot",
+		"ryoku-shell suspend",
 		"timedatectl set-timezone Europe/Vienna",
 		"timedatectl show -p Timezone --value",
 		"localectl set-x11-keymap de  nodeadkeys ",
@@ -209,7 +211,7 @@ func TestPowerTimeKeymap(t *testing.T) {
 	if got := strings.Join(runner.commands, "\n"); got != strings.Join(want, "\n") {
 		t.Fatalf("commands:\n%s", got)
 	}
-	for _, bad := range [][]string{{"power", "halt"}, {"keymap", "set", "de;rm"}, {"time"}} {
+	for _, bad := range [][]string{{"power", "halt"}, {"power", "hibernate"}, {"keymap", "set", "de;rm"}, {"time"}} {
 		if code := app.Execute(bad); code != ExitUsage {
 			t.Errorf("%v exit = %d", bad, code)
 		}
