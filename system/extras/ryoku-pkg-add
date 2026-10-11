@@ -6,11 +6,11 @@ set -euo pipefail
   exit 2
 }
 
-command -v dnf >/dev/null 2>&1 || {
-  echo "ryoku-pkg-add: Fedora's dnf is required" >&2
+command -v ryoku-host >/dev/null 2>&1 || {
+  echo "ryoku-pkg-add: ryoku-host is required" >&2
   exit 1
 }
 
 priv=()
 (( EUID == 0 )) || priv=(sudo)
-exec "${priv[@]}" dnf -y install -- "$@"
+exec "${priv[@]}" ryoku-host pkg install "$@"
