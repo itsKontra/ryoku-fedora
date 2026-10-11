@@ -44,6 +44,9 @@ from a repository secret with no committed key. OpenRouter is the recommended
 backend (OpenAI-compatible, one key, cheap models); Anthropic and OpenAI work
 too. Placeholders (%1, %2, ...) are shielded so they survive translation, and
 overrides/<lang>.json always wins, so a human fix is never overwritten.
+RYOKU_I18N_BUDGET caps a sync at that many seconds, and a rate limit that
+outlasts its backoff stops the run early; either way every catalog keeps what
+was translated, and the next sync's delta resumes from there.
 
   python3 sync.py extract
   python3 sync.py sync                       # all targets, Google
@@ -63,6 +66,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -340,6 +344,8 @@ def google_translate(text, tl, tries=4):
         {"client": "gtx", "sl": "en", "tl": tl, "dt": "t", "q": q})
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     for attempt in range(tries):
+        if _halted():
+            return None
         try:
             _pace()
             with urllib.request.urlopen(req, timeout=15) as resp:
@@ -365,6 +371,34 @@ _pace_last = [0.0]
 _PACE_MIN = 1.0 / float(os.environ.get("RYOKU_I18N_RATE") or 2.0)
 
 
+# A run that keeps hitting the limiter, or outlives RYOKU_I18N_BUDGET seconds,
+# stops asking for more and keeps what it already has: the catalog is written
+# with every translation that came back, and the next run's delta picks up the
+# rest. Grinding on through a block only ends in the runner cancelling the job
+# and nothing being saved at all.
+_STOP = threading.Event()
+_BUDGET = float(os.environ.get("RYOKU_I18N_BUDGET") or 0)
+_START = time.monotonic()
+
+
+def _halted():
+    if not _STOP.is_set() and _BUDGET and time.monotonic() - _START > _BUDGET:
+        print(f"  ! time budget of {_BUDGET:.0f}s spent, keeping what is done", file=sys.stderr)
+        _STOP.set()
+    return _STOP.is_set()
+
+
+def _rate_limited(e):
+    return getattr(e, "code", None) == 429 or "429" in str(e)
+
+
+def _retry_after(e, fallback):
+    try:
+        return min(120.0, max(fallback, float(e.headers.get("Retry-After"))))
+    except (AttributeError, TypeError, ValueError):
+        return fallback
+
+
 def _pace():
     with _pace_lock:
         wait = _pace_last[0] + _PACE_MIN - time.monotonic()
@@ -373,26 +407,33 @@ def _pace():
         _pace_last[0] = time.monotonic()
 
 
-def _google_get(payload, tl, tries=7):
+def _google_get(payload, tl, tries=5):
     url = "https://translate.googleapis.com/translate_a/single?" + urllib.parse.urlencode(
         {"client": "gtx", "sl": "en", "tl": tl, "dt": "t", "q": payload})
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     for attempt in range(tries):
+        if _halted():
+            return None
         try:
             _pace()
             with urllib.request.urlopen(req, timeout=20) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except Exception as e:
+            rate_limited = _rate_limited(e)
             if attempt == tries - 1:
                 print(f"  ! translate failed ({tl}): {e}", file=sys.stderr)
+                # a block that outlasted a full backoff will not lift for the
+                # next chunk either; stop the run instead of paying it again.
+                if rate_limited:
+                    print("  ! rate limit persists, stopping this run", file=sys.stderr)
+                    _STOP.set()
                 return None
             # exponential backoff + jitter. A 429 is the endpoint asking for a
             # real pause, not a hiccup: back off hard on it, because retrying
             # inside a second only deepens the block and loses the whole
             # language. Everything else is a transient network fault.
-            rate_limited = "429" in str(e)
-            base = 8.0 if rate_limited else 1.5
-            time.sleep(base * (2 ** attempt) + random.random() * 2)
+            base = 4.0 if rate_limited else 1.5
+            time.sleep(_retry_after(e, base * (2 ** attempt)) + random.random() * 2)
     return None
 
 
@@ -610,11 +651,33 @@ def llm_call(cfg, prompt):
                    "X-Title": "Ryoku i18n",
                    "HTTP-Referer": "https://github.com/noctalia-dev"}
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=headers)
-    with urllib.request.urlopen(req, timeout=90) as resp:
-        data = json.loads(resp.read().decode())
+    data = _llm_post(req)
     if provider == "anthropic":
         return data["content"][0]["text"]
     return data["choices"][0]["message"]["content"]
+
+
+class LLMUnavailable(Exception):
+    """The provider kept refusing (rate limit, outage): splitting the batch
+    would only multiply the refused requests, so the caller gives up on it."""
+
+
+def _llm_post(req, tries=6):
+    for attempt in range(tries):
+        if _halted():
+            raise LLMUnavailable("run stopped")
+        try:
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                return json.loads(resp.read().decode())
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
+            code = getattr(e, "code", None)
+            if code is not None and code != 429 and code < 500:
+                raise LLMUnavailable(f"HTTP {code}") from e
+            if attempt == tries - 1:
+                if code == 429:
+                    _STOP.set()
+                raise LLMUnavailable(str(e)) from e
+            time.sleep(_retry_after(e, 2.0 * (2 ** attempt)) + random.random())
 
 
 def _extract_json(text):
@@ -641,6 +704,8 @@ def llm_translate(cfg, lang, keys, batch=40):
             out.update({k: _sanitize(v) for k, v in got.items()
                         if k in chunk and isinstance(v, str) and v
                         and _ph(v) == _ph(k)})
+        except LLMUnavailable as e:
+            print(f"  ! llm unavailable ({lang}), {len(chunk)} strings left: {e}", file=sys.stderr)
         except Exception as e:
             if len(chunk) > 1 and depth < 6:
                 mid = len(chunk) // 2
@@ -650,6 +715,8 @@ def llm_translate(cfg, lang, keys, batch=40):
                 print(f"  ! llm failed ({lang}) on {chunk!r}: {str(e)[:80]}", file=sys.stderr)
 
     for i in range(0, len(keys), batch):
+        if _halted():
+            break
         run(keys[i:i + batch], 0)
         print(f"  {lang}: {len(out)}/{len(keys)}")
     return out
@@ -710,7 +777,7 @@ def cmd_sync(argv):
         missing = [k for k in en if not done(k)]
 
         translated = {}
-        if missing:
+        if missing and not _halted():
             if engine == "llm":
                 translated = llm_translate(cfg, lang, missing)
             else:
@@ -728,6 +795,8 @@ def cmd_sync(argv):
                 out[k] = existing[k]                  # keep prior translation
             elif k in translated:
                 out[k] = translated[k]
+            elif k in existing and existing[k] != k:
+                out[k] = existing[k]                  # forced, but no new one came
             else:
                 out[k] = _sanitize(k)                  # unresolved -> English source
                 if k in missing:
@@ -737,6 +806,8 @@ def cmd_sync(argv):
         print(f"sync[{engine}] {lang}: {len(out)} strings "
               f"({len(translated)} newly translated, {len(overrides)} overrides, "
               f"{len(failed)} unresolved)")
+        if _halted():
+            continue
         # a whole catalog is thousands of requests; running the next language
         # straight after is what turns the keyless endpoint's rate limiter on.
         # the LLM engine is paid for and needs no such pause.
