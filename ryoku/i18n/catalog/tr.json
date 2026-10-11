@@ -2145,7 +2145,7 @@
   "Match the login screen, TTYs, and boot prompt too.": "Giriş ekranını, TTY'leri ve önyükleme istemini de eşleştir.",
   "Match title (e.g. Picture-in-Picture)": "Başlığı eşleştir (ör. Picture-in-Picture)",
   "Match title (optional)": "Başlığı eşleştir (isteğe bağlı)",
-  "Material": "Material",
+  "Material": "Materyal",
   "Material 3 colour-generation algorithm.": "Material 3 renk üretim algoritması.",
   "Material Symbols font missing; every shell icon renders as its ligature name": "Material Symbols yazı tipi eksik; her shell simgesi ligatur adı olarak işlenir",
   "Material Symbols icon font": "Material Symbols simge yazı tipi",

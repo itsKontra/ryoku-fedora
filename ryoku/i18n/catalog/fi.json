@@ -4820,7 +4820,7 @@
   "daily": "päivittäin",
   "dark": "tumma",
   "david.png": "david.png",
-  "ddd, MMM d": "ddd, MMM d",
+  "ddd, MMM d": "ddd, d. MMM",
   "decor art": "koristegrafiikka",
   "decor art present in %s": "koristegrafiikka löytyy kohteesta %s",
   "decor art source unreadable (%v)": "koristegrafiikan lähde ei ole luettavissa (%v)",
