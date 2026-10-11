@@ -64,12 +64,8 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Tokens.s5
 
-                Image {
-                    width: 64
-                    height: 64
-                    source: Qt.resolvedUrl("art/logo-mark.svg")
-                    fillMode: Image.PreserveAspectFit
-                    sourceSize: Qt.size(128, 128)
+                BrandMark {
+                    size: 64
                 }
 
                 Text {

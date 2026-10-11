@@ -24,13 +24,9 @@ Item {
             width: Math.min(parent.width - Tokens.s7 * 2, 600)
             spacing: Tokens.s5
 
-            Image {
+            BrandMark {
                 anchors.horizontalCenter: parent.horizontalCenter
-                width: 58
-                height: 58
-                source: Qt.resolvedUrl("art/logo-mark.svg")
-                fillMode: Image.PreserveAspectFit
-                sourceSize: Qt.size(116, 116)
+                size: 58
             }
 
             Text {

@@ -128,12 +128,9 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Tokens.s3
 
-            Image {
-                width: 32
-                height: 32
-                source: Qt.resolvedUrl("art/logo-mark.svg")
-                fillMode: Image.PreserveAspectFit
-                sourceSize: Qt.size(64, 64)
+            BrandMark {
+                anchors.verticalCenter: parent.verticalCenter
+                size: 32
             }
 
             Column {
@@ -141,7 +138,7 @@ Rectangle {
                 spacing: 1
 
                 Text {
-                    text: I18n.tr("RYOKU")
+                    text: Theme.brandName.toUpperCase()
                     color: Tokens.ink
                     font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall
