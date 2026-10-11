@@ -206,8 +206,8 @@ Singleton {
         if (idx >= 0)
             target = matches[(idx + 1) % matches.length];
         else {
-            const wsName = Wm.focusedWorkspace ? Wm.focusedWorkspace.name : "";
-            target = matches.find(m => m.workspace === wsName) || matches[0];
+            const wsId = Wm.focusedWorkspace ? Wm.focusedWorkspace.id : "";
+            target = matches.find(m => m.workspace === wsId) || matches[0];
         }
         Wm.focusWindow(target.id);
     }
