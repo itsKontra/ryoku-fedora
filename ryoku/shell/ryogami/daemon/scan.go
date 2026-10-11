@@ -145,10 +145,15 @@ func collectMedia(root, thumbDir, thumbSmDir, wpType string, exts map[string]boo
 }
 
 // processItem resolves one scanned file against prior state: an unchanged mtime
-// returns the prior entry untouched; otherwise thumbs and colors are (re)built
-// while favourites and apply counts carry over.
+// reuses the prior entry at the file's current location; otherwise thumbs and
+// colors are (re)built while favourites and apply counts carry over.
 func processItem(it scanned, prior map[string]Entry, onItem func(Entry)) Entry {
 	if p, ok := prior[it.key]; ok && p.Mtime == it.mtime {
+		// Location follows the file, so a moved library or home keeps applying.
+		// An animated still's VideoFile is its cached clip, not a location.
+		if it.videoFile != "" {
+			p.VideoFile = it.videoFile
+		}
 		// A warm entry may predate preview clips: backfill without a rescan.
 		if it.wpType == "video" && (p.VideoPrev == "" || !fileExists(p.VideoPrev)) {
 			p.VideoPrev = ensureVideoPreview(it)
