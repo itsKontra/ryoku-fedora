@@ -215,9 +215,11 @@ def load_v2_messages(con, cutoff_ms: int) -> list[dict]:
     turn is a row whose JSON blob holds tokens/model/cost and the role lives in
     a type column. Column names drift across releases, so the blob, role and
     time columns are detected from the live schema rather than assumed."""
-    if "session_message" not in [
-        r[0] for r in con.execute("select name from sqlite_master where type='table'")
-    ]:
+    try:
+        tables = [r[0] for r in con.execute("select name from sqlite_master where type='table'")]
+    except sqlite3.Error:
+        return []
+    if "session_message" not in tables:
         return []
     columns = _table_columns(con, "session_message")
     blob_col = _pick(columns, "data", "content", "body", "message", "json")
@@ -249,7 +251,7 @@ def load_v2_messages(con, cutoff_ms: int) -> list[dict]:
             blob = json.loads(values.get(blob_col) or "{}")
         except ValueError:
             continue
-        rec = parse_message_v2(blob, str(values.get(role_col, "")), str(values.get(session_col, "")))
+        rec = parse_message_v2(blob, str(values.get(role_col) or ""), str(values.get(session_col) or ""))
         if rec is None:
             continue
         if not rec["time"]:

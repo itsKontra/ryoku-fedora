@@ -128,6 +128,33 @@ echo '{"_source":"storage","_tokens_used":9}' > "$d/home/.cache/opencode-usage.j
 HOME="$d/home" OPENCODE_DATA_DIR="$d/data" "$collector"
 check "no data marks prior cache stale" _source stale "$d/home/.cache/opencode-usage.json"
 
+# --- 6. a corrupt opencode.db degrades to stale, never a crash ---
+d="$work/corrupt"
+mkdir -p "$d/data" "$d/home/.cache"
+echo "not a sqlite database" > "$d/data/opencode.db"
+echo '{"_source":"storage","_tokens_used":9}' > "$d/home/.cache/opencode-usage.json"
+HOME="$d/home" OPENCODE_DATA_DIR="$d/data" "$collector"
+check "corrupt db marks prior cache stale" _source stale "$d/home/.cache/opencode-usage.json"
+
+# --- 7. a NULL type column falls back to the blob's role ---
+d="$work/nulltype"
+mkdir -p "$d/data" "$d/home/.cache"
+python3 - "$d/data/opencode.db" <<'PY'
+import sqlite3, sys, json, time
+db = sqlite3.connect(sys.argv[1])
+db.execute("create table session_message(id text, session_id text,"
+           " type text, time_updated integer, data text)")
+now = int(time.time() * 1000)
+db.execute("insert into session_message values(?,?,?,?,?)",
+           ("n", "s", None, now,
+            json.dumps({"role": "assistant", "tokens": {"input": 4, "output": 2},
+                        "model": {"id": "m", "providerID": "p"},
+                        "time": {"completed": now}, "cost": 0})))
+db.commit()
+PY
+HOME="$d/home" OPENCODE_DATA_DIR="$d/data" "$collector"
+check "NULL type uses the blob role" _tokens_used 6 "$d/home/.cache/opencode-usage.json"
+
 if (( fail )); then
   echo "opencode-usage: FAILED" >&2
   exit 1
