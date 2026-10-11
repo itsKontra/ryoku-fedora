@@ -192,7 +192,7 @@ func runAct(args []string) error {
 		return perform(action("ToggleOverview", map[string]any{}))
 
 	case wm.ActionNightLightOn:
-		return nightlightStart(wlsunsetArgs(nightlightTemp(rest))...)
+		return nightlightStart(wm.WlsunsetArgs(nightlightTemp(rest))...)
 
 	case wm.ActionNightLightOff:
 		nightlightStop("wlsunset")
@@ -645,16 +645,6 @@ func nightlightTemp(args []string) int {
 		t = 25000
 	}
 	return t
-}
-
-// wlsunsetArgs pins wlsunset to one temperature all year. With no location it
-// holds a static state, but which one follows the season: the low (-t) while
-// the sun's declination is negative, the high (-T) from about March to
-// September, when it reads the missing latitude as midnight sun. A fixed far
-// high turned the screen blue every summer, so the high sits one kelvin above
-// the low, the smallest gap its high-above-low validation accepts.
-func wlsunsetArgs(temp int) []string {
-	return []string{"wlsunset", "-t", strconv.Itoa(temp), "-T", strconv.Itoa(temp + 1)}
 }
 
 // nightlightStart replaces any running backend with a fresh one warmed to the

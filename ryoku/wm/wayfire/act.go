@@ -317,7 +317,7 @@ func runAct(args []string) error {
 		return perform("wayfire/set-keyboard-state", map[string]any{"layout-index": next})
 
 	case wm.ActionNightLightOn:
-		return nightlightStart("wlsunset", "-t", strconv.Itoa(nightlightTemp(rest)), "-T", "30000")
+		return nightlightStart(wm.WlsunsetArgs(nightlightTemp(rest))...)
 
 	case wm.ActionNightLightOff:
 		nightlightStop("wlsunset")
@@ -1106,10 +1106,7 @@ func nightlightTemp(args []string) int {
 }
 
 // nightlightStart replaces any running backend with a fresh one warmed to
-// the temperature. wlsunset with no location computes a polar-night
-// trajectory and sits at its low temperature (-t) until killed, so the
-// night light is exactly as warm as the user set, day or night; the fixed
-// high (-T) only satisfies the validation that high must exceed low. The
+// the temperature (wm.WlsunsetArgs pins it all year). The
 // backend is detached (its own session, stdio to /dev/null, released) to
 // outlive this short-lived invocation; wayfire restores the gamma through
 // wlr-gamma-control when it goes away.
