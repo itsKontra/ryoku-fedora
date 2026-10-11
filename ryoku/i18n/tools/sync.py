@@ -286,10 +286,14 @@ def load_json(path):
 
 
 def write_json(path, obj):
+    # sync saves mid-run, so a run killed between writes must never leave a
+    # truncated catalog behind: write aside, then swap it in.
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(dict(sorted(obj.items())), fh, ensure_ascii=False, indent=2)
         fh.write("\n")
+    os.replace(tmp, path)
 
 
 def cmd_extract():
@@ -439,11 +443,14 @@ def google_batch(texts, tl):
     return out
 
 
-def google_translate_all(texts, tl, workers=4):
+def google_translate_all(texts, tl, workers=4, progress=None):
     """Every string for one language. Multi-line sources cannot ride a
     newline-joined payload, so they go one at a time; the rest batch. Requests
     run a few at a time, which is what makes a 4000-string language minutes
-    rather than hours, while staying gentle enough not to trip the block."""
+    rather than hours, while staying gentle enough not to trip the block.
+    progress(out) is called with everything translated so far after each
+    request, so the caller can save it."""
+    progress = progress or (lambda out: None)
     multiline = [t for t in texts if "\n" in t]
     flat = [t for t in texts if "\n" not in t]
     out = {}
@@ -461,9 +468,11 @@ def google_translate_all(texts, tl, workers=4):
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         for got in pool.map(lambda c: google_batch(c, tl), chunks):
             out.update(got)
+            progress(out)
         for t, got in zip(multiline, pool.map(lambda s: google_translate(s, tl), multiline)):
             if got:
                 out[t] = got
+                progress(out)
 
     # anything the batch did not echo back, retried on its own.
     missed = [t for t in texts if t not in out]
@@ -472,6 +481,7 @@ def google_translate_all(texts, tl, workers=4):
             for t, got in zip(missed, pool.map(lambda s: google_translate(s, tl), missed)):
                 if got:
                     out[t] = got
+                    progress(out)
     return out
 
 
@@ -622,13 +632,19 @@ def _extract_json(text):
     return json.loads(text[a:b + 1]) if a >= 0 and b > a else {}
 
 
-def llm_translate(cfg, lang, keys, batch=40):
+def llm_translate(cfg, lang, keys, batch=40, progress=None):
     """Translate `keys` into `lang` (a file code or name) via the model, in
     batches with the domain prompt + glossary. A batch whose reply is not valid
     JSON is bisected and retried, so one malformed string never sinks a whole
-    batch. Returns {key: translation} for what came back; caller picks fallback."""
+    batch. Batches run RYOKU_I18N_WORKERS at a time (default 4): one request
+    at a time made a full pass take well over an hour. progress(out) is called
+    after each batch so the caller can save. Returns {key: translation} for
+    what came back; caller picks fallback."""
     name = LANG_NAMES.get(lang, lang)
+    progress = progress or (lambda out: None)
+    workers = max(1, int(os.environ.get("RYOKU_I18N_WORKERS") or 4))
     out = {}
+    lock = threading.Lock()
 
     def run(chunk, depth):
         if not chunk:
@@ -638,9 +654,11 @@ def llm_translate(cfg, lang, keys, batch=40):
             # a translation that lost, gained or translated a placeholder would
             # print a literal "%s" (or drop an argument) at runtime, so it is
             # dropped here and the English source is shipped instead.
-            out.update({k: _sanitize(v) for k, v in got.items()
-                        if k in chunk and isinstance(v, str) and v
-                        and _ph(v) == _ph(k)})
+            good = {k: _sanitize(v) for k, v in got.items()
+                    if k in chunk and isinstance(v, str) and v
+                    and _ph(v) == _ph(k)}
+            with lock:
+                out.update(good)
         except Exception as e:
             if len(chunk) > 1 and depth < 6:
                 mid = len(chunk) // 2
@@ -649,9 +667,12 @@ def llm_translate(cfg, lang, keys, batch=40):
             else:
                 print(f"  ! llm failed ({lang}) on {chunk!r}: {str(e)[:80]}", file=sys.stderr)
 
-    for i in range(0, len(keys), batch):
-        run(keys[i:i + batch], 0)
-        print(f"  {lang}: {len(out)}/{len(keys)}")
+    chunks = [keys[i:i + batch] for i in range(0, len(keys), batch)]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        for _ in pool.map(lambda c: run(c, 0), chunks):
+            with lock:
+                progress(out)
+                print(f"  {lang}: {len(out)}/{len(keys)}", flush=True)
     return out
 
 
@@ -708,31 +729,43 @@ def cmd_sync(argv):
         def done(k):
             return k in overrides or (not force and k in existing and existing[k] != k)
         missing = [k for k in en if not done(k)]
+        path = os.path.join(TRANS, f"{lang}.json")
+
+        # a translation that lost, gained or translated a placeholder would
+        # print a literal "%s" at runtime, so it is dropped and the English
+        # source ships for that string instead.
+        def placeheld(got):
+            return {k: v for k, v in got.items() if _ph(v) == _ph(k)}
+
+        def merge(translated):
+            out, failed = {}, []
+            for k in en:
+                if k in overrides:
+                    out[k] = overrides[k]
+                elif not force and k in existing and existing[k] != k:
+                    out[k] = existing[k]              # keep prior translation
+                elif k in translated:
+                    out[k] = translated[k]
+                else:
+                    out[k] = _sanitize(k)              # unresolved -> English source
+                    if k in missing:
+                        failed.append(k)              # a real miss, not a kept string
+            return out, failed
+
+        # saved after every batch, so a run that is cancelled or killed keeps
+        # what it paid for and the next run's delta resumes from there.
+        def save(got):
+            write_json(path, merge(placeheld(got))[0])
 
         translated = {}
         if missing:
             if engine == "llm":
-                translated = llm_translate(cfg, lang, missing)
+                translated = llm_translate(cfg, lang, missing, progress=save)
             else:
-                got = google_translate_all(missing, tl)
-                # a translation that lost, gained or translated a placeholder
-                # would print a literal "%s" at runtime, so it is dropped and
-                # the English source ships for that string instead.
-                translated = {k: v for k, v in got.items() if _ph(v) == _ph(k)}
+                translated = placeheld(google_translate_all(missing, tl, progress=save))
 
-        out, failed = {}, []
-        for k in en:
-            if k in overrides:
-                out[k] = overrides[k]
-            elif not force and k in existing and existing[k] != k:
-                out[k] = existing[k]                  # keep prior translation
-            elif k in translated:
-                out[k] = translated[k]
-            else:
-                out[k] = _sanitize(k)                  # unresolved -> English source
-                if k in missing:
-                    failed.append(k)                  # a real miss, not a kept string
-        write_json(os.path.join(TRANS, f"{lang}.json"), out)
+        out, failed = merge(translated)
+        write_json(path, out)
         unresolved += len(failed)
         print(f"sync[{engine}] {lang}: {len(out)} strings "
               f"({len(translated)} newly translated, {len(overrides)} overrides, "
@@ -875,10 +908,9 @@ def cmd_llm(langs):
         en = load_json(os.path.join(TRANS, "en.json"))
     keys = list(en)
     for lang in (langs or [cfg.get("target", "es")]):
-        out = llm_translate(cfg, lang, keys)
-        os.makedirs(GEN_DIR, exist_ok=True)
-        with open(os.path.join(GEN_DIR, f"{lang}.json"), "w", encoding="utf-8") as fh:
-            json.dump(dict(sorted(out.items())), fh, ensure_ascii=False, indent=2)
+        path = os.path.join(GEN_DIR, f"{lang}.json")
+        out = llm_translate(cfg, lang, keys, progress=lambda got: write_json(path, got))
+        write_json(path, out)
         print(f"llm {lang}: wrote {len(out)} strings -> {GEN_DIR}/{lang}.json")
     return 0
 
