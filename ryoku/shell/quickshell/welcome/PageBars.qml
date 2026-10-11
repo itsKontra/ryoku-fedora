@@ -21,7 +21,8 @@ Item {
             if (styles[i].id === styleId)
                 return styles[i].name
         }
-        return ""
+        // An installed style the tour has no card for still names itself.
+        return styleId
     }
 
     Column {

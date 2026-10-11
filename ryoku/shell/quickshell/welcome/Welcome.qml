@@ -16,7 +16,8 @@ Rectangle {
     implicitHeight: 760
 
     property int step: 0
-    property string barStyle: "qsbar"
+    // The live style, from the settings subscription; empty until its first frame.
+    property string barStyle: ""
     property real arrival: 0
     readonly property int lastStep: steps.length - 1
     readonly property string socketPath:
@@ -46,18 +47,12 @@ Rectangle {
     }
 
     function runCommand(argv) {
-        if (argv && argv.length > 0)
-            Quickshell.execDetached(argv)
+        Spawn.run(argv)
     }
 
+    // The settings subscription moves the selection once the daemon takes it.
     function chooseBar(styleId) {
-        barStyle = styleId
-        control.queued += "call settings.patch "
-            + JSON.stringify({ path: "barStyle", value: styleId }) + "\n"
-        if (control.connected)
-            control.flushQueued()
-        else
-            control.connected = true
+        Spawn.run(["ryoku-shell", "barstyle", styleId])
     }
 
     function applySettings(line) {
@@ -65,7 +60,7 @@ Rectangle {
             const frame = JSON.parse(line)
             const liveStyle = frame && typeof frame.barStyle === "string"
                 ? frame.barStyle : ""
-            if (["sumi", "qsbar", "kairos", "iris"].indexOf(liveStyle) >= 0)
+            if (liveStyle.length > 0)
                 barStyle = liveStyle
         } catch (e) {
         }
@@ -96,22 +91,6 @@ Rectangle {
         id: reconnect
         interval: 2000
         onTriggered: if (!settings.connected) settings.connected = true
-    }
-
-    Socket {
-        id: control
-        path: root.socketPath
-        property string queued: ""
-
-        function flushQueued() {
-            if (queued.length === 0)
-                return
-            write(queued)
-            flush()
-            queued = ""
-        }
-
-        onConnectionStateChanged: if (connected) flushQueued()
     }
 
     Item {
