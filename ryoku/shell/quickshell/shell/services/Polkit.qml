@@ -24,6 +24,9 @@ Singleton {
     property bool echo: false       // true when the answer may be shown
     property bool busy: false       // an answer is with PAM, awaiting the verdict
     property string fingerprint: "" // "" none, "scanning", "fail" (pam_fprintd)
+    // A bar style that draws its own prompt counts itself in while it is
+    // mounted; the stock island steps aside only while one is there to answer.
+    property int presenters: 0
 
     readonly property string sockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
 

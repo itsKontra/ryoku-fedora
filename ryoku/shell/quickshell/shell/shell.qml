@@ -745,17 +745,18 @@ ShellRoot {
 
     // The polkit agent streams its prompt on a topic rather than pushing a
     // surface, so raise and drop the island from the state itself. (pill 321-329)
+    // A bar style that presents the prompt itself (Polkit.presenters) takes it
+    // over; if it unmounts mid-prompt the island comes back.
     Connections {
         target: Polkit
-        function onActiveChanged() {
-            // The Shima bar style draws this prompt in its own dialog.
-            if (Polkit.active) {
-                if (Config.barStyle !== "iris")
-                    ShellState.requestSurface("polkit", "", undefined);
-            } else {
+        function sync() {
+            if (Polkit.active && Polkit.presenters === 0)
+                ShellState.requestSurface("polkit", "", undefined);
+            else
                 ShellState.closeSurface("polkit", "");
-            }
         }
+        function onActiveChanged() { sync(); }
+        function onPresentersChanged() { sync(); }
     }
 
     // Stash steps a running task's own surface aside when it needs the auth
