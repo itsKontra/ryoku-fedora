@@ -1,12 +1,13 @@
 import QtQuick
 import Quickshell
-import Ryoku.Ui.Singletons
 
 ShellRoot {
     FloatingWindow {
         id: win
 
-        title: I18n.tr("Welcome to Ryoku")
+        // Untranslated on purpose: the compositors' window rules match this
+        // title, and every Quickshell window shares one app id.
+        title: "Welcome to Ryoku"
         readonly property int fitW: win.screen
             ? Math.min(1180, win.screen.width - 24) : 1180
         readonly property int fitH: win.screen
