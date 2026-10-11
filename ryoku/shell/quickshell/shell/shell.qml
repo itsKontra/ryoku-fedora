@@ -508,7 +508,7 @@ ShellRoot {
                 st.visualizerOverlay = !st.visualizerOverlay;
             break;
         case "visualizer-place":
-            root.placeVisualizer(!StageCfg.StageSession.active);
+            root.placeVisualizer(!root.placingVisualizer());
             break;
         case "quicksettings":
             ShellState.requestSurfaceActive("sidebar-left", undefined);
@@ -613,7 +613,18 @@ ShellRoot {
         }
         if (!VizCfg.Config.enabled)
             VizCfg.Config.setEnabled(true);
-        StageCfg.StageSession.enterWidgets(mon, "visualizer");
+        if (StageCfg.StageSession.onMonitor(mon))
+            StageCfg.StageSession.openSection("visualizer");
+        else
+            StageCfg.StageSession.enterWidgets(mon, "visualizer");
+    }
+    // The place bind toggles only the placement it starts: an editor open on
+    // another catalogue or screen switches to aiming the look, not closes.
+    function placingVisualizer() {
+        const st = ShellState.forActive();
+        const mon = (st && st.modelData && st.modelData.name) ? st.modelData.name : "";
+        return StageCfg.StageSession.onMonitor(mon)
+            && StageCfg.StageSession.section.split("/")[0] === "visualizer";
     }
 
     // --- Root machinery (ported from the reference pill root) --------------

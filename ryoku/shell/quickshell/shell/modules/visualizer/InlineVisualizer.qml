@@ -9,7 +9,10 @@ Item {
     id: root
 
     Repeater {
-        model: Performance.visualizerResident && Config.enabled ? Config.count : 0
+        // A look being aimed stays drawn even when the policy unloads a silent
+        // or power-saving visualizer: an empty grip places nothing.
+        model: (Performance.visualizerResident || Spectrum.placementHolds > 0) && Config.enabled
+            ? Config.count : 0
         delegate: VisualizerView {
             id: vizView
             anchors.fill: parent
