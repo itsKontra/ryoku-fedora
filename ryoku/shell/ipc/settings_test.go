@@ -355,11 +355,11 @@ func TestMalformedFileFirstLoad(t *testing.T) {
 		if !reflect.DeepEqual(s.cur, defaultSettings()) {
 			t.Fatalf("unparseable file did not fall back to defaults")
 		}
-		// Defaults only: exactly the six schema namespaces, no passthrough.
-		if len(s.raw) != 6 {
-			t.Fatalf("first-load fallback carried %d top-level keys, want 6 (schema only)", len(s.raw))
+		// Defaults only: exactly the schema namespaces, no passthrough.
+		if len(s.raw) != len(contractKeys) {
+			t.Fatalf("first-load fallback carried %d top-level keys, want %d (schema only)", len(s.raw), len(contractKeys))
 		}
-		for _, k := range []string{"general", "theme", "bars", "menus", "notifications", "wallpaper"} {
+		for _, k := range []string{"general", "theme", "bars", "menus", "notifications", "wallpaper", "batteryAlerts"} {
 			if _, ok := s.raw[k]; !ok {
 				t.Fatalf("first-load fallback missing schema namespace %q", k)
 			}

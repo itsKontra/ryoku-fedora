@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.UPower
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 
@@ -84,6 +85,17 @@ Item {
     readonly property var advTune: (pg.tune || []).filter(t => t.risk === "advanced")
     readonly property var cpuTune: (pg.cpu || []).filter(t => t.gpu === "cpu")
     readonly property var batteryTune: (pg.cpu || []).filter(t => t.gpu === "battery")
+    // Scans the physical devices, as the shell's Battery service does: the
+    // synthetic display device drops isLaptopBattery on some upower versions
+    // once a full cell sits on AC.
+    readonly property bool hasBattery: {
+        var list = UPower.devices ? UPower.devices.values : [];
+        for (var i = 0; i < list.length; i++) {
+            if (list[i] && list[i].isLaptopBattery && list[i].isPresent)
+                return true;
+        }
+        return false;
+    }
     // idle policy, also fronted by `ryoku-hub cpu`: two toggles plus per-stage
     // minute steppers split into battery and AC. Neutral across compositors.
     readonly property var idleTune: (pg.cpu || []).filter(t => t.gpu === "idle")
@@ -984,8 +996,13 @@ done
                 // ── BATTERY ──
                 SettingCard {
                     width: gfxCol.colWidth
-                    visible: pg.batteryTune.length > 0
+                    visible: pg.hasBattery || pg.batteryTune.length > 0
                     title: I18n.tr("BATTERY")
+
+                    BatteryAlertsSettings {
+                        width: parent.width
+                        visible: pg.hasBattery
+                    }
 
                     Repeater {
                         model: pg.batteryTune
