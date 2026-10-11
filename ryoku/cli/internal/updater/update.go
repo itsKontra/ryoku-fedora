@@ -175,12 +175,16 @@ func Update(args []string) error {
 		return e
 	}
 	progress.logf(i18n.T("Updating %d Ryoku package(s); the base system stays as it is"), len(set))
+	installRyokuDeps(set, withSystem)
 	err = runRyokuUpgrade(set)
 	if err != nil {
 		// One retry on fresh metadata: a COPR mirror or network hiccup is the
 		// usual cause, and the second attempt often lands on a healthy mirror.
+		// That metadata can carry a newer build with new requirements, so
+		// they are resolved again too.
 		progress.logf(i18n.T("The Ryoku package upgrade failed; refreshing %s and retrying once"), sys.RPMRepoName)
 		_ = sys.Sudo(refreshDBArgs()[1:]...)
+		installRyokuDeps(set, withSystem)
 		err = runRyokuUpgrade(set)
 	}
 	if err != nil {
@@ -193,6 +197,19 @@ func Update(args []string) error {
 		e := fmt.Errorf(i18n.T("the Ryoku package upgrade failed; %s: %w"), hint, err)
 		progress.fail(e)
 		return e
+	}
+	// A warning, never a stop: the transaction may already have moved part of
+	// the set, and stage2 still has to deploy its config and run doctor. A
+	// package the user pinned (versionlock, excludepkgs) also lands here.
+	if behind, err := ryokuHeldBack(set); err != nil {
+		fmt.Fprintf(os.Stderr, i18n.T("warning: could not check that every Ryoku package was updated: %v\n"), err)
+	} else if len(behind) > 0 {
+		names := make([]string, len(behind))
+		for i, b := range behind {
+			names[i] = b.Name + " " + b.Old + " -> " + b.New
+		}
+		fmt.Fprintf(os.Stderr, i18n.T("warning: dnf left %d Ryoku package(s) on a different build than %s serves (%s); the dependency problems are listed above\n"),
+			len(behind), sys.RPMRepoName, strings.Join(names, ", "))
 	}
 
 	// The user's lane. Off by default: the kernel and the base come from Fedora
@@ -325,6 +342,37 @@ func snapshotDesc() string {
 // sysupgrade, live in ryokuset.go.
 func runRyokuUpgrade(set []string) error {
 	return runUpgrade("Ryoku", "Ryoku package upgrade", ryokuInstallArgs(set))
+}
+
+// installRyokuDeps installs what the set's new builds require from the
+// distribution (see ryokuset.go). Every failure warns: the transaction after
+// it still moves what it can, and the held-back check names what it could not.
+// Without --system an install that would move the base is left to the user.
+func installRyokuDeps(set []string, withSystem bool) {
+	deps, err := ryokuMissingDeps(set)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, i18n.T("warning: could not check this release for new dependencies: %v\n"), err)
+		return
+	}
+	if len(deps) == 0 {
+		return
+	}
+	progress.logf(i18n.T("This release needs %d new package(s) from your distribution: %s"), len(deps), strings.Join(deps, ", "))
+	if !withSystem {
+		moves, err := depBaseMoves(deps)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, i18n.T("warning: could not plan the dependency install: %v\n"), err)
+			return
+		}
+		if len(moves) > 0 {
+			fmt.Fprintf(os.Stderr, i18n.T("warning: installing them would also update %s, which belongs to the system update; run `ryoku update --system` to take both\n"),
+				strings.Join(moves, ", "))
+			return
+		}
+	}
+	if err := runUpgrade(i18n.T("Dependencies"), "Ryoku dependency install", depInstallArgs(deps)); err != nil {
+		fmt.Fprintf(os.Stderr, i18n.T("warning: installing the new dependencies failed: %v\n"), err)
+	}
 }
 
 // runSystemLane is `ryoku update --system`: the user's lane, opted into. It is
@@ -1375,24 +1423,35 @@ func isHex(s string) bool {
 	return s != ""
 }
 
-// latestAvailable: version of pkg in the RyokuCOPR repo, or "" when the repo
-// isn't configured. refresh makes dnf refetch the repo metadata instead of
-// trusting its cache.
-func latestAvailable(pkg string, refresh bool) string {
+// latestAvailableSet: the newest build the RyokuCOPR repo serves for each of
+// pkgs, name -> EVR. refresh makes dnf refetch the repo metadata instead of
+// trusting its cache; it runs as the user, whose cache is not the one root
+// refreshes.
+func latestAvailableSet(pkgs []string, refresh bool) (map[string]string, error) {
 	// --latest-limit=1: a COPR repo keeps several builds in its repodata and
 	// repoquery lists every one; dnf5's --qf adds no newline, so the versions
 	// came back glued into one string that never matches the installed
 	// version, and a fully updated box reported itself behind.
 	args := []string{"repoquery", "--repo=" + sys.RPMRepoName,
-		"--latest-limit=1", "--qf", "%{VERSION}-%{RELEASE}", pkg}
+		"--latest-limit=1", "--qf", "%{name} %{evr}\n"}
 	if refresh {
 		args = append(args, "--refresh")
 	}
-	out, err := sys.RunOut("dnf", args...)
+	out, err := sys.RunOut("dnf", append(args, pkgs...)...)
+	if err != nil {
+		return nil, err
+	}
+	return evrMap(out), nil
+}
+
+// latestAvailable: version of pkg in the RyokuCOPR repo, or "" when the repo
+// isn't configured.
+func latestAvailable(pkg string, refresh bool) string {
+	latest, err := latestAvailableSet([]string{pkg}, refresh)
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(out)
+	return latest[pkg]
 }
 
 // updateItem = one row in the update list. dnf -> a package (name,

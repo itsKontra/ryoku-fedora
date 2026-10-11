@@ -148,7 +148,7 @@ func TestLatestAvailableRPMPicksNewestBuild(t *testing.T) {
 		"  if [ \"$a\" = \"--latest-limit=1\" ]; then limit=1; fi\n" +
 		"done\n" +
 		"if [ \"$limit\" = 1 ]; then\n" +
-		"  printf '0.3723-8.fc44\\n'\n" +
+		"  printf 'ryoku-desktop 0.3723-8.fc44\\n'\n" +
 		"else\n" +
 		"  printf '0.3719-4.fc440.3720-5.fc440.3721-6.fc440.3722-7.fc440.3723-8.fc44'\n" +
 		"fi\n"
@@ -280,9 +280,9 @@ func TestLatestAvailableRPMRefreshRefetchesMetadata(t *testing.T) {
 	bin := t.TempDir()
 	script := "#!/bin/sh\n" +
 		"for a in \"$@\"; do\n" +
-		"  if [ \"$a\" = \"--refresh\" ]; then printf '0.3916-35.fc44\\n'; exit 0; fi\n" +
+		"  if [ \"$a\" = \"--refresh\" ]; then printf 'ryoku-desktop 0.3916-35.fc44\\n'; exit 0; fi\n" +
 		"done\n" +
-		"printf '0.3739-24.fc44\\n'\n"
+		"printf 'ryoku-desktop 0.3739-24.fc44\\n'\n"
 	if err := os.WriteFile(filepath.Join(bin, "dnf"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}

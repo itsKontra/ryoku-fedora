@@ -139,8 +139,8 @@ signature checking stays enabled; COPR metadata is not separately signed.
 Install `ryoku-desktop` and the selected `ryoku-desktop-<provider>` together.
 The supported Fedora channel is `copr`. `ryoku track copr` selects its base URL;
 updates refresh `RyokuCOPR` and run `distro-sync` restricted to that repository.
-Missing dependencies must be installed through the host's normal transaction
-before retrying. Stable, testing, and frozen release channels are unavailable.
+A new requirement only the distribution serves is installed from every enabled
+repository before that transaction (see `docs/updates.md`). Stable, testing, and frozen release channels are unavailable.
 Dependency COPRs retain their own DNF IDs.
 
 DNF option semantics are documented in the
