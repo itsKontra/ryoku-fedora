@@ -1,5 +1,6 @@
 import QtQuick
 import shell.services
+import "../stage/Singletons" as StageCfg
 
 // One per monitor: loads the selected dock design (Ryoku's islands, or none)
 // whatever the bar style, so an unselected design never creates a window.
@@ -10,6 +11,12 @@ Item {
     property bool surfaceVisible: true
     readonly property string design: Dock.design
     readonly property var item: root.design === "ryoku" ? designLoader.item?.surface : null
+    // The Stage Editor frames this monitor: the dock stays mounted, revealed
+    // and raised, and publishes the edge it occupies so the mode's viewport
+    // shrinks around it. The dock catalogue edits the live surface, so hiding
+    // it while that page is open edits an invisible thing.
+    readonly property bool stageEditing: StageCfg.StageSession.onMonitor(
+        root.screen ? root.screen.name : "")
 
     width: 0
     height: 0
@@ -30,6 +37,7 @@ Item {
             DockSurface {
                 id: dockSurface
                 screen: root.screen
+                stageEditing: root.stageEditing
                 visible: root.surfaceVisible && Dock.cfg("enabled", false)
             }
         }
