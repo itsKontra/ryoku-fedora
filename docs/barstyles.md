@@ -571,8 +571,9 @@ over the same `Ryoku.Ui` form kit the rest of Ryoku Settings uses.
 | Dock | 台 | the app dock: enabled, edge, autohide, magnify, labels, frost, pinned apps |
 
 Open it from the bar logo, or from a terminal or a keybind with `ryoku-shell bar
-settings [route]`. The picker style and desktop widgets it used to carry now live
-in the Hub (Desktop and Widgets pages); session and mid-work toggles live in the
+settings [route]`. The picker style it used to carry now lives on the Hub's
+Desktop page, and desktop widgets are arranged in the Stage Editor (right-click
+the desktop, then Edit desktop); session and mid-work toggles live in the
 Super+Escape quick settings.
 
 ## Kairos Settings

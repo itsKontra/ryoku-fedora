@@ -13,6 +13,7 @@ import Quickshell
 import shell.services
 import "modules/visualizer/Singletons" as VizCfg
 import "modules/stage/Singletons" as StageCfg
+import "modules/stage" as StageEditor
 import "components"
 import "modules/wallpaper"
 import "modules/wallpaper/Singletons" as WallCfg
@@ -196,6 +197,7 @@ ShellRoot {
                 wallpaperLive: wallpaper.live
                 videoMuted: wallpaper.videoMuted
                 videoVolume: wallpaper.videoVolume
+                videoPaused: wallpaper.videoPaused
             }
 
             // A blurred copy of the wallpaper for the compositor's overview
@@ -215,29 +217,28 @@ ShellRoot {
 
             // Stage now renders entirely inside the desktop surface (one stack:
             // backdrop, layers, widgets), so there is no separate Background
-            // surface here (docs/stage.md). Built on first enable or first
-            // placement; cava and its buffers never exist while the visualizer
-            // is off. A silent visualizer is unloaded on every output when the
-            // performance policy asks for it; live audio re-creates it at once.
+            // surface here (docs/stage.md). A silent visualizer is unloaded on
+            // every output when the performance policy asks for it; live audio
+            // re-creates the surfaces immediately. Placement runs in the Stage
+            // Editor now: the desktop hosts the look while the mode frames this
+            // monitor, so this surface exists for the plain and overlay cases only.
             LazyLoader {
                 id: vizLoader
-                activeAsync: (VizCfg.Config.enabled && Perf.visualizerResident)
-                    || (perScreen.st && perScreen.st.visualizerPlacing)
+                activeAsync: VizCfg.Config.enabled && Perf.visualizerResident
                 Visualizer {
                     id: perScreenViz
                     screen: perScreen.modelData
                     mode: !VizCfg.Config.enabled ? "off"
                         : (perScreen.st && perScreen.st.visualizerOverlay ? "overlay" : "desktop")
-                    placing: perScreen.st ? perScreen.st.visualizerPlacing : false
                     // The desktop hosts the visualizer behind the cut-outs while the
-                    // stage is on; this surface steps aside (cava keeps running).
-                    // A rebuilt monitor stack (DPMS off/on, a lid close/open) starts
-                    // with no wallpaper frame, so hostsVisualizer briefly reads false
-                    // even for a stage wallpaper: stay suppressed until the frame
-                    // lands, or the surface maps full-screen and pulses for a few
-                    // seconds on every resume.
+                    // stage is on, and inside the lifted desktop while the Stage
+                    // Editor frames this monitor; this surface steps aside (cava
+                    // keeps running). A rebuilt monitor stack (DPMS off/on, a lid
+                    // close/open) starts with no wallpaper frame, so
+                    // hostsVisualizer briefly reads false even for a stage wallpaper:
+                    // stay suppressed until the frame lands, or the surface maps
+                    // full-screen and pulses for a few seconds on every resume.
                     suppressed: desktop.hostsVisualizer || !wallpaper.reloadReady
-                    onPlacingDone: if (perScreen.st) perScreen.st.visualizerPlacing = false
                 }
             }
 
@@ -470,6 +471,12 @@ ShellRoot {
         }
     }
 
+    // The Stage Editor: the ported desktop chrome, mounted once (it is
+    // per-screen inside) and driven by the Edit widgets session. Built only
+    // while that session is on (docs/stage.md).
+    StageEditor.StageEditorHost {
+    }
+
     // The single surface-toggle mapping. Every shell surface id resolves to one
     // transition here: a per-monitor ShellState flip, a global config toggle, or
     // a request onto the frame menu bus. Both routes to a surface end in this one
@@ -501,8 +508,7 @@ ShellRoot {
                 st.visualizerOverlay = !st.visualizerOverlay;
             break;
         case "visualizer-place":
-            if (st)
-                root.placeVisualizer(!st.visualizerPlacing);
+            root.placeVisualizer(!root.placingVisualizer());
             break;
         case "quicksettings":
             ShellState.requestSurfaceActive("sidebar-left", undefined);
@@ -589,14 +595,36 @@ ShellRoot {
         onPressed: root.toggleSurface("visualizer-place")
     }
 
-    // Aiming a hidden spectrum aims nothing, so placing it shows it first.
+    // Aiming a look happens in the Stage Editor now (docs/stage.md): the bind,
+    // the desktop menu row and the Hub hand-off all enter the edit session on
+    // the active monitor, where the look wears its placement grip like every
+    // other widget. A hidden spectrum aims nothing, so placing it shows it
+    // first. The editor's own Done/Escape leaves the session, so `off` only
+    // unwinds a session that is open.
     function placeVisualizer(on) {
         const st = ShellState.forActive();
         if (!st)
             return;
-        if (on && !VizCfg.Config.enabled)
+        const mon = (st.modelData && st.modelData.name) ? st.modelData.name : "";
+        if (!on) {
+            if (StageCfg.StageSession.active)
+                StageCfg.StageSession.leave();
+            return;
+        }
+        if (!VizCfg.Config.enabled)
             VizCfg.Config.setEnabled(true);
-        st.visualizerPlacing = on;
+        if (StageCfg.StageSession.onMonitor(mon))
+            StageCfg.StageSession.openSection("visualizer");
+        else
+            StageCfg.StageSession.enterWidgets(mon, "visualizer");
+    }
+    // The place bind toggles only the placement it starts: an editor open on
+    // another catalogue or screen switches to aiming the look, not closes.
+    function placingVisualizer() {
+        const st = ShellState.forActive();
+        const mon = (st && st.modelData && st.modelData.name) ? st.modelData.name : "";
+        return StageCfg.StageSession.onMonitor(mon)
+            && StageCfg.StageSession.section.split("/")[0] === "visualizer";
     }
 
     // --- Root machinery (ported from the reference pill root) --------------
@@ -782,6 +810,56 @@ ShellRoot {
             const st = ShellState.forActive();
             if (st)
                 root.placeVisualizer(false);
+        }
+    }
+
+    // Enter or leave the desktop-widget editor without the right-click menu, so
+    // a keybind or the daemon can open it. niri has no global-shortcut protocol,
+    // so every shell surface is driven this way; the editor is no exception.
+    IpcHandler {
+        id: desktopIpc
+        target: "desktop"
+        function editWidgets(mon: string): void {
+            desktopIpc.editSection("widgets", mon);
+        }
+        // Open the Stage Editor straight on one catalogue (widgets, wallpaper,
+        // style, visualizer, depth): the Hub's hand-offs and keybinds land on
+        // the editor they mean. Already open, it switches catalogue in place.
+        function editSection(section: string, mon: string): void {
+            var m = mon;
+            if (!m || m.length === 0) {
+                const st = ShellState.forActive();
+                m = (st && st.modelData) ? st.modelData.name : "";
+            }
+            // The editor targets one monitor by exact name; a cold focused-output
+            // cache (niri via a keybind before a window is focused) yields "",
+            // which matches no desktop, so fall back to the first output.
+            if (!m || m.length === 0)
+                m = ShellState.screens.length > 0 ? ShellState.screens[0].name : "";
+            if (StageCfg.StageSession.onMonitor(m))
+                StageCfg.StageSession.openSection(section);
+            else
+                StageCfg.StageSession.enterWidgets(m, section);
+        }
+        function editDone(): void { StageCfg.StageSession.leave(); }
+        // Open a widget's right-click menu on a monitor (empty = focused).
+        function menu(widget: string, mon: string): void {
+            var m = mon;
+            if (!m || m.length === 0) {
+                const st = ShellState.forActive();
+                m = (st && st.modelData) ? st.modelData.name : "";
+            }
+            ShellState.requestWidgetMenu(m, widget);
+        }
+        // Open a widget's inspector (Customize sheet) on a monitor (empty =
+        // focused), the off-surface twin of the right-click Customize row.
+        function customize(widget: string, mon: string): void {
+            var m = mon;
+            if (!m || m.length === 0) {
+                const st = ShellState.forActive();
+                m = (st && st.modelData) ? st.modelData.name : "";
+            }
+            ShellState.requestWidgetCustomize(m, widget);
         }
     }
 

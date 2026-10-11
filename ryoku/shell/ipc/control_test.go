@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -178,5 +179,28 @@ func TestUnlockPrepareRejectsAnotherLogin1Session(t *testing.T) {
 	const want = "err unlock-prepare: requested login1 session is not owned by this daemon"
 	if got := d.dispatch("unlock-prepare session session-b"); got != want {
 		t.Fatalf("dispatch(unlock-prepare session session-b) = %q, want %q", got, want)
+	}
+}
+
+// TestHubEditorSectionsMatchHub pins the cold-start hand-off table to the one a
+// running Hub uses, so `ryoku-shell hub open X` and `qs ipc call nav open X`
+// land on the same editor catalogue.
+func TestHubEditorSectionsMatchHub(t *testing.T) {
+	b, err := os.ReadFile("../../hub/quickshell/Hub.qml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := regexp.MustCompile(`(?s)function editorSectionFor\(target\) \{(.*?)\n    \}`).FindSubmatch(b)
+	if body == nil {
+		t.Fatal("Hub.qml has no editorSectionFor")
+	}
+	hub := map[string]string{}
+	for _, m := range regexp.MustCompile(`(?s)if \((.*?)\)\s*return "([^"]+)";`).FindAllSubmatch(body[1], -1) {
+		for _, name := range regexp.MustCompile(`"([^"]+)"`).FindAllSubmatch(m[1], -1) {
+			hub[string(name[1])] = string(m[2])
+		}
+	}
+	if !reflect.DeepEqual(hub, hubEditorSections) {
+		t.Fatalf("Hub.qml editorSectionFor = %v, hubEditorSections = %v", hub, hubEditorSections)
 	}
 }

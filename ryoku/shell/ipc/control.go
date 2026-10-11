@@ -148,6 +148,22 @@ func hubNav(section string) bool {
 	return exec.Command("qs", argv...).Run() == nil
 }
 
+// hubEditorSections maps retired Hub links to their owning Stage Editor
+// catalogue. A running Hub resolves the same links in Hub.qml's
+// editorSectionFor; this copy lets a cold `hub open` hand off without starting
+// the Hub, and TestHubEditorSectionsMatchHub keeps the two equal.
+var hubEditorSections = map[string]string{
+	"desktop-scene":            "depth",
+	"stage":                    "depth",
+	"desktop-scene-visualizer": "visualizer",
+	"desktop-scene-widgets":    "widgets",
+	"widgets":                  "widgets",
+}
+
+func hubEditorSection(section string) string {
+	return hubEditorSections[section]
+}
+
 // hubAlive: a running Hub answers its nav ipc.
 func hubAlive() bool {
 	argv := append(hubSelect(), "ipc", "call", "nav", "section")
@@ -164,6 +180,10 @@ func (d *daemon) hubRaise() {
 func (d *daemon) hub(sub, section string) string {
 	switch sub {
 	case "open":
+		if editorSection := hubEditorSection(section); editorSection != "" {
+			go ipcCallN("shell", "desktop", "editSection", editorSection, "")
+			return "ok"
+		}
 		go func() {
 			if hubAlive() {
 				if section != "" {

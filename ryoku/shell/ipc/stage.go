@@ -83,6 +83,12 @@ type stageQuality struct {
 	matting bool
 }
 
+type stageModels struct {
+	Draft    string `json:"draft"`
+	Standard string `json:"standard"`
+	Fine     string `json:"fine"`
+}
+
 type stageTarget struct {
 	slot   string
 	source string
@@ -106,6 +112,7 @@ type stageFrame struct {
 	Busy    bool                      `json:"busy"`
 	Stage   string                    `json:"stage"`
 	Percent int                       `json:"percent"`
+	Notice  string                    `json:"notice,omitempty"`
 	Walls   map[string]stageWallFrame `json:"walls"`
 }
 
@@ -246,11 +253,11 @@ func saveStageIndex(source string, idx stageIndex) {
 
 // --- settings --------------------------------------------------------------
 
-// stageConfig reads the shell-owned quality tier from stage.json and resolves it
-// to the model + matting pair. Everything else in stage.json (edge, shadow,
-// motion) is the shell's; the daemon reads only quality, at each generation.
+// stageConfig reads the shell-owned quality tier and its per-tier model choices
+// from stage.json. Everything else in the file is rendered by the shell.
 func stageConfig() stageQuality {
-	def := stageQualityFor("draft")
+	models := defaultStageModels()
+	def := stageQualityFor("draft", models)
 	dir := ryokuConfigDir()
 	if dir == "" {
 		return def
@@ -260,25 +267,49 @@ func stageConfig() stageQuality {
 		return def
 	}
 	var m struct {
-		Quality string `json:"quality"`
+		Quality string      `json:"quality"`
+		Models  stageModels `json:"models"`
 	}
 	if json.Unmarshal(b, &m) != nil {
 		return def
 	}
-	return stageQualityFor(m.Quality)
+	return stageQualityFor(m.Quality, m.Models)
 }
 
-// stageQualityFor maps a quality tier to the engine model + matting pair:
-// draft -> u2netp, standard -> u2netp + matting, fine -> birefnet + matting.
-func stageQualityFor(tier string) stageQuality {
+// defaultStageModels is the Go twin of the shell's stage Config.defaultModels;
+// the doctor's stageModelDefaults seeds the same table into stage.json.
+func defaultStageModels() stageModels {
+	return stageModels{
+		Draft:    "u2netp",
+		Standard: "u2netp",
+		Fine:     "birefnet-general-lite",
+	}
+}
+
+// stageQualityFor keeps each tier's matting contract while allowing its model
+// to be replaced by a model selected from the engine catalogue.
+func stageQualityFor(tier string, models stageModels) stageQuality {
+	defaults := defaultStageModels()
+	var model string
+	var matting bool
 	switch tier {
 	case "standard":
-		return stageQuality{model: "u2netp", matting: true}
+		model, matting = models.Standard, true
+		if model == "" {
+			model = defaults.Standard
+		}
 	case "fine":
-		return stageQuality{model: "birefnet-general-lite", matting: true}
+		model, matting = models.Fine, true
+		if model == "" {
+			model = defaults.Fine
+		}
 	default:
-		return stageQuality{model: "u2netp", matting: false}
+		model = models.Draft
+		if model == "" {
+			model = defaults.Draft
+		}
 	}
+	return stageQuality{model: model, matting: matting}
 }
 
 // --- engine ----------------------------------------------------------------
@@ -299,12 +330,22 @@ func stageEngineBin() string {
 	return "ryostage"
 }
 
-// stageEngineAvailable probes the runtime on a deadline: a hung helper must
-// never wedge the worker.
-func stageEngineAvailable() bool {
+// stageEngineProbe asks the helper whether it can cut with `model` right now,
+// on a deadline so a hung helper never wedges the worker. It returns the
+// helper's one-line reason ("runtime missing", "model u2netp missing") so a
+// blocked pipeline can name itself instead of dying mute.
+func stageEngineProbe(model string) (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, stageEngineBin(), "check").Run() == nil
+	cmd := exec.CommandContext(ctx, stageEngineBin(), "check", model)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return true, ""
+	}
+	if reason := strings.TrimSpace(string(out)); reason != "" {
+		return false, reason
+	}
+	return false, "engine unavailable"
 }
 
 // stageModelsJSON passes the curated catalogue through to the shell.
@@ -404,6 +445,33 @@ func readLastStagePhase() string {
 		}
 	}
 	return phase
+}
+
+// readLastStageError returns the error the last failed engine phase recorded
+// ("" when the last phase was not an error), so a blocked cut can name the
+// real failure instead of pointing at the log.
+func readLastStageError() string {
+	b, err := os.ReadFile(stageProgressPath())
+	if err != nil {
+		return ""
+	}
+	phase, msg := "", ""
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var rec map[string]any
+		if json.Unmarshal([]byte(line), &rec) != nil {
+			continue
+		}
+		phase, _ = rec["phase"].(string)
+		msg, _ = rec["error"].(string)
+	}
+	if phase == "error" {
+		return msg
+	}
+	return ""
 }
 
 // --- reuse rules -----------------------------------------------------------
@@ -544,9 +612,16 @@ func (d *daemon) stageTargets() []stageTarget {
 	return out
 }
 
+// stageHealMiss remembers a wall whose missing artifacts could not be rebuilt,
+// and why, so a plain wake does not re-run the same failing cut.
+type stageHealMiss struct {
+	model  string
+	reason string
+}
+
 // reconcileStage resolves every on-screen wallpaper's stage from the registry.
-// A plain wake (neither force nor gen) reuses artifacts and never runs the
-// engine, so a switch reuses a stage instantly but never auto-generates; gen
+// A plain wake (neither force nor gen) reuses artifacts and runs the engine
+// only to rebuild an enabled wall's missing ones, once per model; gen
 // (an enable) reuses when present and only generates what is missing; force (a
 // quality change, refresh, or manual re-cut) regenerates. The finished subject
 // is folded to ryogami under the `depth` wire for the Depth effect only;
@@ -562,13 +637,21 @@ func (d *daemon) reconcileStage(force, gen bool) {
 			logStage("save current", err)
 		}
 	}
-	// Only probe the engine when generation is actually possible, so a plain
-	// switch makes zero engine calls.
-	available := false
-	if force || gen {
-		available = stageEngineAvailable()
-	}
 	q := stageConfig()
+	// Probe the engine only when some wall can actually need a cut, and ask
+	// about the model the configured tier uses: a box that installed the fine
+	// tier must not read as "engine missing" just because the draft model is
+	// absent, and a box that cannot cut must say why.
+	probed, available := false, false
+	reason := ""
+	probe := func() bool {
+		if !probed {
+			available, reason = stageEngineProbe(q.model)
+			probed = true
+		}
+		return available
+	}
+	notice := ""
 	dirty := false
 	subjectPublished := false
 	for _, t := range d.stageTargets() {
@@ -577,8 +660,48 @@ func (d *daemon) reconcileStage(force, gen bool) {
 		if effect == "" || effect == stageEffectOff {
 			continue
 		}
+		// A wall switched on whose artifacts vanished (a hand-purged cache, a
+		// cut that died mid-flight) is retried on a plain wake: the registry
+		// says the user wants the scene, so the missing file is the work. A
+		// retry that already failed with this model is not repeated on every
+		// wake; an enable, a re-cut or a model change tries again.
+		missing := !subjectFresh(t.source, stageSubjectOut(t.source))
+		if !missing && effect == stageEffectParallax {
+			missing = !backgroundFresh(t.source, stageBackgroundOut(t.source))
+		}
+		genHere := gen || force
+		wallNotice := ""
+		if missing && !genHere {
+			if miss, ok := d.stageHealMiss[t.source]; ok && miss.model == q.model {
+				wallNotice = miss.reason
+			} else {
+				genHere = true
+			}
+		}
+		avail := false
+		if genHere {
+			avail = probe()
+		}
 		prevBytes, _ := json.Marshal(e)
-		subjectExists := d.ensureArtifacts(t.source, effect, q, force, gen, available)
+		subjectExists := d.ensureArtifacts(t.source, effect, q, force, genHere, avail)
+		if !subjectExists && genHere {
+			wallNotice = reason
+			if avail {
+				wallNotice = readLastStageError()
+				if wallNotice == "" {
+					wallNotice = "the last cut failed"
+				}
+			}
+			if d.stageHealMiss == nil {
+				d.stageHealMiss = map[string]stageHealMiss{}
+			}
+			d.stageHealMiss[t.source] = stageHealMiss{model: q.model, reason: wallNotice}
+		} else if subjectExists {
+			delete(d.stageHealMiss, t.source)
+		}
+		if !subjectExists && notice == "" {
+			notice = wallNotice
+		}
 		e.Layers = d.deriveLayers(t.source, e.Layers)
 		reg.Walls[t.source] = e
 		if newBytes, _ := json.Marshal(e); !bytes.Equal(prevBytes, newBytes) {
@@ -599,6 +722,7 @@ func (d *daemon) reconcileStage(force, gen bool) {
 			logStage("save walls", err)
 		}
 	}
+	d.stageNotice.Store(notice)
 	d.stageBusy.Store(false)
 	d.publishStage()
 }
@@ -757,7 +881,16 @@ func (d *daemon) buildStageFrame() stageFrame {
 		}
 		walls[p] = wf
 	}
-	return stageFrame{Current: cur, Busy: busy, Stage: stageStr, Percent: percent, Walls: walls}
+	return stageFrame{Current: cur, Busy: busy, Stage: stageStr, Percent: percent, Notice: d.stageNoticeText(), Walls: walls}
+}
+
+// stageNoticeText reads the last blocked-cut reason; a daemon that never
+// reconciled (or a bare test struct) reads as fine.
+func (d *daemon) stageNoticeText() string {
+	if v, ok := d.stageNotice.Load().(string); ok {
+		return v
+	}
+	return ""
 }
 
 func (d *daemon) publishStage() {
@@ -959,15 +1092,27 @@ func (d *daemon) stageRemoveLayer(indexArg string) error {
 }
 
 // stageClear removes the current wall's generated artifacts (subject, backdrop,
-// index), keeping manual layers and the effect setting, then reconciles so the
-// overlay clears and layers re-derive without regenerating.
+// index), keeps manual layers, and records the wall as off: the registry is the
+// user's intent, and a cleared cut-out is an intent to stop showing the scene
+// (an on-wall with purged files is the ghost state the self-heal would
+// immediately re-cut). The reconcile then clears the overlay and re-derives.
 func (d *daemon) stageClear() {
-	if wall := d.currentWall(); wall != "" {
-		dir := stageWallDir(wall)
-		for _, n := range []string{"subject.png", "background.png", ".index.json"} {
-			_ = os.Remove(filepath.Join(dir, n))
-		}
+	wall := d.currentWall()
+	if wall == "" {
+		return
 	}
+	dir := stageWallDir(wall)
+	for _, n := range []string{"subject.png", "background.png", ".index.json"} {
+		_ = os.Remove(filepath.Join(dir, n))
+	}
+	reg := loadStageWalls()
+	e := reg.Walls[wall]
+	e.Effect = stageEffectOff
+	reg.Walls[wall] = e
+	if err := saveStageWalls(reg); err != nil {
+		logStage("clear save", err)
+	}
+	d.publishStage()
 	d.scheduleStage()
 }
 
@@ -1359,8 +1504,8 @@ func migrateStageSettings() {
 
 // settingsToV2 maps a v1 or merged-legacy settings map onto the v2 stage.json
 // shape: quality from the tier string when present else the legacy model+matting
-// pair; feather -> edge; shadow/shadowAngle scalars carried; the motion
-// sub-knobs -> the single amount word; lift/preset dropped; idle/music defaulted.
+// pair; the three model slots get their defaults; feather -> edge; the motion
+// sub-knobs become one amount word; lift/preset are dropped.
 func settingsToV2(m map[string]any) map[string]any {
 	motion, _ := m["motion"].(map[string]any)
 	quality := firstString(m["quality"], "")
@@ -1378,6 +1523,7 @@ func settingsToV2(m map[string]any) map[string]any {
 	}
 	return map[string]any{
 		"quality":     quality,
+		"models":      defaultStageModels(),
 		"edge":        firstNumber(m["feather"], 0.15),
 		"shadow":      firstNumber(m["shadow"], 0),
 		"shadowAngle": firstNumber(m["shadowAngle"], 90),
