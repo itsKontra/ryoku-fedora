@@ -195,7 +195,7 @@ Item {
     function rollback() {
         if (pg.snapshot === "")
             return;
-        Spawn.run(["kitty", "-e", "sh", "-c", "ryoku rollback \"$1\"; printf '\\npress enter to close '; read -r _", "sh", pg.snapshot]);
+        Spawn.run(["kitty", "--class=dev.ryoku.update", "-e", "sh", "-c", "ryoku rollback \"$1\"; printf '\\npress enter to close '; read -r _", "sh", pg.snapshot]);
         pg.dismiss();
     }
 
@@ -208,7 +208,11 @@ Item {
     }
 
     function startUpdate() {
-        Spawn.run(["kitty", "-e", "sh", "-c", "exec ryoku update"]);
+        // The update log is the point of the run, so it must not hide behind
+        // this very window: a tiled terminal sits under a float, and Ryoku
+        // Settings floats. The class matches the desktop's float-and-centre
+        // window rule, so the log lands on top while the run goes.
+        Spawn.run(["kitty", "--class=dev.ryoku.update", "-e", "sh", "-c", "exec ryoku update"]);
     }
 
     // idle list: incoming commits when behind, else the recent history the

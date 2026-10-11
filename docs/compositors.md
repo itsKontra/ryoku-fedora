@@ -74,11 +74,13 @@ Shared by both providers:
 Hyprland only:
 
     configReload  cursorSet  focusGrab  globalShortcuts  liveConfigEval
-    plugins  screenShader  specialWorkspace  submap  tiledLayout  windowGeometry
+    persistentScreenCapture  plugins  screenShader  specialWorkspace  submap
+    tiledLayout  windowGeometry
 
 niri only:
 
-    nativeOverview
+    columnFill  keyboardGrabSharesPointer  nativeOverview  overviewBackdrop
+    overviewState
 
 The absences are each compositor's design, not gaps to fill later. The ones that
 change what a user sees on niri:
@@ -94,6 +96,17 @@ change what a user sees on niri:
 - **`liveConfigEval`** and **`configReload`** are absent because niri's config is
   file-only and niri watches it. There is nothing to evaluate and nothing to
   trigger; the Hub applies on save rather than previewing live.
+- **`persistentScreenCapture`** is absent because niri tears its outputs down
+  and recreates them on a config reload or a mode change. A one-shot capture is
+  fine; a layer-shell surface that captures the whole screen and lives for the
+  session races an output leaving under it, and the Qt client segfaults
+  resolving the vanished screen. The launcher's blurred frost is gated on this,
+  so on niri the card opens over a solid drawer instead of taking the shell
+  down.
+- **`keyboardGrabSharesPointer`** is absent on Hyprland because a layer surface
+  holding the keyboard exclusively takes every pointer event too. A shell
+  surface that wants keys beside other clickable surfaces asks for on-demand
+  focus there instead, and takes the keyboard as the pointer crosses it.
 - **`submap`**, **`specialWorkspace`**, **`screenShader`**, **`plugins`** and
   **`cursorSet`** have no niri equivalent, so the binds and settings that need
   them are reported by `apply` rather than silently dropped.
@@ -157,7 +170,7 @@ cannot be sits behind the seam like everything else. Four owners, no overlap:
 |Owner|Owns|
 |---|---|
 |**qylock**|the lock surface only, through Quickshell's `WlSessionLock` -- the Wayland session-lock protocol both providers serve, so the same lock runs on either compositor. The greeter is SDDM rendering the same skin; both halves are qylock.|
-|**the shell daemon**|the fail-closed login1 transaction behind `ryoku-shell suspend`: the foreground-bound daemon owns one delay inhibitor and hard `sleep` block, secure lock-before-suspend, output wake on resume, and lighting restore. Before the singleton moves it proves the outgoing session's qylock; all other online same-user sessions have direct session-scoped qylock clients and login1 observers. Only the foreground session may request sleep or unlock. Lost login1 signal or owner connections reconnect in-process without dropping valid protection. Display work reaches the compositor solely through the seam's `output.power`, with a deadline on each wake attempt.|
+|**the shell daemon**|the fail-closed login1 transaction behind `ryoku-shell suspend`: the foreground-bound daemon owns one delay inhibitor and hard `sleep` block, secure lock-before-suspend, a confirmed guard release before the `Suspend` call (login1 must stop reporting the block, so the daemon's own inhibitor can never deny its own transaction), output wake on resume, and lighting restore. Before the singleton moves it proves the outgoing session's qylock; all other online same-user sessions have direct session-scoped qylock clients and login1 observers. Only the foreground session may request sleep or unlock. Lost login1 signal or owner connections reconnect in-process without dropping valid protection. Display work reaches the compositor solely through the seam's `output.power`, with a deadline on each wake attempt.|
 |**`hypridle`**|the idle timers only -- dim, lock, screen-off, suspend. A suspend timer calls `ryoku-shell suspend`; hypridle never talks to login1 itself.|
 |**`ryoku-clamshell`**|lid ownership for the active graphical session: a `handle-lid-switch` inhibitor, the docked AC-plus-external decision, and routing every non-docked close through `ryoku-shell suspend`. It drops ownership when that session becomes inactive, reacquires it when active, and recovers across login1 restarts.|
 
