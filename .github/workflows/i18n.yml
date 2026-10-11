@@ -36,12 +36,9 @@ permissions:
   contents: write
   pull-requests: write
 
-# A run in progress is left to finish: cancelling it throws away every
-# translation it already paid for. The sync's own time budget bounds how long
-# a newer push waits, and that queued run starts from the newer main.
 concurrency:
   group: i18n
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ github.token }}
@@ -53,7 +50,6 @@ jobs:
   translate:
     name: Regenerate translations
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,7 +71,6 @@ jobs:
           RYOKU_I18N_MODEL: ${{ vars.RYOKU_I18N_MODEL || 'google/gemini-2.5-flash' }}
           RYOKU_I18N_KEY: ${{ secrets.RYOKU_I18N_KEY }}
           FORCE: ${{ inputs.force }}
-          RYOKU_I18N_BUDGET: '2400'
         run: |
           python3 ryoku/i18n/tools/sync.py extract
           flag=""
