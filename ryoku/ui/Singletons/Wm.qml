@@ -69,6 +69,14 @@ Singleton {
         return null;
     }
 
+    // The compositor's scale factor for an output, so a surface can convert
+    // its logical rectangle back to physical pixels. 1 until the daemon has
+    // reported that output.
+    function outputScale(name) {
+        const o = root.outputByName(name);
+        return o && typeof o.scale === "number" && o.scale > 0 ? o.scale : 1;
+    }
+
     // ext-workspace-v1 windowsets joined with the daemon's occupancy residue by
     // name (windowset.id is empty on Hyprland; name is the stable key).
     readonly property var workspaces: {
