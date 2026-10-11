@@ -66,7 +66,7 @@ ShellRoot {
     // Construct the shared services (ShellState's per-monitor state now, heavier
     // providers as surfaces migrate) at load rather than on the first keybind.
     ServiceLoader {
-        services: [ShellState, ScreenTime, Keypresses, KeyboardLayout]
+        services: [ShellState, ScreenTime, Keypresses, KeyboardLayout, BatteryAlerts]
     }
 
     readonly property string reloadStatePath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-reload-cover.json"
@@ -104,6 +104,10 @@ ShellRoot {
         path: root.reloadStatePath
         blockLoading: true
         printErrors: false
+        // One read at load, never again: a shell that was already up when a
+        // reload armed the cover must not steal the next instance's finish by
+        // re-reading the token mid-teardown.
+        watchChanges: false
         onLoaded: {
             try {
                 const token = JSON.parse(text() || "{}").token;

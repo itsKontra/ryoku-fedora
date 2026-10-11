@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	wm "ryoku-wm"
 )
@@ -267,6 +268,9 @@ func touchpadAct(args []string) error {
 	case "off", "disable":
 		off = true
 	case "toggle":
+		if wm.TouchpadToggleIsEcho(time.Now()) {
+			return nil
+		}
 		off = !off
 	case "restore":
 		// The intent already lives in the config niri watches, so restore only

@@ -311,6 +311,7 @@ func readWindows(mons []hyprMonitor) []wm.Window {
 		Address   string `json:"address"`
 		Class     string `json:"class"`
 		Title     string `json:"title"`
+		Pid       int    `json:"pid"`
 		Monitor   int    `json:"monitor"`
 		Floating  bool   `json:"floating"`
 		At        []int  `json:"at"`
@@ -335,6 +336,7 @@ func readWindows(mons []hyprMonitor) []wm.Window {
 			ID:         c.Address,
 			AppID:      c.Class,
 			Title:      c.Title,
+			Pid:        c.Pid,
 			Workspace:  workspaceKey(c.Workspace.ID, c.Workspace.Name),
 			Output:     names[c.Monitor],
 			FocusOrder: c.FocusHistoryID,
