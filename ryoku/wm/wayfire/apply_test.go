@@ -25,6 +25,7 @@ func wayfireHome(t *testing.T) string {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("RYOKU_GREETER_NUMLOCK_FILE", filepath.Join(t.TempDir(), "greeter-numlock"))
 	return wayfireConfigDir()
 }
 
@@ -87,6 +88,25 @@ func capApply(t *testing.T, args ...string) wm.ApplyReport {
 		t.Fatalf("decode report: %v\n%s", err, buf.String())
 	}
 	return rep
+}
+
+// TestApplyPublishesGreeterNumlock: a real apply records the keypad choice
+// where the login greeter reads it, as the other providers' applies do, so a
+// user who turned "Numlock on at login" off is not forced back on at the next
+// boot's login screen.
+func TestApplyPublishesGreeterNumlock(t *testing.T) {
+	wayfireHome(t)
+	withDefaults(t, "")
+	file := os.Getenv("RYOKU_GREETER_NUMLOCK_FILE")
+	store := writeStore(t, `{"desktop":{"input":{"numlockByDefault":false}}}`)
+	capApply(t, store)
+	b, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("apply wrote no greeter numlock hand-off: %v", err)
+	}
+	if got := strings.TrimSpace(string(b)); got != "off" {
+		t.Fatalf("hand-off = %q, want off", got)
+	}
 }
 
 func readGen(t *testing.T, dir, name string) string {

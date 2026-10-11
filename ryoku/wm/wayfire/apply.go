@@ -58,6 +58,7 @@ func runApply(args []string) error {
 	if err := writeOverlayIni("wayfire.ini", body); err != nil {
 		return err
 	}
+	wm.PublishGreeterNumlock(s.Input.NumlockByDefault)
 	rep.Written = []string{filepath.Join(wayfireConfigDir(), "wayfire.ini")}
 	return encodeReport(rep)
 }
