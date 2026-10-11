@@ -63,7 +63,7 @@ Singleton {
         }
 
         // Fedora has no AUR; an AUR-helper request installs from the repositories.
-        root._runTerminalScript("dnf_cmd=$(command -v dnf5 || command -v dnf) || exit 127; sudo \"$dnf_cmd\" install -- \"$1\"", [pkg])
+        root._runTerminalScript("sudo ryoku-host pkg install \"$1\"", [pkg])
         return true
     }
 
@@ -75,7 +75,7 @@ Singleton {
             return false
         }
 
-        root._runTerminalScript("dnf_cmd=$(command -v dnf5 || command -v dnf) || exit 127; sudo \"$dnf_cmd\" remove -- \"$1\"", [pkg])
+        root._runTerminalScript("sudo ryoku-host pkg remove \"$1\"", [pkg])
         return true
     }
 
