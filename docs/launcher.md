@@ -14,7 +14,7 @@ instantly and toggles with `ryoku-shell launcher`.
 
 ## Launcher variants
 
-Hero is the default launcher. Ryoku Settings -> App Launcher offers three
+Hero is the default launcher. Ryoku Settings -> App Launcher offers five
 complete styles and saves the choice as `variant` in
 `~/.config/ryoku/launcher.json`:
 
@@ -29,6 +29,13 @@ complete styles and saves the choice as `variant` in
   clock, the app search and the app list. It masks input to the pill rather than
   the window, so the desktop around it stays clickable; Escape (or Super+Space
   again) closes it.
+- **Spotlight** is the Shima launcher, the one the Shima bar style ships: it
+  drives the frame's morphing-glass search, so Super+Space opens the same
+  spotlight the island's search bubble does, with apps, actions, commands, math
+  and web in one row. When another bar style is active no frame hosts the
+  palette, so the variant mounts the frame's palette surface itself on its own
+  overlay on the focused output. The dock's nine-dot opens whichever launcher
+  style is active.
 
 The resident `shell.qml` selector loads the saved catalog entry without changing
 the stable `ryoku-shell launcher` command or socket. An unknown saved ID resolves

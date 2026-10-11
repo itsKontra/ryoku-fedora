@@ -24,7 +24,9 @@ Item {
 
     property var screen: null
     property bool standalone: false
-    readonly property bool here: (root.screen?.name ?? "") === (GlobalStates.focusedScreen?.name ?? "")
+    // A standalone host was told which output to open on; the frame follows focus.
+    readonly property bool here: (root.screen?.name ?? "") === (root.standalone
+        ? GlobalStates.searchOutput : (GlobalStates.focusedScreen?.name ?? ""))
     readonly property bool present: root.here && (GlobalStates.searchOpen || (content.item?.progress ?? 0) > 0)
     readonly property bool armed: root.here && GlobalStates.searchOpen && (content.item?.armed ?? false)
 
