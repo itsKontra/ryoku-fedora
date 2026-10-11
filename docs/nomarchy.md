@@ -37,9 +37,10 @@ disabled unless enable is requested, and requires `--yes` outside a terminal.
 Update fetches and shows the diff before a fast-forward. Add, update, and enable
 ask the active window-manager provider to scan the plugin with
 `ryoku wm compat`. A plugin that calls an API the provider cannot serve is
-refused with the provider's reason, and a CLI without that scan blocks every
-third-party plugin rather than guessing. Adding a plugin clones its repository
-and never installs packages.
+refused with the provider's reason (niri serves none of Hyprland's
+interfaces, so a Hyprland-only plugin is refused there), and a failed scan
+blocks the plugin. Adding a plugin clones its repository and never installs
+packages.
 
 ## Bar commands
 
@@ -82,7 +83,7 @@ pretending the action worked.
 | `omarchy-toggle-bar` | Nomarchy bar IPC |
 | `omarchy-update`, `omarchy-update-available` | `ryoku update` and `ryoku status --json` |
 | `omarchy-brightness-display` | `ryoku-cmd-brightness` or `ryoku wm act output.power` |
-| `omarchy-monitor-query`, `omarchy-monitor-scale` | Neutral `ryoku wm state` readback and `ryoku-hub outputs apply` scale apply |
+| `omarchy-monitor-query`, `omarchy-monitor-scale` | Neutral `ryoku wm state` readback and `ryoku wm outputs` scale apply |
 | `omarchy-audio-output-volume`, `omarchy-audio-input-mute` | PipeWire `wpctl` controls |
 | `omarchy-audio-output-sink`, `omarchy-audio-sink-availability`, `omarchy-audio-output-set-default`, `omarchy-audio-input-set-default`, `omarchy-audio-output-switch` | PipeWire/Pulse compatibility controls |
 | `omarchy-audio-source-switch` | Nomarchy media IPC |

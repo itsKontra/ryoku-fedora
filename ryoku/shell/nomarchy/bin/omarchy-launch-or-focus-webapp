@@ -104,7 +104,9 @@ case $name in
     state=$(ryoku wm state)
     [[ -n $output ]] || output=$(jq -r '.focusedOutput // (.outputs[] | select(.focused) | .name)' <<<"$state")
     [[ -n $output && $output != null ]] || { echo 'omarchy-monitor-scale: no focused output' >&2; exit 1; }
-    layout=$(jq -c --arg output "$output" --argjson scale "$scale" '
+    layout=$(mktemp)
+    trap 'rm -f "$layout"' EXIT
+    jq --arg output "$output" --argjson scale "$scale" '
       [.outputs[] | {
         name,
         enabled: (.disabled != true),
@@ -118,8 +120,8 @@ case $name in
         colorMode,
         sdrBrightness
       } | if .name == $output then .scale = $scale else . end]
-    ' <<<"$state")
-    exec ryoku-hub outputs apply "$layout"
+    ' <<<"$state" >"$layout"
+    ryoku wm outputs "$layout"
     ;;
   omarchy-file-select)
     title='Select file'; mode=--file-selection; multiple=; directory=; while (($#)); do case $1 in --title) title=${2:-}; shift 2;; --multiple) multiple=--multiple; shift;; --directory) directory=--directory; shift;; --extensions) shift 2;; *) echo "omarchy-file-select: unknown option $1" >&2; exit 2;; esac; done
