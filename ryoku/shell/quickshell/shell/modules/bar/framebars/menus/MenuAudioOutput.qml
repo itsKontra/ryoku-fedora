@@ -53,7 +53,7 @@ Item {
             width: parent.width
             s: root.s
             current: root.sink
-            devices: Audio.outputs
+            devices: Audio.outputs.filter(Audio.alive)
             listOpen: root.devicesOpen
             fallbackIcon: "speaker"
             emptyLabel: I18n.tr("No output device")
@@ -65,10 +65,10 @@ Item {
         MicroLabel {
             label: I18n.tr("Apps")
             s: root.s
-            visible: root.open && Audio.streams.length > 0
+            visible: root.open && Audio.streams.filter(Audio.alive).length > 0
         }
         Repeater {
-            model: root.open ? Audio.streams : []
+            model: root.open ? Audio.streams.filter(Audio.alive) : []
             delegate: AudioAppRow {
                 required property var modelData
                 s: root.s
