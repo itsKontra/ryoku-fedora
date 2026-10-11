@@ -235,13 +235,18 @@ Singleton {
     function closeWindow(id) { root._act("window.close", "", [String(id)]); }
     function focusApp(appId) { root._act("app.focus", "", [String(appId)]); }
     function floatWindow(id) { root._act("window.float", "windowFloat", [String(id)]); }
-    // State carries workspace NAMES, the key windows and outputs agree on,
-    // while acts take Workspace.ID: a value that names a workspace becomes
-    // its id, anything else passes through, so a provider whose ids are its
-    // names, or whose handles are opaque, keeps working untouched.
+    // Acts take Workspace.ID, but callers hold either key: the bar and the
+    // overview pass ids, the rail passes names. An exact id wins, because on
+    // niri a name is a position ("1", "2") and an id a growing counter, so
+    // id "2" can belong to the workspace named "1" while another is named
+    // "2". Only a key that is no id is read as a name; anything else passes
+    // through, so opaque handles keep working.
     function _wsId(key) {
         const k = String(key);
         const list = root.workspaces;
+        for (let i = 0; i < list.length; i++)
+            if (String(list[i].id) === k)
+                return k;
         for (let i = 0; i < list.length; i++)
             if (String(list[i].name) === k)
                 return String(list[i].id);
