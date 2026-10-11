@@ -56,14 +56,13 @@ for wallpaper input.
 1. Add one `Item` under `clock/` with explicit implicit dimensions.
 2. Register its key in `clock/Clock.qml`.
 3. Add the same key to `WidgetMenu.qml`'s clock design cycle.
-4. Add the option and preview treatment to the Hub's Desktop Widgets page.
-
-The Hub preview is a small independent rendering, not an import of the live
-face. Keep it visually equivalent without duplicating runtime behavior.
+4. Add any face-specific option to `options/ClockOptions.qml`, which the
+   widget's Customize inspector and the Stage Editor's widget page both show.
 
 ## Configuration
 
-The desktop menu, dragging code and Ryoku Settings all meet at
+The desktop menu, the Customize inspector, the Stage Editor and the dragging
+code all meet at
 `~/.config/ryoku/widgets.json`. `Singletons/Config.qml` watches that file, so a
 write retunes the running clock without IPC or a shell reload.
 
@@ -79,15 +78,9 @@ write on release. A compass anchor survives monitor changes; `"free"` stores raw
 monitor pixels. The lock setting disables drag and resize without changing the
 saved position.
 
-The Hub has a Save/Revert draft over the same file. Any new clock key must be
-added to both `Singletons/Config.qml` and the Hub's Widgets schema and adapter in
-the same change, otherwise a Hub save can discard a key it does not know.
-
-The desktop menu opens that page with:
-
-    ryoku-hub config set section widgets
-
-and then starts the guarded Hub process. There is no direct menu-to-Hub IPC.
+Ryoku Settings has no Widgets page: widgets are edited on the desktop, and an
+old `ryoku-shell hub open widgets` link opens the Stage Editor's Widgets
+catalogue instead. A new key only needs `Singletons/Config.qml`.
 
 ## Plugin widgets
 

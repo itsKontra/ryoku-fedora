@@ -18,36 +18,51 @@ Singleton {
     property bool available: false
     property bool checked: false
     property bool installing: false
+    property string installingModel: ""
     property bool removing: false
+    property string removingModel: ""
     // Curated catalogue objects: {id,tier,label,size,installed,licence,upstream}.
     property var models: []
     property string progress: ""
 
     function recheck() { checkProc.running = false; checkProc.running = true; }
     function install(model) {
-        if (root.installing) return;
+        if (root.installing || !model || model.length === 0) return;
         root.installing = true;
+        root.installingModel = model;
         root.progress = "";
-        installProc.command = (model && model.length > 0) ? [root.bin, "install", model] : [root.bin, "install"];
+        installProc.command = [root.bin, "install", model];
         installProc.running = false;
         installProc.running = true;
     }
     function remove(model) {
         if (root.removing || root.installing || !model || model.length === 0) return;
         root.removing = true;
+        root.removingModel = model;
         root.progress = "";
         removeProc.command = [root.bin, "remove", model];
         removeProc.running = false;
         removeProc.running = true;
     }
-    function modelByTier(tier) {
+    function modelById(id) {
         const m = root.models || [];
-        for (var i = 0; i < m.length; i++) if (m[i].tier === tier) return m[i];
+        for (var i = 0; i < m.length; i++) if (m[i].id === id) return m[i];
         return null;
     }
-    // Draft/Standard share the draft-tier model (u2netp); Fine needs the fine tier.
-    function modelForQuality(q) { return q === "fine" ? root.modelByTier("fine") : root.modelByTier("draft"); }
-    function qualityInstalled(q) { const m = root.modelForQuality(q); return !!(m && m.installed === true); }
+    function defaultModelId(q) {
+        return q === "fine" ? "birefnet-general-lite" : "u2netp";
+    }
+    function selectedModelId(q, choices) {
+        const selected = choices && typeof choices[q] === "string" ? choices[q] : "";
+        return root.modelById(selected) ? selected : root.defaultModelId(q);
+    }
+    function modelForQuality(q, choices) {
+        return root.modelById(root.selectedModelId(q, choices));
+    }
+    function qualityInstalled(q, choices) {
+        const m = root.modelForQuality(q, choices);
+        return !!(m && m.installed === true);
+    }
 
     Process {
         id: checkProc
@@ -80,22 +95,33 @@ Singleton {
         id: installProc
         stdout: SplitParser { onRead: line => root.progress = line }
         stderr: SplitParser { onRead: line => root.progress = line }
-        onExited: { root.installing = false; root.recheck(); }
+        onExited: {
+            root.installing = false;
+            root.installingModel = "";
+            root.recheck();
+        }
     }
     Process {
         id: removeProc
         stdout: SplitParser { onRead: line => root.progress = line }
         stderr: SplitParser { onRead: line => root.progress = line }
-        onExited: { root.removing = false; root.recheck(); }
+        onExited: {
+            root.removing = false;
+            root.removingModel = "";
+            root.recheck();
+        }
     }
 
     readonly property string sockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
-    property var frame: ({ current: "", busy: false, stage: "", percent: 0, walls: {} })
+    property var frame: ({ current: "", busy: false, stage: "", percent: 0, notice: "", walls: {} })
 
     readonly property string current: root.frame.current || ""
     readonly property bool busy: root.frame.busy === true
     readonly property string stage: root.frame.stage || ""
     readonly property int percent: (typeof root.frame.percent === "number") ? root.frame.percent : 0
+    // Why the last reconcile could not produce a cut ("" when the pipeline is
+    // fine): the daemon names the missing model/runtime instead of dying mute.
+    readonly property string notice: root.frame.notice || ""
     readonly property string effect: root.effectFor(root.current)
 
     // Optimistic per-layer overlay so a front/depth flip shows instantly instead

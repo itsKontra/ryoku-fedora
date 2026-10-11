@@ -117,6 +117,7 @@ type daemon struct {
 	stageForce   atomic.Bool          // a pending forced regenerate (effect/quality change, refresh, re-cut)
 	stageGen     atomic.Bool          // a pending enable: reuse an existing cut, else generate
 	stageBusy    atomic.Bool          // a cut/inpaint is in flight (for the status/topic)
+	stageNotice  atomic.Value         // why the last reconcile could not produce a cut ("" when fine)
 	ledsSig      chan struct{}        // coalescing wake for the OpenRGB worker
 	widgetSig    chan struct{}        // coalescing wake for the widget-occupancy gate
 	quit         chan struct{}

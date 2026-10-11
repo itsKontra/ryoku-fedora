@@ -148,6 +148,19 @@ func hubNav(section string) bool {
 	return exec.Command("qs", argv...).Run() == nil
 }
 
+// Retired Hub links now name their owning Stage Editor catalogue.
+func hubEditorSection(section string) string {
+	switch section {
+	case "desktop-scene", "stage":
+		return "depth"
+	case "desktop-scene-visualizer":
+		return "visualizer"
+	case "desktop-scene-widgets", "widgets":
+		return "widgets"
+	}
+	return ""
+}
+
 // hubAlive: a running Hub answers its nav ipc.
 func hubAlive() bool {
 	argv := append(hubSelect(), "ipc", "call", "nav", "section")
@@ -164,6 +177,10 @@ func (d *daemon) hubRaise() {
 func (d *daemon) hub(sub, section string) string {
 	switch sub {
 	case "open":
+		if editorSection := hubEditorSection(section); editorSection != "" {
+			go ipcCallN("shell", "desktop", "editSection", editorSection, "")
+			return "ok"
+		}
 		go func() {
 			if hubAlive() {
 				if section != "" {

@@ -16,6 +16,9 @@ Rectangle {
     // toolkit button does. Off by default: a button inside a list row would
     // have the commit's rebuild destroy its own delegate mid-tap.
     property bool stealFocus: false
+    // Callers in a reduced-motion surface (the Stage Editor) turn the hover
+    // and press fades off.
+    property bool motionEnabled: !Tokens.reduceMotion
     signal act()
 
     activeFocusOnTab: armed
@@ -37,8 +40,8 @@ Rectangle {
     color: primary && armed ? Tokens.bone : (tap.pressed && armed ? Tokens.tint16 : (bh.hovered && armed ? Tokens.tint10 : "transparent"))
     border.width: Tokens.border
     border.color: activeFocus ? Tokens.bone : (primary && armed ? Tokens.bone : (bh.hovered && armed ? Tokens.lineStrong : Tokens.line))
-    Behavior on color { ColorAnimation { duration: Tokens.snap } }
-    Behavior on opacity { NumberAnimation { duration: Tokens.snap } }
+    Behavior on color { enabled: btn.motionEnabled; ColorAnimation { duration: Tokens.snap } }
+    Behavior on opacity { enabled: btn.motionEnabled; NumberAnimation { duration: Tokens.snap } }
 
     Text {
         id: lab
