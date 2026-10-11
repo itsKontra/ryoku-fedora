@@ -6257,7 +6257,7 @@
   "warning: %s did not finish; check its output and retry the driver setup before rebooting": "সতর্কতা: %s শেষ হয়নি; এর আউটপুট চেক করুন এবং রিবুট করার আগে ড্রাইভার সেটআপ পুনরায় চেষ্টা করুন",
   "warning: %s reported an error; inspect it and re-run by hand if needed": "সতর্কতা: %s ত্রুটি জানিয়েছে; প্রয়োজন হলে পরীক্ষা করুন এবং পুনরায় চালান",
   "warning: could not check that every Ryoku package was updated: %v": "সতর্কতা: সব Ryoku প্যাকেজ আপডেট হয়েছে কিনা পরীক্ষা করা যায়নি: %v",
-  "warning: could not check this release for new dependencies: %v": "warning: could not check this release for new dependencies: %v",
+  "warning: could not check this release for new dependencies: %v": "সতর্কবার্তা: নতুন নির্ভরতার জন্য এই রিলিজ পরীক্ষা করা যায়নি: %v",
   "warning: could not disable %s": "সতর্কতা: %s অক্ষম করতে পারিনি",
   "warning: could not hand off to the updated binary: %v": "সতর্কতা: আপডেট করা বাইনারিতে স্থানান্তর করতে পারেনি: %v",
   "warning: could not plan the dependency install: %v": "সতর্কতা: ডিপেন্ডেন্সি ইনস্টল পরিকল্পনা করা যায়নি: %v",
