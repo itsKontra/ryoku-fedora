@@ -28,16 +28,34 @@ Scope {
     Connections {
         target: StageCfg.StageSession
         function onModeChanged() {
-            if (StageCfg.StageSession.widgets) {
-                GlobalStates.openEditMode(StageCfg.StageSession.monitor);
-                root.showSection();
-            } else {
+            if (!StageCfg.StageSession.widgets) {
                 GlobalStates.editMode = false;
+                return;
             }
+            // The chrome opened first (its monitor switch reopens it), so the
+            // session is following it rather than leading.
+            if (GlobalStates.editMode)
+                return;
+            GlobalStates.openEditMode(StageCfg.StageSession.monitor);
+            root.showSection();
         }
         function onSectionChanged() {
             if (StageCfg.StageSession.widgets)
                 root.showSection();
+        }
+        // An open session retargeted at another monitor (a hand-off naming a
+        // second screen) moves the chrome with it. openEditMode is a no-op
+        // while the mode is on, and switchEditMonitor would close it and drop
+        // the session, so the frame is handed over in place.
+        function onMonitorChanged() {
+            const monitor = StageCfg.StageSession.monitor;
+            if (!StageCfg.StageSession.widgets || !GlobalStates.editMode
+                    || monitor === "" || GlobalStates.editModeMonitor === monitor)
+                return;
+            GlobalStates.closeEditWidgetMenu();
+            GlobalStates.closeDesktopMenu();
+            GlobalStates.editModeMonitor = monitor;
+            root.showSection();
         }
     }
     // A section may name a page inside it ("wallpaper/wallpapers"), so a
@@ -54,8 +72,19 @@ Scope {
     Connections {
         target: GlobalStates
         function onEditModeChanged() {
-            if (!GlobalStates.editMode && StageCfg.StageSession.widgets)
-                StageCfg.StageSession.leave();
+            if (!GlobalStates.editMode) {
+                if (StageCfg.StageSession.widgets)
+                    StageCfg.StageSession.leave();
+                return;
+            }
+            // The chrome's own monitor switch closes and reopens the mode;
+            // the reopen restarts the session on the new screen so its
+            // desktop lifts instead of the chrome framing an idle one.
+            if (!StageCfg.StageSession.active)
+                StageCfg.StageSession.enterWidgets(GlobalStates.editModeMonitor,
+                    GlobalStates.editDrawerPage !== ""
+                        ? GlobalStates.editDrawerSection + "/" + GlobalStates.editDrawerPage
+                        : GlobalStates.editDrawerSection);
         }
         function onEditModeMonitorChanged() {
             if (GlobalStates.editMode
