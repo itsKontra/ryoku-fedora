@@ -181,7 +181,7 @@ func defaultBinds() map[string]wayfireBind {
 		// Windows
 		"window.close": {
 			key: "window_close", extra: "<alt> KEY_F4",
-			cmd: "ryoku-wm-wayfire act window.close focused",
+			cmd: wm.ShimaCloseCheck + " && " + wm.ShimaCloseConfirm + " || ryoku-wm-wayfire act window.close focused",
 		},
 		"window.fullscreen":    {section: "wm-actions", key: "toggle_fullscreen"},
 		"window.float":         {key: "window_float", cmd: "ryoku-wm-wayfire act window.float focused"},

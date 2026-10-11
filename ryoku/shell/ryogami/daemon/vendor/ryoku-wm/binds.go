@@ -74,6 +74,15 @@ type CatalogBind struct {
 // command.
 const QmlEnv = `env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml"`
 
+// ShimaCloseCheck succeeds when the Shima frame (bar style id "iris") is the bar
+// style and its close confirmation is switched on. The emitting providers chain
+// it before ShimaCloseConfirm, so the close bind asks the shell first and
+// otherwise falls through to the compositor's own close.
+const ShimaCloseCheck = `jq -e '(.barStyle // "qsbar") == "iris" and .inir.closeConfirm.enabled == true' "${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/shell.json" >/dev/null 2>&1`
+
+// ShimaCloseConfirm is the shell call that raises Shima's close confirmation.
+const ShimaCloseConfirm = "qs -c shell ipc call closeConfirm trigger"
+
 // catalogue is the shipped set, in the order the legend presents it. The four
 // move-workspace-to-screen chords carry their modifiers in canonical order
 // (SUPER CTRL ALT), the same order NormChord produces, so every shipped chord is
