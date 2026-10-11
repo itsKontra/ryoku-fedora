@@ -3,15 +3,14 @@
 // only feeds it frames. applyEvent never mutates its input; it returns a fresh
 // state the view reconciles against, so the node tests and QML share one source
 // of truth. It handles the v3 stream: tool partial merges (input, output,
-// diffs, auto), permissions keyed by requestId and dropped on
-// permission_resolved, and an approvals mode.
+// diffs, auto) and permissions keyed by requestId and dropped on
+// permission_resolved.
 
 function initialState() {
     return {
         items: [], // ordered stream: {kind:'msg'|'tool', ...}
         permissions: [], // pending approvals, keyed by requestId
         banner: { state: "starting", error: "" },
-        approvals: "read-only", // what runs unasked: "ask" nothing, "read-only" reads, "auto" everything
         busy: false,
         seq: 0,
         models: [],
@@ -139,9 +138,6 @@ function applyEvent(state, ev) {
     }
     case "permission_resolved":
         s.permissions = state.permissions.filter(function (p) { return p.requestId !== ev.requestId; });
-        return s;
-    case "approvals":
-        s.approvals = ev.mode === "ask" || ev.mode === "auto" ? ev.mode : "read-only";
         return s;
     case "turn_end": {
         var anyOpen = state.items.some(function (it) { return it.open; });

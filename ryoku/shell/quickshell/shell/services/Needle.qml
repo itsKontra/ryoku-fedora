@@ -12,6 +12,7 @@ import "lib/chatstate.js" as ChatState
 // projected state drives a ListModel the view binds to. Because the session is
 // shared, a turn started from the launcher or the dashboard shows here too,
 // and a shell reload just reconnects and replays. No per-turn process, no reset.
+// The bridge starts the first time a surface connects, never at login.
 Singleton {
     id: root
 
@@ -20,7 +21,6 @@ Singleton {
     // Projected reducer state the view reads.
     property bool busy: false
     property string activity: ""          // working-strip label ("" = idle)
-    property string approvalsMode: "ask"  // "read-only" auto-approves reads
     property string bannerState: "starting"
     property var models: []
     property string currentModel: ""
@@ -54,6 +54,7 @@ Singleton {
     // Outbound messages queued until the follow process has started its stdin.
     property var _outbox: []
     property bool _started: false
+    property bool _wanted: false
 
     // ---- outbound (all client messages are one stdin line) -------------------
 
@@ -71,12 +72,13 @@ Singleton {
         if ((q.length === 0 && imgs.length === 0) || root.busy)
             return;
         if (imgs.length === 0) {
-            root._send({ type: "user", text: q });
+            root._sendUser(q, [], []);
             return;
         }
         // QML cannot base64 a file, so the daemon encodes the attachments and we
         // fold the result into the user message it hands back.
         encodeProc.pendingText = q;
+        encodeProc.pendingPaths = imgs.slice();
         var cmd = ["ryoku-rashin", "chat"];
         for (var i = 0; i < imgs.length; i++) {
             cmd.push("--encode-image");
@@ -84,6 +86,14 @@ Singleton {
         }
         encodeProc.command = cmd;
         encodeProc.running = true;
+    }
+
+    // The daemon sends user_text to every client but the author, so the bar
+    // shows its own question the way the dashboard does: locally, as it sends.
+    function _sendUser(text, images, paths) {
+        root._send(images.length > 0 ? { type: "user", text: text, images: images } : { type: "user", text: text });
+        root._state = ChatState.applyEvent(root._state, { type: "user", text: text, images: paths });
+        root._project();
     }
 
     function cancel() { root._send({ type: "cancel" }); }
@@ -96,13 +106,6 @@ Singleton {
             return;
         root.currentModel = String(id);
         root._send({ type: "set_model", modelId: String(id) });
-    }
-
-    function setApprovals(mode) {
-        if (mode !== "read-only" && mode !== "ask" && mode !== "auto")
-            return;
-        root.approvalsMode = mode;
-        root._send({ type: "approvals", mode: mode });
     }
 
     // Answer the approval the agent is waiting on; an empty option declines.
@@ -130,13 +133,19 @@ Singleton {
         Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | wl-copy", "_", String(t)]);
     }
 
+    // Start the resident bridge; every chat surface calls this as it appears.
+    function connect() {
+        root._wanted = true;
+        if (!follow.running && !followRestart.running)
+            follow.running = true;
+    }
+
     function noteOpened() {
         root.loadReady();
         root.loadBackends();
         root.loadRecentAsks();
         root.loadQuickLane();
-        if (!follow.running && !followRestart.running)
-            follow.running = true;
+        root.connect();
     }
 
     function noteClosed() {}
@@ -166,6 +175,7 @@ Singleton {
         }
         if (!f || !f.type)
             return;
+        followRestart.interval = 400;
         root._state = ChatState.applyEvent(root._state, f);
         root._project();
     }
@@ -175,7 +185,6 @@ Singleton {
         root.busy = st.busy === true;
         // An open approval is what the turn waits on, whatever ran last.
         root.activity = (st.permissions || []).length > 0 && st.busy ? I18n.tr("waiting for your approval") : (st.activity || "");
-        root.approvalsMode = st.approvals || "read-only";
         root.models = st.models || [];
         root.currentModel = st.currentModel || "";
         if (st.agent && st.agent.length > 0)
@@ -273,11 +282,11 @@ Singleton {
     ListModel { id: messages }
 
     // The one resident bridge. It stays connected across turns and reconnects on
-    // its own; it exits only if it crashes, and then we bring it straight back.
+    // its own; it exits only if it crashes, and then we bring it back, waiting
+    // longer each time it dies without a frame so a missing binary cannot spin.
     Process {
         id: follow
         command: ["ryoku-rashin", "chat", "--follow"]
-        running: true
         stdinEnabled: true
         stdout: SplitParser {
             splitMarker: "\n"
@@ -291,13 +300,18 @@ Singleton {
         }
         onExited: () => {
             root._started = false;
-            followRestart.restart();
+            if (root._wanted)
+                followRestart.restart();
         }
     }
     Timer {
         id: followRestart
         interval: 400
-        onTriggered: if (!follow.running) follow.running = true
+        onTriggered: {
+            followRestart.interval = Math.min(followRestart.interval * 2, 30000);
+            if (!follow.running)
+                follow.running = true;
+        }
     }
 
     // Attachment encoding: the daemon returns {type:"images", images:[...]} and
@@ -305,13 +319,14 @@ Singleton {
     Process {
         id: encodeProc
         property string pendingText: ""
+        property var pendingPaths: []
         stdout: SplitParser {
             splitMarker: "\n"
             onRead: (line) => {
                 var f;
                 try { f = JSON.parse(String(line)); } catch (e) { return; }
                 if (f && f.type === "images")
-                    root._send({ type: "user", text: encodeProc.pendingText, images: f.images || [] });
+                    root._sendUser(encodeProc.pendingText, f.images || [], encodeProc.pendingPaths);
             }
         }
     }

@@ -294,11 +294,13 @@ ShellRoot {
             }
             Timer { id: askHold; interval: 15000 }
 
-            // The pinned chat bubble lives on the screen it was pinned to.
-            AskBubble {
-                screen: perScreen.modelData
-                enabled: Config.askBubble.enabled
+            // The pinned chat bubble lives on the screen it was pinned to. It is
+            // only built once pinned, so an unpinned shell never starts the chat
+            // bridge.
+            LazyLoader {
+                active: Config.askBubble.enabled
                     && Config.askBubble.screen === perScreen.modelData.name
+                AskBubble { screen: perScreen.modelData }
             }
 
             // The dock: a resident per-monitor surface on the edge opposite the

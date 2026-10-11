@@ -64,7 +64,10 @@ Scope {
         persistPosition();
     }
 
-    Component.onCompleted: restorePosition()
+    Component.onCompleted: {
+        restorePosition();
+        Needle.connect();
+    }
     onScreenChanged: Qt.callLater(restorePosition)
 
     Connections {

@@ -67,7 +67,7 @@ Scope {
 
     // One full-screen surface holds the bar and the click-away area: a second
     // exclusive surface for the scrim leaves the keyboard with whichever one the
-    // compositor mapped last, and Hyprland and niri disagree about which.
+    // compositor mapped last, and compositors disagree about which that is.
     PanelWindow {
         id: panel
         screen: root.screen

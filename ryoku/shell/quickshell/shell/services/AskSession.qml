@@ -142,9 +142,12 @@ Scope {
                 }
             }
         }
+        // The daemon holds the stream open through an approval, so an exit while
+        // still working means the answer is never coming, approval or not.
         onExited: code => {
-            if (root.phase === "working" && !root.permPending) {
+            if (root.phase === "working") {
                 root.errorText = code === 0 ? I18n.tr("No answer") : I18n.tr("Ask failed");
+                root.permPending = false;
                 root.phase = "failed";
             }
         }

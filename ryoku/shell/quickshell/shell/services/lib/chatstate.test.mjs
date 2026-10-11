@@ -104,15 +104,16 @@ test("permission_resolved drops exactly that request, whoever answered it", () =
     assert.equal(s.permissions[0].requestId, "r2");
 });
 
-test("approvals frame carries the mode into state", () => {
-    let s = applyEvent(initialState(), { type: "approvals", mode: "read-only" });
-    assert.equal(s.approvals, "read-only");
-    s = applyEvent(s, { type: "approvals", mode: "ask" });
-    assert.equal(s.approvals, "ask");
-    s = applyEvent(s, { type: "approvals", mode: "auto" });
-    assert.equal(s.approvals, "auto");
-    s = applyEvent(s, { type: "approvals", mode: "yolo" });
-    assert.equal(s.approvals, "read-only", "an unknown mode is the default");
+test("the author's local user echo sits above the reply it gets", () => {
+    const s = run([
+        { type: "user", text: "hello", images: ["/tmp/shot.png"] },
+        { type: "state", state: "busy" },
+        { type: "agent_text", text: "hi" },
+        { type: "turn_end" }
+    ]);
+    assert.deepEqual(s.items.map((it) => it.role), ["user", "agent"]);
+    assert.equal(s.items[0].text, "hello");
+    assert.deepEqual(s.items[0].images, ["/tmp/shot.png"]);
 });
 
 test("replay_start clears the stream and stale approvals, replay_end resumes live", () => {
