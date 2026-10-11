@@ -337,6 +337,50 @@ func TestStagePurgedArtifactsRetryOnWake(t *testing.T) {
 	}
 }
 
+// TestStageFailedHealIsNotRepeated pins the self-heal's limit: a rebuild that
+// fails on a plain wake is not re-run on every later wake (each one a full
+// cut), keeps its reason on the frame, and an enable tries again.
+func TestStageFailedHealIsNotRepeated(t *testing.T) {
+	home := stageHome(t)
+	logf := writeStageStub(t)
+	t.Setenv("STAGE_STUB_CUT_FAIL", "1")
+
+	wall := filepath.Join(home, "w.png")
+	writeFile(t, wall, "wp")
+	reg := stageWalls{Walls: map[string]stageWall{wall: {Effect: stageEffectDepth}}}
+	if err := saveStageWalls(reg); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &daemon{stageSig: make(chan struct{}, 1)}
+	d.showWall(wall)
+	for range 3 {
+		d.reconcileStage(false, false)
+	}
+	if n := countCalls(logf, "cut"); n != 1 {
+		t.Fatalf("a failing self-heal ran %d cuts over 3 plain wakes, want 1", n)
+	}
+	if n := countCalls(logf, "check"); n != 1 {
+		t.Fatalf("a failing self-heal probed %d times over 3 plain wakes, want 1", n)
+	}
+	if f := d.buildStageFrame(); f.Notice == "" {
+		t.Fatal("a skipped heal dropped the failure's notice")
+	}
+
+	t.Setenv("STAGE_STUB_CUT_FAIL", "")
+	d.reconcileStage(false, true)
+	if n := countCalls(logf, "cut"); n != 2 {
+		t.Fatalf("an enable after a failed heal ran %d cuts in total, want 2", n)
+	}
+	if !isFile(stageSubjectOut(wall)) {
+		t.Fatal("the enable did not produce a subject")
+	}
+	d.reconcileStage(false, false)
+	if f := d.buildStageFrame(); f.Notice != "" {
+		t.Fatalf("notice = %q after a good cut, want cleared", f.Notice)
+	}
+}
+
 // TestStageBlockedCutNotices pins the loud failure: when the engine cannot cut
 // (the tier's model is missing), the enable still records the effect but the
 // frame carries the helper's reason instead of dying mute, and the next good

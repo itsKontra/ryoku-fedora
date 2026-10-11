@@ -276,6 +276,8 @@ func stageConfig() stageQuality {
 	return stageQualityFor(m.Quality, m.Models)
 }
 
+// defaultStageModels is the Go twin of the shell's stage Config.defaultModels;
+// the doctor's stageModelDefaults seeds the same table into stage.json.
 func defaultStageModels() stageModels {
 	return stageModels{
 		Draft:    "u2netp",
@@ -610,9 +612,16 @@ func (d *daemon) stageTargets() []stageTarget {
 	return out
 }
 
+// stageHealMiss remembers a wall whose missing artifacts could not be rebuilt,
+// and why, so a plain wake does not re-run the same failing cut.
+type stageHealMiss struct {
+	model  string
+	reason string
+}
+
 // reconcileStage resolves every on-screen wallpaper's stage from the registry.
-// A plain wake (neither force nor gen) reuses artifacts and never runs the
-// engine, so a switch reuses a stage instantly but never auto-generates; gen
+// A plain wake (neither force nor gen) reuses artifacts and runs the engine
+// only to rebuild an enabled wall's missing ones, once per model; gen
 // (an enable) reuses when present and only generates what is missing; force (a
 // quality change, refresh, or manual re-cut) regenerates. The finished subject
 // is folded to ryogami under the `depth` wire for the Depth effect only;
@@ -652,30 +661,46 @@ func (d *daemon) reconcileStage(force, gen bool) {
 			continue
 		}
 		// A wall switched on whose artifacts vanished (a hand-purged cache, a
-		// cut that died mid-flight) is retried on any wake: the registry says
-		// the user wants the scene, so the missing file is the work.
+		// cut that died mid-flight) is retried on a plain wake: the registry
+		// says the user wants the scene, so the missing file is the work. A
+		// retry that already failed with this model is not repeated on every
+		// wake; an enable, a re-cut or a model change tries again.
 		missing := !subjectFresh(t.source, stageSubjectOut(t.source))
 		if !missing && effect == stageEffectParallax {
 			missing = !backgroundFresh(t.source, stageBackgroundOut(t.source))
 		}
-		genHere := gen || force || missing
+		genHere := gen || force
+		wallNotice := ""
+		if missing && !genHere {
+			if miss, ok := d.stageHealMiss[t.source]; ok && miss.model == q.model {
+				wallNotice = miss.reason
+			} else {
+				genHere = true
+			}
+		}
 		avail := false
 		if genHere {
 			avail = probe()
 		}
 		prevBytes, _ := json.Marshal(e)
 		subjectExists := d.ensureArtifacts(t.source, effect, q, force, genHere, avail)
-		if !subjectExists && notice == "" {
-			switch {
-			case genHere && !avail:
-				notice = reason
-			case genHere && avail:
-				if cutErr := readLastStageError(); cutErr != "" {
-					notice = cutErr
-				} else {
-					notice = "the last cut failed"
+		if !subjectExists && genHere {
+			wallNotice = reason
+			if avail {
+				wallNotice = readLastStageError()
+				if wallNotice == "" {
+					wallNotice = "the last cut failed"
 				}
 			}
+			if d.stageHealMiss == nil {
+				d.stageHealMiss = map[string]stageHealMiss{}
+			}
+			d.stageHealMiss[t.source] = stageHealMiss{model: q.model, reason: wallNotice}
+		} else if subjectExists {
+			delete(d.stageHealMiss, t.source)
+		}
+		if !subjectExists && notice == "" {
+			notice = wallNotice
 		}
 		e.Layers = d.deriveLayers(t.source, e.Layers)
 		reg.Walls[t.source] = e
