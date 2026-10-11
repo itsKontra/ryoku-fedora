@@ -92,7 +92,8 @@ for asset in share/icons/Bibata-Modern-Ice/cursors/left_ptr \
   share/ryoku-cursor-material/bibata/src/cursor_utils.py \
   share/fonts/SpaceGrotesk/regular.otf share/fonts/MaterialSymbolsRounded.ttf \
   share/fonts/JetBrainsMonoNerdFont/regular.ttf \
-  share/fonts/SpaceMonoNerdFont/regular.ttf bin/matugen; do
+  share/fonts/SpaceMonoNerdFont/regular.ttf share/fonts/ReadexPro/regular.ttf \
+  bin/matugen; do
   install -Dm644 /etc/hostname "$target/usr/$asset"
 done
 

@@ -61,7 +61,18 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Resume from the last run's translations
+        # a run cancelled by a newer push (or one that failed) still pushes what
+        # it translated; starting from that branch's catalogs means this run
+        # only pays for what is still missing. Overrides stay main's.
+        if: ${{ !inputs.force }}
+        run: |
+          git fetch --depth=1 origin "$BRANCH" || exit 0
+          git ls-tree --name-only FETCH_HEAD ryoku/i18n/catalog/ \
+            | grep '\.json$' | xargs -r git checkout FETCH_HEAD --
+
       - name: Extract English + translate missing strings
+        id: translate
         # Prefer the LLM engine (domain prompt + glossary: correct word senses,
         # length kept in check) when a key is configured; otherwise fall back to
         # the free, keyless Google endpoint so the job still works with no secret.
@@ -87,11 +98,17 @@ jobs:
           python3 ryoku/i18n/tools/sync.py cost || true
 
       - name: Open or refresh the translations PR
+        # always(): sync saves after every batch, so a cancelled or failed run
+        # still has progress on disk worth pushing for the next run to resume.
+        if: always()
+        env:
+          TRANSLATED: ${{ steps.translate.outcome }}
         run: |
           pr=$(gh pr list --state open --head "$BRANCH" --json number --jq '.[0].number // empty')
-          if git diff --quiet -- ryoku/i18n/catalog; then
+          if git diff --quiet HEAD -- ryoku/i18n/catalog; then
             echo "Translations already current on main."
-            if [[ -n $pr ]]; then
+            # an unfinished run proves nothing about what main carries.
+            if [[ -n $pr && $TRANSLATED == success ]]; then
               gh pr close "$pr" --delete-branch --comment 'main already carries every translation.'
             fi
             exit 0

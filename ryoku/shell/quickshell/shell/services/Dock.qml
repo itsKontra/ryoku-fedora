@@ -239,6 +239,12 @@ Singleton {
             return Config.qsbar?.barPosition === "bottom" ? "top" : "bottom";
         return "bottom";
     }
+    // A bar style that draws its own dock keeps its options in a sub-object
+    // of the one dock store (dock.<design>.<key>).
+    function designCfg(designName, key, fallback) {
+        const d = root.cfg(designName, {});
+        return d && d[key] !== undefined && d[key] !== null ? d[key] : fallback;
+    }
     // The daemon's control socket, connected only when there is something to say.
     Socket {
         id: cfgCtl

@@ -2,8 +2,25 @@ local mod = "SUPER"
 
 local K = require("modules.rebind")
 
+-- The Shima frame can ask before a window closes. Only route through the shell
+-- when that is switched on, so every other close stays a native dispatch with
+-- no process in the way (reading shell.json here costs no fork). qs exits 0
+-- with a message while its closeConfirm target is not up, so only a silent call
+-- counts and the window still closes otherwise.
+local function close_active()
+    local f = io.open((os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/ryoku/shell.json")
+    local s = f and f:read("a") or ""
+    if f then f:close() end
+    local style = s:match('"barStyle"%s*:%s*"([^"]*)"') or "qsbar"
+    if style == "iris" and s:find('"inir"%s*:%s*{.-"closeConfirm"%s*:%s*{[^{}]*"enabled"%s*:%s*true') then
+        hl.exec_cmd([[out=$(qs -c shell ipc call closeConfirm trigger 2>&1) && [ -z "$out" ] || hyprctl dispatch 'hl.dsp.window.close()']])
+    else
+        hl.dispatch(hl.dsp.window.close())
+    end
+end
+
 -- Windows
-hl.bind(K(mod .. " + Q"),         hl.dsp.window.close())                           -- close active window
+hl.bind(K(mod .. " + Q"),         close_active)                                    -- close active window (Shima asks first when set to)
 hl.bind(K(mod .. " + F"),         hl.dsp.window.fullscreen())                      -- fullscreen
 hl.bind(K(mod .. " + SHIFT + P"), hl.dsp.window.pin())                             -- pin a floating window
 hl.bind(K(mod .. " + A"),         function() hl.dispatch(hl.dsp.window.float({ action = "toggle" })); hl.dispatch(hl.dsp.window.resize({ x = 1000, y = 660, exact = true })); hl.dispatch(hl.dsp.window.center()) end) -- float at 1000x660, centred (press again to tile back)
@@ -56,6 +73,8 @@ hl.bind(K(mod .. " + J"),         hl.dsp.exec_cmd("ryotunes"))                  
 
 -- Shell surfaces and tools
 hl.bind(K(mod .. " + Space"),     hl.dsp.global("ryoku:launcher"))                 -- open the app launcher
+hl.bind(K("ALT + Space"),         hl.dsp.global("ryoku:ask"))                      -- ask Rashin
+hl.bind(K(mod .. " + ALT + Space"), hl.dsp.exec_cmd("ryoku-summon Rashin flock -n -o /tmp/rashin-app.lock rashin-app")) -- Rashin app: the console window (a second press focuses it)
 hl.bind(K(mod .. " + K"),         hl.dsp.exec_cmd("pkill -x -f 'qs -c keys' 2>/dev/null || flock -n -o /tmp/ryoku-keys.lock qs -c keys")) -- keybind cheatsheet: toggle (press to open, press again to close)
 hl.bind(K(mod .. " + L"),         hl.dsp.exec_cmd("ryoku-shell lock"))             -- lock the screen
 hl.bind(K(mod .. " + Escape"),    hl.dsp.global("ryoku:quicksettings")) -- quick settings: power, logout, restart, shutdown, wifi

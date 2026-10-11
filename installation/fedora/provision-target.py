@@ -543,6 +543,7 @@ def seed_desktop_extras(root, repo_dir=None):
         "material-symbols": "share/fonts/MaterialSymbolsRounded.ttf",
         "jetbrains-mono-nerd-fonts": "share/fonts/JetBrainsMonoNerdFont/*.ttf",
         "space-mono-nerd-fonts": "share/fonts/SpaceMonoNerdFont/*.ttf",
+        "readex-pro": "share/fonts/ReadexPro/*.ttf",
         "matugen": "bin/matugen",
     }
     prefix = root / "usr"

@@ -15,6 +15,9 @@ BuildRequires:  ninja-build
 BuildRequires:  gcc-c++
 BuildRequires:  qt6-qtbase-devel
 BuildRequires:  qt6-qtdeclarative-devel
+BuildRequires:  pkgconfig
+BuildRequires:  gtk3-devel
+BuildRequires:  webkit2gtk4.1-devel
 Requires:       ryoku = %{version}-%{release}
 Requires:       ryoku-shell = %{version}-%{release}
 Requires:       ryogami = %{version}-%{release}
@@ -26,6 +29,8 @@ Requires:       ryoku-extras = %{version}-%{release}
 Requires:       sddm-theme-ryoku = %{version}-%{release}
 Requires:       ryoku-desktop-compositor
 Requires:       quickshell
+Requires:       gtk3
+Requires:       webkit2gtk4.1
 Requires:       sddm
 Requires:       weston
 Requires:       kitty
@@ -79,6 +84,10 @@ Requires:       google-noto-sans-fonts
 Requires:       google-noto-sans-cjk-fonts
 Requires:       google-noto-emoji-fonts
 Requires:       jetbrains-mono-fonts
+# Shima's numerals and its Montserrat look; Readex Pro, its title face, is not
+# packaged for Fedora and ships from ryoku-extras.
+Requires:       google-rubik-fonts
+Requires:       julietaula-montserrat-fonts
 Provides:       ryostore
 Provides:       ryovm
 Provides:       ryoku-ui = %{version}-%{release}

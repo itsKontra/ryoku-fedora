@@ -183,6 +183,12 @@ func TestACPHandshakePromptStreamPermissionCancel(t *testing.T) {
 	if pr.Outcome.Outcome != "selected" || pr.Outcome.OptionID != "allow" {
 		t.Fatalf("permission outcome %+v", pr)
 	}
+	ev = expectEvent(t, conn.Events(), "permission_resolved")
+	if ev.RequestID != "77" || ev.Outcome != "allowed" {
+		t.Fatalf("resolved event %+v", ev)
+	}
+	// A second answer (another surface racing) is dropped, not re-sent.
+	conn.RespondPermission(77, "deny")
 
 	// Turn end.
 	fa.respond(*prompt.ID, map[string]any{"stopReason": "end_turn"})
@@ -196,6 +202,36 @@ func TestACPHandshakePromptStreamPermissionCancel(t *testing.T) {
 	cancel := fa.read()
 	if cancel.Method != "session/cancel" || cancel.ID != nil {
 		t.Fatalf("cancel frame %+v", cancel)
+	}
+}
+
+func TestACPDeclineOpenPermsReleasesBlockedTurn(t *testing.T) {
+	conn, fa := newTestPair(t)
+	defer conn.Close()
+
+	permID := int64(5)
+	pp, _ := json.Marshal(map[string]any{
+		"sessionId": "s1",
+		"toolCall":  map[string]string{"title": "rm x"},
+		"options":   []map[string]string{{"optionId": "allow", "name": "Allow", "kind": "allow_once"}},
+	})
+	fa.write(rpcMsg{JSONRPC: "2.0", ID: &permID, Method: "session/request_permission", Params: pp})
+	expectEvent(t, conn.Events(), "permission")
+
+	conn.DeclineOpenPerms()
+	resp := fa.read()
+	var pr struct {
+		Outcome struct {
+			Outcome string `json:"outcome"`
+		} `json:"outcome"`
+	}
+	_ = json.Unmarshal(resp.Result, &pr)
+	if resp.ID == nil || *resp.ID != 5 || pr.Outcome.Outcome != "cancelled" {
+		t.Fatalf("decline response %+v %s", resp.ID, resp.Result)
+	}
+	ev := expectEvent(t, conn.Events(), "permission_resolved")
+	if ev.RequestID != "5" || ev.Outcome != "cancelled" {
+		t.Fatalf("resolved event %+v", ev)
 	}
 }
 

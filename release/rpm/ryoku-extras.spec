@@ -45,3 +45,4 @@ cp -a stage/. %{buildroot}/
 %{_datadir}/ryoku/extras
 %license %{_datadir}/licenses/Bibata/LICENSE
 %license %{_datadir}/licenses/bibata_cursor/LICENSE
+%license %{_datadir}/licenses/ReadexPro/OFL.txt

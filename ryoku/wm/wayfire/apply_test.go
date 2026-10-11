@@ -203,7 +203,7 @@ duration = 400ms circle
 duration = 300ms circle
 
 [command]
-command_window_close = ryoku-wm-wayfire act window.close focused
+command_window_close = jq -e '(.barStyle // "qsbar") == "iris" and .inir.closeConfirm.enabled == true' "${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/shell.json" >/dev/null 2>&1 && out=$(qs -c shell ipc call closeConfirm trigger 2>&1) && [ -z "$out" ] || ryoku-wm-wayfire act window.close focused
 binding_window_close = <super> KEY_Q | <alt> KEY_F4
 command_window_float = ryoku-wm-wayfire act window.float focused
 binding_window_float = <super> KEY_A
@@ -295,6 +295,10 @@ command_app_ryotunes = ryotunes
 binding_app_ryotunes = <super> KEY_J
 command_shell_launcher = ryoku-shell launcher
 binding_shell_launcher = <super> KEY_SPACE
+command_shell_ask = ryoku-shell ask
+binding_shell_ask = <alt> KEY_SPACE
+command_shell_rashin = ryoku-summon Rashin flock -n -o /tmp/rashin-app.lock rashin-app
+binding_shell_rashin = <super> <alt> KEY_SPACE
 command_shell_cheatsheet = pkill -x -f 'qs -c keys' 2>/dev/null || env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml" flock -n -o /tmp/ryoku-keys.lock qs -c keys
 binding_shell_cheatsheet = <super> KEY_K
 command_shell_lock = ryoku-shell lock

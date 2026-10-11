@@ -146,9 +146,10 @@ Item {
         { id: "tray", label: I18n.tr("Tray"), desc: I18n.tr("System tray icons.") },
         { id: "weather", label: I18n.tr("Weather"), desc: I18n.tr("Current conditions.") }
     ]
-    // The running bar style, default the built-in frame style. The frame, rails
-    // and zone editors below are Sumi's; a folder style owns its own layout.
-    readonly property string activeStyle: page.fval("barStyle", "sumi")
+    // The running bar style; an absent key renders the shipped QS Bar, the
+    // shell's own default. The frame, rails and zone editors below are Sumi's;
+    // a folder style owns its own layout.
+    readonly property string activeStyle: page.fval("barStyle", "qsbar")
     readonly property bool sumiActive: page.activeStyle === "sumi"
     readonly property string activeName: {
         for (let i = 0; i < page.barStyles.length; i++)
@@ -206,6 +207,10 @@ Item {
     // only a read-only summary of the order, watched off shell.json so it tracks a
     // move made from the panel or the CLI without a Hub reload.
     property var qsbarLayout: ({})
+    // Shima's frontend (paper-and-ink "ryoku" or the original "inir" look) lives
+    // at inir.iris.appearance.frontend in shell.json; watched here so the toggle
+    // below tracks a flip made from Shima's own settings overlay too.
+    property string irisFrontend: "ryoku"
     readonly property string qsbarLayoutSummary: {
         const layout = page.qsbarLayout || ({});
         const lane = a => Array.isArray(a) ? a.join(" \u00b7 ") : "";
@@ -222,6 +227,8 @@ Item {
             try {
                 const cfg = JSON.parse(shellJsonFile.text() || "{}");
                 page.qsbarLayout = (cfg.qsbar && cfg.qsbar.layout) ? cfg.qsbar.layout : ({});
+                page.irisFrontend = (cfg.inir && cfg.inir.iris && cfg.inir.iris.appearance
+                    && cfg.inir.iris.appearance.frontend) || "ryoku";
             } catch (e) {
                 page.qsbarLayout = ({});
             }
@@ -232,6 +239,28 @@ Item {
     }
     function openDockSettings() {
         Quickshell.execDetached(["ryoku-shell", "hub", "open", "dock"]);
+    }
+
+    // Shima opens its own settings overlay through the shell IPC.
+    function openIrisSettings() {
+        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "iris", "settings", ""]);
+    }
+
+    // Writes through the shell's own config writer (iris set IPC), never the Hub
+    // draft, so it does not fight the frame's live Config and applies at once.
+    function setIrisFrontend(v) {
+        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "iris", "set",
+            "iris.appearance.frontend", JSON.stringify(v)]);
+    }
+
+    // Shima draws its own dock from the shared `dock` store; its switch lives
+    // here because QS Bar Settings, the dock's usual home, is not running then.
+    function dockOn() {
+        const d = page.fval("dock", ({}));
+        return !!(d && d.enabled);
+    }
+    function setDockOn(on) {
+        page.fedit("dock", Object.assign({}, page.fval("dock", ({})), { enabled: on }));
     }
 
     CatalogLabels { id: labels }
@@ -547,12 +576,84 @@ Item {
                 }
             }
 
+            // Shima arranges itself live: the island opens its own settings
+            // overlay and Studio, so this card routes there and keeps the
+            // dock's switch, like QS Bar.
+            SettingCard {
+                id: irisSect
+                width: col.colWidth
+                visible: page.activeStyle === "iris"
+                title: I18n.tr("SHIMA")
+                kana: "島"
+
+                Item {
+                    width: parent.width
+                    height: irisBody.height + Tokens.s3 + Tokens.s4
+                    Column {
+                        id: irisBody
+                        anchors { left: parent.left; right: parent.right; top: parent.top }
+                        anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4; anchors.topMargin: Tokens.s3
+                        spacing: Tokens.s3
+                        Text {
+                            width: parent.width
+                            text: I18n.tr("Shima arranges its island, bubbles and look in its settings overlay.")
+                            color: Tokens.inkMuted
+                            font.family: Tokens.ui
+                            font.pixelSize: Tokens.fBody
+                            wrapMode: Text.WordWrap
+                        }
+                        Item {
+                            width: parent.width
+                            height: Tokens.ctlH
+                            Text {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: I18n.tr("Look")
+                                color: Tokens.ink
+                                font.family: Tokens.ui
+                                font.pixelSize: Tokens.fRow
+                            }
+                            Seg {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                options: ["RYOKU", "ORIGINAL"]
+                                current: page.irisFrontend === "inir" ? "ORIGINAL" : "RYOKU"
+                                onChose: key => page.setIrisFrontend(key === "ORIGINAL" ? "inir" : "ryoku")
+                            }
+                        }
+                        Item {
+                            width: parent.width
+                            height: Tokens.ctlH
+                            Text {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: I18n.tr("Dock")
+                                color: Tokens.ink
+                                font.family: Tokens.ui
+                                font.pixelSize: Tokens.fRow
+                            }
+                            Sw {
+                                objectName: "shima-dock"
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                on: page.dockOn()
+                                onToggled: value => page.setDockOn(value)
+                            }
+                        }
+                        Btn {
+                            text: I18n.tr("OPEN SHIMA SETTINGS")
+                            onAct: page.openIrisSettings()
+                        }
+                    }
+                }
+            }
+
             // A folder style owns its own frame, rails and widgets inside its
             // barstyles/<id>/ folder, so the Sumi editors below stand down.
             SettingCard {
                 id: folderNote
                 width: col.colWidth
-                visible: !page.sumiActive && page.activeStyle !== "qsbar"
+                visible: !page.sumiActive && ["qsbar", "iris"].indexOf(page.activeStyle) === -1
                 title: I18n.tr("LAYOUT")
 
                 Text {

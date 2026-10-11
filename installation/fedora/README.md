@@ -404,8 +404,8 @@ The manifest also covers the compiler/build tools, Rust and Cargo, Node.js 24
 and npm, Python pip and pipx, Intel VA-API, and controller access rules
 (`steam-devices`). The Node `-bin` packages ensure the unversioned commands are
 installed. `ryoku-extras` already supplies Matugen, Bibata, Space Grotesk,
-Material Symbols, JetBrains Mono Nerd Font and SpaceMono Nerd Font; QEMU's
-desktop backends are dependencies of `qemu-system-x86`. The shell installer's
+Material Symbols, JetBrains Mono Nerd Font, SpaceMono Nerd Font and Readex Pro;
+QEMU's desktop backends are dependencies of `qemu-system-x86`. The shell installer's
 source mode and `ryoku recovery` install the `[drivers]`, `[utilities]`,
 `[services]`, `[multimedia]` and `[desktop]` sections of this manifest beside
 the RPM specs' `Requires:`, so a source box matches an ISO one.

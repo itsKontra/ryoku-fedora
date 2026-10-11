@@ -21,9 +21,11 @@ Item {
     width: 0
     height: 0
 
+    // Shima draws its own dock from the same store, so this one steps aside.
     Loader {
         id: designLoader
         active: root.surfaceVisible && Dock.cfg("enabled", false) && root.design !== "none"
+            && Config.barStyle !== "iris"
         asynchronous: true
         sourceComponent: ryokuDesign
     }

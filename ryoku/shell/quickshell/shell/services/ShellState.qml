@@ -112,8 +112,80 @@ Singleton {
     signal surfaceRequested(string id, string mon, var context)
     signal surfaceClosed(string id, string mon)
     signal keyringPromptChanged(int promptId)
-    function requestSurface(id, mon, context) { root.surfaceRequested(id, mon, context); }
-    function closeSurface(id, mon) { root.surfaceClosed(id, mon); }
+
+    function sliceForMonitor(mon) {
+        if (mon && typeof mon === "object")
+            return root.forScreen(mon);
+        if (typeof mon === "string" && mon !== "") {
+            const named = Screens.sliceForName(states.instances, mon);
+            if (named)
+                return named;
+        }
+        return root.forActive();
+    }
+
+    function setAskMode(screen, mode) {
+        if (mode !== "ask" && mode !== "chat" && mode !== "tools" && mode !== "web")
+            return;
+        const slice = root.sliceForMonitor(screen);
+        if (!slice)
+            return;
+        slice.askMode = mode;
+        slice.askTool = "";
+    }
+
+    function closeTransientSurfaces(mon) {
+        const slice = root.sliceForMonitor(mon);
+        if (!slice)
+            return;
+        slice.askOpen = false;
+    }
+
+    // The Ask bar is per-monitor state owned here, not a frame menu: "ask"
+    // toggles it, "ask#chat|web|tools[/compress|/install]" opens it on a mode.
+    function routeOwnedSurface(id, mon) {
+        const split = id.indexOf("#");
+        const base = split >= 0 ? id.substring(0, split) : id;
+        const route = split >= 0 ? id.substring(split + 1) : "";
+        const slice = root.sliceForMonitor(mon);
+        if (!slice)
+            return false;
+
+        if (base !== "ask")
+            return false;
+
+        if (route === "" && slice.askOpen) {
+            slice.askOpen = false;
+            return true;
+        }
+
+        slice.askMode = route === "chat" ? "chat"
+            : route === "web" ? "web"
+            : route.indexOf("tools") === 0 ? "tools" : "ask";
+        slice.askTool = route === "tools/compress" ? "compress"
+            : route === "tools/install" ? "install" : "";
+        slice.askOpen = true;
+        root.surfaceClosed("sidebar-left", slice.modelData.name);
+        return true;
+    }
+
+    function requestSurface(id, mon, context) {
+        const value = id || "";
+        const base = value.split("#")[0];
+        if (base === "sidebar-left")
+            root.closeTransientSurfaces(mon);
+        else
+            root.routeOwnedSurface(value, mon);
+        root.surfaceRequested(value, mon || "", context);
+    }
+
+    function closeSurface(id, mon) {
+        const base = (id || "").split("#")[0];
+        const slice = root.sliceForMonitor(mon);
+        if (slice && (base === "" || base === "ask"))
+            slice.askOpen = false;
+        root.surfaceClosed(id, mon);
+    }
 
     // Open a desktop widget's right-click menu from off-surface (a keybind, the
     // daemon, or a verification harness). niri routes context menus differently
@@ -130,8 +202,10 @@ Singleton {
     // Open a surface on the focused monitor: the menu global-shortcut handlers
     // call this so a keybind lands on the active screen, matching the old
     // `ryoku-shell menu <id>` which routed to the daemon's activeMonitor.
-    function requestSurfaceActive(id, context) {
-        root.surfaceRequested(id, Wm.focusedOutput, context);
+    function requestSurfaceActive(id, screenName) {
+        const monitor = typeof screenName === "string" && screenName !== ""
+            ? screenName : Wm.focusedOutput;
+        root.requestSurface(id, monitor, undefined);
     }
 
     // Keyboard-return bounce bridge. A dismissed keyboard surface (the per-monitor
@@ -156,6 +230,9 @@ Singleton {
             property bool launcherOpen: false           // launcher
             property bool overviewOpen: false           // overview (Super+Tab expo)
             property bool clipboardOpen: false          // clipboard overlay (Super+V)
+            property bool askOpen: false                // Ask bar (Alt+Space)
+            property string askMode: "ask"              // ask | chat | tools | web
+            property string askTool: ""                 // "" | compress | install
 
             // The frame bar's master reveal for this monitor. Resting policy is
             // revealed: each edge then follows its Config reveal flag, and the

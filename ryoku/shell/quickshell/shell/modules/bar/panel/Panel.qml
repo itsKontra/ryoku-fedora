@@ -6,7 +6,8 @@ import "../../../components"
 import Ryoku.Ui.Singletons
 
 // Feature sidebar behind Super+S: a framed floating card with a left activity
-// rail over pluggable pages (Usage, Tools). The Tools "Compress video" and
+// rail over pluggable pages (Usage, Tools); the Rashin chat lives in the
+// Alt+Space Ask bar. The Tools "Compress video" and
 // "Install app" tools open an in-shell file picker that takes over the content
 // area without ever closing the sidebar. Fixed reference px inside; the card
 // hugs its content.
@@ -31,11 +32,10 @@ Item {
 
     // Adding a feature is one row here plus one branch in the Loader below.
     readonly property var tabs: [
-        { id: "chat", icon: "forum", label: I18n.tr("Chat") },
         { id: "usage", icon: "insights", label: I18n.tr("Usage") },
         { id: "tools", icon: "download", label: I18n.tr("Tools") }
     ]
-    property string activeTab: "chat"
+    property string activeTab: "usage"
 
     onPageChanged: root.applyPage()
     Component.onCompleted: root.applyPage()
@@ -147,7 +147,6 @@ Item {
         anchors.margins: 1
         clip: true
 
-        Component { id: chatPage; PanelChat { s: root.s; open: root.open } }
         Component { id: usagePage; PanelOverview { s: root.s; open: root.open } }
         Component {
             id: toolsPage
@@ -159,8 +158,7 @@ Item {
             anchors.fill: parent
             active: root.picking === ""
             visible: root.picking === ""
-            sourceComponent: root.activeTab === "chat" ? chatPage
-                : root.activeTab === "usage" ? usagePage
+            sourceComponent: root.activeTab === "usage" ? usagePage
                 : root.activeTab === "tools" ? toolsPage : null
         }
 

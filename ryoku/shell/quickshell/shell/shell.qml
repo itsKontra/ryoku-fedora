@@ -31,6 +31,7 @@ import Quickshell.Wayland
 import "modules/osd"
 import "modules/notifications"
 import "modules/capture"
+import "modules/ask"
 import "modules/confirm"
 import Ryoku.Ui.Singletons
 
@@ -269,6 +270,38 @@ ShellRoot {
                 }
             }
             Timer { id: controlsHold; interval: SidebarState.exitDuration + 48 }
+
+            // The Alt+Space Ask bar: built on open and kept through a grace
+            // window after closing, so a quick reopen keeps the answer on screen.
+            LazyLoader {
+                id: askLoader
+                property bool open: perScreen.st ? perScreen.st.askOpen : false
+                property bool showNow: false
+                activeAsync: open || askHold.running
+                onItemChanged: if (item) Qt.callLater(() => askLoader.showNow = askLoader.open)
+                onOpenChanged: {
+                    showNow = open && item !== null;
+                    if (!open && active) askHold.restart();
+                }
+                AskBar {
+                    screen: perScreen.modelData
+                    active: askLoader.showNow
+                    mode: perScreen.st ? perScreen.st.askMode : "ask"
+                    tool: perScreen.st ? perScreen.st.askTool : ""
+                    onRequestClose: if (perScreen.st) perScreen.st.askOpen = false
+                    onModeChangeRequested: mode => ShellState.setAskMode(perScreen.modelData, mode)
+                }
+            }
+            Timer { id: askHold; interval: 15000 }
+
+            // The pinned chat bubble lives on the screen it was pinned to. It is
+            // only built once pinned, so an unpinned shell never starts the chat
+            // bridge.
+            LazyLoader {
+                active: Config.askBubble.enabled
+                    && Config.askBubble.screen === perScreen.modelData.name
+                AskBubble { screen: perScreen.modelData }
+            }
 
             // One cheap host per monitor loads only the selected dock design.
             // The surface itself remains independent of the active bar style.
@@ -518,6 +551,9 @@ ShellRoot {
         case "stash":
             ShellState.requestSurfaceActive("stash", undefined);
             break;
+        case "ask":
+            ShellState.requestSurfaceActive("ask", undefined);
+            break;
         case "screenshot":
             ShellState.requestSurfaceActive("quick-settings#capture", undefined);
             break;
@@ -739,14 +775,18 @@ ShellRoot {
 
     // The polkit agent streams its prompt on a topic rather than pushing a
     // surface, so raise and drop the island from the state itself. (pill 321-329)
+    // A bar style that presents the prompt itself (Polkit.presenters) takes it
+    // over; if it unmounts mid-prompt the island comes back.
     Connections {
         target: Polkit
-        function onActiveChanged() {
-            if (Polkit.active)
+        function sync() {
+            if (Polkit.active && Polkit.presenters === 0)
                 ShellState.requestSurface("polkit", "", undefined);
             else
                 ShellState.closeSurface("polkit", "");
         }
+        function onActiveChanged() { sync(); }
+        function onPresentersChanged() { sync(); }
     }
 
     // Stash steps a running task's own surface aside when it needs the auth
@@ -891,6 +931,11 @@ ShellRoot {
         name: "clipboard"
         description: I18n.tr("Open the clipboard history on the active monitor")
         onPressed: root.toggleSurface("clipboard")
+    }
+    CustomShortcut {
+        name: "ask"
+        description: I18n.tr("Ask Rashin")
+        onPressed: root.toggleSurface("ask")
     }
     CustomShortcut {
         name: "stash"

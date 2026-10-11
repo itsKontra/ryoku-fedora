@@ -42,3 +42,11 @@ version: Ryoku runs it over its own desktop, widgets, wallpaper, visualizer and
 depth services, gives it the Ryoku look, and leaves out its lock screen, bar and
 dock editing. ii-p3drovfx is released under the GNU General Public License
 version 3; the ported portions keep that license, compatible with Ryoku's GPL-3.
+
+The Shima bar style (ryoku/shell/quickshell/inir/) is based on iNiR by snowarch
+(https://github.com/snowarch/inir). It is a modified version: Ryoku renamed it,
+gave it its own mark, dropped the Kira mascot, and runs it through Ryoku's
+window-manager layer. It is not iNiR or iRiS, and those names, logos and the Kira
+mascot belong to snowarch. iNiR is released under the GNU General Public License
+version 3 with additional section 7 terms; its NOTICE and LICENSE ship unchanged
+beside the code in ryoku/shell/quickshell/inir/.
