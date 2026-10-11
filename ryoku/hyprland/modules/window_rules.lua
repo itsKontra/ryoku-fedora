@@ -102,6 +102,14 @@ hl.window_rule({
 })
 
 hl.window_rule({
+    name   = "float-rashin-app",
+    match  = { title = "^(Rashin)$" },
+    float  = true,
+    size   = fit(1280, 820),
+    center = true,
+})
+
+hl.window_rule({
     name   = "float-ryovm",
     match  = { title = "^(ryovm)$" },
     float  = true,

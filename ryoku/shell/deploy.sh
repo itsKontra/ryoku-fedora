@@ -603,14 +603,24 @@ install -Dm644 "$here/../niri/niri-portals.conf" "$cfg/xdg-desktop-portal/niri-p
 mkdir -p "$cfg/quickshell/hub"
 cp -a "$here/../hub/quickshell/." "$cfg/quickshell/hub/"
 
-# First-party GUI apps: each ryoku/apps/<name>/quickshell ships as qs -c <name>,
-# launched from a keybind and a .desktop entry. Drop in a new app dir and it ships.
+# First-party GUI apps: each ryoku/apps/<name>/ ships as a Quickshell app (a
+# quickshell/ tree, launched as qs -c <name>) or a compiled app (a
+# CMakeLists.txt, built to $bindir/<name>). Either way a .desktop entry and an
+# icon ride along. Drop in a new app dir and it ships.
 appshare="${XDG_DATA_HOME:-$HOME/.local/share}"
 for appdir in "$here"/../apps/*/; do
-  [[ -d "${appdir}quickshell" ]] || continue
   appname="$(basename "$appdir")"
-  mkdir -p "$cfg/quickshell/$appname"
-  cp -a "${appdir}quickshell/." "$cfg/quickshell/$appname/"
+  if [[ -d "${appdir}quickshell" ]]; then
+    mkdir -p "$cfg/quickshell/$appname"
+    cp -a "${appdir}quickshell/." "$cfg/quickshell/$appname/"
+  fi
+  if [[ -f "${appdir}CMakeLists.txt" ]] && command -v cmake >/dev/null 2>&1; then
+    say "building app $appname"
+    cmake -S "$appdir" -B "${appdir}build" -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
+    cmake --build "${appdir}build" >/dev/null
+    install -m755 "${appdir}build/$appname" "$bindir/$appname"
+  fi
+  [[ -d "${appdir}quickshell" || -f "${appdir}CMakeLists.txt" ]] || continue
   for b in "${appdir}bin/"*; do [[ -f "$b" ]] && install -m755 "$b" "$bindir/$(basename "$b")"; done
   # an app may carry Go helper(s): a subdir with a go.mod builds to a bin named
   # for the module (ryovm/fetch -> ryovm-fetch). keeps "drop in an app dir" true.
@@ -623,9 +633,11 @@ for appdir in "$here"/../apps/*/; do
     (cd "$helperdir" && go build -o "$helper" .) && install -m755 "$helperdir/$helper" "$bindir/$helper"
   done
   for d in "${appdir}"*.desktop; do [[ -f "$d" ]] && install -Dm644 "$d" "$appshare/applications/$(basename "$d")"; done
-  icon="${appdir}quickshell/logo.svg"; [[ -f "$icon" ]] || icon="$here/../assets/brand/logo-mark.svg"
+  icon="${appdir}quickshell/logo.svg"
+  [[ -f "$icon" ]] || icon="${appdir}logo.svg"
+  [[ -f "$icon" ]] || icon="$here/../assets/brand/logo-mark.svg"
   install -Dm644 "$icon" "$appshare/icons/hicolor/scalable/apps/$appname.svg"
-  say "installed app $appname -> $cfg/quickshell/$appname"
+  say "installed app $appname"
 done
 
 # Ryoku Hub (hub/): the surface is deployed above; ship a launcher entry so it

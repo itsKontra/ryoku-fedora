@@ -291,6 +291,20 @@ tool cards, and permission prompts, it carries:
 Terminal `hermes` and web chat share the same memory, because both run in the
 vault workspace.
 
+## The Rashin app
+
+`rashin-app` (`ryoku/apps/rashin-app/`) is a small GTK3 + WebKitGTK window
+that hosts the console above: it opens like a normal window (the launcher or
+`rashin-app`), is single-instance (a `GtkApplication` id), shows a dark boot
+page until `/api/ping` answers, and then loads
+`http://127.0.0.1:<port>/#/chat`. It is a client of the daemon, never a second
+brain, and carries no UI of its own: the same console a browser sees on the
+port. Links to other origins open in the default browser, notifications are
+granted, and the window remembers its size in
+`$XDG_STATE_HOME/ryoku/rashin-app.json`. Hyprland and niri both float it as a
+centred 1280x820 sheet. `ryoku-desktop` builds and ships it, pulling in
+`gtk3` and `webkit2gtk4.1`.
+
 ## Prowl ships with Rashin
 
 `prowl` is Prowl, the code-intelligence indexer and MCP server Rashin's
