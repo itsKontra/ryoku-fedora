@@ -554,6 +554,7 @@ Item {
                             anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
                             options: ["tanzaku", "hearthstone", "carousel"]
+                            labels: ({ tanzaku: I18n.tr("Tanzaku"), hearthstone: I18n.tr("Hearthstone"), carousel: I18n.tr("Carousel") })
                             current: page.root ? page.root.pickerStyle : "tanzaku"
                             onChose: key => { if (page.root) page.root.pickerStyle = key }
                         }
