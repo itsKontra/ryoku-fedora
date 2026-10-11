@@ -16,6 +16,7 @@ directory.
 |`i18n.go`|The Go runtime: `T`, `Tf`, `Use`, language resolution, catalog loading.|
 |`langs.go`|`langs.json` compiled in: `Languages()`, `Find()`, `IsRTL()`.|
 |`tools/sync.py`|extract / sync / check / prune / cost / llm / langs. Ships as `/usr/bin/ryoku-i18n`.|
+|`tools/drop_echoes.py`|Undoes translations changed since a base ref that only echo the English source.|
 |`tools/wrap.py`|AST wrapper: finds displayed literals in QML and wraps them in `I18n.tr`.|
 |`tools/install.sh`|Puts the catalog where a dev checkout looks for it.|
 
