@@ -61,6 +61,18 @@ Singleton {
     // can retune live without a shell restart.
     property alias clipboard: adapter.clipboard
     readonly property var normalizedNacre: NacreConfig.normalize(nacre)
+    readonly property var defaultControls: ({
+        "sections": [
+            { "id": "vitals", "visible": true },
+            { "id": "connections", "visible": true },
+            { "id": "powerProfile", "visible": true },
+            { "id": "media", "visible": false },
+            { "id": "levels", "visible": true },
+            { "id": "bottomControls", "visible": true }
+        ],
+        "hidden": []
+    })
+    property var controls: defaultControls
 
     // typography: a scale that grows or shrinks the whole shell (the bar text
     // and the surfaces around it), keeping the readout legible without overflow.
@@ -142,16 +154,20 @@ Singleton {
     property var themePalette: null
     function refreshThemePalette() {
         var pal = null;
+        var nextControls = root.defaultControls;
         var t = file.text();
         if (t) {
             try {
                 var o = JSON.parse(t);
                 if (o && typeof o.themePalette === "object" && o.themePalette !== null)
                     pal = o.themePalette;
+                if (o && typeof o.controls === "object" && o.controls !== null)
+                    nextControls = o.controls;
             } catch (e) {
             }
         }
         themePalette = pal;
+        controls = nextControls;
     }
 
     // brand: the desktop's mark + name, user-overridable from Ryoku Settings ->

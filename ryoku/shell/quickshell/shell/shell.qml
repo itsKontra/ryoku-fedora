@@ -23,6 +23,7 @@ import "modules/dock"
 import "modules/launcher"
 import "modules/overview"
 import "modules/clipboard"
+import "modules/sidebar"
 import QtQuick
 import Quickshell.Io
 import Quickshell.Wayland
@@ -248,6 +249,25 @@ ShellRoot {
                 dockLaneSize: dockLoader.item ? dockLoader.item.bandSize : 0
                 dockLaneCenter: dockLoader.item ? dockLoader.item.bandCenter : 0
             }
+
+            // The Super+Escape Controls panel: built on open, kept only through
+            // its exit motion, so its system sampling never runs while closed.
+            LazyLoader {
+                id: controlsLoader
+                property bool open: SidebarState.isOpen(perScreen.modelData)
+                property bool showNow: false
+                activeAsync: open || controlsHold.running
+                onItemChanged: if (item) Qt.callLater(() => controlsLoader.showNow = controlsLoader.open)
+                onOpenChanged: {
+                    showNow = open && item !== null;
+                    if (!open && active) controlsHold.restart();
+                }
+                Sidebar {
+                    screen: perScreen.modelData
+                    active: controlsLoader.showNow
+                }
+            }
+            Timer { id: controlsHold; interval: SidebarState.exitDuration + 48 }
 
             // The dock: a resident per-monitor surface on the edge opposite the
             // bar. Style-agnostic, so it lives here rather than inside a bar style;
@@ -485,7 +505,7 @@ ShellRoot {
                 root.placeVisualizer(!st.visualizerPlacing);
             break;
         case "quicksettings":
-            ShellState.requestSurfaceActive("quick-settings", undefined);
+            ShellState.requestSurfaceActive("sidebar-left", undefined);
             break;
         case "wallpaper-menu":
             ShellState.requestSurfaceActive("wallpaper", undefined);
@@ -786,7 +806,7 @@ ShellRoot {
     // `ryoku-shell <id>` spawn open the identical surface.
     CustomShortcut {
         name: "quicksettings"
-        description: I18n.tr("Open quick settings on the active monitor")
+        description: I18n.tr("Open the Controls panel on the active monitor")
         onPressed: root.toggleSurface("quicksettings")
     }
     CustomShortcut {
