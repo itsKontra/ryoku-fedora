@@ -479,6 +479,18 @@ func TestSnapshotStaleBuiltins(t *testing.T) {
 	if !snapshotStaleBuiltins(encode(renamed)) {
 		t.Error("a snapshot naming a built-in differently must be rebuilt")
 	}
+	var missing []Item
+	for _, it := range builtinBarStyles() {
+		if it.ID != "iris" {
+			missing = append(missing, it)
+		}
+	}
+	if !snapshotStaleBuiltins(encode(missing)) {
+		t.Error("a snapshot from before a built-in shipped must be rebuilt")
+	}
+	if snapshotStaleBuiltins(encode([]Item{{ID: "x", Category: "fonts"}})) {
+		t.Error("a snapshot without bar styles has nothing to compare")
+	}
 	store := []Item{{ID: "nacre", Category: "barstyles", Name: "Nacre"}}
 	if snapshotStaleBuiltins(encode(append(current, store...))) {
 		t.Error("store styles must not make a snapshot stale")

@@ -143,9 +143,20 @@ func builtinBarStyles() []Item {
 	}}
 }
 
+func isBuiltinBarStyle(id string) bool {
+	for _, it := range builtinBarStyles() {
+		if it.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 // snapshotStaleBuiltins reports a snapshot whose built-in bar styles read
-// differently from the ones this binary ships: the snapshot is only refreshed on
-// demand, so an update that renames a built-in would otherwise never show.
+// differently from, or fall short of, the ones this binary ships: the snapshot
+// is only refreshed on demand, so an update that renames or adds a built-in
+// would otherwise never show. A snapshot with no bar styles at all has nothing
+// to compare and is left alone.
 func snapshotStaleBuiltins(data []byte) bool {
 	var s struct {
 		Items []Item `json:"items"`
@@ -157,16 +168,22 @@ func snapshotStaleBuiltins(data []byte) bool {
 	for _, it := range builtinBarStyles() {
 		shipped[it.ID] = it
 	}
+	bars, matched := 0, 0
 	for _, it := range s.Items {
-		want, ok := shipped[it.ID]
-		if !ok || it.Category != "barstyles" {
+		if it.Category != "barstyles" {
 			continue
 		}
+		bars++
+		want, ok := shipped[it.ID]
+		if !ok {
+			continue
+		}
+		matched++
 		if it.Name != want.Name || it.Summary != want.Summary || it.Description != want.Description {
 			return true
 		}
 	}
-	return false
+	return bars > 0 && matched < len(shipped)
 }
 
 func barStyleRegistryUnavailable(err error) bool {
@@ -179,7 +196,7 @@ func barStyleRegistryUnavailable(err error) bool {
 }
 
 func (p barProvider) Install(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "kairos" || id == "iris" {
+	if isBuiltinBarStyle(id) {
 		return fmt.Errorf("the built-in %s bar style is already installed", id)
 	}
 	entries, _, err := loadProductRegistry(ctx, p.cache, "barstyles", false)
@@ -194,7 +211,7 @@ func (p barProvider) Install(ctx context.Context, id string) error {
 }
 
 func (p barProvider) Remove(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "kairos" || id == "iris" {
+	if isBuiltinBarStyle(id) {
 		return fmt.Errorf("the built-in %s bar style is not removable", id)
 	}
 	return removeProduct(ctx, "barstyles", id)
