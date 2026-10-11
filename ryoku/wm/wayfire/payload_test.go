@@ -77,16 +77,12 @@ func TestShippedBaselineIsHonest(t *testing.T) {
 	// The login bootstrap: nothing else brings the session up, so a wayfire
 	// login without this row is a bare compositor with no shell, no portals
 	// restart, and every other row here would be config for
-	// a desktop that never starts.
+	// a desktop that never starts. It goes through the host seam like the other
+	// providers' autostarts, which also raises the boot reload cover, and names
+	// wayfire's portal backends.
 	session, _ := doc.get("autostart", "0_session")
-	for _, want := range []string{
-		"dbus-update-activation-environment --systemd --all",
-		"ryoku-power-cutover session-start-logged",
-		"xdg-desktop-portal-gnome.service",
-	} {
-		if !strings.Contains(session, want) {
-			t.Errorf("autostart.0_session is missing %q", want)
-		}
+	if want := "ryoku-host session start xdg-desktop-portal-gnome.service xdg-desktop-portal-gtk.service"; session != want {
+		t.Errorf("autostart.0_session = %q, want %q", session, want)
 	}
 	if wf, _ := doc.get("autostart", "autostart_wf_shell"); wf != "false" {
 		t.Errorf("autostart_wf_shell = %q; the session's shell is Quickshell, not wf-panel", wf)
