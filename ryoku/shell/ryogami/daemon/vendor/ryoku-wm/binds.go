@@ -68,6 +68,12 @@ type CatalogBind struct {
 	Numpad bool
 }
 
+// QmlEnv is the module path a bind-spawned qs surface needs: it never passes
+// through ryoku-shell's daemon, which is what injects the path into the configs
+// it supervises. A shell string the emitting providers concatenate into a spawn
+// command.
+const QmlEnv = `env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml"`
+
 // catalogue is the shipped set, in the order the legend presents it. The four
 // move-workspace-to-screen chords carry their modifiers in canonical order
 // (SUPER CTRL ALT), the same order NormChord produces, so every shipped chord is

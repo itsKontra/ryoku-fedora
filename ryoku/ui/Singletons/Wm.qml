@@ -235,11 +235,24 @@ Singleton {
     function closeWindow(id) { root._act("window.close", "", [String(id)]); }
     function focusApp(appId) { root._act("app.focus", "", [String(appId)]); }
     function floatWindow(id) { root._act("window.float", "windowFloat", [String(id)]); }
-    function moveWindowToWorkspace(id, ws) { root._act("window.moveToWorkspace", "workspaces", [String(id), String(ws)]); }
+    // State carries workspace NAMES, the key windows and outputs agree on,
+    // while acts take Workspace.ID: a value that names a workspace becomes
+    // its id, anything else passes through, so a provider whose ids are its
+    // names, or whose handles are opaque, keeps working untouched.
+    function _wsId(key) {
+        const k = String(key);
+        const list = root.workspaces;
+        for (let i = 0; i < list.length; i++)
+            if (String(list[i].name) === k)
+                return String(list[i].id);
+        return k;
+    }
 
-    function focusWorkspace(ws) { root._act("workspace.focus", "workspaces", [String(ws)]); }
+    function moveWindowToWorkspace(id, ws) { root._act("window.moveToWorkspace", "workspaces", [String(id), root._wsId(ws)]); }
+
+    function focusWorkspace(ws) { root._act("workspace.focus", "workspaces", [root._wsId(ws)]); }
     function cycleWorkspace(delta) { root._act("workspace.cycle", "workspaces", [String(delta)]); }
-    function moveWorkspaceToOutput(ws, output) { root._act("workspace.moveToOutput", "workspaceMoveToOutput", [String(ws), String(output)]); }
+    function moveWorkspaceToOutput(ws, output) { root._act("workspace.moveToOutput", "workspaceMoveToOutput", [root._wsId(ws), String(output)]); }
     function toggleSpecialWorkspace(name) { root._act("workspace.toggleSpecial", "specialWorkspace", [String(name || "")]); }
 
     function cycleKeyboardLayout() { root._act("keyboard.cycleLayout", "keyboardLayoutSwitch", []); }

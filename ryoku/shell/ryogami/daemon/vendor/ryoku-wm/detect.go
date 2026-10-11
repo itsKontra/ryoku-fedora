@@ -16,6 +16,7 @@ import (
 const (
 	ProviderHyprland = "hyprland"
 	ProviderNiri     = "niri"
+	ProviderWayfire  = "wayfire"
 )
 
 type Detection struct {
@@ -46,6 +47,8 @@ var envProviders = []struct {
 	{"HYPRLAND_INSTANCE_SIGNATURE", ProviderHyprland, hyprlandSockets},
 	// niri exports the socket path itself.
 	{"NIRI_SOCKET", ProviderNiri, func(h string) []string { return []string{h} }},
+	// wayfire's ipc plugin exports the socket path itself.
+	{"WAYFIRE_SOCKET", ProviderWayfire, func(h string) []string { return []string{h} }},
 }
 
 // Hyprland's socket dir survives the instance that made it, so the path
@@ -79,6 +82,7 @@ func handleAlive(sockets []string) bool {
 var configDirs = map[string]string{
 	ProviderHyprland: "hypr",
 	ProviderNiri:     "niri",
+	ProviderWayfire:  "wayfire",
 }
 
 func ConfigDir(name string) string { return configDirs[name] }
@@ -104,6 +108,7 @@ func LeafScriptsDir(name string) string {
 var configEntries = map[string]string{
 	ProviderHyprland: "hyprland.lua",
 	ProviderNiri:     "config.kdl",
+	ProviderWayfire:  "wayfire.ini",
 }
 
 // ConfigEntry returns the entry point of a provider's config tree as a path
@@ -129,6 +134,9 @@ var configSeeds = map[string][]string{
 	// so the file has to exist from first boot. Being a seed is also what stops
 	// an update re-laying it over a user's edits.
 	ProviderNiri: {"monitors.kdl", "gpu.kdl", "keyboard.kdl", "user.kdl", "monitors_user.kdl"},
+	// wayfire has no include mechanism, so apply composes wayfire.ini from
+	// the shipped defaults, the store and these files, user.ini last.
+	ProviderWayfire: {"monitors.ini", "keyboard.ini", "user.ini"},
 }
 
 // ConfigSeeds returns the seeded, machine-owned files for a provider, as paths
@@ -170,6 +178,7 @@ func ConfigUserOwned(name string) []string {
 var configFiles = map[string][]string{
 	ProviderHyprland: {"hypr/user.lua", "hypr/monitors_user.lua", "hypr/modules"},
 	ProviderNiri:     {"niri/user.kdl", "niri/monitors_user.kdl"},
+	ProviderWayfire:  {"wayfire/user.ini", "wayfire/monitors.ini"},
 }
 
 // generatedConfig are the files a provider's apply authors from the store, as
@@ -179,6 +188,7 @@ var configFiles = map[string][]string{
 var generatedConfig = map[string][]string{
 	ProviderHyprland: {"hypr/settings.lua", "hypr/rebinds.lua", "ryoku/user_edits/hypr/settings.lua", "ryoku/user_edits/hypr/rebinds.lua"},
 	ProviderNiri:     {"niri/settings.kdl", "niri/rebinds.kdl", "ryoku/user_edits/niri/settings.kdl", "ryoku/user_edits/niri/rebinds.kdl"},
+	ProviderWayfire:  {"wayfire/wayfire.ini", "ryoku/user_edits/wayfire/wayfire.ini"},
 }
 
 // ConfigFiles are a provider's user-editable config paths (the hand-edit escape
@@ -205,7 +215,9 @@ func ResetPaths(name string) []string {
 
 // Providers is stable order, so generated config and installer prompts do not
 // reshuffle between runs.
-func Providers() []string { return []string{ProviderHyprland, ProviderNiri} }
+func Providers() []string {
+	return []string{ProviderHyprland, ProviderNiri, ProviderWayfire}
+}
 
 // Detect resolves the active provider: RYOKU_WM so a developer can drive one
 // without that session, then a live session handle, then XDG_CURRENT_DESKTOP,
