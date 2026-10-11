@@ -65,7 +65,7 @@ Item {
                     anchors.right: sessionRow.left
                     anchors.rightMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
-                    text: Qt.formatTime(clock.date, "HH:mm")
+                    text: TimeFormat.format(clock.date)
                     color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurface)
                     font.family: Theme.fontPrimary
                     font.pixelSize: 34

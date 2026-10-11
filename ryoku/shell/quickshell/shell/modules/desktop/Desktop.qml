@@ -201,7 +201,7 @@ Scope {
     // placed plugin set as they were when this session opened, captured on enter
     // and written back on resetRequested.
     readonly property var _widgetKeys: [
-        "clockEnabled", "clockDesign", "clock24h", "clockSeconds", "clockAccent", "clockScale", "clockAnchor", "clockX", "clockY", "clockLocked", "clockOpacity", "clockBg", "clockRadius", "clockColor", "clockColor2", "clockGradient", "dateShow", "dateDesign", "widgetFont",
+        "clockEnabled", "clockDesign", "clockSeconds", "clockAccent", "clockScale", "clockAnchor", "clockX", "clockY", "clockLocked", "clockOpacity", "clockBg", "clockRadius", "clockColor", "clockColor2", "clockGradient", "dateShow", "dateDesign", "widgetFont",
         "calendarEnabled", "calendarStyle", "calendarWeeks", "calendarWeekNumbers", "calendarHolidayRegion", "calendarScale", "calendarAnchor", "calendarX", "calendarY", "calendarLocked", "calendarOpacity", "calendarColor", "calendarColor2", "calendarGradient",
         "musicEnabled", "musicStyle", "musicLyrics", "musicViz", "musicScale", "musicAnchor", "musicX", "musicY", "musicLocked", "musicOpacity", "musicApp", "musicShape", "musicVideo", "musicVideoFile", "musicColor", "musicColor2", "musicGradient",
         "aioEnabled", "aioStyle", "aioScale", "aioAnchor", "aioX", "aioY", "aioLocked", "aioOpacity", "aioColor", "aioColor2", "aioGradient",
