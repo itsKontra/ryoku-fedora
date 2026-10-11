@@ -61,6 +61,7 @@ func TestSessionStartRunsTheAutostartChain(t *testing.T) {
 	want := []string{
 		"dbus-update-activation-environment --systemd --all",
 		"systemctl --user daemon-reload",
+		"ryoku-reload-cover begin boot",
 		"ryoku-power-cutover session-start-logged",
 		"systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-gtk.service",
 	}
@@ -69,13 +70,21 @@ func TestSessionStartRunsTheAutostartChain(t *testing.T) {
 	}
 }
 
-func TestSessionStartContinuesPastEnvButStopsAtCutover(t *testing.T) {
-	runner := &fakeRunner{codes: map[string]int{"dbus-update": 1, "systemctl --user daemon-reload": 1, "ryoku-power-cutover": 1}}
+func TestSessionStartContinuesPastEnvAndCoverButStopsAtCutover(t *testing.T) {
+	runner := &fakeRunner{codes: map[string]int{"dbus-update": 1, "systemctl --user daemon-reload": 1, "ryoku-reload-cover": 1}}
 	app, _ := testApp(runner, nil)
+	if code := app.Execute([]string{"session", "start"}); code != ExitOK {
+		t.Fatalf("a failed env push, reload or cover failed the session: exit = %d", code)
+	}
+	if len(runner.commands) != 5 {
+		t.Fatalf("session stopped early: %v", runner.commands)
+	}
+	runner = &fakeRunner{codes: map[string]int{"ryoku-power-cutover": 1}}
+	app, _ = testApp(runner, nil)
 	if code := app.Execute([]string{"session", "start"}); code != ExitFailure {
 		t.Fatalf("exit = %d", code)
 	}
-	if len(runner.commands) != 3 {
+	if len(runner.commands) != 4 {
 		t.Fatalf("portal restarted after a failed cutover: %v", runner.commands)
 	}
 }

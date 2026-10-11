@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -414,7 +415,23 @@ func dictationReady() bool {
 	if _, err := exec.LookPath("voxtype"); err != nil {
 		return false
 	}
-	return exec.Command("systemctl", "--user", "is-active", "--quiet", "voxtype.service").Run() == nil
+	return hostUserServiceActive("voxtype.service")
+}
+
+// hostUserServiceActive asks the host seam whether a user service is running.
+func hostUserServiceActive(unit string) bool {
+	return exec.Command("ryoku-host", "svc", "is-active", unit).Run() == nil
+}
+
+// stopHostUserService stops a user service through the host seam. A unit the
+// user manager does not know (absent) is already stopped.
+func stopHostUserService(unit string) error {
+	err := exec.Command("ryoku-host", "svc", "stop", unit).Run()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 4 {
+		return nil
+	}
+	return err
 }
 
 func currentUserProcessRunning(pattern string) bool {

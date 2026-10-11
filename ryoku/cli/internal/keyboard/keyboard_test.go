@@ -3,6 +3,7 @@ package keyboard
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -169,5 +170,25 @@ func TestReadReportsDriftOnAFrenchBox(t *testing.T) {
 	}
 	if !BootStale().Stale {
 		t.Error("the boot image predates the keymap change and must read as stale")
+	}
+}
+
+func TestApplySystemSendsThePrimaryLayoutThroughTheHostSeam(t *testing.T) {
+	old := applySystemKeymap
+	t.Cleanup(func() { applySystemKeymap = old })
+	var got []string
+	applySystemKeymap = func(layout, variant, options string) int {
+		got = []string{layout, variant, options}
+		return 0
+	}
+	if err := ApplySystem(Layout{Layout: "fr,us", Variant: "azerty", Options: "caps:escape"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, "|") != "fr|azerty|caps:escape" {
+		t.Fatalf("keymap = %q", got)
+	}
+	applySystemKeymap = func(string, string, string) int { return 1 }
+	if err := ApplySystem(Layout{Layout: "de"}); err == nil {
+		t.Fatal("a failed localectl write was reported as applied")
 	}
 }

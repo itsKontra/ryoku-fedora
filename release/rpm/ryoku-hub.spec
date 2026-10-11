@@ -11,6 +11,8 @@ BuildRequires:  coreutils
 BuildRequires:  findutils
 BuildRequires:  golang >= 1.26.4
 Requires:       quickshell
+# ryoku-host: the Hub reads and sets the time zone through the seam.
+Requires:       ryoku = %{version}-%{release}
 
 %description
 ryoku-hub, built from the shared Ryoku source and package payload recipe.

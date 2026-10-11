@@ -125,8 +125,9 @@ backend, systemd and dnf/rpm, built on the CLI's own rpm primitives.
   `pkg install`, `install-file` and `remove` run dnf non-interactively, so the
   caller escalates them through `sudo` or `pkexec`.
 - `session start [portal...]` is the login handoff: push the environment into
-  the user manager, reload units, run `ryoku-power-cutover session-start-logged`
-  and, only when that succeeds, restart the portals.
+  the user manager, reload units, raise the boot reload cover (best effort),
+  run `ryoku-power-cutover session-start-logged` and, only when that succeeds,
+  restart the portals.
 - `power`, `time zone|set-zone` and `keymap set` go through systemd,
   timedated and localed, which ask polkit themselves.
 - `repo channel` prints the RyokuCOPR channel.

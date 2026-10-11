@@ -24,6 +24,8 @@ Requires:       librsvg2-tools
 Requires:       xcursorgen
 # ryoku-cursor-material-recolor renders from the Bibata sources it ships.
 Requires:       ryoku-extras = %{version}-%{release}
+# ryoku-host: the shell's service, package and time calls go through the seam.
+Requires:       ryoku = %{version}-%{release}
 
 %description
 ryoku-shell, built from the shared Ryoku source and package payload recipe.

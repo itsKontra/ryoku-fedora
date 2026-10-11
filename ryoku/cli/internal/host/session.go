@@ -5,11 +5,15 @@ package host
 //
 //	dbus-update-activation-environment --systemd --all;
 //	systemctl --user daemon-reload;
+//	ryoku-reload-cover begin boot || true;
 //	ryoku-power-cutover session-start-logged &&
 //	  systemctl --user try-restart xdg-desktop-portal.service <extra...>
 //
-// The environment push and the reload deliberately continue after a failure;
-// only the cutover gates the portal restart. --all, not a name list: a systemd
+// The environment push, the reload and the boot cover deliberately continue
+// after a failure; only the cutover gates the portal restart. The cover goes up
+// before anything restarts so the desktop never loads grey behind the greeter's
+// unlock; it blocks until painted, fails fast headless, and the fresh shell
+// finishes it. --all, not a name list: a systemd
 // or D-Bus launched app sees only what is pushed here. Portals restart last, so
 // a stale frontend from a previous session cannot proxy ScreenCast requests to
 // a dead backend. The extras are the compositor's own portal backends.
@@ -24,6 +28,7 @@ func (a *App) Session(args []string) int {
 	case "start":
 		_ = a.run("dbus-update-activation-environment", "--systemd", "--all")
 		_ = a.run("systemctl", "--user", "daemon-reload")
+		_ = a.run("ryoku-reload-cover", "begin", "boot")
 		if a.run("ryoku-power-cutover", "session-start-logged") != 0 {
 			return ExitFailure
 		}
