@@ -28,6 +28,19 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 	isVideo := wpType == "video"
 	paint := path
 	prefs := wallPrefs()
+	// A switch away from a live clip must drop any transcode still in flight
+	// even when no process is tracked yet; otherwise the clip the user moved
+	// past maps its full-screen surface over the new wallpaper when its encode
+	// finally finishes. The ryogami engine's Play stops the player itself.
+	if !isVideo {
+		if d.video.Playing() {
+			d.video.Stop()
+		} else {
+			d.video.Abandon()
+		}
+	} else if prefs.Engine == "in_shell" {
+		d.video.Stop()
+	}
 	if isVideo {
 		if still := liveStill(path, d.config().videoFrame()); still != "" {
 			paint = still
@@ -35,9 +48,6 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 	}
 
 	if isVideo && prefs.Engine == "in_shell" {
-		if d.video.Playing() {
-			d.video.Stop()
-		}
 		name := filepath.Base(path)
 		key := strings.TrimSuffix(name, filepath.Ext(name))
 		clip := path
@@ -73,9 +83,6 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 	}
 
 	live := isVideo
-	if !isVideo && d.video.Playing() {
-		d.video.Stop()
-	}
 	// A reveal transition is an image operation: the clip's still gets one
 	// too, so a switch onto or off a video animates like any other. Only a
 	// video without a still falls back to a bare cut, with the live flag
@@ -105,6 +112,12 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 			if l {
 				if wait := time.Until(revealUntil); wait > 0 {
 					time.Sleep(wait)
+				}
+				// The player announced and then died during the reveal wait:
+				// yielding now would leave the shell pointing at no live
+				// surface at all. Keep the still until a player is back.
+				if !d.video.Ready() {
+					return
 				}
 			}
 			if d.paintSeq.Load() != seq {

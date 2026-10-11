@@ -1,6 +1,6 @@
 // Package wm is the seam between the Ryoku desktop and the window manager under
-// it. A provider binary implements four verbs (caps, watch, act, apply) and
-// nothing else needs to know which compositor is running.
+// it. A provider binary implements the contract verbs, and nothing else needs
+// to know which compositor is running.
 //
 // Consumers ask what the compositor can do, never which one it is. A compositor
 // name in a conditional means a capability is missing; bin/ryoku-dev-verify-wm-isolation
@@ -132,6 +132,10 @@ type Caps struct {
 	Instance       string         `json:"instance,omitempty"`
 	Supports       []Capability   `json:"supports"`
 	WorkspaceModel WorkspaceModel `json:"workspaceModel"`
+	// ForeignAPIs are shell and IPC interfaces plugins may consume directly.
+	// Compatibility scans compare their requirements with this list before a
+	// third-party plugin is enabled or loaded.
+	ForeignAPIs []ForeignAPI `json:"foreignApis"`
 	// SettingDomains are the setting-key prefixes this provider honours in
 	// apply. The Hub gates rows on them so no row is shown with no writer.
 	SettingDomains []string `json:"settingDomains"`

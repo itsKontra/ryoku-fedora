@@ -79,3 +79,9 @@ func TestClaimsKeyboardGrabSharesPointer(t *testing.T) {
 		t.Error("niri routes the pointer by input region under a keyboard grab; the manifest must say so")
 	}
 }
+
+func TestServesNoForeignShellAPIs(t *testing.T) {
+	if len(foreignAPIs) != 0 {
+		t.Fatalf("foreign APIs = %v, want none", foreignAPIs)
+	}
+}

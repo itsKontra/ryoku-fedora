@@ -128,6 +128,34 @@ func TestScanMergeFavouriteSurvives(t *testing.T) {
 	}
 }
 
+// TestScanWarmVideoFollowsMovedLibrary: an unchanged clip found under a new
+// root keeps its prior state but points at where the file lives now, so a
+// moved library keeps applying instead of handing the player a stale path.
+func TestScanWarmVideoFollowsMovedLibrary(t *testing.T) {
+	root := t.TempDir()
+	prev := filepath.Join(root, "prev.mp4")
+	if err := os.WriteFile(prev, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(root, "new", "clip.mp4")
+	prior := map[string]Entry{
+		"clip.mp4": {Key: "clip.mp4", Type: "video", VideoFile: filepath.Join(root, "old", "clip.mp4"), VideoPrev: prev, Favourite: 1, Mtime: 42},
+	}
+	it := scanned{key: "clip.mp4", name: "clip.mp4", wpType: "video", src: moved, videoFile: moved, mtime: 42}
+	e := processItem(it, prior, func(Entry) { t.Fatal("onItem must not fire for an unchanged entry") })
+	if e.VideoFile != moved || e.Favourite != 1 {
+		t.Fatalf("warm entry must follow the file and keep its state, got %+v", e)
+	}
+
+	anim := map[string]Entry{
+		"a.webp": {Key: "a.webp", Type: "video", VideoFile: "anim/a.mp4", Mtime: 7},
+	}
+	still := scanned{key: "a.webp", name: "a.webp", wpType: "static", src: filepath.Join(root, "a.webp"), mtime: 7}
+	if got := processItem(still, anim, func(Entry) {}); got.VideoFile != "anim/a.mp4" {
+		t.Fatalf("an animated still keeps its cached clip, got %q", got.VideoFile)
+	}
+}
+
 // TestScanMergeVanishedDropped: a prior key with no source file on disk is not
 // carried into the fresh scan.
 func TestScanMergeVanishedDropped(t *testing.T) {

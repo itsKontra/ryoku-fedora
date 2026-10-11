@@ -3,6 +3,7 @@ import QtQuick
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "Singletons"
+import "../../components"
 
 // The spectrum's editing bar, shown while a look is being placed, so a look is tuned
 // where you can see it rather than in the Hub with the desktop behind a window.
@@ -10,7 +11,7 @@ import "Singletons"
 // Fixed to an edge of the screen, never to the box: a readout of the thing being
 // moved must not move with it. Controls come from Ryoku.Ui and metrics from Tokens;
 // the tray is the Hub's gallery with the Hub's painter, so one catalogue draws what
-// the eleven looks look like.
+// the twelve looks look like.
 Item {
     id: bar
 
@@ -22,6 +23,7 @@ Item {
     readonly property bool atTop: bar.box.y + bar.box.height > bar.height - 200
     readonly property alias trayOpen: tray.open
     readonly property alias colorOpen: colorPop.open
+    readonly property alias settingsOpen: settingsPop.open
 
     // The colour the spectrum actually wears: a pinned one wins, else the live
     // wallpaper/theme accent the rest of the shell follows.
@@ -29,21 +31,45 @@ Item {
     readonly property color effectiveColor: Config.hasCustomColor ? Config.customColor : bar.wallpaperColor
 
     function closeTray() { tray.open = false; }
-    function toggleTray() { tray.open = !tray.open; if (tray.open) colorPop.open = false; }
+    function toggleTray() {
+        tray.open = !tray.open;
+        if (tray.open) { colorPop.open = false; settingsPop.open = false; }
+    }
     function closeColor() { colorPop.open = false; }
     function toggleColor() {
         if (!colorPop.open) {
             colorPop.editing = "a";
             colorPop.seed(bar.effectiveColor);
             tray.open = false;
+            settingsPop.open = false;
         }
         colorPop.open = !colorPop.open;
     }
-    // Each drag/type lands on the stop being edited: the base colour, or the
-    // gradient's second stop.
+    function closeSettings() { settingsPop.open = false; }
+    function toggleSettings() {
+        if (!settingsPop.open) { tray.open = false; colorPop.open = false; }
+        settingsPop.open = !settingsPop.open;
+    }
+    // The field's second and third triad stops reuse this picker: the settings
+    // sheet asks, and the picker opens on that stop. Opening it closes the sheet
+    // (one colour surface at a time); the edited value survives underneath.
+    function openAuraColor(which) {
+        tray.open = false;
+        settingsPop.open = false;
+        colorPop.editing = which;
+        colorPop.seed(which === "aura3" ? Config.instance.auraColor3
+                                        : Config.instance.auraColor2);
+        colorPop.open = true;
+    }
+    // Each drag/type lands on the stop being edited: the base colour, the
+    // gradient's second stop, or a field triad stop.
     function commitColor() {
         if (colorPop.editing === "b")
             Config.setColor2(colorPop.curHex);
+        else if (colorPop.editing === "aura2")
+            Config.poke("auraColor2", colorPop.curHex);
+        else if (colorPop.editing === "aura3")
+            Config.poke("auraColor3", colorPop.curHex);
         else
             Config.setColor(colorPop.curHex);
     }
@@ -93,7 +119,7 @@ Item {
         Gallery {
             id: gal
             anchors.centerIn: parent
-            width: 11 * 132 + 10 * 7
+            width: VizStyles.styles.length * 132 + (VizStyles.styles.length - 1) * 7
             painter: VizStyles
             options: VizStyles.styles.map(function (s) { return { key: s.key, origin: s.kind, draw: s.key }; })
             current: Config.styleId
@@ -320,6 +346,59 @@ Item {
                     }
                 }
 
+                Group {
+                    // The edge field's own controls, dimmed (never hidden: the
+                    // bar must not reflow as the catalogue is walked) while a
+                    // boxed look is in hand. The deep field knobs live in the
+                    // gear popup; these three are the ones you aim by eye.
+                    label: I18n.tr("EDGES")
+                    dim: !Config.isAura
+                    Row {
+                        spacing: Tokens.s1
+                        Repeater {
+                            model: ["top", "right", "bottom", "left"]
+                            Btn {
+                                id: edgeBtn
+                                required property string modelData
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: edgeBtn.modelData.charAt(0).toUpperCase()
+                                compact: true
+                                // Lit edges wear the filled plate; every chip stays
+                                // clickable, since `armed` is Btn's enabled state.
+                                primary: Config.instance.auraEdges.indexOf(edgeBtn.modelData) >= 0
+                                onAct: Config.toggleAuraEdge(edgeBtn.modelData)
+                            }
+                        }
+                    }
+                }
+                Group {
+                    label: I18n.tr("MATERIAL")
+                    dim: !Config.isAura
+                    Btn {
+                        text: Config.instance.auraMaterial
+                        compact: true
+                        armed: true
+                        onAct: Config.cycleAuraMaterial()
+                    }
+                }
+                Group {
+                    label: I18n.tr("REACH")
+                    dim: !Config.isAura
+                    Row {
+                        spacing: Tokens.s2
+                        Step {
+                            anchors.verticalCenter: parent.verticalCenter
+                            value: Config.instance.auraDepth
+                            from: 24
+                            to: 600
+                            onModified: (v) => Config.setAuraDepth(v)
+                        }
+                        Value {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Config.instance.auraDepth + "px"
+                        }
+                    }
+                }
                 Rule {}
 
                 Group {
@@ -382,6 +461,7 @@ Item {
 
                 Group {
                     label: I18n.tr("ANGLE")
+                    dim: Config.isAura
                     Row {
                         spacing: Tokens.s2
                         Value {
@@ -401,6 +481,7 @@ Item {
                 Group {
                     // One group, two axes: a lean is one idea.
                     label: I18n.tr("LEAN")
+                    dim: Config.isAura
                     Row {
                         spacing: Tokens.s2
                         Slid {
@@ -434,12 +515,38 @@ Item {
                 }
                 Group {
                     label: I18n.tr("SIZE")
+                    dim: Config.isAura
                     Value {
                         text: Math.round(Config.w * 100) + "\u00d7" + Math.round(Config.h * 100) + "%"
                     }
                 }
 
                 Rule {}
+
+                // The drawer for everything the bar has no room for: a square
+                // affordance skinned like LOOK/COLOR, opening the settings sheet.
+                Group {
+                    label: I18n.tr("MORE")
+                    Rectangle {
+                        width: 30
+                        height: 30
+                        radius: Tokens.radius
+                        color: settingsPop.open ? Tokens.tint16 : (moreHov.hovered ? Tokens.tint10 : "transparent")
+                        border.width: Tokens.border
+                        border.color: settingsPop.open ? Tokens.ink : (moreHov.hovered ? Tokens.lineStrong : Tokens.line)
+                        Behavior on color { ColorAnimation { duration: Tokens.snap } }
+                        GlyphIcon {
+                            anchors.centerIn: parent
+                            width: 14
+                            height: 14
+                            name: "gear"
+                            color: settingsPop.open ? Tokens.ink : Tokens.inkDim
+                            stroke: 1.7
+                        }
+                        HoverHandler { id: moreHov; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: bar.toggleSettings() }
+                    }
+                }
 
                 Group {
                     label: ""
@@ -466,11 +573,17 @@ Item {
                 color: Tokens.lineSoft
             }
             Text {
-                // Phrase by phrase, so each is a translatable unit.
-                text: [I18n.tr("drag to move"), I18n.tr("corner to size"),
-                       I18n.tr("dot to turn"), I18n.tr("scroll to resize"),
-                       "f " + I18n.tr("flip"), "m " + I18n.tr("mirror"),
-                       "r " + I18n.tr("square")].join("     ")
+                // Phrase by phrase, so each is a translatable unit. The edge
+                // field owns the whole screen and has no box to aim, so its
+                // hint names only the gestures that actually edit it.
+                text: (Config.isAura
+                       ? [I18n.tr("the field fills the screen: tune it here"),
+                          "f " + I18n.tr("flow"),
+                          "[ ] " + I18n.tr("walk the looks")]
+                       : [I18n.tr("drag to move"), I18n.tr("corner to size"),
+                          I18n.tr("dot to turn"), I18n.tr("scroll to resize"),
+                          "f " + I18n.tr("flip"), "m " + I18n.tr("mirror"),
+                          "r " + I18n.tr("square"), "s " + I18n.tr("settings")]).join("     ")
                 color: Tokens.inkFaint
                 font.family: Tokens.ui
                 font.pixelSize: Tokens.fMicro
@@ -522,8 +635,6 @@ Item {
         x: Math.round((bar.width - width) / 2)
         y: bar.atTop ? plate.y + plate.height + Tokens.s3 : plate.y - height - Tokens.s3
         width: 244
-        height: pick.height + 2 * Tokens.s4
-        radius: Tokens.radius
         color: Qt.alpha(Tokens.paper, 0.96)
         border.width: Tokens.border
         border.color: Tokens.line
@@ -724,6 +835,28 @@ Item {
                 }
             }
         }
+    }
+
+    // --- the settings sheet ---------------------------------------------------
+    // The gear's drawer: every knob not worth a slot on the bar. A sibling of
+    // the tray and picker, so the Placer's focus and mask already cover it, and
+    // it opens under the gear rather than centred, beside the button that asked.
+    SettingsPopup {
+        id: settingsPop
+        // Under the gear's end of the plate, not centred: the drawer opens
+        // beside the button that asked for it. Both scale about their own
+        // centre, so this matches the plate's scaled right edge exactly.
+        x: Math.round(plate.x + (plate.width - width) / 2
+                      + (plate.width * plate.scale - width * scale) / 2)
+        y: bar.atTop ? plate.y + plate.height * plate.scale + Tokens.s3
+                     : plate.y + plate.height * (1 - plate.scale) - height - Tokens.s3
+        // Never taller than the gap the plate leaves, so the sheet stays on
+        // screen; its body scrolls for the rest.
+        height: Math.max(220, Math.min(420, bar.height - 2 * Tokens.s5
+                    - Math.round(plate.height * plate.scale) - 2 * Tokens.s3))
+        scale: bar.fit(width)
+        transformOrigin: bar.atTop ? Item.Top : Item.Bottom
+        onEditColor: (t) => bar.openAuraColor(t)
     }
 
     // The eyebrow says what the control below it is.
