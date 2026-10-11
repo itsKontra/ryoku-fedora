@@ -14,6 +14,8 @@ import "weather"
 import "notes"
 import "dayprogress"
 import "shape"
+import "iris"
+import "iris/IrisRoster.js" as IrisRoster
 import Ryoku.PluginKit
 import shell.services as Services
 import "../stage"
@@ -109,11 +111,14 @@ Scope {
             Stage.GlobalStates.editProgress, Stage.GlobalStates.editDrawerProgress)
         : Qt.matrix4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
     // Human titles for every framed widget: the built-ins by name, then the
-    // the raw id as a last resort.
+    // hosted roster's own labels, so a frame never reads "irisClock".
     function widgetTitle(w) {
         const n = { clock: "Clock", calendar: "Calendar", music: "Music", aio: "All-in-one", stats: "System stats", weather: "Weather", notes: "Notes", dayprogress: "Day Progress", shape: "Shape", visualizer: "Visualizer" };
         if (n[w])
             return n[w];
+        const iris = IrisRoster.byPrefix(w);
+        if (iris)
+            return iris.label;
         return w;
     }
     function widgetValue(widget, suffix) {
@@ -173,6 +178,13 @@ Scope {
             });
         }
         const out = bi.slice();
+        // the vendored iRiS faces: one roster row each, on/off from widgets.json,
+        // grouped so the Hub's Add drop-down keeps them together.
+        const irisFaces = IrisRoster.faces;
+        for (var k = 0; k < irisFaces.length; k++) {
+            const f = irisFaces[k];
+            out.push({ id: f.prefix, label: f.label, icon: f.icon, enabled: root.widgetValue(f.prefix, "Enabled") === true, group: "Shima widgets" });
+        }
         for (var g = 0; g < order.length; g++) {
             const rows = byGroup[order[g]];
             for (var r = 0; r < rows.length; r++)
@@ -194,6 +206,11 @@ Scope {
         case "notes": return notesLoader.item;
         case "dayprogress": return dayprogressLoader.item;
         case "shape": return shapeLoader.item;
+        }
+        for (var i = 0; i < irisRepeater.count; i++) {
+            const ld = irisRepeater.itemAt(i);
+            if (ld && ld.item && ld.modelData && ld.modelData.prefix === w)
+                return ld.item;
         }
         return null;
     }
@@ -1186,6 +1203,67 @@ Scope {
             }
         }
 
+        // one IrisFaceWidget slot per enabled iRiS face. Same host contract as
+        // the built-ins -- WidgetSlot owns placement/size/lock/backing and the
+        // colour modes; the adapter renders the vendored inir face in Ryoku's
+        // look. Driven by the shared roster so a face is registered once.
+        Repeater {
+            id: irisRepeater
+            model: IrisRoster.faces
+            delegate: Loader {
+                id: irisLoader
+                required property var modelData
+                anchors.fill: parent
+                z: root.widgetZ(irisLoader.modelData.prefix)
+                active: root.widgetsEnabled && root.reloadReady
+                    && (root.widgetValue(irisLoader.modelData.prefix, "Enabled") === true)
+                sourceComponent: Component {
+                    Item {
+                        anchors.fill: parent
+                        WidgetSlot {
+                            id: irisSlot
+                            widget: irisLoader.modelData.prefix
+                            monitor: root.monitorName
+                            z: root.widgetZ(irisLoader.modelData.prefix)
+                            visible: true
+                            anchor: root.widgetValue(irisLoader.modelData.prefix, "Anchor")
+                            freeX: root.widgetValue(irisLoader.modelData.prefix, "X")
+                            freeY: root.widgetValue(irisLoader.modelData.prefix, "Y")
+                            locked: root.widgetValue(irisLoader.modelData.prefix, "Locked")
+                            composing: root.stageComposing
+                            stageController: stageSelection
+                            gridSize: root.editGridSize
+                            snapEnabled: root.editGridSnap
+                            // iNiR style: the face owns its plate, so the slot draws no
+                            // backing. Ryoku style: the slot draws the chosen backing.
+                            bg: Config[irisLoader.modelData.prefix + "Style"] === "ryoku"
+                                ? Config[irisLoader.modelData.prefix + "Bg"] : "none"
+                            scaleCfg: root.widgetValue(irisLoader.modelData.prefix, "Scale")
+                            // per-widget geometry (Ryoku-style backing / iNiR plate radius)
+                            radiusOverride: Config[irisLoader.modelData.prefix + "Radius"]
+                            pad: Config[irisLoader.modelData.prefix + "Pad"] >= 0
+                                ? Config[irisLoader.modelData.prefix + "Pad"] : 0
+                            borderWidth: Config[irisLoader.modelData.prefix + "Border"]
+                            borderOpacity: Config[irisLoader.modelData.prefix + "BorderOpacity"]
+                            backingOpacity: Config[irisLoader.modelData.prefix + "BackingOpacity"]
+                            onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
+                            onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(irisSlot); }
+                            onResized: root.stageRecordGesture(irisSlot)
+                            IrisFaceWidget {
+                                faceId: irisLoader.modelData.id
+                                kind: irisLoader.modelData.kind
+                                prefix: irisLoader.modelData.prefix
+                                scaleCfg: root.widgetValue(irisLoader.modelData.prefix, "Scale")
+                                sizeCfg: root.widgetValue(irisLoader.modelData.prefix, "Size")
+                                screen: root.screen
+                                hostX: irisSlot.x
+                                hostY: irisSlot.y
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // one draggable PluginDesktopSlot per enabled desktopWidget plugin.
         // drag = write free pos. resize bracket = write scale. right-click

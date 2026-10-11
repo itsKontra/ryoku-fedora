@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import "Singletons"
 import Ryoku.Ui.Singletons
+import "iris/IrisRoster.js" as IrisRoster
 import "../stage/Singletons" as StageCfg
 import "../visualizer/Singletons" as VizCfg
 import stage.modules.common.functions as StageFunctions
@@ -61,6 +62,15 @@ Item {
         : menu.scope + "Design"
     readonly property string curDesign: menu.isWidget ? (Config[menu.designKey] ?? "") : ""
 
+    // The vendored iRiS faces hosted in Ryoku's slot: roster metadata, their
+    // upstream/Ryoku skin toggle, and the face's own size ladder.
+    readonly property var irisFace: IrisRoster.byPrefix(menu.scope)
+    readonly property bool isIris: menu.irisFace !== null
+    readonly property bool isRyokuStyle: menu.isIris && Config[menu.scope + "Style"] === "ryoku"
+    readonly property var facePresets: menu.isIris ? menu.irisFace.sizes : []
+    readonly property string facePresetKey: menu.scope + "Size"
+    readonly property string curFacePreset: menu.isIris ? (Config[menu.scope + "Size"] || menu.irisFace.sizes[0]) : ""
+
     // the kanji seal each scope carries in the menu masthead (docs/ui-ux.md).
     readonly property var glosses: ({
         "desktop": "卓上",
@@ -93,7 +103,7 @@ Item {
         dayprogress: ["ring", "arc"],
         shape: ["dot", "ring", "diamond", "square"]
     })
-    readonly property bool hasDesign: menu.isWidget
+    readonly property bool hasDesign: menu.isWidget && !menu.isIris
         && (menu.designLists[menu.scope] !== undefined)
 
     // The source menu and resize grip share the same named detents.
@@ -112,6 +122,13 @@ Item {
         if (!d)
             return;
         Config.set(menu.designKey, d[(d.indexOf(Config[menu.designKey]) + 1) % d.length]);
+    }
+    function cycleFacePreset() {
+        const presets = menu.facePresets;
+        if (!presets || presets.length < 2)
+            return;
+        const current = presets.indexOf(menu.curFacePreset);
+        Config.set(menu.facePresetKey, presets[(current + 1) % presets.length]);
     }
     function stepScale(direction) {
         const next = StageFunctions.EditModeLogic.steppedScale(menu.curScale, direction);
@@ -163,17 +180,35 @@ Item {
 
     DesktopMenu {
         id: shell
-        title: I18n.tr(menu.builtinLabels[menu.scope] || menu.cap(menu.scope))
-        gloss: menu.glosses[menu.scope] || ""
+        title: menu.isIris ? I18n.tr(menu.irisFace.label)
+            : I18n.tr(menu.builtinLabels[menu.scope] || menu.cap(menu.scope))
+        gloss: menu.glosses[menu.scope] || (menu.isIris ? menu.irisFace.gloss : "")
 
         // ── quick knobs ────────────────────────────────────────────────
-        // Native widgets cycle their look. Everything finer opens Customize.
+        // Native widgets cycle their look; hosted faces flip between their
+        // upstream skin and Ryoku's backing. Everything finer opens Customize.
         MenuRow {
             visible: menu.hasDesign
             label: I18n.tr("Style")
             value: menu.cap(menu.curDesign)
             closeOnTrigger: false
             onTriggered: menu.cycleDesign()
+        }
+        MenuRow {
+            visible: menu.isIris
+            label: I18n.tr("Style")
+            value: menu.isRyokuStyle ? "Ryoku" : "Original"
+            on: menu.isRyokuStyle
+            closeOnTrigger: false
+            onTriggered: Config.set(menu.scope + "Style",
+                menu.isRyokuStyle ? "inir" : "ryoku")
+        }
+        MenuRow {
+            visible: menu.isIris && menu.facePresets.length > 1
+            label: I18n.tr("Face size")
+            value: menu.cap(menu.curFacePreset)
+            closeOnTrigger: false
+            onTriggered: menu.cycleFacePreset()
         }
         MenuRow {
             visible: menu.isVisualizer

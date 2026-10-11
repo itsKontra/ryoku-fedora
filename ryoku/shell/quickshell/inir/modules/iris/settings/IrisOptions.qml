@@ -96,9 +96,6 @@ QtObject {
         return name !== "ink"
     }
     function shown(spec: var): bool {
-        // The desktop draws Shima's widget faces through a Ryoku desktop module
-        // this build does not carry yet, so their settings would change nothing.
-        if (spec.target === "desktop" && spec.group === "Widgets") return false
         if (spec.showIf && !spec.showIf()) return false
         if (!root.availableIn(spec)) return false
         const when = String(spec.visibleWhen ?? "")
