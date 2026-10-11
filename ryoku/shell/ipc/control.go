@@ -148,17 +148,20 @@ func hubNav(section string) bool {
 	return exec.Command("qs", argv...).Run() == nil
 }
 
-// Retired Hub links now name their owning Stage Editor catalogue.
+// hubEditorSections maps retired Hub links to their owning Stage Editor
+// catalogue. A running Hub resolves the same links in Hub.qml's
+// editorSectionFor; this copy lets a cold `hub open` hand off without starting
+// the Hub, and TestHubEditorSectionsMatchHub keeps the two equal.
+var hubEditorSections = map[string]string{
+	"desktop-scene":            "depth",
+	"stage":                    "depth",
+	"desktop-scene-visualizer": "visualizer",
+	"desktop-scene-widgets":    "widgets",
+	"widgets":                  "widgets",
+}
+
 func hubEditorSection(section string) string {
-	switch section {
-	case "desktop-scene", "stage":
-		return "depth"
-	case "desktop-scene-visualizer":
-		return "visualizer"
-	case "desktop-scene-widgets", "widgets":
-		return "widgets"
-	}
-	return ""
+	return hubEditorSections[section]
 }
 
 // hubAlive: a running Hub answers its nav ipc.

@@ -54,12 +54,10 @@ Rectangle {
     // remember the last section so a reopen lands where you left, not the default.
     // Read once at startup by `sectionGet` below; written here on every change.
     onSectionChanged: Quickshell.execDetached(["ryoku-hub", "config", "set", "section", hub.section])
-    // A Hub that remembered the retired `windows` section, or a deep link that
-    // still names it, lands on the compositor page that now holds those rows
-    // rather than a blank pane.
     // Retired page names stay useful as entry points, but the desktop owns the
     // editors now: a deep link hands off to the Stage Editor's catalogue
-    // without changing the already-open Hub's current page.
+    // without changing the already-open Hub's current page. ryoku-shell's
+    // hubEditorSections holds the same table for a cold `hub open`.
     function editorSectionFor(target) {
         if (target === "widgets" || target === "desktop-scene-widgets")
             return "widgets";
@@ -69,6 +67,9 @@ Rectangle {
             return "depth";
         return "";
     }
+    // A Hub that remembered the retired `windows` section, or a deep link that
+    // still names it, lands on the compositor page that now holds those rows
+    // rather than a blank pane.
     function canonicalSection(s) {
         // sections that were folded into another page: an old deep link (the
         // Store's "open in settings", a keybind, a script) still lands right.
