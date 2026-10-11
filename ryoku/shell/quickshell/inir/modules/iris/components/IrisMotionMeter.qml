@@ -60,14 +60,13 @@ Singleton {
 
     Process {
         id: refresh
-        command: ["niri", "msg", "-j", "outputs"]
+        command: ["ryoku-hub", "outputs"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
                     const outputs = JSON.parse(text)
-                    const output = outputs[GlobalStates.focusedScreen?.name ?? ""] ?? Object.values(outputs)[0]
-                    const mode = output?.modes?.[output?.current_mode ?? 0]
-                    if (mode?.refresh_rate > 0) root.vblank = 1000000 / mode.refresh_rate
+                    const output = outputs.find(o => o.name === (GlobalStates.focusedScreen?.name ?? "")) ?? outputs[0]
+                    if (output?.refresh > 0) root.vblank = 1000 / output.refresh
                 } catch (error) {}
             }
         }
