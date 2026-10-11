@@ -120,6 +120,25 @@ class Extras(unittest.TestCase):
             target = root / 'share/fonts/SpaceMonoNerdFont/SpaceMonoNerdFont-Regular.ttf'
             self.assertEqual(target.read_bytes(), font_data)
 
+    def test_readex_pro_takes_the_variable_face_and_its_licence(self):
+        import io, tarfile
+        blob = io.BytesIO()
+        font_data = b'\x00\x01\x00\x00mock font data'
+        with tarfile.open(fileobj=blob, mode='w:gz') as archive:
+            for name, data in (('readexpro-x/fonts/variable/Readexpro[HEXP,wght].ttf', font_data),
+                               ('readexpro-x/fonts/ttf/ReadexPro-Bold.ttf', font_data),
+                               ('readexpro-x/OFL.txt', b'licence')):
+                info = tarfile.TarInfo(name)
+                info.size = len(data)
+                archive.addfile(info, io.BytesIO(data))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(extra, 'download', return_value=blob.getvalue()):
+                extra.install('readex-pro', root)
+            fonts = sorted(p.name for p in (root / 'share/fonts/ReadexPro').iterdir())
+            self.assertEqual(fonts, ['Readexpro[HEXP,wght].ttf'])
+            self.assertEqual((root / 'share/licenses/ReadexPro/OFL.txt').read_bytes(), b'licence')
+
     def test_truncated_download_fails_checksum(self):
         import io
         with patch.object(extra.urllib.request, 'urlopen', return_value=io.BytesIO(b'partial')):

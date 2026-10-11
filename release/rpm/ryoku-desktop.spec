@@ -79,6 +79,10 @@ Requires:       google-noto-sans-fonts
 Requires:       google-noto-sans-cjk-fonts
 Requires:       google-noto-emoji-fonts
 Requires:       jetbrains-mono-fonts
+# Shima's numerals and its Montserrat look; Readex Pro, its title face, is not
+# packaged for Fedora and ships from ryoku-extras.
+Requires:       google-rubik-fonts
+Requires:       julietaula-montserrat-fonts
 Provides:       ryostore
 Provides:       ryovm
 Provides:       ryoku-ui = %{version}-%{release}
