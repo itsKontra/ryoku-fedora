@@ -96,6 +96,15 @@ asks for packages the repository serves now; the transaction is restricted to
 `--repo=RyokuCOPR`, so dnf takes our build of a name that also exists in the
 Fedora repositories, and `distro-sync` moves it down as readily as up.
 
+A release can add a requirement only Fedora serves (a font, a library). The
+restricted transaction cannot see it, so the update first resolves the set
+with `--assumeno`, installs whatever dnf reports nothing provides from every
+enabled repository, and only then runs the real transaction. Those are new
+packages, never upgrades of the base. dnf skips an upgrade it cannot resolve
+and still exits 0, so afterwards the update compares each package against the
+newest build `RyokuCOPR` serves and fails, naming the packages, when any was
+left behind.
+
 After the desktop is back, the update refreshes the agent OS when it is present:
 `ryoku-rashin index` regenerates the vault and re-indexes the config mirror with
 Prowl, then `prowl` is brought current. On a dev box (Prowl on PATH but

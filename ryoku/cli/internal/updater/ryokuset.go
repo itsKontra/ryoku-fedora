@@ -2,6 +2,8 @@ package updater
 
 import (
 	"bufio"
+	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -96,6 +98,93 @@ func ryokuInstallArgs(set []string) []string {
 		return []string{"true"}
 	}
 	return append([]string{"sudo", "dnf", "-y", "--repo=" + sys.RPMRepoName, "distro-sync"}, set...)
+}
+
+// A release can add a Requires on a package only Fedora serves (a font, a
+// library). The lane is restricted to RyokuCOPR, so dnf sees nothing that
+// provides it and skips the whole set with exit 0. ryokuMissingDeps finds those
+// requirements with a dry resolve, and depInstallArgs installs just them from
+// every enabled repository before the real transaction: new packages only, so
+// the base system still does not move.
+
+// nothingProvidesRe: dnf's "nothing provides <capability> needed by <nevra>".
+var nothingProvidesRe = regexp.MustCompile(`nothing provides (.+?) needed by `)
+
+// missingDeps: the capabilities a resolve reported nothing provides, in order
+// of first mention, deduplicated. Pure over dnf's output.
+func missingDeps(out string) []string {
+	seen := map[string]bool{}
+	var caps []string
+	for _, m := range nothingProvidesRe.FindAllStringSubmatch(out, -1) {
+		if c := strings.TrimSpace(m[1]); c != "" && !seen[c] {
+			seen[c] = true
+			caps = append(caps, c)
+		}
+	}
+	return caps
+}
+
+// ryokuPlanArgs resolves the lane without running it; --assumeno needs no root.
+func ryokuPlanArgs(set []string) []string {
+	return append([]string{"dnf", "--assumeno", "--repo=" + sys.RPMRepoName, "distro-sync"}, set...)
+}
+
+// depInstallArgs installs the missing requirements from every enabled repo.
+func depInstallArgs(caps []string) []string {
+	return append([]string{"sudo", "dnf", "-y", "install"}, caps...)
+}
+
+// ryokuMissingDeps: what the set's new builds require that RyokuCOPR alone
+// cannot provide. --assumeno exits non-zero whenever there is work, so the
+// output is read whatever the status.
+func ryokuMissingDeps(set []string) []string {
+	argv := ryokuPlanArgs(set)
+	out, _ := exec.Command(argv[0], argv[1:]...).CombinedOutput()
+	return missingDeps(string(out))
+}
+
+// heldBack: the set's packages the box still runs older than the newest build
+// the repo serves. dnf skips an uninstallable upgrade and exits 0, so its
+// status alone cannot say the set moved. Pure over two name -> EVR maps.
+func heldBack(installed, latest map[string]string) []updateItem {
+	var behind []updateItem
+	for name, have := range installed {
+		if want, ok := latest[name]; ok && versionCompare(have, want) < 0 {
+			behind = append(behind, updateItem{Name: name, Old: have, New: want})
+		}
+	}
+	sort.Slice(behind, func(i, j int) bool { return behind[i].Name < behind[j].Name })
+	return behind
+}
+
+// evrMap reads "name evr" lines, keeping the newest EVR of a repeated name.
+func evrMap(out string) map[string]string {
+	m := map[string]string{}
+	for _, l := range lines(out) {
+		f := strings.Fields(l)
+		if len(f) != 2 {
+			continue
+		}
+		if have, ok := m[f[0]]; !ok || versionCompare(have, f[1]) < 0 {
+			m[f[0]] = f[1]
+		}
+	}
+	return m
+}
+
+// ryokuHeldBack compares the box against the repo after the transaction.
+func ryokuHeldBack(set []string) ([]updateItem, error) {
+	latest, err := sys.RunOut("dnf", append([]string{"repoquery", "--repo=" + sys.RPMRepoName,
+		"--latest-limit=1", "--qf", "%{name} %{evr}\n"}, set...)...)
+	if err != nil {
+		return nil, err
+	}
+	installed, err := sys.RunOut("rpm", append([]string{"-q", "--qf",
+		"%{NAME} %{EPOCHNUM}:%{VERSION}-%{RELEASE}\n"}, set...)...)
+	if err != nil && strings.TrimSpace(installed) == "" {
+		return nil, err
+	}
+	return heldBack(evrMap(installed), evrMap(latest)), nil
 }
 
 // systemLanePending: what the user's lane would take, minus the Ryoku set we

@@ -175,6 +175,12 @@ func Update(args []string) error {
 		return e
 	}
 	progress.logf(i18n.T("Updating %d Ryoku package(s); the base system stays as it is"), len(set))
+	if deps := ryokuMissingDeps(set); len(deps) > 0 {
+		progress.logf(i18n.T("This release needs %d new package(s) from your distribution: %s"), len(deps), strings.Join(deps, ", "))
+		if err := runUpgrade(i18n.T("Dependencies"), "Ryoku dependency install", depInstallArgs(deps)); err != nil {
+			fmt.Fprintf(os.Stderr, i18n.T("warning: installing the new dependencies failed: %v\n"), err)
+		}
+	}
 	err = runRyokuUpgrade(set)
 	if err != nil {
 		// One retry on fresh metadata: a COPR mirror or network hiccup is the
@@ -191,6 +197,16 @@ func Update(args []string) error {
 			hint = i18n.T("see `ryoku rollback` (pre-update snapshot ") + pre + ")"
 		}
 		e := fmt.Errorf(i18n.T("the Ryoku package upgrade failed; %s: %w"), hint, err)
+		progress.fail(e)
+		return e
+	}
+	if behind, err := ryokuHeldBack(set); err == nil && len(behind) > 0 {
+		names := make([]string, len(behind))
+		for i, b := range behind {
+			names[i] = b.Name + " " + b.Old + " -> " + b.New
+		}
+		e := fmt.Errorf(i18n.T("dnf could not move %d Ryoku package(s) to what %s serves (%s); the dependency problems are listed above"),
+			len(behind), sys.RPMRepoName, strings.Join(names, ", "))
 		progress.fail(e)
 		return e
 	}
