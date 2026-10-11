@@ -197,6 +197,7 @@ ShellRoot {
                 wallpaperLive: wallpaper.live
                 videoMuted: wallpaper.videoMuted
                 videoVolume: wallpaper.videoVolume
+                videoPaused: wallpaper.videoPaused
             }
 
             // A blurred copy of the wallpaper for the compositor's overview
