@@ -54,15 +54,16 @@ Item {
     }
 
     readonly property bool sounding: Spectrum.energy > 0.04 || motion.activity > 0.02
-    // The idle wave is the user's opted-in resting animation, so plain silence
-    // must leave it breathing; only the hard tiers (Power Saver, lowPowerMode,
-    // Game Mode) force it off, as Performance documents.
-    readonly property bool wantIdleWave: motion.cfg.idleWave && !Performance.visualizerHardFrozen
+    // Idle wave and spin are explicit visual choices. Only the hard performance
+    // tiers override them; plain audio-idle merely stops the analyser.
+    readonly property bool hardFrozen: Performance.visualizerHardFrozen
+    readonly property bool wantIdleWave: motion.cfg.idleWave && !motion.hardFrozen
+    readonly property bool wantSpin: motion.cfg.spin > 0 && !motion.hardFrozen
     readonly property bool wantPeaks: motion.cfg.peaks
         && (motion.style === "bars" || motion.style === "segments")
     readonly property bool animating: motion.sounding || motion.wantIdleWave
         || motion.maxLevel > 0.004 || (motion.scope && Waveform.samples.length > 0)
-        || motion.cfg.spin > 0
+        || motion.wantSpin
 
     function rawLevel(i) {
         var l = Spectrum.levels;
@@ -81,6 +82,10 @@ Item {
         running: motion.active && Config.enabled && motion.animating
         repeat: true
         property real last: 0
+        // A stop leaves `last` stale: the first tick after a hard freeze or
+        // inactive surface would otherwise clock the whole frozen span as one
+        // frame and spike the governor. Reseed that first tick.
+        onRunningChanged: if (!ticker.running) ticker.last = 0;
         onTriggered: {
             var now = Date.now();
             var raw = ticker.last > 0 ? (now - ticker.last) / 1000 : ticker.interval / 1000;
@@ -94,6 +99,10 @@ Item {
     // Climb and descend tiers on a slow average of the overrun, with a dwell, so
     // a single hitch never trips a change and the tier cannot oscillate.
     function governor(raw, asked) {
+        // A gap far past the asked interval is a resume, not sustained overrun:
+        // counting it would trip a tier the instant animation restarts.
+        if (raw > asked * 4)
+            return;
         var ratio = Math.min(3, asked > 0 ? raw / asked : 1);
         motion.govOverrun += (ratio - motion.govOverrun) * 0.1;
         var now = Date.now();
@@ -116,7 +125,7 @@ Item {
             * (1 - Math.exp(-dt / (goal > motion.activity ? 0.05 : 1.1)));
         if (motion.wantIdleWave)
             motion.idlePhase += dt * (Math.PI * 2 / 6);
-        if (motion.cfg.spin > 0)
+        if (motion.wantSpin)
             motion.spinDeg = (motion.spinDeg + dt * motion.cfg.spin) % 360;
 
         if (motion.scope) {
@@ -196,6 +205,13 @@ Item {
         motion.maxLevel = mx;
     }
 
+    onHardFrozenChanged: if (motion.hardFrozen) {
+        motion.activity = 0;
+        motion.maxLevel = 0;
+        motion.levels = [];
+        motion.peaks = [];
+    }
+
     // A stopped Timer must leave a resting picture behind, not the last frame
     // of the music.
     onAnimatingChanged: if (!motion.animating) {
@@ -206,5 +222,12 @@ Item {
     onBandsChanged: {
         motion.levels = [];
         motion.peaks = [];
+    }
+
+    // Turning the governor off must not leave a stale cap latched: re-enabling
+    // adaptive quality starts clean at the full frame rate.
+    onGovOnChanged: if (!motion.govOn) {
+        motion.govTier = 0;
+        motion.govOverrun = 1;
     }
 }

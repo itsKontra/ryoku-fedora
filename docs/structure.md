@@ -84,10 +84,11 @@ truth for the live desktop.
   primitives, and the wallpaper palette. It also hosts the desktop spectrum
   renderer, so the wallpaper and the Hub preview draw one geometry:
   `SpectrumField.qml` with the analytic `shaders/spectrum.frag(.qsb)` pass draws
-  every look, `Singletons/VizStyles.qml` is the single catalogue of the eleven
+  the boxed looks, `AuraField.qml` with `shaders/aura.frag(.qsb)` draws the edge
+  field, `Singletons/VizStyles.qml` is the single catalogue of the twelve
   looks, and `lib/spectrum.js` (with `spectrum.test.mjs` beside it) is the pure
   band math, `lib/place.js` (with `place.test.mjs`) the placement math for a box that turns
-  and leans.
+  and leans, `lib/aura.js` (with `aura.test.mjs`) the sector folding for the field.
   Installs to `/usr/lib/qt6/qml/Ryoku/Ui`.
 - `i18n/` the translation catalog and the three runtimes that read it. English
   source strings are the keys, so a developer only ever writes English and a

@@ -192,10 +192,10 @@ func runAct(args []string) error {
 		return perform(action("ToggleOverview", map[string]any{}))
 
 	case wm.ActionNightLightOn:
-		return nightlightStart("gammastep", "-m", "wayland", "-O", strconv.Itoa(nightlightTemp(rest)))
+		return nightlightStart(wlsunsetArgs(nightlightTemp(rest))...)
 
 	case wm.ActionNightLightOff:
-		nightlightStop("gammastep")
+		nightlightStop("wlsunset")
 		return nil
 
 	case wm.ActionInputTouchpad:
@@ -647,11 +647,20 @@ func nightlightTemp(args []string) int {
 	return t
 }
 
+// wlsunsetArgs pins wlsunset to one temperature all year. With no location it
+// holds a static state, but which one follows the season: the low (-t) while
+// the sun's declination is negative, the high (-T) from about March to
+// September, when it reads the missing latitude as midnight sun. A fixed far
+// high turned the screen blue every summer, so the high sits one kelvin above
+// the low, the smallest gap its high-above-low validation accepts.
+func wlsunsetArgs(temp int) []string {
+	return []string{"wlsunset", "-t", strconv.Itoa(temp), "-T", strconv.Itoa(temp + 1)}
+}
+
 // nightlightStart replaces any running backend with a fresh one warmed to the
-// temperature. gammastep -m wayland -O sets the temperature over
-// wlr-gamma-control and pauses until killed, so it is detached (its own session,
-// stdio to /dev/null, released) to outlive this short-lived invocation; niri
-// restores the gamma when it goes away.
+// temperature. The backend is detached (its own session, stdio to /dev/null,
+// released) to outlive this short-lived invocation; niri restores the gamma
+// when it goes away.
 func nightlightStart(argv ...string) error {
 	nightlightStop(argv[0])
 	null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)

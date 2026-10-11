@@ -37,6 +37,8 @@ import (
 // The Qt client segfaults resolving a screen that is already gone. niri still
 // answers one-shot captures (the overview, a window preview, grim), so this is
 // about the long-lived surface, not screencopy itself.
+var foreignAPIs = []wm.ForeignAPI{}
+
 var capsManifest = []wm.Capability{
 	wm.CapWorkspaces,
 	wm.CapWorkspaceMoveToOutput,
@@ -87,10 +89,10 @@ var compositorPackages = []string{
 	"niri",
 	"xwayland-satellite",
 	"xdg-desktop-portal-gnome",
-	// gammastep holds the warm gamma while the night light is on, over
+	// wlsunset holds the warm gamma while the night light is on, over
 	// wlr-gamma-control. niri's night-light backend, so its variant ships and
 	// reclaims it.
-	"gammastep",
+	"wlsunset",
 }
 
 // The manifest is fixed, not probed: niri does not gain features while running,
@@ -104,13 +106,14 @@ func runCaps() error {
 		// Workspaces are created and removed per output as windows come and
 		// go, so presenting them as numbered slots would be a lie.
 		WorkspaceModel: wm.WorkspaceModelDynamic,
+		ForeignAPIs:    foreignAPIs,
 		// wm.niri.* keys stay in the store untouched while another compositor
 		// is active, so they are still there on the way back.
-		SettingDomains: []string{"desktop", "wm." + wm.ProviderNiri},
-		ConfigFiles:    wm.ConfigFiles(wm.ProviderNiri),
-		GeneratedFiles: wm.GeneratedConfig(wm.ProviderNiri),
-		PortalBackend:  "gnome",
-		NightLightProcess: "gammastep",
+		SettingDomains:    []string{"desktop", "wm." + wm.ProviderNiri},
+		ConfigFiles:       wm.ConfigFiles(wm.ProviderNiri),
+		GeneratedFiles:    wm.GeneratedConfig(wm.ProviderNiri),
+		PortalBackend:     "gnome",
+		NightLightProcess: "wlsunset",
 		Packages:          compositorPackages,
 		WindowRuleActions: windowRuleActions,
 	}

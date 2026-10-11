@@ -677,8 +677,17 @@ through the same `Ryoku.Ui.SpectrumField`, so the preview is the exact geometry
 the wallpaper draws and the two cannot drift; only the ramp differs, since app
 content carries no accent.
 
-There are eleven looks, eight that grow from an edge of their box and three that
-are polar:
+There are twelve looks: eight that grow from an edge of their box, three that
+are polar, and one that is not a box at all. `aura` is an edge field, drawn by
+`ryoku/ui/AuraField` and `shaders/aura.frag` instead of the spectrum shader:
+twelve eased sectors (folded and followed in `lib/aura.js`) flow along chosen
+screen edges as one organic current, a rail, an open frame or a joined
+perimeter. It owns four small vocabularies -- material (silk, aurora, contour,
+liquid), movement (flow, ribbon, cells, filament), effect (clean, shimmer,
+echo, prism, bloom, caustic, afterglow) and colour mode (flow, spectrum, pulse,
+static) -- plus reach, span, taper and corner blending, and it paints a
+wallpaper-lit triad unless all three stops are pinned. Its motion twin is
+`AuraMotion`, which runs the same adaptive idle/halve rules as `Motion`.
 
 |Look|Kind|What it is|
 |---|---|---|
@@ -693,8 +702,9 @@ are polar:
 |`radial`|polar|rounded polar bars and a per-angle ramp around a bass-pulsed inner ring|
 |`orb`|polar|a glass sphere: a barely-there body, a wobbling lit rim and ripples inside|
 |`spiral`|polar|bands laid along an Archimedean spiral over one and a half turns|
+|`aura`|field|a living current of light flowing along the screen's edges, twelve sectors deep|
 
-Every look lives in a box, and the box goes anywhere. `x` and `y` place its top
+Every look but `aura` lives in a box, and the box goes anywhere. `x` and `y` place its top
 left corner as fractions of the screen, `w` and `h` size it, `grow` says which of
 its edges the bands rise from (up, down, center, left or right), and `angle` turns
 the whole thing about its centre. A polar look centres in the box and takes its
@@ -740,12 +750,17 @@ An editing bar (`EditBar.qml`) comes with it, fixed to the bottom of the screen 
 stepping to the top when the box would be under it: a readout of the thing being
 moved is the one thing on screen that must not move with it. It carries the look
 itself, and the knobs you judge by eye rather than by number: the current look drawn
-as a silhouette (click for a tray of all eleven, or wheel the chip to walk them),
+as a silhouette (click for a tray of all thirteen, or wheel the chip to walk them),
 bands, mirror, peak caps, gain, smoothing, the live angle with a SQUARE reset, the
-two leans with a LEVEL reset, the size, FLIP and DONE. `F` flips, `M` mirrors, `P`
-toggles peak caps, `R` squares, `[` and `]` walk the looks. The point is that a look
+two leans with a LEVEL reset, the size, a gear that opens a square drawer of
+everything the bar has no room for (`SettingsPopup.qml`: playback, shape, and the
+field's deep knobs, scrollable, dimming what the current look ignores), FLIP and
+DONE. `F` flips, `M` mirrors, `P`
+toggles peak caps, `R` squares, `S` opens the drawer, `[` and `]` walk the looks.
+The point is that a look
 is tuned where you can see it,
-on the wallpaper, instead of behind the Hub's window; the Hub keeps the full board.
+on the wallpaper, instead of behind the Hub's window; the Hub keeps the look
+picker and the enable switch.
 
 The bar is built from `Ryoku.Ui`'s own controls (`Btn`, `Step`, `Sw`, `Slid`,
 `Gallery`) at the shell's own token metrics, so it is the shell's idiom at the

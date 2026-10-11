@@ -23,7 +23,7 @@ A provider is one binary, `ryoku-wm-<name>`, shipped by
 
 |Verb|Answers|
 |---|---|
-|`caps`|the capability manifest, the workspace model, which files it owns, and the packages it is made of|
+|`caps`|the capability manifest, workspace model, foreign shell interfaces, owned files, and package set|
 |`state`|one snapshot: outputs, workspaces, windows, keyboard|
 |`watch`|the same as a stream of frames, one JSON object per line|
 |`act <id>`|one neutral action (`window.close`, `workspace.focus`, ...)|
@@ -34,6 +34,23 @@ A provider is one binary, `ryoku-wm-<name>`, shipped by
 |`outputs <layout>`|apply a display layout|
 |`session`|the `wayland-session` desktop entry|
 |`environment <pid>`|export the provider's opaque handle from one verified session process|
+
+`ryoku wm compat <plugin-dir>` is the neutral plugin gate. It scans QML,
+JavaScript, shell, Python and executable files without running them, then
+compares any foreign shell interfaces it finds with `caps.foreignApis`. A
+completed scan always exits zero and prints `{ok, requires, reason}` as JSON,
+including `ok: false` when the active provider cannot serve every requirement.
+An incomplete scan, a path error or a provider error exits non-zero, so plugin
+hosts fail closed. The scan rejects symlinks that leave the plugin directory
+and bounds per-file bytes, tree entries and total source bytes to keep enable
+and load paths fast.
+
+The Hyprland provider serves `quickshell-hyprland`, `hyprctl` and
+`hyprland-ipc`. The niri provider serves no foreign shell APIs. A plugin that
+imports `Quickshell.Hyprland`, calls `hyprctl`, or reaches Hyprland IPC through
+`HYPRLAND_INSTANCE_SIGNATURE` or `.socket2.sock` therefore loads normally on
+Hyprland and is refused before enable or load on niri, with the missing APIs in
+`reason`.
 
 `apply --preview` writes nothing and reports what it could not honour. That
 report is what `ryoku wm use` and the Hub show before a switch, so the cost of
@@ -115,7 +132,7 @@ change what a user sees on niri:
 actions rather than a settings row:
 
 - `nightlight.on <K>` warms the screen to a colour temperature; the provider runs
-  its own detached backend (`hyprsunset` on Hyprland, `gammastep` on niri).
+  its own detached backend (`hyprsunset` on Hyprland, `wlsunset` on niri).
 - `nightlight.off` stops that backend, and the compositor restores the gamma when
   it goes away.
 

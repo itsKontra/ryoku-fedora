@@ -377,7 +377,7 @@ func stubRequest(t *testing.T, fn func(any) (json.RawMessage, error)) func() {
 
 // The colour temperature is clamped to the range the gamma client accepts and a
 // missing or unparseable argument falls back to the default, so a stray keybind
-// argument can never ask gammastep for a value it would reject or for 0 K.
+// argument can never ask wlsunset for a value it would reject or for 0 K.
 func TestNightlightTempClamps(t *testing.T) {
 	for _, tc := range []struct {
 		args []string
@@ -445,5 +445,19 @@ func TestActBorderPaletteNoOpWhenFixed(t *testing.T) {
 	}
 	if _, err := os.Stat(borderPalettePath()); !os.IsNotExist(err) {
 		t.Error("a fixed border must not write the palette file")
+	}
+}
+
+// wlsunset reads a missing location as polar night half the year and as
+// midnight sun the other half, holding -t or -T respectively, so both must
+// land on the user's temperature: one kelvin apart, the smallest gap its
+// high-above-low validation accepts.
+func TestWlsunsetArgsHoldOneTemperatureAllYear(t *testing.T) {
+	for _, temp := range []int{1000, 4000, 25000} {
+		got := strings.Join(wlsunsetArgs(temp), " ")
+		want := fmt.Sprintf("wlsunset -t %d -T %d", temp, temp+1)
+		if got != want {
+			t.Errorf("wlsunsetArgs(%d) = %q, want %q", temp, got, want)
+		}
 	}
 }

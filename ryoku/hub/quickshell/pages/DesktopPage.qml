@@ -180,6 +180,19 @@ Item {
             visible: sp.tab === "Visualizer"
         }
 
+        // The deep visualiser controls moved to the desktop editor; this note
+        // points there so the trimmed tab does not read as missing settings.
+        Text {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            visible: sp.tab === "Visualizer"
+            text: I18n.tr("Deep settings live on the desktop editor: the gear in the placement bar opens them.")
+            color: Tokens.inkMuted
+            font.family: Tokens.ui
+            font.pixelSize: Tokens.fSmall
+            wrapMode: Text.WordWrap
+        }
+
         // ── PICKERS: how the theme, wallpaper and media pickers are laid out.
         // Folded flat off the General subtab so the shared extras slot leaves no
         // gap on Visualizer, the way the visualiser preview folds off General.

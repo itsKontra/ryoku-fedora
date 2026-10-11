@@ -142,6 +142,8 @@ type daemon struct {
 	wmReady      bool
 	wmVersions   map[string]int // frame kind -> publishes since daemon start
 	wmTopic      *stateTopic
+	nightlight   *nightlightState // night-light self-heal (nil until started)
+	wmFocusTopic *stateTopic
 	gateMu       sync.Mutex               // guards gateWant / gateWake
 	gateWant     map[string]bool          // component -> may run now (absent = yes)
 	gateWake     map[string]chan struct{} // wakes a parked supervisor when its gate opens
@@ -464,7 +466,6 @@ func (d *daemon) bootstrap() {
 	go d.watchMatugenKnobs()
 	go d.ledsWorker()
 	d.startWM()
-	go d.watchAudio()
 	go d.watchPowerSounds()
 	go d.watchAutoPowerSaver()
 	go d.widgetGateWorker()
@@ -761,8 +762,8 @@ func (d *daemon) supervise(name string) {
 			return
 		default:
 		}
-		// park while a gate keeps this component unloaded (the visualiser
-		// audio-unload). a fresh open wakes us; the timeout is a safety re-check.
+		// Park while an idle-freeable component's gate is closed. A fresh open
+		// wakes the supervisor; the timeout is only a safety re-check.
 		for !d.gateAllows(name) {
 			select {
 			case <-d.quit:
@@ -1093,10 +1094,9 @@ func (d *daemon) dispatch(line string) string {
 			return "ok"
 		}
 		d.ensure(config)
-		if config == "visualizer" || parkable(config) {
-			// an explicit toggle must win over the idle-unload gate: reopen a
-			// parked visualiser or palette so its supervisor respawns, then
-			// ipcCall retries until the fresh instance answers.
+		if parkable(config) {
+			// An explicit open wins over the idle-unload gate, then ipcCall
+			// retries until the palette's fresh process answers.
 			d.setGate(config, true)
 		}
 		mon := d.activeMonitor()

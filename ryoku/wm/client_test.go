@@ -33,7 +33,7 @@ if (( n == 0 )); then
   echo "provider still coming up" >&2
   exit 1
 fi
-printf '%s' '{"name":"testwm","supports":["nightLight"],"nightLightProcess":"gammastep"}'
+printf '%s' '{"name":"testwm","supports":["nightLight"],"nightLightProcess":"wlsunset"}'
 `)
 	if err := os.WriteFile(prov, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -53,11 +53,35 @@ printf '%s' '{"name":"testwm","supports":["nightLight"],"nightLightProcess":"gam
 	if err != nil {
 		t.Fatalf("second caps probe should succeed once the provider answers: %v", err)
 	}
-	if caps.NightLightProcess != "gammastep" {
+	if caps.NightLightProcess != "wlsunset" {
 		t.Fatalf("reprobe did not pick up the real caps: %+v", caps)
 	}
 	if !c.Can(CapNightLight) {
 		t.Fatal("night light capability should read true after a successful reprobe")
+	}
+}
+
+func TestClientCompatibilityUsesProviderManifest(t *testing.T) {
+	dir := t.TempDir()
+	prov := filepath.Join(dir, "ryoku-wm-testwm")
+	if err := os.WriteFile(prov, []byte("#!/bin/sh\nprintf '%s' '{\"name\":\"testwm\",\"supports\":[],\"foreignApis\":[\"quickshell-hyprland\"]}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	plugin := filepath.Join(dir, "plugin")
+	if err := os.Mkdir(plugin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(plugin, "Main.qml"), []byte("import Quickshell.Hyprland\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	got, err := OpenNamed("testwm").Compatibility(plugin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.OK {
+		t.Fatalf("provider-declared interface was blocked: %+v", got)
 	}
 }
 

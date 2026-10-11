@@ -34,6 +34,9 @@ func niriHome(t *testing.T) string {
 	// touchpadDisabled() reads XDG_STATE_HOME; pin it to a clean dir so the
 	// generated touchpad block does not depend on the dev box's live toggle.
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	// apply publishes the keypad choice for the greeter; keep it off the
+	// dev box's real /var/lib/ryoku hand-off.
+	t.Setenv("RYOKU_GREETER_NUMLOCK_FILE", filepath.Join(t.TempDir(), "greeter-numlock"))
 	return niriConfigDir()
 }
 
@@ -76,6 +79,23 @@ func TestWindowsHonoured(t *testing.T) {
 	}
 	if !defaultStore().Windows.TameMaximizeOnOpen {
 		t.Fatal("the correction must default on, so the reported behaviour is fixed out of the box")
+	}
+}
+
+// TestApplyPublishesGreeterNumlock: a real apply records the keypad choice
+// where the login greeter reads it, so a user who turned "Numlock on at login"
+// off is not forced back on at the next boot's login screen.
+func TestApplyPublishesGreeterNumlock(t *testing.T) {
+	niriHome(t)
+	file := os.Getenv("RYOKU_GREETER_NUMLOCK_FILE")
+	store := writeStore(t, `{"desktop":{"input":{"numlockByDefault":false}}}`)
+	capApply(t, store)
+	b, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("apply wrote no greeter numlock hand-off: %v", err)
+	}
+	if got := strings.TrimSpace(string(b)); got != "off" {
+		t.Fatalf("hand-off = %q, want off", got)
 	}
 }
 

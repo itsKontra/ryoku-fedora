@@ -225,7 +225,7 @@ func liveStill(video string, sec float64) string {
 	if os.MkdirAll(dir, 0o755) != nil {
 		return ""
 	}
-	tmp := out + ".tmp." + strconv.Itoa(os.Getpid()) + ".jpg"
+	tmp := fmt.Sprintf("%s.tmp.%d-%d.jpg", out, os.Getpid(), time.Now().UnixNano())
 	err = exec.Command("ffmpeg", "-y", "-v", "error", "-ss", secStr, "-i", video,
 		"-frames:v", "1", "-q:v", "2", tmp).Run()
 	if err != nil || !fileExists(tmp) {

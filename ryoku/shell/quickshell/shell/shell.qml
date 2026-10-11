@@ -216,10 +216,12 @@ ShellRoot {
             // backdrop, layers, widgets), so there is no separate Background
             // surface here (docs/stage.md). Built on first enable or first
             // placement; cava and its buffers never exist while the visualizer
-            // is off.
+            // is off. A silent visualizer is unloaded on every output when the
+            // performance policy asks for it; live audio re-creates it at once.
             LazyLoader {
                 id: vizLoader
-                activeAsync: VizCfg.Config.enabled || (perScreen.st && perScreen.st.visualizerPlacing)
+                activeAsync: (VizCfg.Config.enabled && Perf.visualizerResident)
+                    || (perScreen.st && perScreen.st.visualizerPlacing)
                 Visualizer {
                     id: perScreenViz
                     screen: perScreen.modelData
