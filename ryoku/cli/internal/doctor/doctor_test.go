@@ -1218,11 +1218,9 @@ func TestBarStyleDefaultsToQsbar(t *testing.T) {
 	}
 }
 
-// migrateDockStore lifts the retired qsbar.dock* knobs into a top-level dock
-// object once the dock became its own shell surface. It must move exactly the
-// five persisted knobs under their new names, drop them from qsbar, never
-// clobber a dock object the shell already wrote, leave the shell-defaulted keys
-// absent, and be idempotent so a second doctor run reads clean.
+// The dock migration converges the qsbar and Sumi frame-bar stores on the
+// universal shell object without changing pin order or overwriting current keys,
+// and is idempotent so a second doctor run reads clean.
 func TestMigrateDockStore(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -1232,7 +1230,11 @@ func TestMigrateDockStore(t *testing.T) {
 		{"absent both", `{"barStyle":"qsbar","qsbar":{"barGapTop":3}}`, false},
 		{"qsbar keys only", `{"qsbar":{"dockEnabled":true,"dockMagnify":false,"dockPinned":["kitty.desktop"],"dockFrost":true,"dockShadow":false,"barGapTop":3}}`, true},
 		{"both present", `{"dock":{"enabled":false,"edge":"top"},"qsbar":{"dockEnabled":true,"dockPinned":["kitty.desktop"],"barGapTop":3}}`, true},
-		{"already migrated", `{"dock":{"enabled":true,"pinned":["kitty.desktop"]},"qsbar":{"barGapTop":3}}`, false},
+		{"already migrated", `{"dock":{"enabled":true,"pinned":["kitty","org.gnome.Nautilus"]},"qsbar":{"barGapTop":3}}`, false},
+		{"pins need normalising", `{"dock":{"pinned":["kitty.desktop","Kitty"]},"qsbar":{"barGapTop":3}}`, true},
+		{"sumi pins", `{"frameBars":{"style":"sumi","dock":{"pinned":["thunar.desktop"]}},"qsbar":{"barGapTop":3}}`, true},
+		{"knobs without pins", `{"qsbar":{"dockEnabled":true,"barGapTop":3}}`, true},
+		{"pins already chosen", `{"dock":{"pinned":[],"customPins":true},"frameBars":{"dock":{"pinned":["thunar"]}},"qsbar":{"barGapTop":3}}`, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1250,7 +1252,17 @@ func TestMigrateDockStore(t *testing.T) {
 			if err := json.Unmarshal(out, &cfg); err != nil {
 				t.Fatalf("migrated JSON does not parse: %v", err)
 			}
+			if dock, _ := cfg["dock"].(map[string]any); dock != nil {
+				if _, isList := dock["pinned"].([]any); !isList {
+					t.Errorf("dock.pinned must stay a list, got %v", dock["pinned"])
+				}
+			}
 			qsbar, _ := cfg["qsbar"].(map[string]any)
+			if frame, ok := cfg["frameBars"].(map[string]any); ok {
+				if pins, _ := frame["dock"].(map[string]any)["pinned"].([]any); len(pins) != 0 {
+					t.Errorf("frameBars.dock.pinned kept its pins: %v", frame)
+				}
+			}
 			for old := range oldDockKeys {
 				if _, present := qsbar[old]; present {
 					t.Errorf("retired key %q survived in qsbar", old)
@@ -1266,8 +1278,22 @@ func TestMigrateDockStore(t *testing.T) {
 		})
 	}
 
+	// pins-already-chosen: an empty list the user chose is not refilled from
+	// a retired store.
+	out, _, err := migrateDockStore([]byte(`{"dock":{"pinned":[],"customPins":true},"frameBars":{"dock":{"pinned":["thunar"]}}}`))
+	if err != nil {
+		t.Fatalf("migrateDockStore: %v", err)
+	}
+	var chosen map[string]any
+	if err := json.Unmarshal(out, &chosen); err != nil {
+		t.Fatalf("migrated JSON does not parse: %v", err)
+	}
+	if pins, _ := chosen["dock"].(map[string]any)["pinned"].([]any); len(pins) != 0 {
+		t.Errorf("a chosen pin list was refilled: %v", pins)
+	}
+
 	// qsbar-keys-only: every knob lands in the new dock object under its new name.
-	out, _, err := migrateDockStore([]byte(`{"qsbar":{"dockEnabled":true,"dockMagnify":false,"dockPinned":["kitty.desktop"],"dockFrost":true,"dockShadow":false}}`))
+	out, _, err = migrateDockStore([]byte(`{"qsbar":{"dockEnabled":true,"dockMagnify":false,"dockPinned":["kitty.desktop"],"dockFrost":true,"dockShadow":false}}`))
 	if err != nil {
 		t.Fatalf("migrateDockStore: %v", err)
 	}
@@ -1279,8 +1305,8 @@ func TestMigrateDockStore(t *testing.T) {
 	if dock["enabled"] != true || dock["magnify"] != false || dock["frost"] != true || dock["shadow"] != false {
 		t.Errorf("dock knobs did not move correctly: %v", dock)
 	}
-	if pins, ok := dock["pinned"].([]any); !ok || len(pins) != 1 || pins[0] != "kitty.desktop" {
-		t.Errorf("dockPinned did not move to dock.pinned: %v", dock["pinned"])
+	if pins, ok := dock["pinned"].([]any); !ok || len(pins) != 1 || pins[0] != "kitty" {
+		t.Errorf("dockPinned did not canonicalise into dock.pinned: %v", dock["pinned"])
 	}
 	// the keys the shell defaults stay absent, so its Config.qml default applies.
 	for _, absent := range []string{"edge", "autohide", "labels", "media"} {
@@ -1311,6 +1337,69 @@ func TestMigrateDockStore(t *testing.T) {
 	if q := cfg["qsbar"].(map[string]any); q["dockEnabled"] != nil {
 		t.Errorf("qsbar dockEnabled was not deleted: %v", q)
 	}
+
+	t.Run("every retired store keeps pin order", func(t *testing.T) {
+		in := []byte(`{
+			"dock":{"pinned":["Firefox.desktop","org.gnome.Nautilus"]},
+			"qsbar":{"dockPinned":["kitty.desktop","firefox"],"barGapTop":3},
+			"frameBars":{"style":"sumi","dock":{"pinned":["Thunar.desktop","kitty"]},"rails":{"top":true}}
+		}`)
+		out, changed, err := migrateDockStore(in)
+		if err != nil || !changed {
+			t.Fatalf("migrateDockStore: changed=%v err=%v", changed, err)
+		}
+		var got map[string]any
+		if err := json.Unmarshal(out, &got); err != nil {
+			t.Fatal(err)
+		}
+		pins := got["dock"].(map[string]any)["pinned"].([]any)
+		want := []string{"Firefox", "org.gnome.Nautilus", "kitty", "Thunar"}
+		if len(pins) != len(want) {
+			t.Fatalf("pins = %v, want %v", pins, want)
+		}
+		for i := range want {
+			if pins[i] != want[i] {
+				t.Errorf("pins[%d] = %v, want %q", i, pins[i], want[i])
+			}
+		}
+		frame := got["frameBars"].(map[string]any)
+		if pins, _ := frame["dock"].(map[string]any)["pinned"].([]any); len(pins) != 0 || frame["style"] != "sumi" || frame["rails"] == nil {
+			t.Errorf("frameBars dock pins survived or unrelated keys were lost: %v", frame)
+		}
+		if _, again, err := migrateDockStore(out); err != nil || again {
+			t.Errorf("re-migrating must be a no-op: changed=%v err=%v", again, err)
+		}
+	})
+
+	t.Run("frame dock keeps its other keys", func(t *testing.T) {
+		out, changed, err := migrateDockStore([]byte(`{"frameBars":{"dock":{"pinned":["kitty"],"size":2}}}`))
+		if err != nil || !changed {
+			t.Fatalf("migrateDockStore: changed=%v err=%v", changed, err)
+		}
+		var got map[string]any
+		if err := json.Unmarshal(out, &got); err != nil {
+			t.Fatal(err)
+		}
+		frameDock := got["frameBars"].(map[string]any)["dock"].(map[string]any)
+		if pins, ok := frameDock["pinned"].([]any); !ok || len(pins) != 0 || frameDock["size"] != float64(2) {
+			t.Errorf("frameBars.dock = %v, want only its pins emptied", frameDock)
+		}
+	})
+
+	// The schema's own empty frame pin list (and the shell-config reconciler's
+	// seeded default) is not a retired store: leaving it is what keeps the two
+	// reconcilers from undoing each other on every run.
+	t.Run("empty frame pin list is left alone", func(t *testing.T) {
+		in := `{"dock":{"pinned":["kitty"]},"frameBars":{"dock":{"pinned":[]}}}`
+		if _, changed, err := migrateDockStore([]byte(in)); err != nil || changed {
+			t.Errorf("changed=%v err=%v, want a no-op", changed, err)
+		}
+		frame, _ := normalizeFrameBars(map[string]any{"version": float64(1)})
+		raw, _ := json.Marshal(map[string]any{"dock": map[string]any{"pinned": []any{"kitty"}}, "frameBars": frame})
+		if _, changed, err := migrateDockStore(raw); err != nil || changed {
+			t.Errorf("a normalised frameBars must be a no-op: changed=%v err=%v", changed, err)
+		}
+	})
 
 	// garbage errors rather than silently rewriting.
 	if _, _, err := migrateDockStore([]byte("not json")); err == nil {

@@ -65,6 +65,8 @@ Rectangle {
             return "visualizer";
         if (target === "stage" || target === "desktop-scene")
             return "depth";
+        if (target === "dock")
+            return "dock";
         return "";
     }
     // A Hub that remembered the retired `windows` section, or a deep link that

@@ -158,6 +158,7 @@ var hubEditorSections = map[string]string{
 	"desktop-scene-visualizer": "visualizer",
 	"desktop-scene-widgets":    "widgets",
 	"widgets":                  "widgets",
+	"dock":                     "dock",
 }
 
 func hubEditorSection(section string) string {

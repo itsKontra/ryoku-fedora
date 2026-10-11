@@ -303,27 +303,21 @@ ShellRoot {
                 AskBubble { screen: perScreen.modelData }
             }
 
-            // The dock: a resident per-monitor surface on the edge opposite the
-            // bar. Style-agnostic, so it lives here rather than inside a bar style;
-            // it is not built until the user turns it on (Hub -> Bar Studio -> Dock).
-            // Shima draws its own dock from the same settings, so this one steps aside.
-            LazyLoader {
+            // One cheap host per monitor loads only the selected dock design.
+            // The surface itself remains independent of the active bar style.
+            // The dock stays through the Stage Editor session (like the bar):
+            // the dock catalogue edits it live, and the mode's viewport clears
+            // the edge it occupies (GlobalStates.dockInsets).
+            UniversalDockHost {
                 id: dockLoader
-                activeAsync: Dock.cfg("enabled", false) && Config.barStyle !== "iris"
-                DockSurface {
-                    id: perScreenDock
-                    screen: perScreen.modelData
-                    // Edit widgets steps the dock back so the whole desktop is the canvas.
-                    visible: Dock.cfg("enabled", false) && Config.barStyle !== "iris"
-                        && !(StageCfg.StageSession.widgets && StageCfg.StageSession.monitor === perScreen.modelData.name)
-                }
+                screen: perScreen.modelData
             }
 
             // The dock's right-click context menu: a full-screen overlay on the
             // monitor that owns the open menu (the thin dock strip cannot host it).
             LazyLoader {
                 id: dockMenuLoader
-                property bool open: Dock.menuOpen && Dock.menuScreen === perScreen.modelData.name
+                property bool open: Dock.design === "ryoku" && Dock.menuOpen && Dock.menuScreen === perScreen.modelData.name
                 activeAsync: open || dockMenuHold.running
                 onOpenChanged: if (!open && active) dockMenuHold.restart()
                 DockMenuOverlay {

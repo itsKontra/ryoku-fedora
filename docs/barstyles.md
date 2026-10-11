@@ -586,7 +586,7 @@ over the same `Ryoku.Ui` form kit the rest of Ryoku Settings uses.
 | Bar | 帯 | position, form, surface, gaps, scale, accent, gap animation, auto-hide |
 | Layout | 配置 | the three lanes: move, hide, add and reset the bar's widgets |
 | Widgets | 部品 | every widget as a row: on/off, density, colour and its own settings |
-| Dock | 台 | the app dock: enabled, edge, autohide, magnify, labels, frost, pinned apps |
+| Dock | 台 | a hand-off: opens the Stage Editor's Dock section, where every bar style's shared dock is edited |
 
 Open it from the bar logo, or from a terminal or a keybind with `ryoku-shell bar
 settings [route]`. The picker style it used to carry now lives on the Hub's

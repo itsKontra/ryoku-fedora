@@ -26,7 +26,7 @@ var ROUTES = [
     { id: "widgets", label: "Widgets", gloss: "\u90e8\u54c1", file: "WidgetsRoute", section: "bar",
       desc: "Show, size, colour and tune each widget.",
       keywords: "widget show hide on off density icon compact colour fill ai claude codex opencode volume boost clock weather sensor temperature plugin settings" },
-    { id: "dock",    label: "Dock",    gloss: "\u53f0", file: "DockRoute", section: "bar",
+    { id: "dock",    label: "Dock",    gloss: "\u53f0", editor: "dock", section: "bar",
       desc: "The app dock opposite the bar.",
       keywords: "dock app pinned pin edge autohide auto hide magnify frost depth shadow label media chip peek" },
     { id: "community", label: "Community", gloss: "\u6709\u5fd7", file: "CommunityRoute", section: "community",

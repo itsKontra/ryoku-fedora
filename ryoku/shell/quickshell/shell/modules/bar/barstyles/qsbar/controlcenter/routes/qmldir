@@ -2,4 +2,3 @@ BarsRoute BarsRoute.qml
 IdentityRoute IdentityRoute.qml
 LayoutRoute LayoutRoute.qml
 WidgetsRoute WidgetsRoute.qml
-DockRoute DockRoute.qml

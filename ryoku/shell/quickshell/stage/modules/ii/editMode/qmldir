@@ -6,6 +6,8 @@ EditBarComponentPage 1.0 EditBarComponentPage.qml
 EditBarMenu 1.0 EditBarMenu.qml
 EditColourPage 1.0 EditColourPage.qml
 EditDesktopIconsPage 1.0 EditDesktopIconsPage.qml
+EditDockAppearancePage 1.0 EditDockAppearancePage.qml
+EditDockWidgetsPage 1.0 EditDockWidgetsPage.qml
 EditMenuPageHeader 1.0 EditMenuPageHeader.qml
 EditMenuRow 1.0 EditMenuRow.qml
 EditModeChrome 1.0 EditModeChrome.qml

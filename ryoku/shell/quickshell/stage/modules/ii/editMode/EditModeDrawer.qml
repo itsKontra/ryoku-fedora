@@ -16,14 +16,14 @@ import shell.services as ShellServices
 /**
  * Edit Mode's panel: the surface that slides in from the right of the card.
  *
- * The catalogues - the desktop's widgets, the bar, the lock
+ * Six catalogues - the desktop's widgets, the bar, the dock, the lock
  * screen's own switches, the wallpaper (each screen's picture, the colour
  * source, the framing) and the style (presets, theme, palette) - and each
  * of them is a ROOT with sub-pages rather
  * than a list of accordions. That is the change: sections that expanded in
  * place put eighty rows in one scroll and left no room for anything a section
- * might want to say about itself, which is why the bar's style variants had
- * nowhere to live and stayed in Settings. A page
+ * might want to say about itself, which is why the bar's style variants and
+ * the dock's own appearance had nowhere to live and stayed in Settings. A page
  * per destination gives each one the whole panel.
  *
  * The address is `GlobalStates.editDrawerSection` plus `editDrawerPage`, held
@@ -98,6 +98,8 @@ Item {
             return page.startsWith("category:") || ((page === "desktopApps" || page === "desktopIcons") && !root.lockTab);
         if (section === "bar")
             return page === "appearance" || page.startsWith("component:");
+        if (section === "dock")
+            return page === "appearance" || page === "widgets" || page.startsWith("apps:");
         if (section === "style")
             return page === "colours";
         if (section === "wallpaper")
@@ -447,6 +449,81 @@ Item {
         return group ? group.items : [];
     }
 
+    // The dock catalogue reads the shell's canonical desktop ids. Running
+    // aliases are resolved before grouping so one application never appears in
+    // both Open now and On the dock under different names.
+    readonly property var dockGroups: {
+        if (root.section !== "dock")
+            return [];
+        const pinnedIds = ShellServices.Dock.pinnedOrStarter();
+        const taken = {};
+        for (const id of pinnedIds)
+            taken[ShellServices.Dock.canonicalId(id)] = true;
+        const running = [];
+        for (const client of ShellServices.Dock.clients) {
+            const id = ShellServices.Dock.canonicalId(client.className);
+            if (!id || taken[id] || running.some(app => app.appId === id))
+                continue;
+            taken[id] = true;
+            running.push({ appId: id });
+        }
+        const rest = Array.from(AppSearch.list ?? [])
+            .filter(entry => entry && entry.id && !entry.noDisplay
+                && !taken[ShellServices.Dock.canonicalId(entry.id)]);
+        const item = (appId, pinned, name) => ({
+            "appId": ShellServices.Dock.canonicalId(appId),
+            "pinned": pinned,
+            "name": name || root.appName(appId)
+        });
+        return [
+            {
+                "key": "pinned",
+                "title": Translation.tr("On the dock"),
+                "icon": "keep",
+                "items": pinnedIds.filter(id => !!id).map(id => item(id, true, ""))
+            },
+            {
+                "key": "running",
+                "title": Translation.tr("Open now"),
+                "icon": "select_window",
+                "items": running.map(app => item(app.appId, false, ""))
+            },
+            {
+                "key": "installed",
+                "title": Translation.tr("All apps"),
+                "icon": "apps",
+                "items": rest.map(entry => item(entry.id, false, entry.name))
+            }
+        ];
+    }
+
+    function appName(appId) {
+        return DesktopEntries.heuristicLookup(appId)?.name ?? appId;
+    }
+
+    function dockGroupByKey(key) {
+        return root.dockGroups.find(group => group.key === key) ?? null;
+    }
+
+    readonly property var dockSearchRows: {
+        if (root.section !== "dock" || !root.searching)
+            return [];
+        const rows = [];
+        for (const group of root.dockGroups)
+            for (const app of group.items)
+                rows.push({ "app": app, "hay": root.prepared(app.name, app.appId) });
+        return rows;
+    }
+
+    readonly property var dockItems: {
+        if (root.searching)
+            return root.fuzzyPick(root.dockSearchRows).map(row => row.app);
+        if (!root.page.startsWith("apps:"))
+            return [];
+        const group = root.dockGroupByKey(root.page.substring(5));
+        return group ? group.items : [];
+    }
+
     readonly property var homeAppsItems: {
         if (root.section !== "apps")
             return [];
@@ -573,7 +650,7 @@ Item {
 
     readonly property bool lockTab: GlobalStates.editLockPreview
     onLockTabChanged: {
-        if (root.lockTab ? (root.section === "bar" || root.section === "apps") : root.section === "lock")
+        if (root.lockTab ? (root.section === "bar" || root.section === "dock" || root.section === "apps") : root.section === "lock")
             GlobalStates.editDrawerSection = "widgets";
     }
     readonly property bool anyLockFork: root.activeWidgets.some(entry =>
@@ -635,6 +712,8 @@ Item {
                 return Translation.tr("Home screen apps");
             if (root.section === "bar")
                 return Translation.tr("Bar");
+            if (root.section === "dock")
+                return Translation.tr("Dock");
             if (root.section === "lock")
                 return Translation.tr("Lock screen");
             if (root.section === "style")
@@ -667,10 +746,16 @@ Item {
             return Translation.tr("Desktop icons");
         if (root.page.startsWith("category:"))
             return root.widgetGroupByKey(root.page.substring(9))?.title ?? Translation.tr("Widgets");
+        if (root.page.startsWith("apps:"))
+            return root.dockGroupByKey(root.page.substring(5))?.title ?? Translation.tr("Apps");
         if (root.page.startsWith("component:"))
             return BarComponentRegistry.getComponent(root.page.substring(10))?.title ?? Translation.tr("Widget");
         if (root.page === "appearance")
-            return Translation.tr("Bar appearance");
+            return root.section === "dock"
+                ? Translation.tr("Dock design & settings")
+                : Translation.tr("Bar appearance");
+        if (root.page === "widgets")
+            return Translation.tr("Pinned apps & order");
         return Translation.tr("Edit");
     }
 
@@ -686,6 +771,8 @@ Item {
         }
         if (root.section === "bar")
             return "dock_to_bottom";
+        if (root.section === "dock")
+            return "dock";
         if (root.section === "lock")
             return "lock";
         if (root.section === "style")
@@ -856,7 +943,9 @@ Item {
                         ? (root.lockTab
                             ? Translation.tr("The picture behind the lock screen. Position and zoom are set on the Desktop tab.")
                             : Translation.tr("Each screen's picture and how it sits. While this is open, drag the desktop to move the wallpaper and use the wheel or a pinch to zoom."))
-                    : Translation.tr("Drag a widget onto the bar to drop it where you want it, or open one to change how it looks.")
+                    : root.section === "bar"
+                        ? Translation.tr("Drag a widget onto the bar to drop it where you want it, or open one to change how it looks.")
+                        : Translation.tr("Pin apps, and choose how the dock itself is drawn.")
                 font.family: Appearance.font.family.main
                 font.pixelSize: Appearance.font.pixelSize.small
                 font.weight: Font.Normal
@@ -890,6 +979,7 @@ Item {
                     rightPadding: 32
                     placeholderText: root.section === "apps" || (root.section === "widgets" && root.page === "desktopApps")
                         ? Translation.tr("Search applications")
+                        : root.section === "dock" ? Translation.tr("Search apps")
                         : root.section === "bar" ? Translation.tr("Search bar widgets")
                         : Translation.tr("Search widgets")
                     onTextChanged: root.query = searchField.text
@@ -987,6 +1077,7 @@ Item {
                             return root.extraSection.page;
                         if (root.searching)
                             return root.section === "bar" ? barListPage
+                                : root.section === "dock" ? dockAppListPage
                                 : root.section === "apps" ? appsListPage
                                 : root.section === "widgets" && root.page === "desktopApps" ? desktopAppsPage
                                 : widgetListPage;
@@ -1007,11 +1098,20 @@ Item {
                             return root.page === "colours" ? colourPage : stylePage;
                         if (root.section === "wallpaper")
                             return root.page.startsWith("wallpapers") ? wallpaperPage : wallpaperRootPage;
+                        if (root.section === "bar") {
+                            if (root.page === "appearance")
+                                return barAppearancePage;
+                            if (root.page.startsWith("component:"))
+                                return barComponentPage;
+                            return barRootPage;
+                        }
                         if (root.page === "appearance")
-                            return barAppearancePage;
-                        if (root.page.startsWith("component:"))
-                            return barComponentPage;
-                        return barRootPage;
+                            return dockAppearancePage;
+                        if (root.page === "widgets")
+                            return dockWidgetsPage;
+                        if (root.page.startsWith("apps:"))
+                            return dockAppListPage;
+                        return dockRootPage;
                     }
                 }
             }
@@ -1533,6 +1633,131 @@ Item {
             onPlaceRequested: bucket => root.barPlaceRequested(componentPage.componentId, bucket)
             onRemoveRequested: root.barRemoveRequested(componentPage.componentId)
         }
+    }
+
+    // The dock's root: how it is drawn, what it carries, and the three answers
+    // to "why is this app in the list".
+    Component {
+        id: dockRootPage
+
+        StyledFlickable {
+            id: dockRoot
+            contentHeight: dockColumn.implicitHeight
+            clip: true
+
+            ColumnLayout {
+                id: dockColumn
+                width: dockRoot.width
+                spacing: 3
+
+                EditPanelRow {
+                    Layout.fillWidth: true
+                    first: true
+                    last: false
+                    symbol: "palette"
+                    title: Translation.tr("Dock design & settings")
+                    subtitle: Translation.tr("Design, placement, behaviour and design details")
+                    onActivated: root.openPage("appearance")
+                }
+
+                EditPanelRow {
+                    Layout.fillWidth: true
+                    first: false
+                    last: true
+                    symbol: "keep"
+                    title: Translation.tr("Pinned apps & order")
+                    subtitle: Translation.tr("Remove pins or move them into place")
+                    onActivated: root.openPage("widgets")
+                }
+
+                EditPanelRow {
+                    Layout.fillWidth: true
+                    Layout.topMargin: 3
+                    first: true
+                    last: true
+                    destructive: true
+                    symbol: "reset_wrench"
+                    title: Translation.tr("Reset the dock")
+                    subtitle: Translation.tr("The pins and the order the shell ships with")
+                    trailingKind: "none"
+                    onActivated: root.resetRequested("dock")
+                }
+
+                EditPanelSectionLabel {
+                    text: Translation.tr("Apps")
+                }
+
+                Repeater {
+                    model: root.dockGroups
+
+                    delegate: EditPanelRow {
+                        required property var modelData
+                        required property int index
+                        staggerIndex: index
+                        Layout.fillWidth: true
+                        first: index === 0
+                        last: index === root.dockGroups.length - 1
+                        symbol: modelData.icon
+                        title: modelData.title
+                        valueText: `${modelData.items.length}`
+                        onActivated: root.openPage("apps:" + modelData.key)
+                    }
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    implicitHeight: 8
+                }
+            }
+        }
+    }
+
+    Component {
+        id: dockAppListPage
+
+        Item {
+            StyledListView {
+                id: appList
+                anchors.fill: parent
+                // Pinning moves an app between groups and rebuilds this list.
+                // Entrance animations would replay the whole page on each click.
+                popin: false
+                animateAppearance: false
+                clip: true
+                spacing: 3
+                model: root.dockItems
+
+                delegate: EditPanelRow {
+                    required property var modelData
+                    required property int index
+                    width: appList.width
+                    first: index === 0
+                    last: index === root.dockItems.length - 1
+                    iconSource: ShellServices.Dock.iconFor(modelData.appId ?? "")
+                    title: modelData.name ?? modelData.appId
+                    trailingKind: modelData.pinned === true ? "check" : "add"
+                    onActivated: ShellServices.Dock.togglePin(modelData.appId ?? "")
+                }
+            }
+
+            StyledText {
+                anchors.centerIn: parent
+                visible: appList.count === 0
+                text: Translation.tr("Nothing here")
+                font.pixelSize: Appearance.font.pixelSize.small
+                color: Appearance.colors.colOnSurfaceVariant
+            }
+        }
+    }
+
+    Component {
+        id: dockAppearancePage
+        EditDockAppearancePage {}
+    }
+
+    Component {
+        id: dockWidgetsPage
+        EditDockWidgetsPage {}
     }
 
     Component {
