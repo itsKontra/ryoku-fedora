@@ -102,8 +102,11 @@ with `--assumeno`, installs whatever dnf reports nothing provides from every
 enabled repository, and only then runs the real transaction. Those are new
 packages, never upgrades of the base. dnf skips an upgrade it cannot resolve
 and still exits 0, so afterwards the update compares each package against the
-newest build `RyokuCOPR` serves and fails, naming the packages, when any was
-left behind.
+newest build `RyokuCOPR` serves and warns, naming the packages, when any was
+left behind. It warns rather than stops: part of the set may already have
+moved, so the config still has to be deployed, and a package the user pinned
+on purpose is left behind by design. Both checks run as the user and refresh
+`RyokuCOPR` first, since root's freshly refreshed cache is not theirs.
 
 After the desktop is back, the update refreshes the agent OS when it is present:
 `ryoku-rashin index` regenerates the vault and re-indexes the config mirror with

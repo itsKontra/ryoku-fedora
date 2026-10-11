@@ -74,7 +74,7 @@ Problem 2: package ryoku-desktop-hyprland-0.4096-112.fc44.x86_64 from RyokuCOPR 
 
 func TestDependencyArgs(t *testing.T) {
 	if got := ryokuPlanArgs([]string{"ryoku-desktop"}); !reflect.DeepEqual(got,
-		[]string{"dnf", "--assumeno", "--repo=RyokuCOPR", "distro-sync", "ryoku-desktop"}) {
+		[]string{"dnf", "--assumeno", "--refresh", "--repo=RyokuCOPR", "distro-sync", "ryoku-desktop"}) {
 		t.Errorf("plan: %v", got)
 	}
 	if got := depInstallArgs([]string{"google-rubik-fonts"}); !reflect.DeepEqual(got,

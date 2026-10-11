@@ -125,8 +125,10 @@ func missingDeps(out string) []string {
 }
 
 // ryokuPlanArgs resolves the lane without running it; --assumeno needs no root.
+// --refresh because it runs as the user: resolved against a stale user cache,
+// the old build requires nothing new and the missing dependency goes unseen.
 func ryokuPlanArgs(set []string) []string {
-	return append([]string{"dnf", "--assumeno", "--repo=" + sys.RPMRepoName, "distro-sync"}, set...)
+	return append([]string{"dnf", "--assumeno", "--refresh", "--repo=" + sys.RPMRepoName, "distro-sync"}, set...)
 }
 
 // depInstallArgs installs the missing requirements from every enabled repo.
@@ -172,10 +174,11 @@ func evrMap(out string) map[string]string {
 	return m
 }
 
-// ryokuHeldBack compares the box against the repo after the transaction.
+// ryokuHeldBack compares the box against the repo after the transaction. It
+// refreshes: a stale user cache would agree with the old build and hide the
+// very packages this exists to catch.
 func ryokuHeldBack(set []string) ([]updateItem, error) {
-	latest, err := sys.RunOut("dnf", append([]string{"repoquery", "--repo=" + sys.RPMRepoName,
-		"--latest-limit=1", "--qf", "%{name} %{evr}\n"}, set...)...)
+	latest, err := latestAvailableSet(set, true)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +187,7 @@ func ryokuHeldBack(set []string) ([]updateItem, error) {
 	if err != nil && strings.TrimSpace(installed) == "" {
 		return nil, err
 	}
-	return heldBack(evrMap(installed), evrMap(latest)), nil
+	return heldBack(evrMap(installed), latest), nil
 }
 
 // systemLanePending: what the user's lane would take, minus the Ryoku set we

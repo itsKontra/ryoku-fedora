@@ -200,15 +200,18 @@ func Update(args []string) error {
 		progress.fail(e)
 		return e
 	}
-	if behind, err := ryokuHeldBack(set); err == nil && len(behind) > 0 {
+	// A warning, never a stop: the transaction may already have moved part of
+	// the set, and stage2 still has to deploy its config and run doctor. A
+	// package the user pinned (versionlock, excludepkgs) also lands here.
+	if behind, err := ryokuHeldBack(set); err != nil {
+		fmt.Fprintf(os.Stderr, i18n.T("warning: could not check that every Ryoku package was updated: %v\n"), err)
+	} else if len(behind) > 0 {
 		names := make([]string, len(behind))
 		for i, b := range behind {
 			names[i] = b.Name + " " + b.Old + " -> " + b.New
 		}
-		e := fmt.Errorf(i18n.T("dnf could not move %d Ryoku package(s) to what %s serves (%s); the dependency problems are listed above"),
+		fmt.Fprintf(os.Stderr, i18n.T("warning: dnf left %d Ryoku package(s) behind what %s serves (%s); the dependency problems are listed above\n"),
 			len(behind), sys.RPMRepoName, strings.Join(names, ", "))
-		progress.fail(e)
-		return e
 	}
 
 	// The user's lane. Off by default: the kernel and the base come from Fedora
@@ -1391,24 +1394,35 @@ func isHex(s string) bool {
 	return s != ""
 }
 
-// latestAvailable: version of pkg in the RyokuCOPR repo, or "" when the repo
-// isn't configured. refresh makes dnf refetch the repo metadata instead of
-// trusting its cache.
-func latestAvailable(pkg string, refresh bool) string {
+// latestAvailableSet: the newest build the RyokuCOPR repo serves for each of
+// pkgs, name -> EVR. refresh makes dnf refetch the repo metadata instead of
+// trusting its cache; it runs as the user, whose cache is not the one root
+// refreshes.
+func latestAvailableSet(pkgs []string, refresh bool) (map[string]string, error) {
 	// --latest-limit=1: a COPR repo keeps several builds in its repodata and
 	// repoquery lists every one; dnf5's --qf adds no newline, so the versions
 	// came back glued into one string that never matches the installed
 	// version, and a fully updated box reported itself behind.
 	args := []string{"repoquery", "--repo=" + sys.RPMRepoName,
-		"--latest-limit=1", "--qf", "%{VERSION}-%{RELEASE}", pkg}
+		"--latest-limit=1", "--qf", "%{name} %{evr}\n"}
 	if refresh {
 		args = append(args, "--refresh")
 	}
-	out, err := sys.RunOut("dnf", args...)
+	out, err := sys.RunOut("dnf", append(args, pkgs...)...)
+	if err != nil {
+		return nil, err
+	}
+	return evrMap(out), nil
+}
+
+// latestAvailable: version of pkg in the RyokuCOPR repo, or "" when the repo
+// isn't configured.
+func latestAvailable(pkg string, refresh bool) string {
+	latest, err := latestAvailableSet([]string{pkg}, refresh)
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(out)
+	return latest[pkg]
 }
 
 // updateItem = one row in the update list. dnf -> a package (name,
