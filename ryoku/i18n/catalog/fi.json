@@ -6481,7 +6481,7 @@
   "· clears on save": "· tyhjentää tallennuksessa",
   "· resets in %1": "· nollautuu %1:ssä",
   "· saved - ✕ forget": "· tallennettu - ✕ unohda",
-  "· swap %1 GiB": "· swap %1 GiB",
+  "· swap %1 GiB": "· sivutus %1 GiB",
   "ΛVΛLON": "ΛVΛLON",
   "…and any other packages, comma-separated (e.g. postgresql, redis)": "…ja kaikki muut paketit, pilkuilla erotettu (esim. postgresql, redis)",
   "← WALLPAPERS": "← TAUSTAKUVAT",
