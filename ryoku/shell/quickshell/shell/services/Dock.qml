@@ -154,6 +154,36 @@ Singleton {
     }
     function setPinned(array) { root.setCfg("pinned", array); }
 
+    // Window classes and desktop-entry ids name the same app in more than one
+    // way; the Shima frame's own dock compares them through the desktop
+    // database so a pin and its running window are one entry.
+    function canonicalId(value) {
+        const id = String(value ?? "").trim().replace(/\.desktop$/i, "");
+        if (id.length === 0)
+            return "";
+        const entry = DesktopEntries.heuristicLookup(id);
+        return entry?.id ? String(entry.id).replace(/\.desktop$/i, "") : id.toLowerCase();
+    }
+    function sameApp(a, b) {
+        const left = root.canonicalId(a);
+        return left.length > 0 && left === root.canonicalId(b);
+    }
+    function togglePin(className) {
+        const pins = root.pinnedOrStarter();
+        const hit = pins.find(pin => root.sameApp(pin, className));
+        root.setPinned(hit !== undefined ? root.unpin(pins, hit) : root.pin(pins, className));
+    }
+    // A bar style that draws its own dock keeps its options in a sub-object
+    // of the one dock store (dock.<design>.<key>).
+    function designCfg(designName, key, fallback) {
+        const d = root.cfg(designName, {});
+        return d && d[key] !== undefined && d[key] !== null ? d[key] : fallback;
+    }
+    function resolvedEdge() {
+        const edge = String(root.cfg("edge", "auto"));
+        return ["top", "bottom", "left", "right"].includes(edge) ? edge : "bottom";
+    }
+
     // The daemon's control socket, connected only when there is something to say.
     Socket {
         id: cfgCtl

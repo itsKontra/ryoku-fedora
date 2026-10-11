@@ -31,7 +31,7 @@ Item {
         { "name": "ActivSpot",    "by": "Devvvmn",        "role": I18n.tr("window spotlight"),     "url": "https://github.com/Devvvmn/ActivSpot" },
         { "name": "hyprmod",      "by": "BlueManCZ",      "role": I18n.tr("Hyprland tooling"),     "url": "https://github.com/BlueManCZ/hyprmod" },
         { "name": "dotfiles",     "by": "matteogini",     "role": I18n.tr("dotfile craft"),        "url": "https://github.com/matteogini/dotfiles" },
-        { "name": "inir",         "by": "snowarch",       "role": I18n.tr("launcher grid"),        "url": "" },
+        { "name": "iNiR",         "by": "snowarch",       "role": I18n.tr("launcher grid; the Shima bar style is based on iNiR"), "url": "https://github.com/snowarch/inir" },
         { "name": "noctalia",     "by": "noctalia-dev",   "role": I18n.tr("shell polish"),         "url": "https://github.com/noctalia-dev/noctalia-shell" },
         { "name": "DankMaterial", "by": "AvengeMedia",    "role": I18n.tr("material shell"),       "url": "https://github.com/AvengeMedia/DankMaterialShell" },
         { "name": "Omarchy",      "by": "DHH",            "role": I18n.tr("opinionated Arch"),     "url": "" },

@@ -273,14 +273,15 @@ ShellRoot {
             // The dock: a resident per-monitor surface on the edge opposite the
             // bar. Style-agnostic, so it lives here rather than inside a bar style;
             // it is not built until the user turns it on (Hub -> Bar Studio -> Dock).
+            // Shima draws its own dock from the same settings, so this one steps aside.
             LazyLoader {
                 id: dockLoader
-                activeAsync: Dock.cfg("enabled", false)
+                activeAsync: Dock.cfg("enabled", false) && Config.barStyle !== "iris"
                 DockSurface {
                     id: perScreenDock
                     screen: perScreen.modelData
                     // Edit widgets steps the dock back so the whole desktop is the canvas.
-                    visible: Dock.cfg("enabled", false)
+                    visible: Dock.cfg("enabled", false) && Config.barStyle !== "iris"
                         && !(StageCfg.StageSession.widgets && StageCfg.StageSession.monitor === perScreen.modelData.name)
                 }
             }
@@ -744,14 +745,18 @@ ShellRoot {
 
     // The polkit agent streams its prompt on a topic rather than pushing a
     // surface, so raise and drop the island from the state itself. (pill 321-329)
+    // A bar style that presents the prompt itself (Polkit.presenters) takes it
+    // over; if it unmounts mid-prompt the island comes back.
     Connections {
         target: Polkit
-        function onActiveChanged() {
-            if (Polkit.active)
+        function sync() {
+            if (Polkit.active && Polkit.presenters === 0)
                 ShellState.requestSurface("polkit", "", undefined);
             else
                 ShellState.closeSurface("polkit", "");
         }
+        function onActiveChanged() { sync(); }
+        function onPresentersChanged() { sync(); }
     }
 
     // Stash steps a running task's own surface aside when it needs the auth

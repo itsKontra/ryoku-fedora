@@ -38,6 +38,7 @@ class ProvisionTargetTest(unittest.TestCase):
             "share/fonts/MaterialSymbolsRounded.ttf",
             "share/fonts/JetBrainsMonoNerdFont/regular.ttf",
             "share/fonts/SpaceMonoNerdFont/regular.ttf",
+            "share/fonts/ReadexPro/regular.ttf",
             "bin/matugen",
         ):
             self.write("usr/" + asset, "installed asset\n")

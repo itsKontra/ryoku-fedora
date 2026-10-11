@@ -41,18 +41,28 @@ Scope {
     readonly property real uiScale: Tokens.uiScaleFor(root.modelData ? root.modelData.name : "")
     readonly property bool barEnabled: Tokens.barEnabledFor(
         root.modelData ? root.modelData.name : "")
-    readonly property bool qsbarPrimaryHost: Config.barStyle === "qsbar"
-        && root.modelData
+    // The screen that hosts whole-desktop surfaces: the primary output. QS Bar
+    // needs it even when its bar is hidden (its popups/notifications live
+    // there), and so does a frame-family style (Shima): the scene is one
+    // island, dock and popup system for the desktop, not a per-screen bar, so
+    // hiding a monitor's bar must not blank the whole shell.
+    readonly property bool primaryHost: root.modelData
         && ShellState.screens.length > 0
         && ShellState.screens[0].name === root.modelData.name
+        && (Config.barStyle === "qsbar" || BarProducts.isFrameFamily(Config.barStyle))
 
-    // The built-in Sumi frame scene draws only while the active bar style is the
-    // built-in one; a receipt-owned style would load its own scene without rails.
-    readonly property bool sumiActive: BarProducts.sceneUrl(Config.barStyle) === ""
+    // The built-in Sumi frame scene draws while the active bar style is the
+    // built-in one, or while a broken style has degraded to it; a healthy
+    // receipt-owned style loads its own scene instead.
+    readonly property bool sumiActive: root.degraded
+        || BarProducts.sceneUrl(Config.barStyle) === ""
 
-    // A transient Loader.Error on a builtin style must not stick us on sumi; count
-    // retries so a genuinely broken style still degrades gracefully after ~8s.
+    // A transient Loader.Error on a builtin style must not stick us on sumi;
+    // count retries so a hiccup self-heals. Once a builtin is genuinely broken
+    // (retries spent), BarProducts records it and every monitor degrades to the
+    // painted sumi rail instead of an empty frame, until the style changes.
     property int barStyleRetries: 0
+    readonly property bool degraded: BarProducts.brokenStyle === Config.barStyle
 
     readonly property var state: root.modelData ? ShellState.forScreen(root.modelData) : null
     readonly property bool revealed: root.state ? root.state.barRevealed : true
@@ -475,7 +485,7 @@ Scope {
     // host still map (topBar mode) so menus and surfaces stay style-agnostic.
     Loader {
         id: barStyleLoader
-        active: !root.sumiActive && (root.barEnabled || root.qsbarPrimaryHost)
+        active: !root.sumiActive && (root.barEnabled || root.primaryHost)
         source: BarProducts.sceneUrl(Config.barStyle)
         onLoaded: {
             root.barStyleRetries = 0
@@ -485,14 +495,27 @@ Scope {
         // transient hiccup (an update's config/plugin swap, a cold-start race), so
         // retry instead of permanently dropping to the sumi rail. A store-installed
         // style that errors is genuinely broken → fail() it as before.
+        // Once a builtin's retries are spent it is genuinely broken on this box:
+        // degrade to the painted sumi rail and record it so the Hub can say so.
+        // Both marks flip this Loader's own `active`, so they land after the
+        // status change settles instead of inside it.
         onStatusChanged: {
             if (status !== Loader.Error)
                 return;
-            if (BarProducts.isBuiltin(Config.barStyle) && root.barStyleRetries < 10) {
-                root.barStyleRetries++;
-                barStyleReload.restart();
+            const style = Config.barStyle;
+            if (BarProducts.isBuiltin(style)) {
+                if (root.barStyleRetries < 10) {
+                    root.barStyleRetries++;
+                    barStyleReload.restart();
+                } else {
+                    // The deferred mark must not land on a style picked since.
+                    Qt.callLater(() => {
+                        if (Config.barStyle === style)
+                            BarProducts.markBroken(style);
+                    });
+                }
             } else {
-                BarProducts.fail(Config.barStyle);
+                Qt.callLater(BarProducts.fail, style);
             }
         }
     }
@@ -502,7 +525,7 @@ Scope {
         onTriggered: {
             barStyleLoader.active = false;
             barStyleLoader.active = Qt.binding(
-                () => !root.sumiActive && (root.barEnabled || root.qsbarPrimaryHost));
+                () => !root.sumiActive && (root.barEnabled || root.primaryHost));
         }
     }
     Connections {
@@ -510,6 +533,16 @@ Scope {
         function onModelDataChanged() {
             if (barStyleLoader.item)
                 barStyleLoader.item.modelData = root.modelData;
+        }
+    }
+    // A new pick gets a fresh set of retries; a style that broke earlier is
+    // tried again once the user picks it again.
+    Connections {
+        target: Config
+        function onBarStyleChanged() {
+            root.barStyleRetries = 0;
+            if (BarProducts.brokenStyle !== Config.barStyle)
+                BarProducts.brokenStyle = "";
         }
     }
 }

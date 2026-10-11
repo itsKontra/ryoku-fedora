@@ -62,32 +62,10 @@ func (p barProvider) Load(ctx context.Context, refresh bool) ([]Item, SourceStat
 	}
 
 	active := p.activeStyle()
-	items := []Item{{
-		ID: "sumi", Category: "barstyles", Name: "Sumi",
-		Summary:     "Ink spine",
-		Description: "The built-in left rail: paper, ink, and a vertical working edge.",
-		Tags:        []string{"rail", "vertical", "built-in"},
-		Installed:   true,
-		Metadata:    map[string]any{"scene": "", "core": true},
-	}}
-	items = append(items, Item{
-		ID: "qsbar", Category: "barstyles", Name: "QS Bar",
-		Summary:     "Hancore top bar",
-		Description: "The default top bar: Hancore's Quickshell Rise, ported to Ryoku.",
-		Tags:        []string{"top", "horizontal", "built-in"},
-		Installed:   true,
-		Active:      active == "qsbar",
-		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
-	})
-	items = append(items, Item{
-		ID: "kairos", Category: "barstyles", Name: "Kairos",
-		Summary:     "Island clock",
-		Description: "One floating island at the top of the screen: the clock that grows on hover.",
-		Tags:        []string{"top", "island", "built-in"},
-		Installed:   true,
-		Active:      active == "kairos",
-		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
-	})
+	items := builtinBarStyles()
+	for i := range items {
+		items[i].Active = items[i].ID != "sumi" && items[i].ID == active
+	}
 
 	entries, state, registryErr := loadProductRegistry(ctx, p.cache, "barstyles", refresh)
 	if registryErr != nil && !barStyleRegistryUnavailable(registryErr) {
@@ -131,6 +109,83 @@ func (p barProvider) Load(ctx context.Context, refresh bool) ([]Item, SourceStat
 	return items, state, nil
 }
 
+// builtinBarStyles are the styles this binary ships; their text lives here, so a
+// catalogue snapshot built by an older binary is checked against it.
+func builtinBarStyles() []Item {
+	return []Item{{
+		ID: "sumi", Category: "barstyles", Name: "Sumi",
+		Summary:     "Ink spine",
+		Description: "The built-in left rail: paper, ink, and a vertical working edge.",
+		Tags:        []string{"rail", "vertical", "built-in"},
+		Installed:   true,
+		Metadata:    map[string]any{"scene": "", "core": true},
+	}, {
+		ID: "qsbar", Category: "barstyles", Name: "QS Bar",
+		Summary:     "Hancore top bar",
+		Description: "The default top bar: Hancore's Quickshell Rise, ported to Ryoku.",
+		Tags:        []string{"top", "horizontal", "built-in"},
+		Installed:   true,
+		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
+	}, {
+		ID: "kairos", Category: "barstyles", Name: "Kairos",
+		Summary:     "Island clock",
+		Description: "One floating island at the top of the screen: the clock that grows on hover.",
+		Tags:        []string{"top", "island", "built-in"},
+		Installed:   true,
+		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
+	}, {
+		ID: "iris", Category: "barstyles", Name: "Shima",
+		Summary:     "Based on iNiR by snowarch",
+		Description: "An island on any screen edge that grows into whatever you clicked: morphing glass, bubbles, a dock, a studio and its own settings.",
+		Tags:        []string{"island", "frame", "built-in"},
+		Installed:   true,
+		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
+	}}
+}
+
+func isBuiltinBarStyle(id string) bool {
+	for _, it := range builtinBarStyles() {
+		if it.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// snapshotStaleBuiltins reports a snapshot whose built-in bar styles read
+// differently from, or fall short of, the ones this binary ships: the snapshot
+// is only refreshed on demand, so an update that renames or adds a built-in
+// would otherwise never show. A snapshot with no bar styles at all has nothing
+// to compare and is left alone.
+func snapshotStaleBuiltins(data []byte) bool {
+	var s struct {
+		Items []Item `json:"items"`
+	}
+	if json.Unmarshal(data, &s) != nil {
+		return false
+	}
+	shipped := make(map[string]Item)
+	for _, it := range builtinBarStyles() {
+		shipped[it.ID] = it
+	}
+	bars, matched := 0, 0
+	for _, it := range s.Items {
+		if it.Category != "barstyles" {
+			continue
+		}
+		bars++
+		want, ok := shipped[it.ID]
+		if !ok {
+			continue
+		}
+		matched++
+		if it.Name != want.Name || it.Summary != want.Summary || it.Description != want.Description {
+			return true
+		}
+	}
+	return bars > 0 && matched < len(shipped)
+}
+
 func barStyleRegistryUnavailable(err error) bool {
 	var requestErr *url.Error
 	if errors.As(err, &requestErr) {
@@ -141,7 +196,7 @@ func barStyleRegistryUnavailable(err error) bool {
 }
 
 func (p barProvider) Install(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "kairos" {
+	if isBuiltinBarStyle(id) {
 		return fmt.Errorf("the built-in %s bar style is already installed", id)
 	}
 	entries, _, err := loadProductRegistry(ctx, p.cache, "barstyles", false)
@@ -156,7 +211,7 @@ func (p barProvider) Install(ctx context.Context, id string) error {
 }
 
 func (p barProvider) Remove(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "kairos" {
+	if isBuiltinBarStyle(id) {
 		return fmt.Errorf("the built-in %s bar style is not removable", id)
 	}
 	return removeProduct(ctx, "barstyles", id)
@@ -500,8 +555,13 @@ func mutateBarStyleSelection(path string, mutate func(map[string]any) bool) erro
 	return writeShellConfigState(path, state)
 }
 
+// activeStyle is the style the shell renders: an absent or unreadable
+// selection draws the shipped QS Bar, so the catalogue marks that one.
 func (p barProvider) activeStyle() string {
-	return readBarStyleSelection(p.shellConfig)
+	if id := readBarStyleSelection(p.shellConfig); id != "" {
+		return id
+	}
+	return "qsbar"
 }
 
 func readBarStyleSelection(path string) string {

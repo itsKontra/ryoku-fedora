@@ -203,7 +203,7 @@ duration = 400ms circle
 duration = 300ms circle
 
 [command]
-command_window_close = ryoku-wm-wayfire act window.close focused
+command_window_close = jq -e '(.barStyle // "qsbar") == "iris" and .inir.closeConfirm.enabled == true' "${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/shell.json" >/dev/null 2>&1 && out=$(qs -c shell ipc call closeConfirm trigger 2>&1) && [ -z "$out" ] || ryoku-wm-wayfire act window.close focused
 binding_window_close = <super> KEY_Q | <alt> KEY_F4
 command_window_float = ryoku-wm-wayfire act window.float focused
 binding_window_float = <super> KEY_A

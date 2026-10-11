@@ -54,7 +54,7 @@ func spawnSh(cmd string) string { return "spawn-sh " + kdlStr(cmd) }
 func defaultBinds() map[string]niriBind {
 	return map[string]niriBind{
 		// Windows
-		"window.close":      {action: "close-window", noRepeat: true},
+		"window.close":      {action: spawnSh(wm.ShimaCloseCheck + " && " + wm.ShimaCloseConfirm + " || niri msg action close-window"), noRepeat: true},
 		"window.fullscreen": {action: "fullscreen-window"},
 		// The catalogue names this "Float or tile", which is niri's mechanic too.
 		"window.float": {action: "toggle-window-floating"},
