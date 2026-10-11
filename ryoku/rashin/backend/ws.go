@@ -406,6 +406,9 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 		case "load":
 			if in.SessionID != "" {
 				go func(c *acpConn, id string) {
+					// Leaving a conversation declines what it was waiting on;
+					// nobody could answer it once the transcript is gone.
+					c.DeclineOpenPerms()
 					h.mu.Lock()
 					h.resetConversationLocked() // the ACP replay rebuilds it
 					h.introduced = true         // an existing session already introduced itself
@@ -420,6 +423,7 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 			}
 		case "new":
 			go func(c *acpConn, fresh bool) {
+				c.DeclineOpenPerms()
 				h.mu.Lock()
 				h.resetConversationLocked()
 				h.introduced = false

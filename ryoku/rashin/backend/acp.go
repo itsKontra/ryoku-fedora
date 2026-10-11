@@ -496,12 +496,20 @@ func (c *acpConn) waitSession(timeout time.Duration) string {
 func (c *acpConn) Cancel() {
 	c.mu.Lock()
 	sid := c.sessionID
+	c.mu.Unlock()
+	c.notify("session/cancel", map[string]string{"sessionId": sid})
+	c.DeclineOpenPerms()
+}
+
+// DeclineOpenPerms answers every unanswered permission request with a decline,
+// so a turn blocked on one can end and every surface drops its card.
+func (c *acpConn) DeclineOpenPerms() {
+	c.mu.Lock()
 	open := make([]int64, 0, len(c.openPerms))
 	for id := range c.openPerms {
 		open = append(open, id)
 	}
 	c.mu.Unlock()
-	c.notify("session/cancel", map[string]string{"sessionId": sid})
 	for _, id := range open {
 		c.RespondPermission(id, "")
 	}
@@ -617,15 +625,17 @@ func (c *acpConn) handleAgentRequest(msg rpcMsg) {
 		for _, o := range p.Options {
 			opts = append(opts, PermOption{ID: o.OptionID, Name: o.Name, Kind: o.Kind})
 		}
+		// Registered and announced under one lock, so an answer racing in
+		// (a decline on load or cancel) cannot be emitted before the request.
 		c.mu.Lock()
 		c.openPerms[*msg.ID] = opts
-		c.mu.Unlock()
 		c.emit(AcpEvent{
 			Type:      "permission",
 			RequestID: fmt.Sprint(*msg.ID),
 			PermTitle: p.ToolCall.Title,
 			Options:   opts,
 		})
+		c.mu.Unlock()
 	default:
 		// Unknown inbound request: JSON-RPC method-not-found keeps the child sane.
 		id := *msg.ID

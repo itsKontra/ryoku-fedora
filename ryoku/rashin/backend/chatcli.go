@@ -127,14 +127,42 @@ func followSleep(ctx context.Context, d time.Duration) bool {
 	}
 }
 
+// followOutbox holds client lines the socket has not taken yet. It keeps the
+// newest followOutboxCap, so a daemon that stays down cannot grow it forever.
+type followOutbox struct{ lines [][]byte }
+
+const followOutboxCap = 64
+
+func (o *followOutbox) push(msg []byte) {
+	o.lines = append(o.lines, msg)
+	if over := len(o.lines) - followOutboxCap; over > 0 {
+		o.lines = o.lines[over:]
+	}
+}
+
+// flush sends lines oldest first and stops at the first one send refuses,
+// keeping it and everything after it for the next connection.
+func (o *followOutbox) flush(send func([]byte) bool) {
+	for len(o.lines) > 0 && send(o.lines[0]) {
+		o.lines = o.lines[1:]
+	}
+}
+
 func cmdChatFollow() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// conn is the live socket, swapped on each reconnect and read by the stdin
-	// pump under mu so a forwarded message always lands on the current one.
+	// conn is the live socket, swapped on each reconnect. Every write happens
+	// under mu, so a line sent while the socket is down (a dial, a backoff)
+	// waits in the outbox and goes out, in order, before anything newer.
 	var mu sync.Mutex
 	var conn *websocket.Conn
+	var outbox followOutbox
+	write := func(c *websocket.Conn, msg []byte) bool {
+		wctx, wcancel := context.WithTimeout(ctx, 5*time.Second)
+		defer wcancel()
+		return c.Write(wctx, websocket.MessageText, msg) == nil
+	}
 
 	go func() {
 		r := bufio.NewReader(os.Stdin)
@@ -142,11 +170,11 @@ func cmdChatFollow() error {
 			line, err := r.ReadBytes('\n')
 			if msg := bytes.TrimRight(line, "\r\n"); len(msg) > 0 {
 				mu.Lock()
-				c := conn
-				mu.Unlock()
-				if c != nil {
-					_ = c.Write(ctx, websocket.MessageText, msg)
+				outbox.push(msg)
+				if conn != nil {
+					outbox.flush(func(m []byte) bool { return write(conn, m) })
 				}
+				mu.Unlock()
 			}
 			if err != nil {
 				cancel() // stdin closed: the bar is gone, so exit.
@@ -171,6 +199,7 @@ func cmdChatFollow() error {
 		c.SetReadLimit(32 << 20)
 		mu.Lock()
 		conn = c
+		outbox.flush(func(m []byte) bool { return write(c, m) })
 		mu.Unlock()
 		backoff = 500 * time.Millisecond
 
