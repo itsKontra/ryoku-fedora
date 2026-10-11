@@ -9,11 +9,13 @@ noswitch=0
 lockscreen=0
 screen=""
 
+# A value flag given last has nothing to shift past, and a failed `shift 2`
+# shifts nothing, so each falls back to one shift instead of spinning.
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --mode|--type) shift 2 ;;
-        --image) image="${2:-}"; shift 2 ;;
-        --screen) screen="${2:-}"; shift 2 ;;
+        --mode|--type) shift 2 || shift ;;
+        --image) image="${2:-}"; shift 2 || shift ;;
+        --screen) screen="${2:-}"; shift 2 || shift ;;
         --noswitch) noswitch=1; shift ;;
         --lockscreen) lockscreen=1; shift ;;
         --lightmode|--refresh-frame|--request-seq)
