@@ -235,11 +235,29 @@ Singleton {
     function closeWindow(id) { root._act("window.close", "", [String(id)]); }
     function focusApp(appId) { root._act("app.focus", "", [String(appId)]); }
     function floatWindow(id) { root._act("window.float", "windowFloat", [String(id)]); }
-    function moveWindowToWorkspace(id, ws) { root._act("window.moveToWorkspace", "workspaces", [String(id), String(ws)]); }
+    // Acts take Workspace.ID, but callers hold either key: the bar and the
+    // overview pass ids, the rail passes names. An exact id wins, because on
+    // niri a name is a position ("1", "2") and an id a growing counter, so
+    // id "2" can belong to the workspace named "1" while another is named
+    // "2". Only a key that is no id is read as a name; anything else passes
+    // through, so opaque handles keep working.
+    function _wsId(key) {
+        const k = String(key);
+        const list = root.workspaces;
+        for (let i = 0; i < list.length; i++)
+            if (String(list[i].id) === k)
+                return k;
+        for (let i = 0; i < list.length; i++)
+            if (String(list[i].name) === k)
+                return String(list[i].id);
+        return k;
+    }
 
-    function focusWorkspace(ws) { root._act("workspace.focus", "workspaces", [String(ws)]); }
+    function moveWindowToWorkspace(id, ws) { root._act("window.moveToWorkspace", "workspaces", [String(id), root._wsId(ws)]); }
+
+    function focusWorkspace(ws) { root._act("workspace.focus", "workspaces", [root._wsId(ws)]); }
     function cycleWorkspace(delta) { root._act("workspace.cycle", "workspaces", [String(delta)]); }
-    function moveWorkspaceToOutput(ws, output) { root._act("workspace.moveToOutput", "workspaceMoveToOutput", [String(ws), String(output)]); }
+    function moveWorkspaceToOutput(ws, output) { root._act("workspace.moveToOutput", "workspaceMoveToOutput", [root._wsId(ws), String(output)]); }
     function toggleSpecialWorkspace(name) { root._act("workspace.toggleSpecial", "specialWorkspace", [String(name || "")]); }
 
     function cycleKeyboardLayout() { root._act("keyboard.cycleLayout", "keyboardLayoutSwitch", []); }

@@ -84,7 +84,7 @@ jobs:
       fail-fast: false
       matrix:
         fedora: ['44']
-        compositor: [hyprland, niri]
+        compositor: [hyprland, niri, wayfire]
         dnf: [dnf, dnf4]
     container: fedora:${{ matrix.fedora }}
     steps:
