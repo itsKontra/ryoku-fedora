@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 #
 # ryoku-wayland-session: SDDM's [Wayland] SessionCommand, wrapping the stock
-# session start with a wait for the greeter to release the GPU.
+# session start with a wait for the user's config bootstrap and for the greeter
+# to release the GPU.
+#
+# A first login has no Ryoku config yet: ryoku-bootstrap lays it down and
+# renders the compositor's generated files, but as a default.target unit it
+# races the session compositor. A compositor that resolves its config file once
+# at startup then runs its own defaults for the whole first session, with no
+# shell. Starting the unit here joins that job and waits for it, bounded so
+# login never hangs; its conditions make it an instant no-op on every later
+# login.
 #
 # On a hybrid-GPU laptop (e.g. AMD iGPU + NVIDIA dGPU) the SDDM greeter runs as
 # weston on one VT; SDDM then starts the user session on the next VT without
@@ -14,6 +23,9 @@
 # Bounded so login never hangs; a plain no-op when no weston is running (a
 # desktop with no hybrid race, or the greeter already gone).
 set -u
+
+bootstrap_deadline="${RYOKU_SESSION_BOOTSTRAP_DEADLINE:-60}"
+timeout "$bootstrap_deadline" systemctl --user start ryoku-bootstrap.service >/dev/null 2>&1 || true
 
 deadline="${RYOKU_SESSION_SETTLE_DEADLINE:-8}"
 start=$SECONDS

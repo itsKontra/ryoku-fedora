@@ -16,9 +16,10 @@
 # and night light rides wlsunset over wlr-gamma-control.
 #
 # No systemd drop-in, unlike niri: wayfire ships no user unit, so there is no
-# unit to order the config bootstrap against. ryoku-bootstrap runs globally for
-# this case, and wayfire's own inotify reload picks up a tree materialized
-# moments after login.
+# unit to order the config bootstrap against. wayfire resolves its config file
+# once at startup and never picks up a tree materialized after it, so the
+# login's SessionCommand (ryoku-wayland-session) waits for ryoku-bootstrap
+# before the compositor starts.
 startdir=${startdir:?stage-package.sh must set startdir}
 pkgdir=${pkgdir:?stage-package.sh must set pkgdir}
 _repo="$startdir/../../.."
