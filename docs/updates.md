@@ -99,14 +99,20 @@ Fedora repositories, and `distro-sync` moves it down as readily as up.
 A release can add a requirement only Fedora serves (a font, a library). The
 restricted transaction cannot see it, so the update first resolves the set
 with `--assumeno`, installs whatever dnf reports nothing provides from every
-enabled repository, and only then runs the real transaction. Those are new
-packages, never upgrades of the base. dnf skips an upgrade it cannot resolve
-and still exits 0, so afterwards the update compares each package against the
-newest build `RyokuCOPR` serves and warns, naming the packages, when any was
-left behind. It warns rather than stops: part of the set may already have
-moved, so the config still has to be deployed, and a package the user pinned
-on purpose is left behind by design. Both checks run as the user and refresh
-`RyokuCOPR` first, since root's freshly refreshed cache is not theirs.
+enabled repository, and only then runs the real transaction; the retry after a
+failed transaction resolves again, since its fresh metadata can carry a newer
+build. That install must not move the base: when its own dry resolve would
+upgrade, downgrade or remove an installed package, it is skipped with a warning
+pointing at `ryoku update --system`, which takes both. dnf skips a move it
+cannot resolve and still exits 0, so afterwards the update compares each
+package against the newest build `RyokuCOPR` serves, in either direction, and
+warns, naming the packages, when any was left on another build. It warns
+rather than stops: part of the set may already have moved, so the config still
+has to be deployed, and a package the user pinned on purpose is left behind by
+design. The dry resolves run as the user in the C locale (dnf's text is matched
+in English) and refresh `RyokuCOPR` first, since root's freshly refreshed cache
+is not theirs; one that fails to resolve at all is reported, not read as
+"nothing missing".
 
 After the desktop is back, the update refreshes the agent OS when it is present:
 `ryoku-rashin index` regenerates the vault and re-indexes the config mirror with

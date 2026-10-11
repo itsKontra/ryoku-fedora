@@ -175,18 +175,16 @@ func Update(args []string) error {
 		return e
 	}
 	progress.logf(i18n.T("Updating %d Ryoku package(s); the base system stays as it is"), len(set))
-	if deps := ryokuMissingDeps(set); len(deps) > 0 {
-		progress.logf(i18n.T("This release needs %d new package(s) from your distribution: %s"), len(deps), strings.Join(deps, ", "))
-		if err := runUpgrade(i18n.T("Dependencies"), "Ryoku dependency install", depInstallArgs(deps)); err != nil {
-			fmt.Fprintf(os.Stderr, i18n.T("warning: installing the new dependencies failed: %v\n"), err)
-		}
-	}
+	installRyokuDeps(set, withSystem)
 	err = runRyokuUpgrade(set)
 	if err != nil {
 		// One retry on fresh metadata: a COPR mirror or network hiccup is the
 		// usual cause, and the second attempt often lands on a healthy mirror.
+		// That metadata can carry a newer build with new requirements, so
+		// they are resolved again too.
 		progress.logf(i18n.T("The Ryoku package upgrade failed; refreshing %s and retrying once"), sys.RPMRepoName)
 		_ = sys.Sudo(refreshDBArgs()[1:]...)
+		installRyokuDeps(set, withSystem)
 		err = runRyokuUpgrade(set)
 	}
 	if err != nil {
@@ -210,7 +208,7 @@ func Update(args []string) error {
 		for i, b := range behind {
 			names[i] = b.Name + " " + b.Old + " -> " + b.New
 		}
-		fmt.Fprintf(os.Stderr, i18n.T("warning: dnf left %d Ryoku package(s) behind what %s serves (%s); the dependency problems are listed above\n"),
+		fmt.Fprintf(os.Stderr, i18n.T("warning: dnf left %d Ryoku package(s) on a different build than %s serves (%s); the dependency problems are listed above\n"),
 			len(behind), sys.RPMRepoName, strings.Join(names, ", "))
 	}
 
@@ -344,6 +342,37 @@ func snapshotDesc() string {
 // sysupgrade, live in ryokuset.go.
 func runRyokuUpgrade(set []string) error {
 	return runUpgrade("Ryoku", "Ryoku package upgrade", ryokuInstallArgs(set))
+}
+
+// installRyokuDeps installs what the set's new builds require from the
+// distribution (see ryokuset.go). Every failure warns: the transaction after
+// it still moves what it can, and the held-back check names what it could not.
+// Without --system an install that would move the base is left to the user.
+func installRyokuDeps(set []string, withSystem bool) {
+	deps, err := ryokuMissingDeps(set)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, i18n.T("warning: could not check this release for new dependencies: %v\n"), err)
+		return
+	}
+	if len(deps) == 0 {
+		return
+	}
+	progress.logf(i18n.T("This release needs %d new package(s) from your distribution: %s"), len(deps), strings.Join(deps, ", "))
+	if !withSystem {
+		moves, err := depBaseMoves(deps)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, i18n.T("warning: could not plan the dependency install: %v\n"), err)
+			return
+		}
+		if len(moves) > 0 {
+			fmt.Fprintf(os.Stderr, i18n.T("warning: installing them would also update %s, which belongs to the system update; run `ryoku update --system` to take both\n"),
+				strings.Join(moves, ", "))
+			return
+		}
+	}
+	if err := runUpgrade(i18n.T("Dependencies"), "Ryoku dependency install", depInstallArgs(deps)); err != nil {
+		fmt.Fprintf(os.Stderr, i18n.T("warning: installing the new dependencies failed: %v\n"), err)
+	}
 }
 
 // runSystemLane is `ryoku update --system`: the user's lane, opted into. It is

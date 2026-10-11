@@ -2,6 +2,8 @@ package updater
 
 import (
 	"bufio"
+	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -104,11 +106,36 @@ func ryokuInstallArgs(set []string) []string {
 // library). The lane is restricted to RyokuCOPR, so dnf sees nothing that
 // provides it and skips the whole set with exit 0. ryokuMissingDeps finds those
 // requirements with a dry resolve, and depInstallArgs installs just them from
-// every enabled repository before the real transaction: new packages only, so
-// the base system still does not move.
+// every enabled repository before the real transaction. An install that would
+// upgrade, downgrade or remove a base package is the user's lane, so it runs
+// only under --system (see baseMoves).
 
 // nothingProvidesRe: dnf's "nothing provides <capability> needed by <nevra>".
 var nothingProvidesRe = regexp.MustCompile(`nothing provides (.+?) needed by `)
+
+// dryRun runs a dnf --assumeno command in the C locale, so the English text
+// these parsers match is what dnf prints, with stdout and stderr together (the
+// problems go to stderr). --assumeno exits 1 whenever there is work, so a
+// non-zero status is a failure only when the output holds no resolve.
+func dryRun(argv []string) (string, error) {
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	b, err := cmd.CombinedOutput()
+	out := string(b)
+	if err != nil && !resolved(out) {
+		if ls := lines(out); len(ls) > 0 {
+			return out, fmt.Errorf("%s: %s", strings.Join(argv, " "), ls[len(ls)-1])
+		}
+		return out, err
+	}
+	return out, nil
+}
+
+// resolved: dnf got as far as an answer, a transaction it declined or a
+// problem it could not solve.
+func resolved(out string) bool {
+	return strings.Contains(out, "Operation aborted by the user") || nothingProvidesRe.MatchString(out)
+}
 
 // missingDeps: the capabilities a resolve reported nothing provides, in order
 // of first mention, deduplicated. Pure over dnf's output.
@@ -136,22 +163,63 @@ func depInstallArgs(caps []string) []string {
 	return append([]string{"sudo", "dnf", "-y", "install"}, caps...)
 }
 
-// ryokuMissingDeps: what the set's new builds require that RyokuCOPR alone
-// cannot provide. --assumeno exits non-zero whenever there is work, so the
-// output is read whatever the status.
-func ryokuMissingDeps(set []string) []string {
-	argv := ryokuPlanArgs(set)
-	out, _ := exec.Command(argv[0], argv[1:]...).CombinedOutput()
-	return missingDeps(string(out))
+// depPlanArgs resolves that install without running it.
+func depPlanArgs(caps []string) []string {
+	return append([]string{"dnf", "--assumeno", "install"}, caps...)
 }
 
-// heldBack: the set's packages the box still runs older than the newest build
-// the repo serves. dnf skips an uninstallable upgrade and exits 0, so its
-// status alone cannot say the set moved. Pure over two name -> EVR maps.
+// ryokuMissingDeps: what the set's new builds require that RyokuCOPR alone
+// cannot provide.
+func ryokuMissingDeps(set []string) ([]string, error) {
+	out, err := dryRun(ryokuPlanArgs(set))
+	if err != nil {
+		return nil, err
+	}
+	return missingDeps(out), nil
+}
+
+// baseMoves: the installed packages a dnf transaction table upgrades,
+// downgrades or removes, the base moving under a "new packages only" install
+// (a "libfoo >= 2.1" while 2.0 is installed, or a newer glibc a font pulls
+// in). Pure over dnf's C-locale output: a section header starts the line, a
+// package sits one space in, and its "replacing" line further.
+func baseMoves(out string) []string {
+	var names []string
+	moving := false
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(l, "Transaction Summary"):
+			return names
+		case l != "" && !strings.HasPrefix(l, " "):
+			moving = strings.HasPrefix(l, "Upgrading") || strings.HasPrefix(l, "Downgrading") ||
+				strings.HasPrefix(l, "Removing")
+		case moving && strings.HasPrefix(l, " ") && !strings.HasPrefix(l, "  "):
+			if f := strings.Fields(l); len(f) > 0 {
+				names = append(names, f[0])
+			}
+		}
+	}
+	return names
+}
+
+// depBaseMoves: the base packages installing caps would move.
+func depBaseMoves(caps []string) ([]string, error) {
+	out, err := dryRun(depPlanArgs(caps))
+	if err != nil {
+		return nil, err
+	}
+	return baseMoves(out), nil
+}
+
+// heldBack: the set's packages the box runs at any build other than the newest
+// the repo serves, older or newer: distro-sync moves the set down as readily as
+// up, so a pulled build left installed is as stuck as a missed one. dnf skips
+// an unresolvable move and exits 0, so its status alone cannot say the set
+// moved. Pure over two name -> EVR maps.
 func heldBack(installed, latest map[string]string) []updateItem {
 	var behind []updateItem
 	for name, have := range installed {
-		if want, ok := latest[name]; ok && versionCompare(have, want) < 0 {
+		if want, ok := latest[name]; ok && versionCompare(have, want) != 0 {
 			behind = append(behind, updateItem{Name: name, Old: have, New: want})
 		}
 	}

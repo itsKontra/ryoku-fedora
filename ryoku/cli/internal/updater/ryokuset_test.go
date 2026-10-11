@@ -1,7 +1,10 @@
 package updater
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -88,8 +91,69 @@ func TestDependencyArgs(t *testing.T) {
 func TestHeldBack(t *testing.T) {
 	installed := evrMap("ryoku-desktop 0:0.4093-109.fc44\nryogami 0:0.4096-112.fc44\nryoku-shell 0:0.4097-113.fc44\n")
 	latest := evrMap("ryoku-desktop 0.4095-111.fc44\nryoku-desktop 0.4096-112.fc44\nryogami 0.4096-112.fc44\nryoku-shell 0.4096-112.fc44\n")
-	want := []updateItem{{Name: "ryoku-desktop", Old: "0:0.4093-109.fc44", New: "0.4096-112.fc44"}}
+	want := []updateItem{
+		{Name: "ryoku-desktop", Old: "0:0.4093-109.fc44", New: "0.4096-112.fc44"},
+		{Name: "ryoku-shell", Old: "0:0.4097-113.fc44", New: "0.4096-112.fc44"},
+	}
 	if got := heldBack(installed, latest); !reflect.DeepEqual(got, want) {
 		t.Errorf("heldBack = %v, want %v", got, want)
+	}
+}
+
+// The dry resolve of a dependency install, in dnf5's C-locale table: the new
+// font is fine, the library it pulls along upgrades the base.
+func TestBaseMoves(t *testing.T) {
+	out := `Updating and loading repositories:
+Repositories loaded.
+Package                Arch   Version        Repository      Size
+Installing:
+ google-rubik-fonts    noarch 0:2.200-3.fc44 fedora     1.2 MiB
+Installing dependencies:
+ fontpackages-filesystem noarch 0:1.44-1.fc44 fedora   0 B
+Upgrading:
+ libfoo                x86_64 0:2.1-1.fc44   updates   300 KiB
+   replacing libfoo    x86_64 0:2.0-1.fc44   fedora    290 KiB
+Removing dependencies:
+ libfoo-compat         x86_64 0:2.0-1.fc44   fedora     12 KiB
+
+Transaction Summary:
+ Installing:         2 packages
+ Upgrading:          1 package
+ Removing:           1 package
+Operation aborted by the user.`
+	if got, want := baseMoves(out), []string{"libfoo", "libfoo-compat"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("baseMoves = %v, want %v", got, want)
+	}
+	if got := baseMoves("Package Arch\nInstalling:\n google-rubik-fonts noarch 0:2.200-3.fc44 fedora 1 MiB\n"); got != nil {
+		t.Errorf("baseMoves(new only) = %v, want nil", got)
+	}
+}
+
+// dnf's text is matched in English, so the dry resolve must run in the C
+// locale; and a non-zero exit is a failure only when dnf resolved nothing.
+func TestDryRun(t *testing.T) {
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"case \"$1\" in\n" +
+		"  fail) echo 'Failed to download metadata for repo RyokuCOPR' >&2; exit 1 ;;\n" +
+		"esac\n" +
+		"if [ \"$LC_ALL\" = C ]; then echo ' - nothing provides libfoo needed by ryogami-1-1.x86_64' >&2\n" +
+		"else echo ' - nichts stellt libfoo bereit' >&2; fi\n" +
+		"echo 'Operation aborted by the user.'\n" +
+		"exit 1\n"
+	if err := os.WriteFile(filepath.Join(bin, "dnf"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("LC_ALL", "de_DE.UTF-8")
+	out, err := dryRun([]string{"dnf", "plan"})
+	if err != nil {
+		t.Fatalf("a declined transaction is a resolve, not an error: %v", err)
+	}
+	if got := missingDeps(out); !reflect.DeepEqual(got, []string{"libfoo"}) {
+		t.Errorf("missingDeps under a German locale = %v, want [libfoo]", got)
+	}
+	if _, err := dryRun([]string{"dnf", "fail"}); err == nil || !strings.Contains(err.Error(), "Failed to download metadata") {
+		t.Errorf("a resolve that never ran: err = %v, want dnf's last line", err)
 	}
 }
