@@ -32,6 +32,23 @@ func TestTranscriptCapKeepsTail(t *testing.T) {
 	}
 }
 
+func TestOpenApprovalsTrackedApartFromTranscript(t *testing.T) {
+	h := newChatHub()
+	h.broadcast(wsOut{Type: "permission", RequestID: "1", Title: "rm x"})
+	h.broadcast(wsOut{Type: "permission", RequestID: "2", Title: "mv a b"})
+	h.broadcast(wsOut{Type: "permission_resolved", RequestID: "1", Outcome: "allowed"})
+	if len(h.transcript) != 0 {
+		t.Fatalf("approvals are not conversation: %+v", h.transcript)
+	}
+	if len(h.perms) != 1 || h.perms[0].RequestID != "2" {
+		t.Fatalf("open approvals = %+v, want only request 2", h.perms)
+	}
+	h.releasePerms()
+	if len(h.perms) != 0 {
+		t.Fatalf("a dead agent's approvals must be released: %+v", h.perms)
+	}
+}
+
 func TestExtractImagesFindsRealFilesOnly(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)

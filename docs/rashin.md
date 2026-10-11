@@ -210,18 +210,49 @@ dead end:
 | `cmd` | a backtick span whose first word is on `PATH` | copies the command |
 | `color` | a hex color, shown with a live swatch | copies the hex |
 
-Plus a COPY chip for the whole answer and CONTINUE IN DASHBOARD. The answer
-text itself is selectable for mouse-copying a fragment. Nonexistent paths and
-non-runnable backtick spans are dropped, so a chip never lies.
+Plus a COPY chip for the whole answer and CONTINUE IN CHAT (the Ask bar's
+Agent mode); the Ask bar adds OPEN RASHIN (the Rashin window) and PIN BUBBLE.
+The answer text itself is selectable for mouse-copying a fragment. Nonexistent
+paths and non-runnable backtick spans are dropped, so a chip never lies.
 
 ### Continue while it works, and cancel
 
-While the agent is still working, two options sit under the pulsing strip:
-**CONTINUE IN DASHBOARD** opens the dashboard chat, where the same turn is
+While the agent is still working, the options sit under the pulsing strip:
+**CONTINUE IN CHAT** opens the Ask bar's Agent mode, where the same turn is
 streaming live (the daemon runs each turn on a background context, so it keeps
-going even after the launcher closes), and **CANCEL** stops it. Escape cancels
-a working ask; the daemon interrupts both the fast lane and any session-lane
-turn.
+going even after the launcher closes), **OPEN RASHIN** raises the Rashin window
+(Ask bar only), and **CANCEL** stops it. Escape cancels a working ask; the
+daemon interrupts both the fast lane and any session-lane turn.
+
+### The Ask bar
+
+Alt+Space (`ryoku-shell ask`, rebindable in the Hub as `shell.ask`) opens the
+Ask bar on the focused screen: one monochrome surface with four modes, **Ask**
+(the quick asks above, through `ryoku-rashin ask`), **Agent** (the shared
+agent session, the same one the dashboard chat shows), **Tools** (link
+downloads, compress and install pickers, the Rashin dashboard) and **Web**
+(search). `ryoku-shell ask chat` and `ryoku-shell ask tools` open it on a mode.
+A native dotted orb thinks while the agent works and a beam runs the border.
+
+Agent mode is a live view of `/ws/chat`: the shell keeps one resident
+`ryoku-rashin chat --follow` process, a transparent proxy that prints every
+server frame as a JSON line and forwards every stdin line as a client message,
+and a pure reducer (`services/lib/chatstate.js`) turns the frames into the
+transcript. Approvals sit inline; an approval answered on any surface (the bar,
+the dashboard) disappears from every other one, because the daemon broadcasts
+`permission_resolved` and keeps open approvals apart from the replayed
+transcript. A chat can be pinned to the desktop as a draggable bubble (its
+place and screen are stored under `ask.bubble` in `shell.json`).
+
+Two icon buttons sit on the header beside the `RASHIN // ASK` mark. The
+**history** drawer lists the recent chats (the shared session's stored
+sessions; picking one switches the chat to it) and the recent asks (the
+`\resume` history; picking one recalls its answer without a model call). The
+**model** drawer switches the fast lane's provider (`ryoku-rashin backend`,
+"Follow Hermes" clears the override) and the agent's chat model.
+`Ctrl+Shift+H` and `Ctrl+Shift+M` toggle the two drawers without the mouse;
+with one open, Up/Down move its selection and Enter picks, and Escape closes
+the drawer before it closes the bar.
 
 ### `\resume`
 

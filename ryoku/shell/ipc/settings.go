@@ -22,7 +22,7 @@ import (
 // writing it directly).
 //
 // The daemon owns a typed schema for its top-level namespaces (general, theme,
-// bars, menus, notifications, wallpaper, batteryAlerts, controls). Those are
+// bars, menus, notifications, wallpaper, batteryAlerts, controls, ask). Those are
 // validated: enum membership and integer ranges are rejected, the float
 // strength/contrast/opacity values clamp into range, and Controls drops unknown
 // or duplicate layout identifiers. Every other top-level key in the file (the
@@ -53,6 +53,7 @@ var contractKeys = map[string]bool{
 	"wallpaper":     true,
 	"batteryAlerts": true,
 	"controls":      true,
+	"ask":           true,
 }
 
 // Value domains, in the display order of contract 14 section 8. Stored as stable
@@ -112,7 +113,8 @@ var (
 
 // settings mirrors the reference configuration schema (contract 14), minus the
 // keys Ryoku has no consumer for (see the slice report): the icon-theme group,
-// the custom-CSS file, and the app-launcher menu.
+// the custom-CSS file, and the app-launcher menu. Ask holds the Ask bar's
+// persistent chat-bubble placement.
 type settings struct {
 	General       generalSettings       `json:"general"`
 	Theme         themeSettings         `json:"theme"`
@@ -122,6 +124,7 @@ type settings struct {
 	Wallpaper     wallpaperSettings     `json:"wallpaper"`
 	BatteryAlerts batteryAlertsSettings `json:"batteryAlerts"`
 	Controls      controlsSettings      `json:"controls"`
+	Ask           askSettings           `json:"ask"`
 }
 
 type generalSettings struct {
@@ -279,6 +282,17 @@ type controlsSection struct {
 	Visible bool   `json:"visible"`
 }
 
+type askSettings struct {
+	Bubble askBubbleSettings `json:"bubble"`
+}
+
+type askBubbleSettings struct {
+	Enabled bool    `json:"enabled"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	Screen  string  `json:"screen"`
+}
+
 func ip(n int) *int { return &n }
 
 // mw builds a unit menu-widget; spc a spacer; qa a quick-actions group. Used only
@@ -354,6 +368,7 @@ func defaultSettings() *settings {
 		Wallpaper:     wallpaperSettings{ContentFit: "Cover", TransitionPreset: "random", VideoEngine: "ryogami", VideoEnabled: true, VideoTranscodeFps: 24, VideoTranscodeWidth: 1920},
 		BatteryAlerts: batteryAlertsSettings{Enabled: true, WarningEnabled: true, CriticalEnabled: true, WarningPercent: 25, CriticalPercent: 10},
 		Controls:      controlsSettings{Sections: controls, Hidden: []string{}},
+		Ask:           askSettings{Bubble: askBubbleSettings{Enabled: false, X: 0.94, Y: 0.68, Screen: ""}},
 	}
 }
 
@@ -437,6 +452,7 @@ func (s *settings) normalize(strict bool) error {
 	s.Wallpaper.normalize(v)
 	s.BatteryAlerts.normalize(v)
 	s.Controls.normalize()
+	s.Ask.normalize(v)
 	return v.err
 }
 
@@ -579,6 +595,11 @@ func (w *wallpaperSettings) normalize(v *validator) {
 	// wallpaper.transition_preset is Ryogami's now: it reads the key from
 	// shell.json per-apply and falls back to random on an unknown name, so
 	// ryoku-shell keeps the key but no longer duplicates the preset name list.
+}
+
+func (a *askSettings) normalize(v *validator) {
+	v.clampF(&a.Bubble.X, 0, 1)
+	v.clampF(&a.Bubble.Y, 0, 1)
 }
 
 // normalize keeps the known sections in the stored order, appends any missing
@@ -791,6 +812,7 @@ func buildSettings(raw map[string]any, strict bool) (*settings, error) {
 		"wallpaper":     &s.Wallpaper,
 		"batteryAlerts": &s.BatteryAlerts,
 		"controls":      &s.Controls,
+		"ask":           &s.Ask,
 	}
 	for k, ptr := range dst {
 		raw, ok := raw[k]

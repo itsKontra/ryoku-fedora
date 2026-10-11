@@ -49,7 +49,7 @@ type SessionMeta struct {
 
 // AcpEvent is the translated stream ws.go forwards to the dashboard.
 type AcpEvent struct {
-	Type         string // state | agent_text | agent_thought | user_text | tool | permission | turn_end | models | commands | session_info | usage | replay_start | replay_end
+	Type         string // state | agent_text | agent_thought | user_text | tool | permission | permission_resolved | turn_end | models | commands | session_info | usage | replay_start | replay_end
 	State        string
 	Err          string
 	Text         string
@@ -60,6 +60,7 @@ type AcpEvent struct {
 	RequestID    string
 	PermTitle    string
 	Options      []PermOption
+	Outcome      string // permission_resolved: allowed | rejected | cancelled
 	StopReason   string
 	Models       []ModelInfo
 	CurrentModel string
@@ -100,6 +101,9 @@ type acpConn struct {
 	// answeredPerms: a permission request is replied to exactly once, even
 	// when the dashboard and the terminal race to answer it.
 	answeredPerms map[int64]bool
+	// openPerms holds each unanswered request's options, so an answer can say
+	// whether it allowed or rejected and a cancel can release every one.
+	openPerms map[int64][]PermOption
 
 	// configStamp is the hermes config the process loaded at spawn; hermes
 	// reads config.yaml and .env once, so a session outlives a `hermes setup`
@@ -143,6 +147,7 @@ func newACPConn(in io.Writer, out io.Reader, closer io.Closer) *acpConn {
 		pending:       map[int64]chan rpcMsg{},
 		events:        make(chan AcpEvent, 256),
 		answeredPerms: map[int64]bool{},
+		openPerms:     map[int64][]PermOption{},
 	}
 	go c.readLoop(out)
 	return c
@@ -491,11 +496,20 @@ func (c *acpConn) waitSession(timeout time.Duration) string {
 func (c *acpConn) Cancel() {
 	c.mu.Lock()
 	sid := c.sessionID
+	open := make([]int64, 0, len(c.openPerms))
+	for id := range c.openPerms {
+		open = append(open, id)
+	}
 	c.mu.Unlock()
 	c.notify("session/cancel", map[string]string{"sessionId": sid})
+	for _, id := range open {
+		c.RespondPermission(id, "")
+	}
 }
 
-// RespondPermission answers an inbound session/request_permission request.
+// RespondPermission answers an inbound session/request_permission request;
+// an empty option declines it. Every surface hears the outcome, so an
+// approval answered in one place disappears everywhere.
 func (c *acpConn) RespondPermission(requestID int64, optionID string) {
 	c.mu.Lock()
 	if c.answeredPerms[requestID] {
@@ -503,12 +517,22 @@ func (c *acpConn) RespondPermission(requestID int64, optionID string) {
 		return
 	}
 	c.answeredPerms[requestID] = true
+	opts := c.openPerms[requestID]
+	delete(c.openPerms, requestID)
 	c.mu.Unlock()
 	outcome := map[string]any{"outcome": "cancelled"}
+	resolved := "cancelled"
 	if optionID != "" {
 		outcome = map[string]any{"outcome": "selected", "optionId": optionID}
+		resolved = "allowed"
+		for _, o := range opts {
+			if o.ID == optionID && strings.HasPrefix(o.Kind, "reject") {
+				resolved = "rejected"
+			}
+		}
 	}
 	c.respond(requestID, map[string]any{"outcome": outcome})
+	c.emit(AcpEvent{Type: "permission_resolved", RequestID: fmt.Sprint(requestID), Outcome: resolved})
 }
 
 func (c *acpConn) Close() {
@@ -593,6 +617,9 @@ func (c *acpConn) handleAgentRequest(msg rpcMsg) {
 		for _, o := range p.Options {
 			opts = append(opts, PermOption{ID: o.OptionID, Name: o.Name, Kind: o.Kind})
 		}
+		c.mu.Lock()
+		c.openPerms[*msg.ID] = opts
+		c.mu.Unlock()
 		c.emit(AcpEvent{
 			Type:      "permission",
 			RequestID: fmt.Sprint(*msg.ID),

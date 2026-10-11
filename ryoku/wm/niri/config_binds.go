@@ -141,6 +141,7 @@ func defaultBinds() map[string]niriBind {
 
 		// Shell
 		"shell.launcher":          {action: spawnArgs("ryoku-shell", "launcher")},
+		"shell.ask":               {action: spawnArgs("ryoku-shell", "ask")},
 		"shell.rashin":            {action: spawnSh("ryoku-summon Rashin flock -n -o /tmp/rashin-app.lock rashin-app")},
 		"shell.cheatsheet":        {action: spawnSh("pkill -x -f 'qs -c keys' 2>/dev/null || " + wm.QmlEnv + " flock -n -o /tmp/ryoku-keys.lock qs -c keys")},
 		"shell.lock":              {action: spawnArgs("ryoku-shell", "lock")},

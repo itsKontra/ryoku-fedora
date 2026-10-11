@@ -74,6 +74,44 @@ Singleton {
     })
     property var controls: defaultControls
 
+    // ask: where the Ask bar's pinned chat bubble sits, as fractions of its
+    // screen, and which screen holds it. Clamped here and in the daemon.
+    readonly property var askBubble: {
+        const ask = adapter.ask && typeof adapter.ask === "object" ? adapter.ask : ({});
+        const bubble = ask.bubble && typeof ask.bubble === "object" ? ask.bubble : ({});
+        const x = Number(bubble.x);
+        const y = Number(bubble.y);
+        return {
+            enabled: bubble.enabled === true,
+            x: Math.max(0, Math.min(1, isFinite(x) ? x : 0.94)),
+            y: Math.max(0, Math.min(1, isFinite(y) ? y : 0.68)),
+            screen: String(bubble.screen || "")
+        };
+    }
+
+    function patchAskBubble(key, value) {
+        if (["enabled", "x", "y", "screen"].indexOf(key) < 0)
+            return;
+        let clean = value;
+        if (key === "x" || key === "y") {
+            const number = Number(value);
+            clean = Math.max(0, Math.min(1, isFinite(number) ? number : root.askBubble[key]));
+        } else if (key === "enabled") {
+            clean = value === true;
+        } else {
+            clean = String(value || "");
+        }
+        const next = Object.assign({}, root.askBubble);
+        next[key] = clean;
+        adapter.ask = { bubble: next };
+        shaderCtl.queued += "call settings.patch "
+            + JSON.stringify({ path: "ask.bubble." + key, value: clean }) + "\n";
+        if (shaderCtl.connected)
+            shaderCtl.flushQueued();
+        else
+            shaderCtl.connected = true;
+    }
+
     // typography: a scale that grows or shrinks the whole shell (the bar text
     // and the surfaces around it), keeping the readout legible without overflow.
     property alias fontScale:  adapter.fontScale
@@ -233,6 +271,14 @@ Singleton {
                 "paneRadius": 12,
                 "cardRadius": 9,
                 "pruneWeekly": false
+            })
+            property var ask: ({
+                "bubble": {
+                    "enabled": false,
+                    "x": 0.94,
+                    "y": 0.68,
+                    "screen": ""
+                }
             })
         }
     }

@@ -183,6 +183,12 @@ func TestACPHandshakePromptStreamPermissionCancel(t *testing.T) {
 	if pr.Outcome.Outcome != "selected" || pr.Outcome.OptionID != "allow" {
 		t.Fatalf("permission outcome %+v", pr)
 	}
+	ev = expectEvent(t, conn.Events(), "permission_resolved")
+	if ev.RequestID != "77" || ev.Outcome != "allowed" {
+		t.Fatalf("resolved event %+v", ev)
+	}
+	// A second answer (another surface racing) is dropped, not re-sent.
+	conn.RespondPermission(77, "deny")
 
 	// Turn end.
 	fa.respond(*prompt.ID, map[string]any{"stopReason": "end_turn"})

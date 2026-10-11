@@ -1015,6 +1015,9 @@ var surfaceCommands = map[string]string{
 	"screenshot":         "quick-settings#capture",
 	"compress":           "stash#compress",
 	"install":            "stash#install",
+	"ask":                "ask",
+	"ask chat":           "ask#chat",
+	"ask tools":          "ask#tools",
 	// Preserved aliases so nothing scripted today breaks: the menu-prefixed
 	// spellings and the file-picker desktop entries (install-app.desktop,
 	// compress-video.desktop) land on the same surfaces they always have.
@@ -1073,6 +1076,16 @@ func (d *daemon) dispatch(line string) string {
 			}
 			routeCmd = line
 		}
+	case "ask":
+		// Bare `ask` is a surface verb; a mode word deep-links into the bar.
+		if len(args) == 0 {
+			break
+		}
+		if len(args) == 1 && (args[0] == "chat" || args[0] == "tools") {
+			routeCmd = line
+			break
+		}
+		return "err ask: expected chat or tools"
 	case "bar":
 		// The data-layout verbs (list/catalog/move/show/hide/set/position/form/
 		// defaults/settings) take a verb first; the reveal grammar takes an edge

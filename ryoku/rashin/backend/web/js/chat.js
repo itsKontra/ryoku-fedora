@@ -55,7 +55,8 @@ function lastOpenAgentMsg(items) {
 
 // applyEvent(state, ev) -> next state. Never mutates the input; always returns a
 // fresh object so the DOM layer can diff cheaply. ev is a daemon->client frame
-// (chat WS protocol) or the local {type:'permission_reply'} echo.
+// (chat WS protocol, where permission_resolved clears an approval answered on
+// any surface) or the local {type:'permission_reply'} echo.
 export function applyEvent(state, ev) {
   const s = Object.assign({}, state);
   if (!state.replaying) s.activity = activityFor(ev, state);
@@ -116,6 +117,7 @@ export function applyEvent(state, ev) {
       });
       return s;
     }
+    case "permission_resolved":
     case "permission_reply": {
       s.permissions = state.permissions.filter((p) => p.requestId !== ev.requestId);
       return s;

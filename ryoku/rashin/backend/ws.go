@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,7 @@ type wsOut struct {
 	Status     string        `json:"status,omitempty"`
 	RequestID  string        `json:"requestId,omitempty"`
 	Options    []PermOption  `json:"options,omitempty"`
+	Outcome    string        `json:"outcome,omitempty"`
 	StopReason string        `json:"stopReason,omitempty"`
 	Models     []ModelInfo   `json:"models,omitempty"`
 	Current    string        `json:"current,omitempty"`
@@ -66,6 +68,9 @@ type chatHub struct {
 	// joiner so a chat begun anywhere (launcher ask, another tab) is already
 	// on screen when the dashboard opens.
 	transcript []wsOut
+	// perms are the approvals still waiting on a person, in arrival order;
+	// a joiner gets them after the replay so any surface can answer one.
+	perms []wsOut
 	// introduced guards the one-time Needle identity preamble: it rides the
 	// first non-slash chat turn of a session and only hermes sees it.
 	introduced bool
@@ -106,17 +111,27 @@ func newChatHub() *chatHub {
 	}
 }
 
-// transcriptWorthy: the conversation itself, not ephemeral status.
+// transcriptWorthy: the conversation itself, not ephemeral status. Open
+// approvals are held apart in perms: once answered they are history.
 func transcriptWorthy(t string) bool {
 	switch t {
-	case "user_text", "agent_text", "agent_thought", "tool", "permission", "turn_end":
+	case "user_text", "agent_text", "agent_thought", "tool", "turn_end":
 		return true
 	}
 	return false
 }
 
-// recordLocked appends a frame to the session transcript; h.mu held.
+// recordLocked appends a frame to the session transcript and tracks the open
+// approvals; h.mu held.
 func (h *chatHub) recordLocked(m wsOut) {
+	switch m.Type {
+	case "permission":
+		h.perms = append(h.perms, m)
+		return
+	case "permission_resolved":
+		h.perms = slices.DeleteFunc(h.perms, func(p wsOut) bool { return p.RequestID == m.RequestID })
+		return
+	}
 	if !transcriptWorthy(m.Type) {
 		return
 	}
@@ -124,6 +139,25 @@ func (h *chatHub) recordLocked(m wsOut) {
 		h.transcript = h.transcript[len(h.transcript)-transcriptCap/2:]
 	}
 	h.transcript = append(h.transcript, m)
+}
+
+// resetConversationLocked forgets the transcript and any open approvals, for
+// a new or loaded session; h.mu held.
+func (h *chatHub) resetConversationLocked() {
+	h.transcript = nil
+	h.perms = nil
+}
+
+// releasePerms clears approvals a dead agent can no longer receive, on every
+// surface.
+func (h *chatHub) releasePerms() {
+	h.mu.Lock()
+	open := h.perms
+	h.perms = nil
+	h.mu.Unlock()
+	for _, p := range open {
+		h.broadcast(wsOut{Type: "permission_resolved", RequestID: p.RequestID, Outcome: "cancelled"})
+	}
 }
 
 func (h *chatHub) broadcast(m wsOut) {
@@ -218,6 +252,7 @@ func (h *chatHub) pump(c *acpConn) {
 		case "state":
 			h.broadcast(wsOut{Type: "state", State: ev.State, Error: ev.Err})
 			if ev.State == "dead" {
+				h.releasePerms()
 				h.dropConn(c)
 			}
 		case "agent_text":
@@ -230,6 +265,8 @@ func (h *chatHub) pump(c *acpConn) {
 			h.broadcast(wsOut{Type: "tool", ID: ev.ToolID, Title: ev.ToolTitle, Kind: ev.ToolKind, Status: ev.ToolStatus})
 		case "permission":
 			h.broadcast(wsOut{Type: "permission", RequestID: ev.RequestID, Title: ev.PermTitle, Options: ev.Options})
+		case "permission_resolved":
+			h.broadcast(wsOut{Type: "permission_resolved", RequestID: ev.RequestID, Outcome: ev.Outcome})
 		case "turn_end":
 			h.broadcast(wsOut{Type: "turn_end", StopReason: ev.StopReason})
 			h.broadcast(wsOut{Type: "state", State: "ready"})
@@ -255,6 +292,7 @@ func (h *chatHub) pump(c *acpConn) {
 			h.broadcast(wsOut{Type: "replay_end"})
 		}
 	}
+	h.releasePerms()
 	h.dropConn(c)
 }
 
@@ -272,12 +310,12 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 	}
 	// Replay the running conversation so a joiner lands mid-session with the
 	// transcript already on screen (this is how a launcher ask is waiting in
-	// the dashboard when the user clicks "continue").
-	var replay []wsOut
-	if len(h.transcript) > 0 {
-		replay = append([]wsOut{{Type: "replay_start"}}, h.transcript...)
-		replay = append(replay, wsOut{Type: "replay_end"})
-	}
+	// the dashboard when the user clicks "continue"), then the approvals still
+	// waiting, so any surface can answer one. An empty replay still goes out:
+	// a client reconnecting to a restarted daemon must drop what it showed.
+	replay := append([]wsOut{{Type: "replay_start"}}, h.transcript...)
+	replay = append(replay, wsOut{Type: "replay_end"})
+	replay = append(replay, h.perms...)
 	h.mu.Unlock()
 
 	writerDone := make(chan struct{})
@@ -369,8 +407,8 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 			if in.SessionID != "" {
 				go func(c *acpConn, id string) {
 					h.mu.Lock()
-					h.transcript = nil  // the ACP replay rebuilds it
-					h.introduced = true // an existing session already introduced itself
+					h.resetConversationLocked() // the ACP replay rebuilds it
+					h.introduced = true         // an existing session already introduced itself
 					h.mu.Unlock()
 					h.broadcast(wsOut{Type: "state", State: "busy"})
 					if err := c.LoadSession(id); err != nil {
@@ -383,7 +421,7 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 		case "new":
 			go func(c *acpConn, fresh bool) {
 				h.mu.Lock()
-				h.transcript = nil
+				h.resetConversationLocked()
 				h.introduced = false
 				h.mu.Unlock()
 				h.broadcast(wsOut{Type: "replay_start"})

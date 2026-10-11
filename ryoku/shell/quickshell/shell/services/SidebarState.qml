@@ -121,6 +121,9 @@ Singleton {
         const slice = root.sliceFor(screen);
         if (!slice)
             return;
+        const shellSlice = ShellState.forScreen(slice.modelData);
+        if (shellSlice)
+            shellSlice.askOpen = false;
         slice.tab = root.normalizedTab(tab);
         slice.open = true;
     }
