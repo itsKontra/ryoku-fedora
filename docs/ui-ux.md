@@ -498,22 +498,24 @@ and per-monitor visibility from `ShellState`.
   controls out of the bar. The monitor-local menu manager owns those cards and
   the bounded frame menus. The global Controls panel lives in
   `ryoku/shell/quickshell/shell/modules/sidebar/`; see `docs/sidebars.md`.
-- **dock** an app island cluster on a screen edge, its own shell surface
-  (`shell/modules/dock/DockSurface.qml`, one per monitor) rather than a part of
-  any one bar, so it rides every bar style. Pinned apps hold a stable order you
-  set, then a separator, then whatever else is running; drag an island to
-  reorder the pins. Autohide keeps it as a thin peek strip that reveals on a
-  slow hover along the edge; off reserves its space and always shows it.
-  Hovering magnifies an island to 1.4, shows the app name as a hover label, and
-  grows a live window-preview strip (thumbnail, title, window count, close);
-  left click activates, cycles or launches, middle click opens a fresh
-  instance, right click pins or unpins. An optional media chip rides the end of
-  the band. The top-level `dock` object in `shell.json` drives it: `enabled`
-  (off by default), `edge` (`auto` = opposite the bar, or a fixed side),
-  `autohide`, `pinned`, `magnify`, `frost`, `shadow`, `labels` and `media`.
-  Sumi's `RailDock` rail widget is the in-band alternative: the same pin model
-  on the frame rail, no magnify and no preview, with a running indicator on the
-  outer edge.
+- **dock** a per-monitor shell surface that is independent of the selected bar
+  style. `UniversalDockHost.qml` loads the selected design, Ryoku's paper
+  islands or none, lazily: no design, no window. Every design reads the same
+  running-window model and canonical desktop-entry pins from the top-level
+  `dock` object in `shell.json`, so aliases cannot create duplicate pins. The
+  shared controls are `enabled` (off by default), `design`, `edge` (`auto` =
+  opposite the bar, or a fixed side), `autohide`, `size` (icon size),
+  `magnify` and the `pinned` order; the Ryoku look keys are `style`, `frost`,
+  `shadow`, `labels` and `media`. The Stage Editor's Dock section is the only
+  settings surface: design cards, placement and behaviour, the Ryoku look, pin
+  ordering and the app catalogue. Bar Studio and the QS Bar's Dock route only
+  open that section. Ryoku's design places pinned apps first, then a separator
+  and running apps; autohide keeps a thin peek strip that reveals on a slow
+  hover along the edge. Hovering magnifies an island, shows the app name and
+  grows a live window-preview strip; left click activates, cycles or launches,
+  middle click opens a fresh instance, right click opens the pin menu. Sumi's
+  `RailDock` rail widget is the in-band alternative and reads and writes the
+  same shared pins.
 - **wallpaper** the background itself, drawn on the bottom layer with its own
   reveal shader for transitions: 22 presets the daemon draws from at random on
   each switch, from the crossfades, directional sweeps and circle irises to a

@@ -1210,8 +1210,9 @@ func (d *daemon) barSettings(args []string) string {
 // partial dock object in shell.json never drops a field a mutation did not set.
 func defaultDock() map[string]any {
 	return map[string]any{
-		"enabled": false, "edge": "auto", "autohide": true, "pinned": []string{},
-		"magnify": true, "frost": true, "shadow": true, "labels": true, "media": false,
+		"enabled": false, "design": "ryoku", "edge": "auto", "autohide": true, "size": 44,
+		"pinned": []string{}, "magnify": true, "style": "islands", "frost": true,
+		"shadow": true, "labels": true, "media": false,
 	}
 }
 

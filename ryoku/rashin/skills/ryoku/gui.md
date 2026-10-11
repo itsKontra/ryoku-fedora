@@ -67,7 +67,8 @@ them here:
 | Intent | GUI surface | How to open | The command behind it |
 |---|---|---|---|
 | Change wallpaper or theme | Wallpaper picker | Super+W | `ryogami wallpaper ui` (picker), `ryogami wallpaper set\|next\|random` |
-| Bar layout, widgets, dock | QS Bar Settings | `ryoku-shell bar settings [route]` | `ryoku-shell bar ...`, `ryoku-shell dock ...` (see bar.md) |
+| Bar layout and widgets | QS Bar Settings | `ryoku-shell bar settings [route]` | `ryoku-shell bar ...` (see bar.md) |
+| Dock design, behaviour, pinned apps | Stage Editor > Dock | right-click the desktop, Edit desktop | `ryoku-shell dock ...` (see bar.md) |
 | Launch an app | App launcher | Super+Space | the shell launcher (the App Launcher page tunes it) |
 | Screen time and downloads | Stash | Super+S | a shell surface; no config command |
 

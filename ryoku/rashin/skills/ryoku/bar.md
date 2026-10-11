@@ -135,8 +135,12 @@ ryoku-shell dock autohide on
 
 ## Opening the settings panel
 
-The bar and the dock have their own GUI, **QS Bar Settings**, not a Ryoku Hub
-page; name it when a user asks how to change the bar from the desktop.
+The bar has its own GUI, **QS Bar Settings**, not a Ryoku Hub page; name it
+when a user asks how to change the bar from the desktop. The dock is shared by
+every bar style and is edited in the **Stage Editor's Dock section**
+(right-click the desktop, Edit desktop, Dock): design, edge, autohide, icon
+size, look, pinned apps and their order. QS Bar Settings' `dock` route and Bar
+Studio's DOCK card only open that section.
 
 `ryoku-shell bar settings [route]` raises **QS Bar Settings** on the active
 monitor (routes: `bars`, `layout`, `widgets`, `dock`, `community`). It is the

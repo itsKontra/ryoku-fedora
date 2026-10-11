@@ -1113,14 +1113,13 @@ func reconcileShellConfig(checkOnly bool) recResult {
 
 // ---- reconciler: dock config store -------------------------------------------
 
-// reconcileDockStore moves the retired dock knobs out of the qsbar map and into
-// the top-level `dock` object the shell reads now that the dock is its own
-// shell surface for every bar style. Only the five keys a box could have
-// persisted move (enabled, magnify, pinned, frost, shadow); the rest of the
-// dock object (edge, autohide, labels, media) is left absent so Config.qml's
-// defaults apply. Surgical and idempotent: a dock object the shell already
-// wrote is never clobbered, the old keys are dropped from qsbar, and a store
-// with none of them is left alone.
+// reconcileDockStore converges every retired dock store onto shell.json's
+// top-level dock object, the one store the universal dock host and Sumi's rail
+// dock both read. The qsbar map's old dock* knobs move across (a key the dock
+// object already holds wins), Sumi's frameBars.dock.pinned joins the shared pin
+// list (leaving the empty list its schema keeps), and the list is normalised to desktop ids (no `.desktop` suffix, no
+// duplicates) keeping source order. Idempotent: a store with no retired keys and
+// a clean pin list is left alone.
 func reconcileDockStore(checkOnly bool) recResult {
 	path := filepath.Join(sys.ConfigHome(), "ryoku", "shell.json")
 	raw, err := os.ReadFile(path)
@@ -1133,11 +1132,11 @@ func reconcileDockStore(checkOnly bool) recResult {
 			withFix(i18n.T("delete %s to re-seed it"), path)
 	}
 	if !changed {
-		return okRes(i18n.T("dock config lives in the top-level dock object"))
+		return okRes(i18n.T("dock settings use the universal dock store"))
 	}
 	if checkOnly {
-		return wouldRes(i18n.T("shell.json still keeps dock knobs in the qsbar map")).
-			withFix(i18n.T("ryoku doctor moves them into the top-level dock object in place"))
+		return wouldRes(i18n.T("retired dock settings still exist outside the universal dock store")).
+			withFix(i18n.T("ryoku doctor merges them into shell.json and removes the retired keys"))
 	}
 	tmp := path + ".ryoku-tmp"
 	if err := os.WriteFile(tmp, migrated, 0o644); err != nil {
@@ -1147,7 +1146,7 @@ func reconcileDockStore(checkOnly bool) recResult {
 		os.Remove(tmp)
 		return failRes(i18n.T("could not replace %s: %v"), path, err)
 	}
-	return fixedRes(i18n.T("moved the retired qsbar dock knobs into the top-level dock object"))
+	return fixedRes(i18n.T("merged retired dock settings into the universal dock store"))
 }
 
 // oldDockKeys map each retired qsbar dock knob to its key in the top-level dock
@@ -1161,57 +1160,152 @@ var oldDockKeys = map[string]string{
 	"dockShadow":  "shadow",
 }
 
-// migrateDockStore lifts the retired qsbar.dock* knobs into a top-level dock
-// object under their new names, deleting them from qsbar. Every other key
-// (qsbar's own settings and each moved value) is preserved as raw bytes, a dock
-// object the shell already wrote wins key-by-key, and a store with none of the
-// old keys is a no-op, so a second run reads clean.
+// canonicalDockID strips a pin to its desktop id. Case is kept: the shell
+// stores the desktop database's own id (org.gnome.Nautilus), and lowering it
+// here would rewrite every list the shell saves on the next doctor run.
+func canonicalDockID(value string) string {
+	id := strings.TrimSpace(value)
+	if strings.HasSuffix(strings.ToLower(id), ".desktop") {
+		id = id[:len(id)-len(".desktop")]
+	}
+	return id
+}
+
+// appendDockPins adds the pins in raw to dst in order, skipping any app dst
+// already holds under another spelling.
+func appendDockPins(dst []string, raw json.RawMessage) []string {
+	var values []any
+	if len(raw) == 0 || json.Unmarshal(raw, &values) != nil {
+		return dst
+	}
+	seen := make(map[string]bool, len(dst))
+	for _, id := range dst {
+		seen[strings.ToLower(id)] = true
+	}
+	for _, value := range values {
+		id := ""
+		switch v := value.(type) {
+		case string:
+			id = canonicalDockID(v)
+		case map[string]any:
+			if s, ok := v["desktop_id"].(string); ok {
+				id = canonicalDockID(s)
+			} else if s, ok := v["id"].(string); ok {
+				id = canonicalDockID(s)
+			}
+		}
+		if id != "" && !seen[strings.ToLower(id)] {
+			dst = append(dst, id)
+			seen[strings.ToLower(id)] = true
+		}
+	}
+	return dst
+}
+
+func dockPinsAreCanonical(raw json.RawMessage, pins []string) bool {
+	var stored []string
+	if json.Unmarshal(raw, &stored) != nil || len(stored) != len(pins) {
+		return false
+	}
+	for i := range pins {
+		if stored[i] != pins[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeObject(raw json.RawMessage) (map[string]json.RawMessage, error) {
+	out := map[string]json.RawMessage{}
+	if len(raw) == 0 {
+		return out, nil
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// migrateDockStore folds the qsbar dock* knobs and Sumi's frame-bar pins into
+// the top-level dock object and normalises its pin list. Every other key is
+// preserved as raw bytes, and a store with nothing to move is a no-op, so a
+// second run reads clean.
 func migrateDockStore(raw []byte) ([]byte, bool, error) {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &top); err != nil {
 		return nil, false, err
 	}
-	qsbarRaw, ok := top["qsbar"]
-	if !ok {
-		return nil, false, nil
-	}
-	var qsbar map[string]json.RawMessage
-	if err := json.Unmarshal(qsbarRaw, &qsbar); err != nil {
+	dock, err := decodeObject(top["dock"])
+	if err != nil {
 		return nil, false, err
 	}
-	moved := map[string]json.RawMessage{}
-	for old, want := range oldDockKeys {
-		if v, ok := qsbar[old]; ok {
-			moved[want] = v
-			delete(qsbar, old)
-		}
-	}
-	if len(moved) == 0 {
-		return nil, false, nil
-	}
-	// A dock object the shell already wrote wins: only fill the keys it lacks,
-	// so a re-run or a hand edit is never clobbered.
-	dock := map[string]json.RawMessage{}
-	if dockRaw, ok := top["dock"]; ok {
-		if err := json.Unmarshal(dockRaw, &dock); err != nil {
+	pins := appendDockPins(nil, dock["pinned"])
+	changed := len(dock["pinned"]) > 0 && !dockPinsAreCanonical(dock["pinned"], pins)
+
+	if qsbarRaw, ok := top["qsbar"]; ok {
+		qsbar, err := decodeObject(qsbarRaw)
+		if err != nil {
 			return nil, false, err
 		}
-	}
-	for k, v := range moved {
-		if _, ok := dock[k]; !ok {
-			dock[k] = v
+		moved := false
+		for old, want := range oldDockKeys {
+			value, ok := qsbar[old]
+			if !ok {
+				continue
+			}
+			if want == "pinned" {
+				pins = appendDockPins(pins, value)
+			} else if _, exists := dock[want]; !exists {
+				dock[want] = value
+			}
+			delete(qsbar, old)
+			moved = true
+		}
+		if moved {
+			if top["qsbar"], err = json.Marshal(qsbar); err != nil {
+				return nil, false, err
+			}
+			changed = true
 		}
 	}
-	dockBytes, err := json.Marshal(dock)
-	if err != nil {
+
+	if frameRaw, ok := top["frameBars"]; ok {
+		frame, err := decodeObject(frameRaw)
+		if err != nil {
+			return nil, false, err
+		}
+		if frameDockRaw, ok := frame["dock"]; ok {
+			frameDock, err := decodeObject(frameDockRaw)
+			if err != nil {
+				return nil, false, err
+			}
+			// The frameBars schema keeps an empty pinned list (the shell's
+			// FrameBars.js and the shell-config reconciler both write one), so
+			// the moved pins leave [] behind rather than a missing key the
+			// next normalise would put back.
+			if oldPins := appendDockPins(nil, frameDock["pinned"]); len(oldPins) > 0 {
+				pins = appendDockPins(pins, frameDock["pinned"])
+				frameDock["pinned"] = json.RawMessage("[]")
+				if frame["dock"], err = json.Marshal(frameDock); err != nil {
+					return nil, false, err
+				}
+				if top["frameBars"], err = json.Marshal(frame); err != nil {
+					return nil, false, err
+				}
+				changed = true
+			}
+		}
+	}
+
+	if !changed {
+		return nil, false, nil
+	}
+	if dock["pinned"], err = json.Marshal(pins); err != nil {
 		return nil, false, err
 	}
-	top["dock"] = dockBytes
-	qsbarBytes, err := json.Marshal(qsbar)
-	if err != nil {
+	if top["dock"], err = json.Marshal(dock); err != nil {
 		return nil, false, err
 	}
-	top["qsbar"] = qsbarBytes
 	out, err := json.MarshalIndent(top, "", "  ")
 	if err != nil {
 		return nil, false, err

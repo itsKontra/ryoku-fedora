@@ -216,10 +216,13 @@ Singleton {
             property var kairos: ({})
             property var dock: ({
                 "enabled": false,
+                "design": "ryoku",
                 "edge": "auto",
                 "autohide": true,
+                "size": 44,
                 "pinned": [],
                 "magnify": true,
+                "style": "islands",
                 "frost": true,
                 "shadow": true,
                 "labels": true,

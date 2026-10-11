@@ -292,6 +292,12 @@ later deliberate 12 remains a user choice.
 `reconcileClockFormat` folds the bars' and desktop clock's retired 12/24-hour
 switches into `general.clock_format_24_h` once, then records a marker so a
 later choice in Ryoku Settings stands.
+`reconcileDockStore` keeps one dock store for every bar style: the QS Bar's
+retired `qsbar.dock*` knobs and Sumi's rail-dock pins (`frameBars.dock.pinned`)
+merge into the top-level `dock` object in their original order, and the pin
+list is normalised to desktop ids (no `.desktop` suffix, no duplicate
+spellings). A key the dock object already holds wins, and Sumi's emptied list
+stays as the `[]` its schema seeds, so a second run is a no-op.
 `reconcileUserEdits` seeds the how-to guide and, for boxes upgraded from the
 retired adopt step, moves the tool's own user files (`hypr/user.lua`,
 `hypr/monitors_user.lua`, `kitty/user.conf`) back OUT of the overlay. Those are

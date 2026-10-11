@@ -71,9 +71,10 @@ the command (the GUI is for the human), then say what you changed and where to
 see or undo it in the GUI. Never hand back a bare shell command for a change that
 has a page or a picker.
 
-Two surfaces have no Hub page. Wallpaper and theme are the shell picker
+Three surfaces have no Hub page. Wallpaper and theme are the shell picker
 (Super+W, `ryogami wallpaper ui`) and the bar Wallpaper widget; the bar layout
-and the dock are QS Bar Settings (`ryoku-shell bar settings`), not the Hub. See
+is QS Bar Settings (`ryoku-shell bar settings`); the dock is the Stage Editor's
+Dock section (right-click the desktop, Edit desktop, Dock). See
 [`gui.md`](gui.md) for the full intent-to-surface map.
 
 ## Safety rules
@@ -169,8 +170,10 @@ When a request would change the system, in order:
 - "Hide the GPU widget" -> QS Bar Settings > Widgets, or `ryoku-shell bar hide gpu`
 - "Make the bar islands" -> QS Bar Settings > Bars, or `ryoku-shell bar form islands`
 - "Open the bar settings" -> `ryoku-shell bar settings` (the launcher mark opens it too)
-- "Turn the dock off" -> QS Bar Settings > Dock, or `ryoku-shell dock hide`
-- "Pin Firefox to the dock" -> QS Bar Settings > Dock, or `ryoku-shell dock pin firefox`
+- "Turn the dock off" -> Stage Editor > Dock (right-click the desktop, Edit
+  desktop), or `ryoku-shell dock hide`
+- "Pin Firefox to the dock" -> Stage Editor > Dock > All apps, right-click it
+  in the dock, or `ryoku-shell dock pin firefox`
 - "Change my wallpaper" -> press Super+W and pick one (the wallpaper picker);
   scripted: `ryogami wallpaper set <path>`
 - "Remap a key" -> Ryoku Hub > Keybinds (Super+comma, `ryoku-shell hub open keybinds`)
