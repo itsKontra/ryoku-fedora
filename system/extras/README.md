@@ -12,7 +12,7 @@ Ryostore owns the catalogue, its cache, and script/plugin downloads.
   `RYOSTORE_DRYRUN=1` prints actions without running installers, querying remote
   package metadata, or changing packages. Catalogue fetching and report writes
   still occur.
-- `ryoku-pkg-add` installs packages through `dnf -y install`.
+- `ryoku-pkg-add` installs packages through `ryoku-host pkg install` (`dnf -y install`).
 - `ryoku-pkg-remove` removes packages and unneeded dependencies through DNF.
   DNF can also remove dependent applications, so its transaction confirmation
   remains enabled in the store's terminal. Cancelling does not trigger retries.

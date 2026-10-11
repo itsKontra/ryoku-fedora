@@ -108,8 +108,11 @@ truth for the live desktop.
   `internal/`: `updater` (update, status, rollback, channel, run-state,
   materialize, version), `doctor` (the convergent reconcilers, report, and
   `--explain`), and `sys` (the shared exec/package/path/terminal primitives,
-  defined once). Per-command reference, user- vs developer-facing, in
-  `docs/cli.md`.
+  defined once). `cmd/ryoku-host` builds `/usr/bin/ryoku-host`, the host seam
+  runtime code calls for services, packages, power, time zone, keymap and the
+  session handoff; its systemd and dnf backend in `internal/host` is built on
+  `sys`, so nothing else grows host checks. Per-command reference, user- vs
+  developer-facing, in `docs/cli.md`.
 - `hub/` Ryoku Settings, the central control-center GUI (`Super + ,`): `backend/`
   (`ryoku-hub`, the Go data plane that reads the keybind legend from the live
   Hyprland config, generates the `settings.lua` overlay (in `user_edits`) from JSON, and

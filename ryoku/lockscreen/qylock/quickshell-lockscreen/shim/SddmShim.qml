@@ -322,8 +322,8 @@ Item {
             shim.startPw();
         }
 
-        function reboot() { Quickshell.execDetached(["bash", "-c", "if [ -d /run/systemd/system ]; then systemctl reboot; else loginctl reboot; fi"]); }
-        function powerOff() { Quickshell.execDetached(["bash", "-c", "if [ -d /run/systemd/system ]; then systemctl poweroff; else loginctl poweroff; fi"]); }
+        function reboot() { Quickshell.execDetached(["ryoku-host", "power", "reboot"]); }
+        function powerOff() { Quickshell.execDetached(["ryoku-host", "power", "poweroff"]); }
         function suspend() { Quickshell.execDetached(["ryoku-shell", "suspend"]); }
     }
 

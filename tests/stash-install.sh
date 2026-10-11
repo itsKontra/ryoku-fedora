@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # hermetic test for ryoku/shell/scripts/stash-install.sh. stash makes dropped
 # files launchable: AppImages + self-contained tarballs get a synth desktop
-# entry; an RPM goes through `dnf install` via pkexec, never extracted into
-# ~/.local where its /opt binary would not work, and a refused or cancelled
+# entry; an RPM goes through `ryoku-host pkg install-file` via pkexec, never
+# extracted into ~/.local where its /opt binary would not work, and a refused or cancelled
 # install leaves it in the stash. an Arch package (.pkg.tar.*) is refused
-# outright. pkexec + dnf stubbed; this asserts the dispatch without touching
-# the real system.
+# outright. pkexec + ryoku-host stubbed; this asserts the dispatch without
+# touching the real system.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -20,8 +20,9 @@ present() { if [[ -e $1 ]]; then echo "  ok: $2"; else echo "::error::FAIL: $2 (
 absent()  { if [[ ! -e $1 ]]; then echo "  ok: $2"; else echo "::error::FAIL: $2 ($1 exists)" >&2; fail=1; fi; }
 
 # stubs. pkexec records args (escalation assertion) and exits $PKEXEC_RC (126
-# is a dismissed polkit prompt); dnf, notify-send, update-desktop-database just
-# need to exist for the script's presence checks.
+# is a dismissed polkit prompt); ryoku-host answers pkgmgr like a Fedora box;
+# notify-send and update-desktop-database just need to exist for the script's
+# presence checks.
 stub="$work/bin"
 mkdir -p "$stub"
 cat >"$stub/pkexec" <<EOF
@@ -34,7 +35,8 @@ cat >"$stub/flatpak" <<EOF
 printf '%s\n' "\$*" >>"$work/flatpak.log"
 exit 0
 EOF
-for t in dnf notify-send update-desktop-database; do printf '#!/bin/sh\nexit 0\n' >"$stub/$t"; done
+printf '#!/bin/sh\n[ "$1" = pkgmgr ] && echo dnf\nexit 0\n' >"$stub/ryoku-host"
+for t in notify-send update-desktop-database; do printf '#!/bin/sh\nexit 0\n' >"$stub/$t"; done
 chmod +x "$stub"/*
 export PATH="$stub:$PATH"
 
@@ -43,7 +45,7 @@ run_stash() {
   HOME="$work/home" "$BASH" "$SCRIPT" >"$work/out" 2>&1
 }
 
-# case 1: .rpm installs via pkexec dnf install, not extracted.
+# case 1: .rpm installs via pkexec ryoku-host pkg install-file, not extracted.
 s1="$work/stash1"; mkdir -p "$s1"
 : >"$s1/foo.rpm"
 : >"$work/pkexec.log"
@@ -54,8 +56,8 @@ else
   echo "::error::FAIL: did not report the package name; out: $(cat "$work/out")" >&2
   fail=1
 fi
-check "$(cat "$work/pkexec.log")" "dnf install -y $s1/foo.rpm" \
-  "rpm handed to pkexec dnf install"
+check "$(cat "$work/pkexec.log")" "/usr/bin/ryoku-host pkg install-file $s1/foo.rpm" \
+  "rpm handed to pkexec /usr/bin/ryoku-host pkg install-file"
 absent "$work/home/.local/share/ryoku-apps/foo" "rpm NOT extracted into ~/.local"
 absent "$s1/foo.rpm" "source removed from the stash after a successful install"
 if grep -qx "@AUTH" "$work/out"; then
@@ -177,7 +179,7 @@ for prc in 126 1; do
   : >"$work/pkexec.log"
   rc=0; PKEXEC_RC=$prc PATH="$fakebsd:$PATH" STASH_DIR="$s8" run_stash || rc=$?
   check "$rc" "1" "pkexec exit $prc: install exits non-zero"
-  check "$(cat "$work/pkexec.log")" "dnf install -y $s8/denied.rpm" "pkexec exit $prc: went through dnf"
+  check "$(cat "$work/pkexec.log")" "/usr/bin/ryoku-host pkg install-file $s8/denied.rpm" "pkexec exit $prc: went through the host seam"
   present "$s8/denied.rpm" "pkexec exit $prc: the .rpm stays in the stash"
   absent "$work/home/.local/share/ryoku-apps/denied" "pkexec exit $prc: no payload extracted into ryoku-apps"
 done
@@ -187,9 +189,9 @@ else
   echo "::error::FAIL: dismissed prompt not reported as cancelled; out: $(cat "$work/out")" >&2; fail=1
 fi
 
-# case 9: a box with rpm but no dnf uses pkexec rpm -Uvh, and its failure
-# keeps the source too. PATH holds only the tools the script needs, so the
-# host's dnf is out of reach.
+# case 9: a box with rpm but no package manager (ryoku-host absent) uses pkexec
+# rpm -Uvh, and its failure keeps the source too. PATH holds only the tools the
+# script needs, so the host's dnf and ryoku-host are out of reach.
 mini="$work/mini"; mkdir -p "$mini"
 for t in basename tr mkdir rm cp chmod find awk head wc cut sort mktemp sed cat grep dirname; do
   ln -sf "$(command -v "$t")" "$mini/$t"

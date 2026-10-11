@@ -64,14 +64,17 @@ func UnitEnabled(unit string) bool {
 	return exec.Command("systemctl", "is-enabled", "--quiet", unit).Run() == nil
 }
 
-// InstalledVersion is the installed ryoku-desktop package version, or "".
-func InstalledVersion() string {
-	out, err := RunOut("rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", "ryoku-desktop")
+// PkgVersion is the installed VERSION-RELEASE of a package, or "".
+func PkgVersion(name string) string {
+	out, err := RunOut("rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}", name)
 	if err != nil || strings.Contains(out, "not installed") {
 		return ""
 	}
 	return strings.TrimSpace(out)
 }
+
+// InstalledVersion is the installed ryoku-desktop package version, or "".
+func InstalledVersion() string { return PkgVersion("ryoku-desktop") }
 
 // CountNonEmpty counts the non-blank lines in s.
 func CountNonEmpty(s string) int {

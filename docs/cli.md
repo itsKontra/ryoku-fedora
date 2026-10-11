@@ -110,6 +110,34 @@ at once; on a dev checkout it drops the override and leaves the re-lay to
 
 ## Production internals
 
+### `ryoku-host`
+
+`ryoku-host` is the internal host seam the shell, the Hub, scripts and both
+compositor autostarts call instead of spelling `systemctl`, `dnf` or
+`timedatectl` themselves. It ships in the `ryoku` package as
+`/usr/bin/ryoku-host`; `ryoku-host --help` lists every verb. Fedora has one
+backend, systemd and dnf/rpm, built on the CLI's own rpm primitives.
+
+- `svc [--user|--system] <verb> <unit>...` runs a `systemctl` verb, user scope
+  by default. An unknown unit returns the absent code, an inactive or disabled
+  one the false code.
+- `pkg installed|available|version|owner` query rpm and dnf's cached metadata.
+  `pkg install`, `install-file` and `remove` run dnf non-interactively, so the
+  caller escalates them through `sudo` or `pkexec`.
+- `session start [portal...]` is the login handoff: push the environment into
+  the user manager, reload units, raise the boot reload cover (best effort),
+  run `ryoku-power-cutover session-start-logged` and, only when that succeeds,
+  restart the portals.
+- `power poweroff|reboot`, `time zone|set-zone` and `keymap set` go through
+  systemd, timedated and localed, which ask polkit themselves. `power suspend`
+  runs `ryoku-shell suspend`, the shell daemon's lock-then-sleep transaction:
+  the daemon's own sleep block would deny a bare `systemctl suspend`.
+  Hibernate is not offered, since nothing owns a safe hibernate transaction yet.
+- `repo channel` prints the RyokuCOPR channel.
+
+Exit codes: 0 success or true, 1 failure, 2 usage, 3 false, 4 absent, 5 not
+provided.
+
 ### `ryoku materialize`
 
 Lays Ryoku's base configs into `~/.config`, declaratively and override-safe. It

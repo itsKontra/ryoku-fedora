@@ -1,7 +1,9 @@
 # Maintainer: Ryoku <releases@ryoku.dev>
 #
 # Ryoku control CLI (Go): the single front door to update, rollback, snapshot,
-# and the config materialize step.
+# and the config materialize step, plus ryoku-host, the host seam the shell,
+# Hub, scripts and compositor autostarts call for services, packages, power,
+# time zone, keymap and the session handoff.
 #
 # RPM metadata and dependencies live in release/rpm/ryoku.spec. This sourced
 # recipe only builds from ryoku/cli and stages the payload for stage-package.sh.
@@ -15,10 +17,12 @@ _repo="$startdir/../../.."
 build() {
   cd "$_repo/ryoku/cli" || return
   go build -o "$srcdir/ryoku" .
+  go build -o "$srcdir/ryoku-host" ./cmd/ryoku-host
 }
 
 package() {
   install -Dm755 "$srcdir/ryoku" "$pkgdir/usr/bin/ryoku"
+  install -Dm755 "$srcdir/ryoku-host" "$pkgdir/usr/bin/ryoku-host"
   # the boot guard: a system unit `ryoku boot-guard` runs from early in every
   # boot (enabled by the doctor on every update, so existing boxes get it),
   # and the tmpfiles entries for its marker and the sessions' boot-ok files.

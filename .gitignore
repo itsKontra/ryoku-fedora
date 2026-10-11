@@ -9,6 +9,7 @@
 /ryoku/rashin/backend/ryoku-rashin
 /ryoku/cli/ryoku
 /ryoku/cli/ryoku-cli
+/ryoku/cli/ryoku-host
 /ryoku/apps/ryovm/fetch/ryovm-fetch
 /ryoku/apps/ryovm/remote/ryossh
 /ryoku/apps/ryovm/mon/ryovm-mon

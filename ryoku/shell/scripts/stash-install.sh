@@ -1,9 +1,9 @@
 #!/bin/bash
 # stash app installer: makes whatever the user dropped in the Ryoku stash
 # launchable. an AppImage or self-contained tarball gets a synthesized XDG
-# desktop entry under ~/.local; an RPM is handed to `dnf install` via pkexec so
-# it installs the normal way and the launcher reads the entry the package
-# itself ships. an Arch package (.pkg.tar.*) is refused: it cannot install on
+# desktop entry under ~/.local; an RPM is handed to dnf through
+# `ryoku-host pkg install-file` via pkexec so it installs the normal way and
+# the launcher reads the entry the package itself ships. an Arch package (.pkg.tar.*) is refused: it cannot install on
 # Fedora, and extracting it would only produce a broken launcher.
 # on success we drop the source from the stash so it doesn't sit there as a
 # duplicate (RYOKU_STASH_KEEP=1 keeps it). a refused, failed or cancelled
@@ -293,7 +293,7 @@ install_tarball() {
   dispatch_extracted "$dst" "$name" "$rawname"
 }
 
-# install_deb SRC (and install_rpm on a box without dnf or rpm): pull a
+# install_deb SRC (and install_rpm on a box without a package manager): pull a
 # foreign package's payload (its usr/ tree) and synthesize an entry from it. bsdtar (libarchive) reads both: .deb nests
 # its payload in data.tar.*, .rpm exposes the cpio tree directly. best-effort,
 # like the tarball path; an RPM installed through dnf or a flatpak is the
@@ -313,26 +313,27 @@ install_deb() {
   dispatch_extracted "$dst" "$name" "$rawname"
 }
 
-# install_rpm SRC: install through dnf (or rpm) via pkexec. a refusal, or a
-# polkit prompt the user dismissed (pkexec exits 126 or 127), is a failed
-# install: extracting the payload instead would hand over an app the package
-# manager rejected or the user declined. only a box with no way to install an
-# rpm at all falls back to the payload extraction.
+# install_rpm SRC: install through the host package seam (dnf), or plain rpm on
+# a box without dnf, via pkexec. a refusal, or a polkit prompt the user
+# dismissed (pkexec exits 126 or 127), is a failed install: extracting the
+# payload instead would hand over an app the package manager rejected or the
+# user declined. only a box with no way to install an rpm at all falls back to
+# the payload extraction.
 install_rpm() {
   local src rawname name dst tool rc
   src="$1"
   rawname=$(basename "$src" .rpm)
   name=$(slug "$rawname"); [ -n "$name" ] || name="app"
-  if command -v dnf >/dev/null 2>&1; then tool=dnf
-  elif command -v rpm >/dev/null 2>&1; then tool=rpm
-  else tool=""
-  fi
+  tool=$(ryoku-host pkgmgr 2>/dev/null)
+  if [ -z "$tool" ] && command -v rpm >/dev/null 2>&1; then tool=rpm; fi
   if [ -n "$tool" ] && command -v pkexec >/dev/null 2>&1; then
     printf '@AUTH\n'
-    if [ "$tool" = dnf ]; then
-      pkexec dnf install -y "$src" >/dev/null 2>&1; rc=$?
-    else
+    if [ "$tool" = rpm ]; then
       pkexec rpm -Uvh "$src" >/dev/null 2>&1; rc=$?
+    else
+      # The packaged path, never PATH: pkexec resolves a bare name through the
+      # caller's PATH, where a checkout's ~/.local/bin copy is user-writable.
+      pkexec /usr/bin/ryoku-host pkg install-file "$src" >/dev/null 2>&1; rc=$?
     fi
     case "$rc" in
       0) LAST_NAME="$name"; return 0 ;;

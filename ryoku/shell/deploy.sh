@@ -368,8 +368,9 @@ say "installed rashin systemd user unit"
 # Rashin is on by default: bring it up at boot now unless the user opted out.
 "$bindir/ryoku-rashin" ensure 2>/dev/null || true
 say "building ryoku CLI"
-(cd "$here/../cli" && go build -o ryoku .)
+(cd "$here/../cli" && go build -o ryoku . && go build -o ryoku-host ./cmd/ryoku-host)
 install -m755 "$here/../cli/ryoku" "$bindir/ryoku"
+install -m755 "$here/../cli/ryoku-host" "$bindir/ryoku-host"
 # every system helper the package ships to /usr/bin, by the same globs, so a new
 # hardware or container helper reaches a checkout the moment it lands.
 for s in "$here/../../system/hardware"/*/ryoku-* "$here/../../system/containers"/ryoku-*; do
@@ -403,6 +404,9 @@ if command -v sudo >/dev/null 2>&1; then
     cmp -s "$1" "$2" && return 0
     sudo install -Dm"$3" "$1" "$2" || true
   }
+  # ryoku-host also runs as root, through sudo or pkexec, whose PATH has no
+  # ~/.local/bin, so the root side gets the same build at the packaged path.
+  _priv_install "$here/../cli/ryoku-host" /usr/bin/ryoku-host 755
   _priv_install "$netdir/ryoku-dns" /usr/bin/ryoku-dns 755
   _priv_install "$netdir/50-ryoku-dns.rules" /usr/share/polkit-1/rules.d/50-ryoku-dns.rules 644
   _priv_install "$netdir/ryoku-wifi-regdom" /usr/bin/ryoku-wifi-regdom 755

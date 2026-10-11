@@ -6,11 +6,14 @@ set -euo pipefail
   exit 2
 }
 
-command -v dnf >/dev/null 2>&1 || {
-  echo "ryoku-pkg-add: Fedora's dnf is required" >&2
+# The packaged path, never PATH: the install runs as root, and a checkout's
+# ~/.local/bin copy is user-writable.
+host=/usr/bin/ryoku-host
+[[ -x $host ]] || {
+  echo "ryoku-pkg-add: $host is required" >&2
   exit 1
 }
 
 priv=()
 (( EUID == 0 )) || priv=(sudo)
-exec "${priv[@]}" dnf -y install -- "$@"
+exec "${priv[@]}" "$host" pkg install "$@"
