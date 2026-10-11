@@ -63,11 +63,11 @@ Item {
             st.launcherOpen = true;
         menu.close();
     }
-    // Quick controls opens the Super+Esc quick-settings panel; Settings opens
-    // Ryoku Settings on its normal page, while Edit desktop above owns the
-    // Stage Editor entry.
+    // Quick controls opens the Super+Esc Controls panel, the same surface the
+    // `quicksettings` shortcut routes to; Settings opens Ryoku Settings on its
+    // normal page, while Edit desktop above owns the Stage Editor entry.
     function quickControls() {
-        Services.ShellState.requestSurfaceActive("quick-settings", undefined);
+        Services.ShellState.requestSurfaceActive("sidebar-left", undefined);
         menu.close();
     }
     function openSettings() {

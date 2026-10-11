@@ -34,7 +34,7 @@ cp "$here/widget-depth-lift-probe.qml" "$work/shell/probe.qml"
 import_path="$work:${QML2_IMPORT_PATH:-$HOME/.local/lib/qt6/qml}"
 XDG_RUNTIME_DIR="$work/xdg" XDG_CONFIG_HOME="$work/cfg" HOME="$work/home" \
     QT_QPA_PLATFORM=offscreen QML2_IMPORT_PATH="$import_path" \
-    timeout 30 qs -p "$work/shell/probe.qml" >"$work/probe.log" 2>&1 || true
+    timeout 30 qs -p "$work/shell/probe.qml" --log-rules 'qml.debug=true' >"$work/probe.log" 2>&1 || true
 
 if ! grep -q WIDGET-DEPTH-LIFT-PROBE-PASS "$work/probe.log"; then
     echo "widget-depth-lift-probe: FAILED" >&2
