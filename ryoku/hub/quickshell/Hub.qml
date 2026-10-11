@@ -19,7 +19,6 @@ import "schema/RecordingPage.js" as RecordingSchema
 import "schema/DictationPage.js" as DictationSchema
 import "schema/LauncherPage.js" as LauncherSchema
 import "schema/FastfetchPage.js" as FastfetchSchema
-import "schema/WidgetsPage.js" as WidgetsSchema
 import "schema/LockscreenPage.js" as LockscreenSchema
 import "schema/AnimationsPage.js" as AnimationsSchema
 import "schema/AddonsPage.js" as AddonsSchema
@@ -58,6 +57,18 @@ Rectangle {
     // A Hub that remembered the retired `windows` section, or a deep link that
     // still names it, lands on the compositor page that now holds those rows
     // rather than a blank pane.
+    // Retired page names stay useful as entry points, but the desktop owns the
+    // editors now: a deep link hands off to the Stage Editor's catalogue
+    // without changing the already-open Hub's current page.
+    function editorSectionFor(target) {
+        if (target === "widgets" || target === "desktop-scene-widgets")
+            return "widgets";
+        if (target === "desktop-scene-visualizer")
+            return "visualizer";
+        if (target === "stage" || target === "desktop-scene")
+            return "depth";
+        return "";
+    }
     function canonicalSection(s) {
         // sections that were folded into another page: an old deep link (the
         // Store's "open in settings", a keybind, a script) still lands right.
@@ -72,6 +83,14 @@ Rectangle {
     // restore silently drags the user back to wherever they were last -- the
     // handoff looked like it did nothing. Deep links come through here and latch.
     function navigate(target) {
+        var editorSection = hub.editorSectionFor(target);
+        if (editorSection !== "") {
+            hub.navigated = true;
+            editorHandoff.command = ["qs", "-c", "shell", "ipc", "call",
+                "desktop", "editSection", editorSection, ""];
+            editorHandoff.running = true;
+            return;
+        }
         target = hub.canonicalSection(target);
         if (!target || hub.pageFile(target) === "" || !hub.sectionAvailable(target))
             return;
@@ -112,7 +131,7 @@ Rectangle {
             { key: "layerrules", name: "Layer Rules", adv: true, needs: { rows: true } } ] },
         { name: "DESKTOP", items: [
             { key: "bar-studio", name: "Bar Studio", wired: true }, { key: "desktop", name: "Desktop", wired: true },
-            { key: "controls", name: "Controls", wired: true }, { key: "widgets", name: "Widgets" },
+            { key: "controls", name: "Controls", wired: true },
             { key: "launcher", name: "App Launcher" } ] },
         { name: "KEYS & APPS", items: [
             { key: "keybinds", name: "Keybinds" }, { key: "appoverrides", name: "App Overrides", adv: true },
@@ -134,7 +153,7 @@ Rectangle {
         "profile": "横顔", "displays": "画面", "input": "入力", "keybinds": "操作",
         "connections": "接続", "gpu": "演算", "recording": "録画", "dictation": "音声",
         "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "controls": "操作", "launcher": "起動", "fastfetch": "情報",
-        "widgets": "部品", "lockscreen": "施錠", "animations": "動き",
+        "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
         "session": "起動", "performance": "性能", "rashin": "羅針",
         "updates": "更新", "credits": "謝辞", "global": "全般", "import": "取込", "windowmanager": "合成"
@@ -161,7 +180,6 @@ Rectangle {
         "controls": "controls quick settings super escape sidebar panel layout sections order graph vitals levels media",
         "launcher": "launcher spotlight command palette greeting weather home",
         "fastfetch": "fetch neofetch terminal system info logo ascii emblem readout",
-        "widgets": "desktop widget clock calendar weather face overlay wallpaper",
         "lockscreen": "lock screensaver signin greeter skin theme login",
         "animations": "animation animations motion transition bezier curve speed feel wobbly disable enable toggle",
         "addons": "installed plugin addon extension manage enable remove update widget bundle extras store marketplace browse",
@@ -188,7 +206,7 @@ Rectangle {
         "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
         "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
         "launcher": LauncherSchema.rows, "fastfetch": FastfetchSchema.rows,
-        "widgets": WidgetsSchema.rows, "lockscreen": LockscreenSchema.rows,
+        "lockscreen": LockscreenSchema.rows,
         "animations": AnimationsSchema.rows, "addons": AddonsSchema.rows,
         "windowrules": WindowRulesSchema.rows, "appoverrides": AppOverridesSchema.rows,
         "layerrules": LayerRulesSchema.rows, "session": SessionSchema.rows,
@@ -283,7 +301,7 @@ Rectangle {
         "titlebar": "title bar", "titlebars": "title bar", "plugin": "plugins addon", "plugins": "plugin addon",
         "monitor": "displays screen", "monitors": "displays screen", "resolution": "displays screen", "hidpi": "displays scale", "refresh": "displays",
         "mouse": "input pointer", "pointer": "input", "keyboard": "input", "touchpad": "input trackpad", "trackpad": "input touchpad",
-        "visualizer": "desktop spectrum", "visualiser": "desktop spectrum", "clock": "widgets desktop", "notifications": "layerrules",
+        "visualizer": "desktop spectrum", "visualiser": "desktop spectrum", "notifications": "layerrules",
         "update": "updates upgrade", "upgrade": "updates", "blur": "windows glass", "rounding": "windows corners", "corners": "windows rounding",
         "animation": "animations motion", "motion": "animations", "gpu": "graphics", "graphics": "gpu",
         "voice": "dictation", "speech": "dictation voice", "microphone": "dictation", "mic": "dictation"
@@ -491,7 +509,7 @@ Rectangle {
         return (prov && prov.length) ? base.concat(prov) : base;
     }
     function pageFile(s) {
-        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "controls": "ControlsPage", "session": "SessionPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "credits": "CreditsPage" };
+        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "controls": "ControlsPage", "session": "SessionPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "credits": "CreditsPage" };
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
         map.windowmanager = "WindowManagerPage";
@@ -827,6 +845,7 @@ Rectangle {
     }
 
     Component.onCompleted: rebase()
+    Process { id: editorHandoff }
     Process {
         id: sectionGet
         command: ["ryoku-hub", "config", "get", "section"]
