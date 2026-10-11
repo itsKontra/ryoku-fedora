@@ -84,7 +84,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        compositor: [hyprland, niri]
+        compositor: [hyprland, niri, wayfire]
         dnf: [dnf, dnf4]
     container: fedora:44
     steps:
