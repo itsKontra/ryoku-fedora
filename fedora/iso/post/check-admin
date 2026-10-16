@@ -1,0 +1,45 @@
+#!/usr/bin/python3
+"""The kickstart's %pre-install step: stop before any package is downloaded
+when Anaconda has no administrator to hand the desktop to.
+
+The root password page is hidden (anaconda/05-ryoku.conf), so the first
+account must be in wheel and have a password. The accounts come from
+Anaconda's Users module over DBus; when that cannot be read the check passes
+and leaves the decision to Anaconda's own User Creation rules.
+"""
+
+import sys
+
+
+def accounts():
+    try:
+        from pyanaconda.modules.common.constants.services import USERS
+        from pyanaconda.modules.common.structures.user import UserData
+    except ImportError as error:
+        print(f":: administrator check skipped: {error}")
+        return None
+    try:
+        return UserData.from_structure_list(USERS.get_proxy().Users)
+    except Exception as error:
+        print(f":: administrator check skipped: {error}")
+        return None
+
+
+def main():
+    users = accounts()
+    if users is None:
+        return 0
+    for user in users:
+        if "wheel" in user.groups and user.password and not user.lock:
+            print(f":: administrator: {user.name}")
+            return 0
+    sys.stderr.write(
+        "Ryoku needs an administrator account with a password.\n"
+        "Reboot the installer, open User Creation, tick 'Make this user\n"
+        "administrator' and set a password before Begin Installation.\n"
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
