@@ -113,8 +113,9 @@ weston_args=()
 
 # weston reads no X11 keyboard config, so without one the greeter comes up on
 # weston's built-in us map and a non-us password fails at the login field. Read
-# the layout the system records and hand it to weston through the libxkbcommon
-# defaults, which weston honours when its own config names no keymap.
+# the layout the system records and write it into weston's own [keyboard]
+# section (keyboard_ini below): weston fills an unset keymap_layout with "us"
+# itself, so the libxkbcommon XKB_DEFAULT_* variables never reach it.
 #
 # /etc/X11/xorg.conf.d/00-keyboard.conf is the richest source (layout, variant,
 # options) but localectl only writes it when a layout is applied system-wide;
@@ -160,7 +161,8 @@ console_to_xkb() {
 layout=""
 variant=""
 options=""
-kb_conf=/etc/X11/xorg.conf.d/00-keyboard.conf
+kb_conf="${RYOKU_GREETER_KB_CONF:-/etc/X11/xorg.conf.d/00-keyboard.conf}"
+vconsole="${RYOKU_GREETER_VCONSOLE:-/etc/vconsole.conf}"
 if [ -r "$kb_conf" ]; then
   xkb_opt() { sed -n "s/.*Option[[:space:]]*\"$1\"[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$kb_conf" | head -n1; }
   layout=$(xkb_opt XkbLayout); layout=${layout%%,*}
@@ -169,15 +171,10 @@ if [ -r "$kb_conf" ]; then
     options=$(xkb_opt XkbOptions)
   fi
 fi
-if [ -z "$layout" ] && [ -r /etc/vconsole.conf ]; then
-  keymap=$(sed -n 's/^[[:space:]]*KEYMAP[[:space:]]*=[[:space:]]*//p' /etc/vconsole.conf | tail -n1)
+if [ -z "$layout" ] && [ -r "$vconsole" ]; then
+  keymap=$(sed -n 's/^[[:space:]]*KEYMAP[[:space:]]*=[[:space:]]*//p' "$vconsole" | tail -n1)
   keymap=${keymap%\"}; keymap=${keymap#\"}
   layout=$(console_to_xkb "$keymap")
-fi
-if [ -n "$layout" ]; then
-  export XKB_DEFAULT_LAYOUT="$layout"
-  [ -n "$variant" ] && export XKB_DEFAULT_VARIANT="$variant"
-  [ -n "$options" ] && export XKB_DEFAULT_OPTIONS="$options"
 fi
 
 # Operator config for where the login form lands. env wins over the file; the
@@ -236,6 +233,8 @@ shell_ini() { printf '[shell]\ncursor-theme=%s\ncursor-size=%s\n\n' "${XCURSOR_T
 # turns letter keys into digits, and the LED state carries into the session and
 # its lock screen, so the session's published choice wins when there is one;
 # with no hand-off yet (fresh install, PIN login) the keypad stays a keypad.
+# The keymap lines carry the system layout read above; with none, weston keeps
+# its us default.
 keyboard_ini() {
   local on=true
   if [ -r "$greeter_numlock_file" ]; then
@@ -244,7 +243,11 @@ keyboard_ini() {
       *) on=true ;;
     esac
   fi
-  printf '[keyboard]\nnumlock-on=%s\n\n' "$on"
+  printf '[keyboard]\nnumlock-on=%s\n' "$on"
+  [ -n "$layout" ] && printf 'keymap_layout=%s\n' "$layout"
+  [ -n "$variant" ] && printf 'keymap_variant=%s\n' "$variant"
+  [ -n "$options" ] && printf 'keymap_options=%s\n' "$options"
+  printf '\n'
 }
 
 # Match the session's touchpad feel: Hyprland enables tap-to-click by default,

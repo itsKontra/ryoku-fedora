@@ -64,7 +64,8 @@ printf 'connected\n' >"$drm/card0-eDP-1/status"
 gdry() {
   PATH="$gtmp/bin:$PATH" RYOKU_GREETER_DRYRUN=1 RYOKU_GREETER_CONF="$gtmp/none.conf" \
     RYOKU_GREETER_DRM_ROOT="$drm" RYOKU_GREETER_NUMLOCK_FILE="$gtmp/no-numlock" \
-    RYOKU_GREETER_PRIMARY_FILE="$gtmp/no-primary" env "$@" "$greeter" 2>/dev/null
+    RYOKU_GREETER_PRIMARY_FILE="$gtmp/no-primary" RYOKU_GREETER_KB_CONF="$gtmp/no-keyboard.conf" \
+    RYOKU_GREETER_VCONSOLE="$gtmp/no-vconsole.conf" env "$@" "$greeter" 2>/dev/null
 }
 
 # With no hand-off yet (a first login, or a PIN that must reach the field as
@@ -82,6 +83,29 @@ grep -Fq 'numlock-on=false' <<<"$gini" || fail "greeter ignored the session's nu
 printf 'on\n' >"$gtmp/numlock"
 gini=$(gdry RYOKU_GREETER_NUMLOCK_FILE="$gtmp/numlock")
 grep -Fq 'numlock-on=true' <<<"$gini" || fail "greeter dropped an on choice"
+
+# weston fills an unset keymap_layout with us and ignores XKB_DEFAULT_*, so the
+# system layout has to be written into its [keyboard] section or a non-us
+# password fails at the login field.
+keymap() { awk -F= '/^\[keyboard\]/{f=1; next} /^\[/{f=0} f&&/^keymap_/{print}' <<<"$1"; }
+gini=$(gdry)
+[ -z "$(keymap "$gini")" ] || fail "greeter wrote a keymap with no system layout (weston must keep its us default)"
+cat >"$gtmp/keyboard.conf" <<'CONF'
+Section "InputClass"
+        Identifier "system-keyboard"
+        MatchIsKeyboard "on"
+        Option "XkbLayout" "de,us"
+        Option "XkbVariant" "nodeadkeys,"
+        Option "XkbOptions" "caps:escape"
+EndSection
+CONF
+gini=$(gdry RYOKU_GREETER_KB_CONF="$gtmp/keyboard.conf")
+[ "$(keymap "$gini")" = $'keymap_layout=de\nkeymap_variant=nodeadkeys\nkeymap_options=caps:escape' ] ||
+  fail "greeter did not hand the X11 layout to weston: $(keymap "$gini")"
+printf 'KEYMAP="de-latin1"\n' >"$gtmp/vconsole.conf"
+gini=$(gdry RYOKU_GREETER_VCONSOLE="$gtmp/vconsole.conf")
+[ "$(keymap "$gini")" = 'keymap_layout=de' ] ||
+  fail "greeter did not fall back to the console keymap: $(keymap "$gini")"
 # With no hand-off, the internal panel keeps the pin.
 grep -Fq 'name=HDMI-A-1' <<<"$gini" || fail "greeter config dropped the external panel"
 # pinned <ini> <name>: the [output] block for <name> carries an app-ids line.

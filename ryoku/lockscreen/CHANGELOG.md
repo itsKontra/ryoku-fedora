@@ -20,6 +20,13 @@
 - The built-in in-session clockwork lockscreen follows the global 12/24-hour preference, including AM/PM.
 
 ### Fixed
+- **The login screen types with the system's keyboard layout.** `ryoku-greeter`
+  handed the layout to weston only through `XKB_DEFAULT_LAYOUT`, which weston
+  15 ignores: it fills an unset `keymap_layout` with `us` itself, so on a de,
+  fr or any other non-us box the password field typed us keys and a password
+  with a layout-dependent character failed while the console and the desktop
+  used the right layout. The layout, variant and options are now written into
+  weston's `[keyboard]` section (`tests/sddm-wayland.sh`).
 - **A login whose home has no Ryoku tree lays it before the compositor starts.**
   `ryoku-wayland-session` runs `ryoku materialize` as the user when
   `~/.config/ryoku` or the shell's `shell.qml` is missing, the condition
