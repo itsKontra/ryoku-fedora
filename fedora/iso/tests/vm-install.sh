@@ -53,6 +53,9 @@ cat /mnt/sysroot/var/log/ryoku-iso-post.log > /dev/ttyS0 2>/dev/null
 set -eu
 check() { if "\$@"; then echo "ok \$*"; else echo "FAILED \$*"; exit 1; fi; }
 check rpm -q ryoku ryoku-desktop ryoku-desktop-hyprland sddm-theme-ryoku
+# one kernel: Anaconda installed the base from updates, so the upgrade in
+# post/provision had no newer kernel to add
+check test "\$(rpm -q kernel-core | wc -l)" = 1
 check systemctl is-enabled --quiet sddm.service
 check test "\$(systemctl get-default)" = graphical.target
 check test -f /etc/yum.repos.d/ryoku.repo

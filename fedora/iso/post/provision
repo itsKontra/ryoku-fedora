@@ -171,8 +171,9 @@ install_packages() {
   local plan
   mapfile -t plan < <(package_plan)
   ((${#plan[@]})) || die "the desktop package plan is empty"
-  # stepSysupgrade in the shell installer: the plan's i686 packages come from
-  # updates and must match the x86_64 builds Anaconda took from the release.
+  # stepSysupgrade in the shell installer: the plan's i686 packages must match
+  # the x86_64 builds Anaconda installed. Anaconda already took them from
+  # updates, so this only catches what was published since its solve.
   log "updating the base system"
   "$dnf" upgrade -y --refresh
   log "installing ${#plan[@]} packages"

@@ -8,8 +8,10 @@
 
 graphical
 
+# The installer image carries its own disabled "updates" repo; a kickstart repo
+# of that name is swallowed by it and the base installs without any updates.
 url --metalink="https://mirrors.fedoraproject.org/metalink?repo=fedora-@RELEASE@&arch=x86_64"
-repo --name=updates --metalink="https://mirrors.fedoraproject.org/metalink?repo=updates-released-f@RELEASE@&arch=x86_64"
+repo --name=fedora-updates --metalink="https://mirrors.fedoraproject.org/metalink?repo=updates-released-f@RELEASE@&arch=x86_64"
 
 %packages
 @^custom-environment
