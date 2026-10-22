@@ -1,0 +1,212 @@
+name: Build Fedora ISO
+
+# Builds the Ryoku Fedora ISO from fedora/iso: the Fedora Everything netinst
+# remastered so Anaconda installs Ryoku from the signed RPM repository at
+# repo.ryoku.dev. A v* tag builds from the stable channel and attaches the ISO
+# to that tag's GitHub release.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Ryoku package channel the ISO installs from'
+        type: choice
+        options: [testing, stable]
+        default: testing
+      releases:
+        description: 'Fedora releases to build, space separated'
+        type: string
+        default: '44'
+      vm_test:
+        description: 'Install each ISO unattended in a VM before uploading it'
+        type: boolean
+        default: true
+      release_tag:
+        description: 'Attach the ISOs to this GitHub release (empty: keep them as artifacts)'
+        type: string
+        default: ''
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-iso-fedora-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check the ISO recipe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: fedora:44
+    outputs:
+      releases: ${{ steps.releases.outputs.releases }}
+      channel: ${{ steps.releases.outputs.channel }}
+    steps:
+      - name: Install check tools
+        run: dnf install -y git pykickstart python3 gawk
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run the static and repository checks
+        run: bash fedora/iso/tests/check.sh --online
+      - name: Resolve the releases and channel
+        id: releases
+        env:
+          REQUESTED: ${{ github.event.inputs.releases || '44' }}
+          CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for release in $REQUESTED; do
+            grep -qx "$release" fedora/releases || {
+              echo "::error::Fedora $release is not in fedora/releases"
+              exit 1
+            }
+          done
+          releases=$(python3 -c 'import json, sys; print(json.dumps(sys.argv[1].split()))' "$REQUESTED")
+          echo "releases=$releases" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: "Build the Fedora ${{ matrix.release }} ISO"
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ${{ fromJSON(needs.check.outputs.releases) }}
+    container:
+      image: fedora:44
+      # mkksiso loop-mounts the EFI boot image to update it
+      options: --privileged
+    steps:
+      - name: Install build tools
+        run: dnf install -y git lorax xorriso cpio gzip curl gnupg2 pykickstart python3 gawk
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Trust the checkout inside the container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Restore the Fedora netinst
+        uses: actions/cache/restore@v4
+        with:
+          path: fedora/iso/work/base
+          key: fedora-netinst-${{ matrix.release }}-${{ github.run_id }}
+          restore-keys: |
+            fedora-netinst-${{ matrix.release }}-
+      - name: Fetch and verify the Fedora netinst
+        id: base
+        run: |
+          set -euo pipefail
+          iso=$(bash fedora/iso/fetch-base.sh --release "${{ matrix.release }}" --dest fedora/iso/work/base)
+          find fedora/iso/work/base -name '*.iso' ! -path "$iso" -delete
+          echo "iso=$iso" >> "$GITHUB_OUTPUT"
+      - name: Save the Fedora netinst
+        uses: actions/cache/save@v4
+        with:
+          path: fedora/iso/work/base
+          key: fedora-netinst-${{ matrix.release }}-${{ github.run_id }}
+      - name: Build the ISO
+        run: |
+          bash fedora/iso/build.sh \
+            --base-iso "${{ steps.base.outputs.iso }}" \
+            --release "${{ matrix.release }}" \
+            --channel "${{ needs.check.outputs.channel }}"
+      - name: Upload the ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryoku-fedora-${{ matrix.release }}-iso
+          path: |
+            fedora/iso/out/*.iso
+            fedora/iso/out/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  vm-test:
+    name: "Install the Fedora ${{ matrix.release }} ISO in a VM"
+    needs: [check, build]
+    if: github.event_name == 'push' || github.event.inputs.vm_test == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        release: ${{ fromJSON(needs.check.outputs.releases) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Free disk for the VM
+        run: |
+          sudo rm -rf /opt/hostedtoolcache /usr/share/dotnet /opt/ghc \
+            /usr/local/lib/android /usr/local/share/boost
+          docker system prune -af
+          df -h /
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          test -e /dev/kvm
+      - name: Download the ISO
+        uses: actions/download-artifact@v4
+        with:
+          name: ryoku-fedora-${{ matrix.release }}-iso
+          path: fedora/iso/out
+      - name: Install unattended and check the result
+        run: |
+          set -euo pipefail
+          iso=$(find fedora/iso/out -name '*.iso' -print -quit)
+          docker run --rm --privileged --device /dev/kvm \
+            -v "$PWD:/repo" -w /repo fedora:44 bash -c "
+              dnf install -y -q lorax xorriso qemu-system-x86-core qemu-img >/dev/null &&
+              bash fedora/iso/tests/vm-install.sh --iso '$iso' --work fedora/iso/work/vm --timeout 5400"
+      - name: Upload the serial log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryoku-fedora-${{ matrix.release }}-vm-log
+          path: fedora/iso/work/vm/serial.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    name: Attach the ISOs to the GitHub release
+    needs: [build, vm-test]
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      (needs.vm-test.result == 'success' || needs.vm-test.result == 'skipped') &&
+      (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.release_tag != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Download the ISOs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ryoku-fedora-*-iso
+          path: out
+          merge-multiple: true
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+              --title "Ryoku Fedora ISO $TAG" \
+              --notes "Ryoku installer ISOs for Fedora, built from fedora/iso. Each one installs from the Ryoku RPM repository at repo.ryoku.dev, so the install needs a network connection."
+          fi
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber out/*.iso out/*.sha256

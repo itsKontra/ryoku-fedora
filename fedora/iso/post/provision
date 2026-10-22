@@ -1,0 +1,387 @@
+#!/usr/bin/bash
+#
+# Turns the minimal Fedora that Anaconda just installed into Ryoku. Runs as
+# root inside the target chroot, after Anaconda has written the accounts,
+# keyboard and timezone the user picked. It repeats the shell installer's
+# Fedora steps (ryoku-shell-installer/engine.go) without a session or sudo:
+# the signed Ryoku repository and its COPRs, the resolved desktop package
+# plan, the SDDM greeter and services, the snapper root config and the
+# per-account seeds. Each account's config tree is laid by `ryoku materialize`
+# at its first login (the SDDM session wrapper and ryoku-bootstrap.service).
+#
+# Inputs, one directory up: ryoku-iso.conf (written by build.sh), facts
+# (written by stage from the installer environment) and payload/, the repo
+# files this needs, at their repo paths.
+set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+payload=${RYOKU_ISO_PAYLOAD:-$here/payload}
+choices=$payload/installation/installerplan/choices.tsv
+translations=$payload/fedora/packages/translations.tsv
+coprs=$payload/fedora/packages/coprs.tsv
+resolve=$payload/system/packages/resolve
+key_path=/etc/pki/rpm-gpg/RPM-GPG-KEY-ryoku
+dnf=dnf
+command -v dnf5 >/dev/null 2>&1 && dnf=dnf5
+
+log() { printf ':: %s\n' "$*"; }
+warn() { printf ':: warning: %s\n' "$*" >&2; }
+die() { printf 'provision: %s\n' "$*" >&2; exit 1; }
+
+# choice_field <kind> <id> <column>: one column of a choices.tsv choice row.
+choice_field() {
+  awk -F '\t' -v kind="$1" -v id="$2" -v col="$3" \
+    '$1 == "choice" && $2 == kind && $3 == id { print $col; exit }' "$choices"
+}
+
+choice_ids() {
+  awk -F '\t' -v kind="$1" '$1 == "choice" && $2 == kind { print $3 }' "$choices"
+}
+
+fresh_policy() {
+  awk -F '\t' -v kind="$1" '$1 == "policy" && $2 == kind && $3 == "fresh" { print $7; exit }' "$choices"
+}
+
+# choice_packages <kind> <id>: the Arch names a choice installs, one per line.
+choice_packages() {
+  local packages
+  packages=$(choice_field "$1" "$2" 5)
+  [[ -n $packages && $packages != - ]] || return 0
+  tr ',' '\n' <<<"$packages"
+}
+
+# available <kind> <id>: every package of the choice maps to a Fedora package.
+available() {
+  local pkg mapped
+  while IFS= read -r pkg; do
+    mapped=$(awk -F '\t' -v pkg="$pkg" '$1 == pkg { print $2; exit }' "$translations")
+    [[ -n $mapped && $mapped != - ]] || return 1
+  done < <(choice_packages "$1" "$2")
+}
+
+# pick <kind> <override> <build default>: the kernel command line wins over
+# the build's default, which wins over choices.tsv's fresh-install policy.
+pick() {
+  local kind=$1 id
+  for id in "$2" "$3"; do
+    [[ -n $id ]] || continue
+    [[ -n $(choice_field "$kind" "$id" 3) ]] || die "unknown $kind choice: $id"
+    available "$kind" "$id" || die "$kind $id is not available on Fedora"
+    printf '%s\n' "$id"
+    return
+  done
+  id=$(fresh_policy "$kind")
+  if [[ $id == first-available ]]; then
+    while IFS= read -r id; do
+      available "$kind" "$id" && { printf '%s\n' "$id"; return; }
+    done < <(choice_ids "$kind")
+    die "no $kind choice is available on Fedora"
+  fi
+  printf '%s\n' "$id"
+}
+
+# drops <kind> <selected>: the packages of every other choice of that kind.
+drops() {
+  local id
+  while IFS= read -r id; do
+    [[ $id == "$2" ]] || choice_packages "$1" "$id"
+  done < <(choice_ids "$1")
+}
+
+# hardware_lanes mirrors hardwareLanes() in the shell installer, from the PCI
+# vendors of the installer's DRM devices.
+hardware_lanes() {
+  case " $gpu_vendors " in
+    *" 0x10de "*) echo amd intel nvidia ;;
+    *" 0x1002 "*) echo amd ;;
+    *" 0x8086 "*) echo intel ;;
+    *) echo vm ;;
+  esac
+}
+
+configure_repositories() {
+  local work fingerprints project includepkgs slug base found
+  log "trusting the Ryoku release key $RYOKU_ISO_KEY_FINGERPRINT"
+  work=$(mktemp -d)
+  curl --fail --location --retry 3 --proto '=https' --proto-redir '=https' \
+    --output "$work/key.asc" "$RYOKU_ISO_KEY_URL"
+  mapfile -t fingerprints < <(
+    GNUPGHOME=$work gpg --batch --with-colons --show-keys --fingerprint "$work/key.asc" |
+      awk -F: '$1 == "pub" { primary = 1; next } primary && $1 == "fpr" { print $10; primary = 0 }'
+  )
+  ((${#fingerprints[@]} == 1)) && [[ ${fingerprints[0]} == "$RYOKU_ISO_KEY_FINGERPRINT" ]] ||
+    die "release key fingerprint is ${fingerprints[*]:-missing}; expected $RYOKU_ISO_KEY_FINGERPRINT"
+  install -Dm644 "$work/key.asc" "$key_path"
+  rm -rf "$work"
+  rpm --import "$key_path"
+
+  log "writing the $RYOKU_ISO_CHANNEL Ryoku repository"
+  cat >/etc/yum.repos.d/ryoku.repo <<EOF
+[ryoku]
+name=Ryoku
+baseurl=$RYOKU_ISO_REPO
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=file://$key_path
+EOF
+  while IFS=$'\t' read -r project includepkgs _ || [[ -n $project ]]; do
+    [[ -n $project && $project != \#* && $project != copr ]] || continue
+    slug=${project//\//-}
+    base=https://download.copr.fedorainfracloud.org/results/$project
+    cat >"/etc/yum.repos.d/ryoku-copr-$slug.repo" <<EOF
+[ryoku-copr-$slug]
+name=Ryoku dependency: $project
+baseurl=$base/fedora-\$releasever-\$basearch/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=0
+gpgkey=$base/pubkey.gpg
+includepkgs=$includepkgs
+skip_if_unavailable=1
+EOF
+  done <"$coprs"
+  chmod 644 /etc/yum.repos.d/ryoku*.repo
+  install -d -m755 /var/lib/ryoku
+  printf '%s\n' "$RYOKU_ISO_CHANNEL" >/var/lib/ryoku/channel-intent
+
+  "$dnf" makecache --refresh -y
+  found=$("$dnf" repoquery --repo=ryoku -q ryoku)
+  [[ -n $found ]] || die "the Ryoku repository is not readable or does not publish ryoku"
+}
+
+# package_plan prints the Fedora packages for the picked choices, the way
+# readEditionPackages() in the shell installer resolves them.
+package_plan() {
+  local args=(--table "$translations" --lane desktop) lane pkg
+  for lane in $(hardware_lanes); do
+    args+=(--lane "hardware:$lane")
+  done
+  # a compositor with its own package lane names it after itself
+  if sh "$resolve" --table "$translations" --lane "$compositor" >/dev/null 2>&1; then
+    args+=(--lane "$compositor")
+  fi
+  while IFS= read -r pkg; do
+    args+=(--drop "$pkg")
+  done < <(drops compositor "$compositor"; drops browser "$browser"; drops login-shell "$login_shell")
+  sh "$resolve" "${args[@]}"
+}
+
+install_packages() {
+  local plan
+  mapfile -t plan < <(package_plan)
+  ((${#plan[@]})) || die "the desktop package plan is empty"
+  # stepSysupgrade in the shell installer: the plan's i686 packages must match
+  # the x86_64 builds Anaconda installed. Anaconda already took them from
+  # updates, so this only catches what was published since its solve.
+  log "updating the base system"
+  "$dnf" upgrade -y --refresh
+  log "installing ${#plan[@]} packages"
+  "$dnf" install -y "${plan[@]}"
+}
+
+# with_systemd_dir runs a command with /run/systemd/system present, the marker
+# sddm/setup reads to tell systemd from runit; an Anaconda chroot may not have it.
+with_systemd_dir() {
+  local made=0
+  [[ -d /run/systemd/system ]] || { mkdir -p /run/systemd/system; made=1; }
+  "$@"
+  ((made == 0)) || rmdir /run/systemd/system
+}
+
+configure_session() {
+  local unit user session
+  for unit in NetworkManager.service bluetooth.service power-profiles-daemon.service; do
+    if [[ -f /usr/lib/systemd/system/$unit ]]; then
+      systemctl enable "$unit"
+    fi
+  done
+  log "wiring SDDM"
+  with_systemd_dir bash "$payload/ryoku/lockscreen/sddm/setup"
+
+  session=/usr/share/wayland-sessions/$compositor.desktop
+  [[ -f $session ]] || die "the $compositor package installed no $session"
+  printf '[Last]\nSession=%s\n' "$session" |
+    install -Dm600 -o sddm -g sddm /dev/stdin /var/lib/sddm/state.conf
+
+  for user in "${accounts[@]}"; do
+    log "installing the lockscreen for $user"
+    with_systemd_dir env SUDO_USER="$user" RYOKU_QYLOCK_MODE=live \
+      RYOKU_QYLOCK_BUNDLE=/usr/share/ryoku/lockscreen/qylock \
+      bash /usr/share/ryoku/lockscreen/install-qylock
+  done
+
+  install -Dm644 /dev/stdin /etc/NetworkManager/conf.d/wifi-backend.conf <<'EOF'
+[device]
+wifi.backend=iwd
+EOF
+}
+
+# configure_snapshots writes what `ryoku doctor` writes for a missing snapper
+# root config (snapperRootConfig in ryoku/cli/internal/doctor/doctor.go) onto
+# the /.snapshots subvolume the Anaconda layout creates.
+configure_snapshots() {
+  if [[ $(findmnt -no FSTYPE /) != btrfs ]] || ! btrfs subvolume show /.snapshots >/dev/null 2>&1; then
+    warn "no btrfs /.snapshots subvolume; snapshots stay off until ryoku doctor sets them up"
+    return 0
+  fi
+  log "configuring root snapshots"
+  chmod 0750 /.snapshots
+  chown root:root /.snapshots
+  install -Dm640 /dev/stdin /etc/snapper/configs/root <<'EOF'
+# Ryoku snapper config for the root filesystem, written by the Ryoku Fedora
+# ISO. Keys not listed here fall back to snapper's built-in defaults.
+SUBVOLUME="/"
+FSTYPE="btrfs"
+QGROUP=""
+SPACE_LIMIT="0.5"
+FREE_LIMIT="0.2"
+ALLOW_USERS=""
+ALLOW_GROUPS=""
+SYNC_ACL="no"
+BACKGROUND_COMPARISON="yes"
+NUMBER_CLEANUP="yes"
+NUMBER_MIN_AGE="1800"
+NUMBER_LIMIT="10"
+NUMBER_LIMIT_IMPORTANT="10"
+TIMELINE_CREATE="no"
+TIMELINE_CLEANUP="yes"
+TIMELINE_MIN_AGE="1800"
+TIMELINE_LIMIT_HOURLY="10"
+TIMELINE_LIMIT_DAILY="7"
+TIMELINE_LIMIT_WEEKLY="0"
+TIMELINE_LIMIT_MONTHLY="0"
+TIMELINE_LIMIT_YEARLY="0"
+EMPTY_PRE_POST_CLEANUP="yes"
+EMPTY_PRE_POST_MIN_AGE="1800"
+EOF
+  if [[ -f /etc/sysconfig/snapper ]] && grep -q '^SNAPPER_CONFIGS=' /etc/sysconfig/snapper; then
+    sed -i 's/^SNAPPER_CONFIGS=.*/SNAPPER_CONFIGS="root"/' /etc/sysconfig/snapper
+  else
+    printf 'SNAPPER_CONFIGS="root"\n' >>/etc/sysconfig/snapper
+  fi
+}
+
+xkb_option() {
+  sed -n "s/^[[:space:]]*Option[[:space:]]*\"$1\"[[:space:]]*\"\([^\"]*\)\".*/\1/p" \
+    /etc/X11/xorg.conf.d/00-keyboard.conf | head -n1
+}
+
+# keyboard_json prints the "input" members for the X11 layout Anaconda wrote,
+# empty for plain us like seededKeymap() in the shell installer.
+keyboard_json() {
+  local layout variant options
+  [[ -f /etc/X11/xorg.conf.d/00-keyboard.conf ]] || return 0
+  layout=$(xkb_option XkbLayout)
+  variant=$(xkb_option XkbVariant)
+  options=$(xkb_option XkbOptions)
+  [[ -n $layout && ! ($layout == us && -z $variant && -z $options) ]] || return 0
+  [[ "$layout$variant$options" =~ ^[A-Za-z0-9_.,:+()-]*$ ]] || { warn "skipping unusual keyboard layout $layout"; return 0; }
+  printf ', "input": {"kbLayout": "%s", "kbVariant": "%s", "kbOptions": "%s"}' "$layout" "$variant" "$options"
+}
+
+# seed_account repeats the shell installer's per-account steps that do not
+# need a session: preferences, stubs, assets and the login shell.
+seed_account() {
+  local user=$1 home uid gid group dir rel content pkg apps="" executable
+  home=$(getent passwd "$user" | cut -d: -f6)
+  uid=$(id -u "$user")
+  gid=$(id -g "$user")
+  log "seeding $user ($home)"
+
+  for group in video input; do
+    if getent group "$group" >/dev/null; then
+      usermod -aG "$group" "$user"
+    fi
+  done
+
+  install -d "$home/.config/ryoku" "$home/.local/state/ryoku"
+  [[ $browser == none ]] || apps=$(printf '"apps": {"browser": "%s"}' "$browser")
+  printf '{"desktop": {%s%s}}\n' "$apps" "$(keyboard_json)" | sed 's/{, /{/' >"$home/.config/ryoku/desktop.json"
+  printf 'default\n' >"$home/.local/state/ryoku/default-rice-pending"
+  while IFS= read -r pkg; do
+    rpm -q "$pkg" >/dev/null 2>&1 || printf '%s\n' "$pkg"
+  done < <(drops browser "$browser"; drops login-shell "$login_shell") >"$home/.local/state/ryoku/provisioned"
+
+  # the optional drop-ins the published Hyprland loader still flags when they
+  # are missing (stepConfigs in the shell installer), kept to this compositor's
+  # own config directory.
+  dir=$(ryoku wm config "$compositor" 2>/dev/null | sed -n 's/^[[:space:]]*"dir":[[:space:]]*"\([^"]*\)".*/\1/p')
+  while IFS='|' read -r rel content; do
+    [[ -n $dir && $rel == .config/$dir/* && ! -e $home/$rel ]] || continue
+    install -D -m644 /dev/stdin "$home/$rel" <<<"$content"
+  done <<'EOF'
+.config/hypr/monitors_user.lua|-- hand-pinned displays, see monitors_user.lua.example. pins here win.
+.config/hypr/user.lua|-- your hyprland overrides. loaded last, never touched by updates.
+.config/hypr/theme.lua|-- owned by ryoku settings: applying a theme replaces this file.
+.config/hypr/settings.lua|-- owned by ryoku settings, regenerated by the hub.
+.config/hypr/modules/private.lua|-- optional private module, yours to fill in.
+.config/hypr/ghosttype.lua|-- owned by ghosttype when installed.
+EOF
+
+  install -d "$home/.local/share/ryoku/assets" "$home/Pictures" "$home/.local/share/applications"
+  rm -rf "$home/.local/share/ryoku/assets/brand"
+  cp -a "$payload/ryoku/assets/brand" "$home/.local/share/ryoku/assets/brand"
+  [[ -e $home/Pictures/Wallpapers ]] || cp -a "$payload/ryoku/assets/wallpapers" "$home/Pictures/Wallpapers"
+  [[ -e $home/.npmrc ]] || install -m644 "$payload/ryoku/apps/npm/npmrc" "$home/.npmrc"
+  install -m644 "$payload/ryoku/apps/nvim/ryoku-nvim.desktop" "$home/.local/share/applications/ryoku-nvim.desktop"
+  chown -R "$uid:$gid" "$home"
+
+  executable=$(choice_field login-shell "$login_shell" 6)
+  if [[ -x $executable ]]; then
+    usermod -s "$executable" "$user"
+  fi
+  runuser -u "$user" -- env HOME="$home" USER="$user" LOGNAME="$user" \
+    ryoku-hub shell loaders "$login_shell" ||
+    warn "could not wire the $login_shell loaders for $user; ryoku doctor repairs them"
+}
+
+verify() {
+  local pkg failed=0
+  for pkg in ryoku ryoku-desktop "ryoku-desktop-$compositor" sddm-theme-ryoku; do
+    rpm -q "$pkg" >/dev/null 2>&1 || { warn "$pkg is not installed"; failed=1; }
+  done
+  systemctl is-enabled --quiet sddm.service || { warn "sddm.service is not enabled"; failed=1; }
+  [[ $(systemctl get-default) == graphical.target ]] || { warn "the default target is not graphical"; failed=1; }
+  ((failed == 0)) || die "the Ryoku desktop is incomplete; see the messages above"
+}
+
+relabel() {
+  local contexts=/etc/selinux/targeted/contexts/files/file_contexts
+  [[ -f $contexts ]] || return 0
+  log "restoring SELinux labels"
+  setfiles -F "$contexts" /etc /home /root /var/lib /usr/share/icons /.snapshots 2>/dev/null ||
+    warn "some SELinux labels could not be restored"
+}
+
+main() {
+  gpu_vendors='' cmdline_compositor='' cmdline_browser='' cmdline_shell=''
+  # shellcheck source=/dev/null
+  source "$here/ryoku-iso.conf"
+  # shellcheck source=/dev/null
+  source "$here/facts"
+  compositor=$(pick compositor "$cmdline_compositor" "$RYOKU_ISO_COMPOSITOR")
+  browser=$(pick browser "$cmdline_browser" "$RYOKU_ISO_BROWSER")
+  login_shell=$(pick login-shell "$cmdline_shell" "$RYOKU_ISO_SHELL")
+  log "desktop: $compositor, browser: $browser, login shell: $login_shell"
+  mapfile -t accounts < <(awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /nologin|false$/ { print $1 }' /etc/passwd)
+  ((${#accounts[@]})) || die "Anaconda created no login account"
+
+  configure_repositories
+  install_packages
+  configure_session
+  configure_snapshots
+  local user
+  for user in "${accounts[@]}"; do
+    seed_account "$user"
+  done
+  RYOKU_HOST_INIT=systemd ryoku-host svc reconcile --system || warn "service reconcile reported problems"
+  verify
+  relabel
+  log "Ryoku is installed; it starts at the login screen after the reboot"
+}
+
+# tests/check.sh sources this file for its choice and package-plan functions.
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  main
+fi
