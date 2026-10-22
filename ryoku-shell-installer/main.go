@@ -194,6 +194,9 @@ func buildItems(f *facts, p *plan, editionPlans ...editionCompositorPlan) []plan
 			on:     &p.resume,
 		})
 	}
+	if f.hasNvidia && f.distro != nil && f.distro.id == "fedora" {
+		it = append(it, fedoraNvidiaItem(f, p))
+	}
 	if f.hasNvidia && (f.distro == nil || f.distro.id != "fedora") {
 		d := i18n.T("installs the proprietary driver, blacklists nouveau, rebuilds the initramfs")
 		if f.nouveauLive {
@@ -271,7 +274,7 @@ var planGroups = []struct {
 	title  string
 	labels []string
 }{
-	{"session & hardware", []string{"NVIDIA proprietary drivers", "Switch login to SDDM", "Enable SDDM login", "Ryoku greeter theme", "AZERTY keyboard (French)", "AZERTY keyboard (Belgian)", "Switch to NetworkManager"}},
+	{"session & hardware", []string{"NVIDIA proprietary drivers", "NVIDIA driver", "Switch login to SDDM", "Enable SDDM login", "Ryoku greeter theme", "AZERTY keyboard (French)", "AZERTY keyboard (Belgian)", "Switch to NetworkManager"}},
 	{"migration & cleanup", []string{"Remove rival shells", "Disable conflicting daemons", "Retire the Omarchy repo", "Carry over monitor layout"}},
 	{"extras", []string{"AUR extras", "Developer toolchain"}},
 }
@@ -1295,6 +1298,9 @@ func main() {
 	editionCompositors, err := loadEditionCompositors(client, d, *ref, *payload)
 	if err != nil {
 		die(err.Error())
+	}
+	if d.id == "fedora" {
+		nvidiaQueryScript = loadNvidiaQueryScript(client, *ref, *payload)
 	}
 	if err := validateEditionFlags(overrides, editionCompositors); err != nil {
 		die(err.Error())

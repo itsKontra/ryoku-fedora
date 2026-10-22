@@ -231,7 +231,7 @@ var sparsePaths = []string{
 }
 
 type plan struct {
-	nvidia      bool   // proprietary NVIDIA driver setup
+	nvidia      bool   // NVIDIA driver setup (Fedora: RPM Fusion's, signed on the machine)
 	switchDM    bool   // disable current DM, enable SDDM
 	switchNet   bool   // disable other network stacks, enable NetworkManager
 	rivals      bool   // remove rival shell packages
@@ -275,7 +275,7 @@ func defaultPlanWithEdition(f *facts, edition editionCompositorPlan, compositorC
 	nvidia := f.hasNvidia && !(f.secureBoot && !f.sbctlSigned)
 	aur := true
 	if f.distro != nil && f.distro.id == "fedora" {
-		nvidia = false
+		nvidia = f.hasNvidia && f.nvidiaGeneration == "supported"
 		aur = false
 	}
 	p := &plan{
@@ -2177,10 +2177,7 @@ func filterByUnmet(pkgs []string, unmetOut string) []string {
 
 func stepDrivers(e *engine) error {
 	if e.d().id == "fedora" {
-		prepareFedoraModuleSigning(e)
-		if e.f.hasNvidia {
-			e.say(i18n.T("Fedora keeps NVIDIA on nouveau in this release; no proprietary driver changes are made."))
-		}
+		stepFedoraDrivers(e)
 		return nil
 	}
 	drv := filepath.Join(e.payload, "system/hardware/drivers")

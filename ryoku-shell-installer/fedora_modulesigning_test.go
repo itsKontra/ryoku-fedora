@@ -49,8 +49,14 @@ esac
 
 func runFedoraDrivers(t *testing.T, home string) (*engine, string) {
 	t.Helper()
+	return runFedoraDriversWith(t, home, false, false)
+}
+
+func runFedoraDriversWith(t *testing.T, home string, hasNvidia, driver bool) (*engine, string) {
+	t.Helper()
 	events := make(chan any, 256)
-	e := &engine{f: &facts{distro: newFedoraLinux(), homeDir: home}, p: &plan{}, events: events}
+	f := &facts{distro: newFedoraLinux(), homeDir: home, hasNvidia: hasNvidia}
+	e := &engine{f: f, p: &plan{nvidia: driver}, events: events}
 	if err := stepDrivers(e); err != nil {
 		t.Fatal(err)
 	}

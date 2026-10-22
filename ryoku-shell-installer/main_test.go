@@ -439,11 +439,11 @@ func TestFedoraPlanNeverClaimsSnapshotRollback(t *testing.T) {
 	}
 }
 
-func TestFedoraPlanKeepsNouveauAndSkipsAUR(t *testing.T) {
+func TestFedoraPlanSkipsArchOnlyItems(t *testing.T) {
 	f := &facts{distro: fedoraLinux, hasNvidia: true}
 	p := defaultPlan(f)
 	if p.nvidia {
-		t.Fatal("Fedora must not schedule proprietary NVIDIA driver changes")
+		t.Fatal("Fedora must not schedule the NVIDIA driver for a GPU whose generation was never checked")
 	}
 	if p.aur {
 		t.Fatal("Fedora must not schedule the Arch-only AUR step")
