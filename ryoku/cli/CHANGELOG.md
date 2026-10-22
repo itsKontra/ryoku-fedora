@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Added
+- **Doctor heals a driver fallback on Fedora.** On a machine with
+  `akmod-nvidia` whose running kernel has no NVIDIA module, doctor runs
+  `sudo ryoku-host kmod build-for-kernel` for that kernel and asks for a
+  reboot, or, when akmods fails, notes its error and the newest installed
+  kernel that still has the driver, to pick from the GRUB menu. A new
+  reconciler points akmods' key paths back at the module signing key when they
+  are missing, dangling or lead to a key akmods generated, and a key fix in
+  the same pass forces a rebuild for the running kernel. akmods' key
+  directories are root's, so doctor reads the links with `sudo -n` and never
+  prompts just to look (`reconcile_fedora_akmods_links.go`,
+  `reconcile_fedora_driver_fallback.go`).
 - **`ryoku-host kmod` installs the NVIDIA driver on Fedora.** `install-driver`
   enables RPM Fusion free and nonfree (keys checked against pinned
   fingerprints), installs `akmods`, prepares the module signing key, installs

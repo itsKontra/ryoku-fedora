@@ -81,6 +81,12 @@ modules), built and signed on the machine; turn the installer's "NVIDIA driver"
 item off to stay on nouveau. RPM Fusion is enabled only on those machines, only
 for the driver. Older NVIDIA cards stay on nouveau on Fedora.
 
+If a Fedora kernel boots without an NVIDIA module (a driver fallback), the
+desktop comes up on nouveau. `ryoku doctor`, which `ryoku update` runs, builds
+the module for the running kernel and asks for a reboot. If the build fails, it
+names the newest installed kernel that still has the driver, to pick from the
+GRUB menu. Ryoku never holds a kernel back and never changes the boot default.
+
 On a hybrid laptop with two GPUs, Ryoku ranks them and pins the strongest as the
 primary renderer on a desktop, while a laptop keeps the integrated GPU primary
 for battery; an external GPU always wins. Every GPU stays available, so a monitor
@@ -166,7 +172,9 @@ One enrollment covers xpadneo and the NVIDIA driver, now and after every
 kernel update. If the screen was skipped, or Secure Boot was turned on after the
 install, run `ryoku doctor` (`ryoku update` runs it too): it queues the
 enrollment again and tells you to reboot and approve it. It also puts the key's
-permissions back when they drift, for example after DKMS regenerates it.
+permissions back when they drift, for example after DKMS regenerates it, and
+points akmods' key paths back at it when akmods made a key of its own; after
+either fix it rebuilds the NVIDIA module with the key.
 
 The private key stays on disk, readable only by root and, on NVIDIA machines,
 by the `akmods` group that builds the driver: the same exposure as RPM Fusion's
