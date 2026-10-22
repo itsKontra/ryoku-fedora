@@ -142,6 +142,9 @@ add_lane udev desktop
 for pkg in dualsensectl dbus hidapi libusb; do add_lane "$pkg" optional; done
 # ryoku-gpu-lib32 installs the 32-bit GPU baseline on demand for games.
 for pkg in lib32-mesa lib32-vulkan-icd-loader lib32-vulkan-nouveau; do add_lane "$pkg" optional; done
+# Arch installs xpadneo for everyone; Fedora makes it opt-in, since its DKMS key
+# needs a MokManager enrollment under Secure Boot.
+expected_lanes[xpadneo-dkms]="|optional|"
 
 canonical_lanes() {
 	local encoded=$1 lane out=

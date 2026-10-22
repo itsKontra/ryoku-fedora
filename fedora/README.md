@@ -84,6 +84,29 @@ The Ryoku Plymouth splash shows from GRUB to the login screen: `ryoku-desktop`
 pulls in the script and label plugins it draws with, and `ryoku-plymouth-apply`
 (`system/boot/ryoku-plymouth-apply`) makes it the default and rebuilds the dracut
 images on install. Later updates rebuild only while it is still the default.
-NVIDIA stays on nouveau. Wayfire is unavailable because Fedora ships
-0.10.1 and Ryoku requires 0.11. AUR-only extras such as Zen Browser, LocalSend,
-Voxtype, Looking Glass, and SteamCMD are not shipped in the Fedora lane.
+Wayfire is unavailable because Fedora ships 0.10.1 and Ryoku requires 0.11.
+AUR-only extras such as Zen Browser, LocalSend, Voxtype, Looking Glass, and
+SteamCMD are not shipped in the Fedora lane.
+
+Ryoku installs no NVIDIA driver on Fedora: NVIDIA GPUs start on nouveau. To use
+NVIDIA's driver, install RPM Fusion's yourself. With Secure Boot on, create and
+enroll akmods' signing key first, reboot and choose Enroll MOK, then install the
+driver and reboot once its module has built:
+
+```sh
+sudo dnf install \
+  https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+  https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+sudo dnf install akmods mokutil openssl && sudo kmodgenca -a                 # Secure Boot only
+sudo mokutil --import /etc/pki/akmods/certs/public_key.der                   # Secure Boot only
+sudo dnf install akmod-nvidia
+```
+
+RPM Fusion rebuilds the module for each new kernel. The desktop needs no change:
+the Hyprland session sets its NVIDIA variables only while the NVIDIA driver is
+loaded.
+
+The Xbox wireless controller driver, `xpadneo-dkms`, is opt-in on Fedora:
+`sudo dnf install xpadneo-dkms`. With Secure Boot on, DKMS signs it with its own
+key; enroll it once with `sudo mokutil --import /var/lib/dkms/mok.pub`, reboot,
+and choose Enroll MOK.
