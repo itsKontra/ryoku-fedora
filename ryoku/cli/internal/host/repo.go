@@ -231,7 +231,7 @@ func ExpandRepoURL(raw string) string {
 	if path == "" {
 		path = "/etc/os-release"
 	}
-	release := osReleaseVersion(path)
+	release := OSReleaseValue(path, "VERSION_ID")
 	if release != "" {
 		raw = strings.ReplaceAll(raw, "$releasever", release)
 	}
@@ -239,7 +239,9 @@ func ExpandRepoURL(raw string) string {
 	return strings.ReplaceAll(raw, "$arch", "x86_64")
 }
 
-func osReleaseVersion(path string) string {
+// OSReleaseValue reads one key, such as ID or VERSION_ID, from an os-release
+// file, unquoted; "" when the file or the key is missing.
+func OSReleaseValue(path, key string) string {
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return ""
@@ -247,9 +249,8 @@ func osReleaseVersion(path string) string {
 	scanner := bufio.NewScanner(strings.NewReader(string(body)))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "VERSION_ID=") {
-			value := strings.TrimSpace(strings.TrimPrefix(line, "VERSION_ID="))
-			return strings.Trim(value, "\"'")
+		if value, ok := strings.CutPrefix(line, key+"="); ok {
+			return strings.Trim(strings.TrimSpace(value), "\"'")
 		}
 	}
 	return ""

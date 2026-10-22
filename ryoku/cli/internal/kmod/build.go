@@ -53,7 +53,7 @@ func (m *Machine) BuildForKernel(opts BuildOptions) (BuildResult, error) {
 	}
 	return BuildResult{
 		Kernel:           kernel,
-		Built:            m.moduleBuilt(kernel),
+		Built:            m.HasDriverModule(kernel),
 		NewestWithModule: m.newestKernelWithModule(),
 		Status:           status,
 	}, nil

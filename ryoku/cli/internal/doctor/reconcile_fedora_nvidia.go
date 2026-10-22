@@ -13,11 +13,9 @@ import (
 // package fills its gaps. Doctor heals only what a package cannot own: the
 // package itself, the kernel arguments and the fallback unit's enablement.
 
-const (
-	rpmFusionDriverPackage = "akmod-nvidia"
-	installDriverCommand   = "sudo ryoku-host kmod install-driver"
-	nvidiaFallbackUnit     = "nvidia-fallback.service"
-)
+const nvidiaFallbackUnit = "nvidia-fallback.service"
+
+var installDriverCommand = kmod.Advice("install-driver")
 
 // rpmFusionNouveauBlacklist is the exact argument pair RPM Fusion puts on every
 // kernel. nvidia-fallback.service fires only on this string, so it is restored
@@ -61,7 +59,7 @@ func fedoraNvidiaChecks() []reconciler {
 // third-party repositories and may need someone at the console to approve an
 // enrollment, so it never runs unattended inside `ryoku update`.
 func reconcileFedoraNvidiaDriver(bool) recResult {
-	installed := nvidiaPackageInstalled(rpmFusionDriverPackage)
+	installed := nvidiaPackageInstalled(kmod.AkmodPackage)
 	switch fedoraNvidiaGPU() {
 	case kmod.GPUAbsent:
 		return okRes(i18n.T("no NVIDIA GPU detected"))
@@ -70,7 +68,7 @@ func reconcileFedoraNvidiaDriver(bool) recResult {
 	case kmod.GPUUnsupported:
 		if installed {
 			return warnRes(i18n.T("akmod-nvidia is installed, but this NVIDIA GPU is older than Turing and the NVIDIA driver cannot drive it; doctor leaves the package alone, and the GPU works on nouveau without it")).
-				withFix("sudo dnf remove akmod-nvidia")
+				withFix("sudo dnf remove %s", kmod.AkmodPackage)
 		}
 		return okRes(i18n.T("this NVIDIA GPU is older than Turing, so it stays on nouveau"))
 	}
@@ -84,10 +82,16 @@ func reconcileFedoraNvidiaDriver(bool) recResult {
 		withFix("%s", installDriverCommand)
 }
 
+// nvidiaDriverOnSupportedGPU is a machine whose NVIDIA setup doctor keeps:
+// RPM Fusion's driver installed for a GPU the generation check passed.
+func nvidiaDriverOnSupportedGPU() bool {
+	return nvidiaPackageInstalled(kmod.AkmodPackage) && fedoraNvidiaGPU() == kmod.GPUSupported
+}
+
 // reconcileFedoraNvidiaPackage brings back what RPM Fusion leaves out: video
 // decode, the initramfs without nouveau and the fallback unit's preset.
 func reconcileFedoraNvidiaPackage(checkOnly bool) recResult {
-	if !nvidiaPackageInstalled(rpmFusionDriverPackage) || fedoraNvidiaGPU() != kmod.GPUSupported {
+	if !nvidiaDriverOnSupportedGPU() {
 		return okRes(i18n.T("no NVIDIA driver on a supported GPU, so Ryoku's NVIDIA package is not needed"))
 	}
 	if nvidiaPackageInstalled(kmod.DriverPackage) {
@@ -113,7 +117,7 @@ func reconcileFedoraNvidiaPackage(checkOnly bool) recResult {
 // /etc/kernel/cmdline, the one every new kernel inherits; the boot entries
 // themselves are readable only by root.
 func reconcileFedoraNouveauBlacklist(checkOnly bool) recResult {
-	if !nvidiaPackageInstalled(rpmFusionDriverPackage) || fedoraNvidiaGPU() != kmod.GPUSupported {
+	if !nvidiaDriverOnSupportedGPU() {
 		return okRes(i18n.T("no NVIDIA driver on a supported GPU, so nouveau stays unblacklisted"))
 	}
 	running, _ := readKernelCmdline(runningKernelCmdline)
@@ -141,7 +145,7 @@ func reconcileFedoraNouveauBlacklist(checkOnly bool) recResult {
 // boots before its NVIDIA module exists. No Fedora or RPM Fusion preset enables
 // it; Ryoku's NVIDIA package does, and doctor keeps it so.
 func reconcileFedoraNvidiaFallback(checkOnly bool) recResult {
-	if !nvidiaPackageInstalled(rpmFusionDriverPackage) {
+	if !nvidiaPackageInstalled(kmod.AkmodPackage) {
 		return okRes(i18n.T("no NVIDIA driver installed, so the nouveau fallback is not needed"))
 	}
 	if systemServiceEnabled(nvidiaFallbackUnit) {

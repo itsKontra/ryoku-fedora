@@ -1,20 +1,15 @@
 package doctor
 
 import (
-	"bytes"
-	"errors"
-	"io"
-	"os"
-	"os/exec"
 	"strings"
 
 	"ryoku-cli/internal/kmod"
 	i18n "ryoku-i18n"
 )
 
-const (
-	prepareModuleSigningKeyCommand      = "sudo ryoku-host kmod prepare-key"
-	queueModuleSigningEnrollmentCommand = "sudo ryoku-host kmod queue-enrollment"
+var (
+	prepareModuleSigningKeyCommand      = kmod.Advice("prepare-key")
+	queueModuleSigningEnrollmentCommand = kmod.Advice("queue-enrollment")
 )
 
 // The key is root-only, so doctor reads its state as the desktop user and asks
@@ -45,47 +40,8 @@ func moduleSigningChecks() []reconciler {
 }
 
 func runKmodAsRoot(verb string) error {
-	_, _, err := kmodAsRoot(kmodRoot{}, verb)
+	_, _, err := kmod.AsRoot{Host: ryokuHostBin()}.Run(verb)
 	return err
-}
-
-// kmodRoot says how to run `sudo ryoku-host kmod`: NonInteractive adds sudo's
-// -n, for a read that must never prompt; Progress also receives ryoku-host's
-// stderr as it runs, for a build that takes minutes.
-type kmodRoot struct {
-	NonInteractive bool
-	Progress       io.Writer
-}
-
-// kmodAsRoot returns ryoku-host's key=value output and its stderr, which on a
-// failure is also the error.
-func kmodAsRoot(how kmodRoot, args ...string) (string, string, error) {
-	var sudoArgs []string
-	if how.NonInteractive {
-		sudoArgs = append(sudoArgs, "-n")
-	}
-	sudoArgs = append(append(sudoArgs, ryokuHostBin(), "kmod"), args...)
-	var stdout, stderr bytes.Buffer
-	cmd := exec.Command("sudo", sudoArgs...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, &stdout, &stderr
-	if how.Progress != nil {
-		cmd.Stderr = io.MultiWriter(&stderr, how.Progress)
-	}
-	err := cmd.Run()
-	if detail := strings.TrimSpace(stderr.String()); err != nil && detail != "" {
-		err = errors.New(detail)
-	}
-	return stdout.String(), stderr.String(), err
-}
-
-// kmodValue reads one key from ryoku-host's key=value output.
-func kmodValue(output, key string) string {
-	for _, line := range strings.Split(output, "\n") {
-		if value, ok := strings.CutPrefix(line, key+"="); ok {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }
 
 func reconcileModuleSigningKey(checkOnly bool) recResult {

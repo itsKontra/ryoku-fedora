@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ryoku-cli/internal/kmod"
 )
 
 const (
@@ -16,7 +18,7 @@ const (
 // stubNvidiaMachine points the updater at a scratch modules tree holding the
 // given kernels and replaces akmod-nvidia's presence and the build with
 // stubs. It returns the kernels a build was asked for.
-func stubNvidiaMachine(t *testing.T, akmod bool, result nvidiaBuild, kernels ...string) *[]string {
+func stubNvidiaMachine(t *testing.T, akmod bool, result kmod.BuildResult, kernels ...string) *[]string {
 	t.Helper()
 	oldModules, oldInstalled, oldBuild := modulesDir, nvidiaAkmodInstalled, nvidiaBuildForKernel
 	t.Cleanup(func() {
@@ -28,7 +30,7 @@ func stubNvidiaMachine(t *testing.T, akmod bool, result nvidiaBuild, kernels ...
 	}
 	nvidiaAkmodInstalled = func() bool { return akmod }
 	var builds []string
-	nvidiaBuildForKernel = func(kernel string) (nvidiaBuild, error) {
+	nvidiaBuildForKernel = func(kernel string) (kmod.BuildResult, error) {
 		builds = append(builds, kernel)
 		return result, nil
 	}
@@ -47,7 +49,7 @@ func installKernel(t *testing.T, kernel string) {
 }
 
 func TestNvidiaBuildSkippedWithoutANewKernel(t *testing.T) {
-	builds := stubNvidiaMachine(t, true, nvidiaBuild{Built: true}, oldNvidiaKernel)
+	builds := stubNvidiaMachine(t, true, kmod.BuildResult{Built: true}, oldNvidiaKernel)
 
 	if note := awaitNvidiaBuild(oldNvidiaKernel); note != "" {
 		t.Fatalf("note = %q, want none", note)
@@ -58,7 +60,7 @@ func TestNvidiaBuildSkippedWithoutANewKernel(t *testing.T) {
 }
 
 func TestNvidiaBuildRunsForTheNewKernelAndReportsTheDriverReady(t *testing.T) {
-	builds := stubNvidiaMachine(t, true, nvidiaBuild{Kernel: newNvidiaKernel, Built: true, Fallback: newNvidiaKernel}, oldNvidiaKernel, newNvidiaKernel)
+	builds := stubNvidiaMachine(t, true, kmod.BuildResult{Kernel: newNvidiaKernel, Built: true, NewestWithModule: newNvidiaKernel}, oldNvidiaKernel, newNvidiaKernel)
 
 	note := awaitNvidiaBuild(oldNvidiaKernel)
 	if len(*builds) != 1 || (*builds)[0] != newNvidiaKernel {
@@ -70,7 +72,7 @@ func TestNvidiaBuildRunsForTheNewKernelAndReportsTheDriverReady(t *testing.T) {
 }
 
 func TestNvidiaBuildFailureNamesTheFallbackKernel(t *testing.T) {
-	builds := stubNvidiaMachine(t, true, nvidiaBuild{Kernel: newNvidiaKernel, Built: false, Fallback: oldNvidiaKernel}, oldNvidiaKernel, newNvidiaKernel)
+	builds := stubNvidiaMachine(t, true, kmod.BuildResult{Kernel: newNvidiaKernel, Built: false, NewestWithModule: oldNvidiaKernel}, oldNvidiaKernel, newNvidiaKernel)
 
 	note := awaitNvidiaBuild(oldNvidiaKernel)
 	if len(*builds) != 1 {
@@ -84,7 +86,7 @@ func TestNvidiaBuildFailureNamesTheFallbackKernel(t *testing.T) {
 }
 
 func TestNvidiaBuildSkippedWithoutAkmodNvidia(t *testing.T) {
-	builds := stubNvidiaMachine(t, false, nvidiaBuild{Built: true}, oldNvidiaKernel, newNvidiaKernel)
+	builds := stubNvidiaMachine(t, false, kmod.BuildResult{Built: true}, oldNvidiaKernel, newNvidiaKernel)
 
 	if note := awaitNvidiaBuild(oldNvidiaKernel); note != "" {
 		t.Fatalf("note = %q, want none", note)
@@ -95,9 +97,9 @@ func TestNvidiaBuildSkippedWithoutAkmodNvidia(t *testing.T) {
 }
 
 func TestNvidiaBuildThatCannotRunLeavesItToAkmodsAtBoot(t *testing.T) {
-	stubNvidiaMachine(t, true, nvidiaBuild{}, oldNvidiaKernel, newNvidiaKernel)
-	nvidiaBuildForKernel = func(string) (nvidiaBuild, error) {
-		return nvidiaBuild{}, errors.New("sudo: a password is required")
+	stubNvidiaMachine(t, true, kmod.BuildResult{}, oldNvidiaKernel, newNvidiaKernel)
+	nvidiaBuildForKernel = func(string) (kmod.BuildResult, error) {
+		return kmod.BuildResult{}, errors.New("sudo: a password is required")
 	}
 
 	note := awaitNvidiaBuild(oldNvidiaKernel)
@@ -112,7 +114,7 @@ func TestNvidiaBuildThatCannotRunLeavesItToAkmodsAtBoot(t *testing.T) {
 func systemLaneInstallsKernel(t *testing.T, manager string) (builds []string, askedForAkmod bool) {
 	t.Helper()
 	isolateHome(t)
-	recorded := stubNvidiaMachine(t, true, nvidiaBuild{Kernel: newNvidiaKernel, Built: true}, oldNvidiaKernel)
+	recorded := stubNvidiaMachine(t, true, kmod.BuildResult{Kernel: newNvidiaKernel, Built: true}, oldNvidiaKernel)
 	nvidiaAkmodInstalled = func() bool { askedForAkmod = true; return true }
 	t.Setenv("RYOKU_HOST_PKGMGR", manager)
 	bin := t.TempDir()
@@ -168,7 +170,7 @@ func TestNvidiaBuildForKernelReadsTheRyokuHostReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := nvidiaBuild{Kernel: newNvidiaKernel, Built: false, Fallback: oldNvidiaKernel}
+	want := kmod.BuildResult{Kernel: newNvidiaKernel, Built: false, NewestWithModule: oldNvidiaKernel}
 	if result != want {
 		t.Fatalf("result = %+v, want %+v", result, want)
 	}
@@ -188,7 +190,7 @@ func TestNvidiaBuildForKernelCarriesRyokuHostsReason(t *testing.T) {
 }
 
 func TestNvidiaBuildFailureWithNoKernelLeftWithTheDriver(t *testing.T) {
-	stubNvidiaMachine(t, true, nvidiaBuild{Kernel: newNvidiaKernel}, oldNvidiaKernel, newNvidiaKernel)
+	stubNvidiaMachine(t, true, kmod.BuildResult{Kernel: newNvidiaKernel}, oldNvidiaKernel, newNvidiaKernel)
 
 	note := awaitNvidiaBuild(oldNvidiaKernel)
 	if !strings.Contains(note, "build failed") || !strings.Contains(note, "no installed kernel has the driver") {

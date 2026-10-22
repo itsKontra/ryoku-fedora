@@ -1,24 +1,27 @@
 package kmod
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"ryoku-cli/internal/host"
 )
 
-// DriverPackage is Ryoku's NVIDIA package. It requires akmod-nvidia, so
-// installing it is what installs the driver.
-const DriverPackage = "ryoku-nvidia-support"
+const (
+	// DriverPackage is Ryoku's NVIDIA package. It requires AkmodPackage, so
+	// installing it is what installs the driver.
+	DriverPackage = "ryoku-nvidia-support"
+	// AkmodPackage is RPM Fusion's package that builds the NVIDIA module on
+	// the machine; it is installed exactly when the driver is.
+	AkmodPackage = "akmod-nvidia"
+)
 
 type DriverOptions struct {
 	// Kernel to build for; it defaults to the boot default kernel.
 	Kernel string
 	// GPUSupported is set by a caller that ran the GPU generation check
-	// itself, such as the ISO, whose target root may lack lspci.
+	// itself, such as an installer whose target root may lack lspci.
 	GPUSupported bool
 }
 
@@ -84,29 +87,16 @@ func (m *Machine) InstallDriver(opts DriverOptions) (DriverResult, error) {
 // fedoraRelease is the machine's Fedora VERSION_ID, which names RPM Fusion's
 // release packages.
 func (m *Machine) fedoraRelease() (string, error) {
-	file, err := os.Open(m.path("/etc/os-release"))
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	values := map[string]string{}
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if key, value, ok := strings.Cut(scanner.Text(), "="); ok {
-			values[key] = strings.Trim(value, `"'`)
-		}
-	}
-	if values["ID"] != "fedora" || values["VERSION_ID"] == "" {
+	osRelease := m.path("/etc/os-release")
+	release := host.OSReleaseValue(osRelease, "VERSION_ID")
+	if host.OSReleaseValue(osRelease, "ID") != "fedora" || release == "" {
 		return "", errors.New("the NVIDIA driver install is for Fedora only")
 	}
-	return values["VERSION_ID"], nil
+	return release, nil
 }
 
 func (m *Machine) dnf(args ...string) error {
-	name := "dnf"
-	if m.cfg.Runner.LookPath("dnf5") {
-		name = "dnf5"
-	}
+	name := host.SelectDNFCommand(m.cfg.Runner.LookPath)
 	result := m.cfg.Runner.Run(host.Command{Name: name, Args: args, Stdout: m.cfg.Log, Stderr: m.cfg.Log})
 	if result.Code != 0 {
 		return fmt.Errorf("%s %s failed with exit status %d", name, strings.Join(args, " "), result.Code)

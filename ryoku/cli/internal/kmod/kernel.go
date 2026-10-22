@@ -3,8 +3,6 @@ package kmod
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 	"strings"
 
 	"ryoku-cli/internal/host"
@@ -27,25 +25,13 @@ func (m *Machine) targetKernel(kernel string) (string, error) {
 	return kernel, nil
 }
 
-// installedKernels lists the kernels with an image under /usr/lib/modules,
-// newest first.
 func (m *Machine) installedKernels() []string {
-	images, _ := filepath.Glob(m.path("/usr/lib/modules/*/vmlinuz"))
-	kernels := make([]string, 0, len(images))
-	for _, image := range images {
-		kernels = append(kernels, filepath.Base(filepath.Dir(image)))
-	}
-	sort.Slice(kernels, func(i, j int) bool { return host.CompareEVR(kernels[i], kernels[j]) > 0 })
-	return kernels
+	return host.InstalledKernels(m.path("/usr/lib/modules"))
 }
 
 // HasDriverModule says whether kernel has an NVIDIA module installed. modinfo
 // needs no root, so doctor asks as the desktop user.
 func (m *Machine) HasDriverModule(kernel string) bool {
-	return m.moduleBuilt(kernel)
-}
-
-func (m *Machine) moduleBuilt(kernel string) bool {
 	result := m.cfg.Runner.Run(host.Command{Name: "modinfo", Args: []string{"-k", kernel, "-F", "filename", "nvidia"}})
 	return result.Code == 0 && strings.TrimSpace(result.Output) != ""
 }
@@ -54,7 +40,7 @@ func (m *Machine) moduleBuilt(kernel string) bool {
 // default one has no NVIDIA module, or "" when no kernel has one.
 func (m *Machine) newestKernelWithModule() string {
 	for _, kernel := range m.installedKernels() {
-		if m.moduleBuilt(kernel) {
+		if m.HasDriverModule(kernel) {
 			return kernel
 		}
 	}
@@ -65,7 +51,7 @@ func (m *Machine) newestKernelWithModule() string {
 // signing key's certificate, so a module signed by any other key, even one
 // also called "DKMS module signing key", fails.
 func (m *Machine) moduleSignedByKey(kernel string) error {
-	if !m.moduleBuilt(kernel) {
+	if !m.HasDriverModule(kernel) {
 		return fmt.Errorf("there is no NVIDIA module for kernel %s", kernel)
 	}
 	sigKey := m.cfg.Runner.Run(host.Command{Name: "modinfo", Args: []string{"-k", kernel, "-F", "sig_key", "nvidia"}})

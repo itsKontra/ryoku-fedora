@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"ryoku-cli/internal/host"
+	"ryoku-cli/internal/kmod"
 	"ryoku-cli/internal/sys"
 
 	i18n "ryoku-i18n"
@@ -323,7 +324,7 @@ func nvidiaDriverActiveFor(kepler, packagePresent bool, loaded []string) bool {
 
 func nvidiaDriverPackagePresent() bool {
 	if nvidiaPackageManager() == host.DNF {
-		return anyNvidiaPackageInstalled("akmod-nvidia", "xorg-x11-drv-nvidia")
+		return anyNvidiaPackageInstalled(kmod.AkmodPackage, "xorg-x11-drv-nvidia")
 	}
 	if nvidiaPackageManager() == host.XBPS {
 		return anyNvidiaPackageInstalled("nvidia", "nvidia580", "nvidia470")

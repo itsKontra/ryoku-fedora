@@ -7,17 +7,17 @@ import (
 	i18n "ryoku-i18n"
 )
 
-const readModuleSigningStatusCommand = "sudo ryoku-host kmod status"
+var readModuleSigningStatusCommand = kmod.Advice("status")
 
 // akmods' key directories are 0750 root:akmods, so the desktop user cannot see
 // the links; root reads them with sudo -n, which answers only from a cached
 // credential and never prompts.
 var moduleSigningLinksAsRoot = func() (kmod.LinkState, error) {
-	output, _, err := kmodAsRoot(kmodRoot{NonInteractive: true}, "status")
+	report, _, err := kmod.AsRoot{Host: ryokuHostBin(), NonInteractive: true}.Run("status")
 	if err != nil {
 		return "", err
 	}
-	links := kmod.LinkState(kmodValue(output, "akmods_links"))
+	links := kmod.LinkState(report["akmods_links"])
 	if links == "" {
 		return "", errors.New("ryoku-host kmod status printed no akmods_links")
 	}

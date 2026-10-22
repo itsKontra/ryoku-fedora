@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"ryoku-cli/internal/host"
+	"ryoku-cli/internal/kmod"
 )
 
 const (
@@ -21,7 +22,8 @@ type fallbackMachine struct {
 	akmodNvidia bool
 	gpu         bool
 	modules     map[string]bool
-	build       nvidiaBuild
+	build       kmod.BuildResult
+	detail      string
 	buildErr    error
 	builds      []string
 }
@@ -29,31 +31,31 @@ type fallbackMachine struct {
 func newFallbackMachine(t *testing.T) *fallbackMachine {
 	t.Helper()
 	m := &fallbackMachine{akmodNvidia: true, gpu: true, modules: map[string]bool{}}
-	oldInstalled, oldKernel, oldModule, oldGPU, oldBuild := doctorPackageInstalled, runningKernel, nvidiaModuleBuilt, driverFallbackGPU, buildNvidiaForKernel
+	oldInstalled, oldKernel, oldModule, oldGPU, oldBuild := nvidiaPackageInstalled, runningKernel, nvidiaModuleBuilt, driverFallbackGPU, buildNvidiaForKernel
 	t.Cleanup(func() {
-		doctorPackageInstalled, runningKernel, nvidiaModuleBuilt, driverFallbackGPU, buildNvidiaForKernel = oldInstalled, oldKernel, oldModule, oldGPU, oldBuild
+		nvidiaPackageInstalled, runningKernel, nvidiaModuleBuilt, driverFallbackGPU, buildNvidiaForKernel = oldInstalled, oldKernel, oldModule, oldGPU, oldBuild
 	})
-	doctorPackageInstalled = func(name string) bool { return name == "akmod-nvidia" && m.akmodNvidia }
+	nvidiaPackageInstalled = func(name string) bool { return name == "akmod-nvidia" && m.akmodNvidia }
 	runningKernel = func() string { return runningTestKernel }
 	nvidiaModuleBuilt = func(kernel string) bool { return m.modules[kernel] }
 	driverFallbackGPU = func() bool { return m.gpu }
-	buildNvidiaForKernel = func(kernel string, rebuild bool) (nvidiaBuild, error) {
-		call := kernel
-		if rebuild {
+	buildNvidiaForKernel = func(opts kmod.BuildOptions) (kmod.BuildResult, string, error) {
+		call := opts.Kernel
+		if opts.Rebuild {
 			call += " --rebuild"
 		}
 		m.builds = append(m.builds, call)
-		if m.build.built {
-			m.modules[kernel] = true
+		if m.build.Built {
+			m.modules[opts.Kernel] = true
 		}
-		return m.build, m.buildErr
+		return m.build, m.detail, m.buildErr
 	}
 	return m
 }
 
 func TestDriverFallbackIsHealedByBuildingForTheRunningKernel(t *testing.T) {
 	machine := newFallbackMachine(t)
-	machine.build = nvidiaBuild{built: true, newestWithModule: runningTestKernel}
+	machine.build = kmod.BuildResult{Built: true, NewestWithModule: runningTestKernel}
 	pass := &moduleSigningPass{}
 
 	todo := pass.reconcileDriverFallback(true)
@@ -79,7 +81,8 @@ func TestDriverFallbackIsHealedByBuildingForTheRunningKernel(t *testing.T) {
 func TestDriverFallbackThatCannotBeBuiltNamesTheNewestKernelWithTheDriver(t *testing.T) {
 	machine := newFallbackMachine(t)
 	machine.modules[olderTestKernel] = true
-	machine.build = nvidiaBuild{newestWithModule: olderTestKernel, detail: "Building rpms failed; see /var/cache/akmods/nvidia/580.95-for-6.18.1.failed.log"}
+	machine.build = kmod.BuildResult{NewestWithModule: olderTestKernel}
+	machine.detail = "Building rpms failed; see /var/cache/akmods/nvidia/580.95-for-6.18.1.failed.log"
 
 	got := (&moduleSigningPass{}).reconcileDriverFallback(false)
 	if got.status != recNote {
@@ -94,7 +97,7 @@ func TestDriverFallbackThatCannotBeBuiltNamesTheNewestKernelWithTheDriver(t *tes
 
 func TestDriverFallbackWithNoKernelLeftWithTheDriverSaysSo(t *testing.T) {
 	machine := newFallbackMachine(t)
-	machine.build = nvidiaBuild{detail: "Building rpms failed"}
+	machine.detail = "Building rpms failed"
 
 	got := (&moduleSigningPass{}).reconcileDriverFallback(false)
 	if got.status != recNote || !strings.Contains(got.detail, "no installed kernel") {
@@ -144,7 +147,7 @@ func TestKeyFixInThePassRebuildsTheDriver(t *testing.T) {
 	calls := signing.use(t)
 	machine := newFallbackMachine(t)
 	machine.modules[runningTestKernel] = true
-	machine.build = nvidiaBuild{built: true, newestWithModule: runningTestKernel}
+	machine.build = kmod.BuildResult{Built: true, NewestWithModule: runningTestKernel}
 
 	check := runModuleSigningPass(true)
 	if got := check["NVIDIA driver fallback"]; got.status != recWouldFix || len(machine.builds) != 0 ||
@@ -173,7 +176,7 @@ func TestAkmodsLinkFixInThePassRebuildsTheDriver(t *testing.T) {
 	signing.use(t)
 	machine := newFallbackMachine(t)
 	machine.modules[runningTestKernel] = true
-	machine.build = nvidiaBuild{built: true, newestWithModule: runningTestKernel}
+	machine.build = kmod.BuildResult{Built: true, NewestWithModule: runningTestKernel}
 
 	fix := runModuleSigningPass(false)
 	if links := fix["akmods links to the module signing key"]; links.status != recFixed {
@@ -230,12 +233,12 @@ printf 'Building and installing nvidia-kmod\nBuilding rpms failed; see the faile
 `,
 	})
 
-	build, err := buildNvidiaForKernel(runningTestKernel, true)
+	build, detail, err := buildNvidiaForKernel(kmod.BuildOptions{Kernel: runningTestKernel, Rebuild: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if build.built || build.newestWithModule != olderTestKernel || build.detail != "Building rpms failed; see the failed log" {
-		t.Fatalf("build = %+v, want failed, the older kernel and akmods' last line", build)
+	if build.Built || build.NewestWithModule != olderTestKernel || detail != "Building rpms failed; see the failed log" {
+		t.Fatalf("build = %+v, detail %q, want failed, the older kernel and akmods' last line", build, detail)
 	}
 	body, err := os.ReadFile(log)
 	if err != nil {
