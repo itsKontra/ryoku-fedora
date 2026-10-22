@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Added
+- **`ryoku-host kmod` installs the NVIDIA driver on Fedora.** `install-driver`
+  enables RPM Fusion free and nonfree (keys checked against pinned
+  fingerprints), installs `akmods`, prepares the module signing key, installs
+  `ryoku-nvidia-support` and builds the module for the boot default kernel,
+  then checks it is signed with the machine's key. `build-for-kernel` reruns
+  akmods for one kernel and reports the newest kernel with a module.
+  `prepare-key` now links akmods' key paths to DKMS's pair, `record-choice`
+  records driver or nouveau, and the status gains `akmods_links=` and
+  `nvidia_choice=`.
 - **Doctor keeps Fedora's module signing key healthy.** Two Fedora-only
   reconcilers read the key through `internal/kmod` and fix it with
   `sudo ryoku-host kmod ...`: one sets the key back to its expected mode and

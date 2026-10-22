@@ -27,7 +27,8 @@ type KeyResult struct {
 
 // PrepareKey makes sure the machine has its module signing key in the
 // expected state. It creates DKMS's pair only when either half is missing, as
-// DKMS itself would, and otherwise only corrects the key's mode and owner.
+// DKMS itself would, and otherwise only corrects the key's mode and owner and,
+// where akmods is installed, its links to the pair.
 func (m *Machine) PrepareKey() (KeyResult, error) {
 	action := KeyUnchanged
 	if !m.exists(KeyPath) || !m.exists(CertPath) {
@@ -53,6 +54,15 @@ func (m *Machine) PrepareKey() (KeyResult, error) {
 			return KeyResult{}, fmt.Errorf("set the mode of %s: %w", KeyPath, err)
 		}
 		if action == KeyUnchanged {
+			action = KeyFixed
+		}
+	}
+	if key.akmods {
+		relinked, err := m.pointAkmodsAtKey(key.wantGID)
+		if err != nil {
+			return KeyResult{}, err
+		}
+		if relinked && action == KeyUnchanged {
 			action = KeyFixed
 		}
 	}

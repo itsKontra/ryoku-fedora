@@ -34,6 +34,8 @@ func TestStatusOutputContract(t *testing.T) {
 		"secure_boot=enforcing",
 		"enrollment=not_queued",
 		"password=enroll",
+		"akmods_links=missing",
+		"nvidia_choice=",
 	}, "\n") + "\n"
 	if stdout != want {
 		t.Fatalf("status output:\n%s\nwant:\n%s", stdout, want)
@@ -53,6 +55,8 @@ func TestStatusOutputWithoutAKey(t *testing.T) {
 		"secure_boot=unsupported",
 		"enrollment=unknown",
 		"password=enroll",
+		"akmods_links=not_needed",
+		"nvidia_choice=",
 	}, "\n") + "\n"
 	if code != 0 || stdout != want {
 		t.Fatalf("exit %d, output:\n%s\nwant:\n%s", code, stdout, want)
@@ -68,7 +72,7 @@ func TestPrepareKeyAndQueueEnrollmentReportTheirActionThenStatus(t *testing.T) {
 		t.Fatalf("prepare-key exit %d:\n%s%s", code, stdout, stderr)
 	}
 	code, stdout, stderr = runCLI(fake, "queue-enrollment", "--root", fake.root)
-	if code != 0 || !strings.HasPrefix(stdout, "action=queued\nkey=present\n") || !strings.HasSuffix(stdout, "enrollment=queued\npassword=enroll\n") {
+	if code != 0 || !strings.HasPrefix(stdout, "action=queued\nkey=present\n") || !strings.Contains(stdout, "\nenrollment=queued\npassword=enroll\n") {
 		t.Fatalf("queue-enrollment exit %d:\n%s%s", code, stdout, stderr)
 	}
 	code, stdout, _ = runCLI(fake, "queue-enrollment", "--root", fake.root)
@@ -85,6 +89,24 @@ func TestCLIFailuresAndUsage(t *testing.T) {
 		t.Fatalf("queue without a key: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 	for _, args := range [][]string{nil, {"bogus"}, {"status", "--root"}, {"status", "extra"}} {
+		if code, _, _ := runCLI(fake, args...); code != 2 {
+			t.Fatalf("%q exit %d, want usage 2", args, code)
+		}
+	}
+}
+
+func TestRecordChoiceIsReportedByStatus(t *testing.T) {
+	fake := newFakeMachine(t)
+	for _, choice := range []string{"driver", "nouveau"} {
+		code, stdout, stderr := runCLI(fake, "record-choice", choice, "--root", fake.root)
+		if code != 0 || !strings.HasPrefix(stdout, "nvidia_choice="+choice+"\nkey=") || !strings.HasSuffix(stdout, "\nnvidia_choice="+choice+"\n") {
+			t.Fatalf("record-choice %s exit %d:\n%s%s", choice, code, stdout, stderr)
+		}
+		if got := readFile(t, fake.path("var/lib/ryoku/nvidia-choice")); got != choice+"\n" {
+			t.Fatalf("nvidia-choice = %q", got)
+		}
+	}
+	for _, args := range [][]string{{"record-choice"}, {"record-choice", "nvidia"}, {"record-choice", "driver", "--root"}} {
 		if code, _, _ := runCLI(fake, args...); code != 2 {
 			t.Fatalf("%q exit %d, want usage 2", args, code)
 		}

@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- `drivers/nvidia.sh`: **`--query` answers whether the GPU takes the open
+  modules, and installs nothing.** It prints and exits with `supported` (0),
+  `unsupported` (3, older than Turing), `absent` (4) or `unknown` (5, no lspci),
+  from the same GSP check the install path uses. Fedora's `ryoku` package ships
+  the script as `/usr/libexec/ryoku/nvidia.sh` for `ryoku-host kmod`.
 - `display/ryoku-monitor`: **a hand-entered resolution is forced, not ignored.**
   When a layout carries a `WxH@rate` mode the panel does not advertise (the Hub's
   new Displays "Custom…" entry), `apply`/`save` generate a CVT reduced-blanking

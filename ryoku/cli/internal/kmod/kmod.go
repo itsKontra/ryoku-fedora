@@ -5,6 +5,8 @@
 package kmod
 
 import (
+	"io"
+	"os"
 	"path/filepath"
 
 	"ryoku-cli/internal/host"
@@ -24,11 +26,13 @@ const (
 const efiGlobalGUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
 
 // Config points a Machine at a root filesystem. Commands such as openssl and
-// mokutil run through Runner; ownership goes through Owners.
+// mokutil run through Runner; ownership goes through Owners. Log receives the
+// progress of long commands (dnf, akmods), never the key=value answer.
 type Config struct {
 	Root   string
 	Runner host.Runner
 	Owners Owners
+	Log    io.Writer
 }
 
 // Machine is one root filesystem whose module signing key and enrollment are
@@ -46,6 +50,9 @@ func New(cfg Config) *Machine {
 	}
 	if cfg.Owners == nil {
 		cfg.Owners = osOwners{}
+	}
+	if cfg.Log == nil {
+		cfg.Log = os.Stderr
 	}
 	return &Machine{cfg: cfg}
 }

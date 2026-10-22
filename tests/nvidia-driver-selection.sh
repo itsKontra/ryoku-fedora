@@ -159,3 +159,63 @@ legacy_case "legacy utils already present" "$pascal" nvidia-580xx-utils \
   "legacy 580xx branch" "pacman -Rdd"
 
 echo "nvidia driver selection: legacy userspace swap OK"
+
+# --query answers "does this GPU get the open modules?" with the install path's
+# own GSP check and changes nothing: it returns before the package manager,
+# ryoku-host or any write. Exit 0 supported, 3 an older NVIDIA GPU, 4 no NVIDIA
+# GPU, 5 no lspci to tell the generation by (sysfs still shows the vendor).
+query_case() {
+  local label=$1 lspci_line=$2 vendor=$3 want_code=$4 want_word=$5
+  local work bin tool out code=0
+  work=$(mktemp -d)
+  bin="$work/bin"
+  mkdir -p "$bin" "$work/pci/0000:01:00.0"
+  printf '%s\n' "$vendor" >"$work/pci/0000:01:00.0/vendor"
+  printf '0x030000\n' >"$work/pci/0000:01:00.0/class"
+  if [[ -n $lspci_line ]]; then
+    printf '#!%s\nprintf "%%s\\n" %q\n' "$(command -v bash)" "$lspci_line" >"$bin/lspci"
+  fi
+  for tool in pacman pacman-conf ryoku-host sudo modinfo systemctl mkdir tee rm; do
+    printf '#!%s\nprintf "%s %%s\\n" "$*" >>%q\n' "$(command -v bash)" "$tool" "$work/calls" >"$bin/$tool"
+  done
+  chmod +x "$bin"/*
+  for tool in bash dirname grep; do ln -s "$(command -v "$tool")" "$bin/$tool"; done
+  out=$(PATH="$bin" RYOKU_PCI_DEVICES_DIR="$work/pci" "$bin/bash" "$driver" --query 2>&1) || code=$?
+  [[ $code == "$want_code" && $out == "$want_word" ]] || {
+    printf '%s: --query gave exit %s "%s", want exit %s "%s"\n' "$label" "$code" "$out" "$want_code" "$want_word" >&2
+    exit 1
+  }
+  [[ ! -s $work/calls ]] || {
+    printf '%s: --query ran:\n%s\n' "$label" "$(cat "$work/calls")" >&2
+    exit 1
+  }
+  if [[ $want_code == 0 || $want_code == 3 ]]; then
+    rm -f "$bin"/*
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" %q\n' "$lspci_line" >"$bin/lspci"
+    printf '#!/usr/bin/env bash\nexit 1\n' >"$bin/pacman"
+    printf '#!/usr/bin/env bash\nexit 0\n' >"$bin/pacman-conf"
+    write_ryoku_host_fake "$bin"
+    chmod +x "$bin"/*
+    out=$(PATH="$bin:$PATH" RYOKU_DRYRUN=1 bash "$driver" 2>&1) || true
+    local chose_open=no
+    [[ $out != *'Turing+ GPU'* ]] || chose_open=yes
+    if [[ ($want_code == 0 && $chose_open == no) || ($want_code != 0 && $chose_open == yes) ]]; then
+      printf '%s: --query says %s but the install path chose:\n%s\n' "$label" "$want_word" "$out" >&2
+      exit 1
+    fi
+  fi
+  rm -rf "$work"
+}
+
+turing='01:00.0 VGA compatible controller: NVIDIA Corporation TU104 [GeForce RTX 2070 SUPER] (rev a1)'
+ampere='01:00.0 3D controller: NVIDIA Corporation GA107M [GeForce RTX 3050 Mobile] (rev a1)'
+intel='00:02.0 VGA compatible controller: Intel Corporation Alder Lake-P GT2 [Iris Xe Graphics] (rev 0c)'
+query_case "turing" "$turing" 0x10de 0 supported
+query_case "ampere laptop" "$ampere" 0x10de 0 supported
+query_case "pascal" "$pascal" 0x10de 3 unsupported
+query_case "kepler" "$kepler" 0x10de 3 unsupported
+query_case "no nvidia" "$intel" 0x8086 4 absent
+query_case "nvidia without lspci" "" 0x10de 5 unknown
+query_case "no nvidia without lspci" "" 0x8086 4 absent
+
+echo "nvidia driver selection: --query OK"

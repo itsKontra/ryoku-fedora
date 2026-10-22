@@ -76,8 +76,10 @@ the right driver is picked for the detected hardware at install time:
   cards. On the stock kernel Ryoku installs the prebuilt module, so there is no
   DKMS build to fail on first boot.
 
-Fedora is the exception: the installer leaves NVIDIA on nouveau and does not
-add a proprietary driver repository.
+On Fedora, Turing and newer cards get RPM Fusion's `akmod-nvidia` (the open
+modules), built and signed on the machine; turn the installer's "NVIDIA driver"
+item off to stay on nouveau. RPM Fusion is enabled only on those machines, only
+for the driver. Older NVIDIA cards stay on nouveau on Fedora.
 
 On a hybrid laptop with two GPUs, Ryoku ranks them and pins the strongest as the
 primary renderer on a desktop, while a laptop keeps the integrated GPU primary
