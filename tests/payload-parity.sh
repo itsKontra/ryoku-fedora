@@ -286,7 +286,8 @@ adapter_entry() {
       return 1
       ;;
     *:usr/share/libalpm/*|*:usr/share/ryoku/packages/void.tsv|*:usr/share/ryoku/packages/fedora.tsv|\
-    fedora:etc/dnf/libdnf5-plugins/*|fedora:usr/libexec/ryoku/ryoku-dnf-snapshot)
+    fedora:etc/dnf/libdnf5-plugins/*|fedora:usr/libexec/ryoku/ryoku-dnf-snapshot|\
+    fedora:usr/libexec/ryoku/nvidia.sh)
       return 1
       ;;
     *:etc/boot/*|*:etc/kernel.d/*|*:usr/lib/initcpio/*|*:usr/share/ryoku/boot/*|\
@@ -377,6 +378,13 @@ for pkg in "${packages[@]}"; do
         || fail "ryoku-desktop $edition package ships the pacman-only ryoku-nvidia-guard"
       grep -qx 'try_sign_modules="true"' "$work/staged/$pkg-$edition/etc/dkms/framework.conf.d/ryoku-sign-modules.conf" \
         || fail "ryoku-desktop $edition package does not make DKMS sign modules inside a chroot"
+    done
+  fi
+  if [[ $pkg == ryoku ]]; then
+    for edition in fedora fedora-spec; do
+      cmp -s "$root/system/hardware/drivers/nvidia.sh" "$work/staged/$pkg-$edition/usr/libexec/ryoku/nvidia.sh" \
+        && [[ -x $work/staged/$pkg-$edition/usr/libexec/ryoku/nvidia.sh ]] \
+        || fail "ryoku $edition package does not ship the driver script ryoku-host kmod asks about the GPU"
     done
   fi
 
