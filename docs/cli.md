@@ -400,8 +400,9 @@ Current reconcilers live in `ryoku/cli/internal/doctor/`. Common checks cover
 desktop sessions, channel health, the keyring unlock policy, compositor config,
 backlights, pending package config, and orphaned packages. Host-specific checks
 stay on their host: pacman lock and progress settings on Arch/CachyOS, Turnstile
-and runit state on Void, and RPM repository metadata plus `.rpmnew` and
-`.rpmsave` files on Fedora. Fedora omits the snapper and Limine checks because
+and runit state on Void, and RPM repository metadata, `.rpmnew` and
+`.rpmsave` files, and the module signing key's permissions and enrollment on
+Fedora. Fedora omits the snapper and Limine checks because
 that edition does not provide them.
 
 Reconcilers retire once every supported install has run them, so the set stays
