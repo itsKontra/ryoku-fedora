@@ -23,7 +23,8 @@
   recorded nouveau choice it notes `sudo ryoku-host kmod install-driver` and
   never runs it; on a pre-Turing card it reports a hand-installed
   `akmod-nvidia` without removing it. The old manual RPM Fusion and dracut
-  advice and the Fedora 580xx mapping are gone. `kmod` gains `GPU()`, the
+  advice, the initramfs rebuild in the dGPU runtime D3 fix included,
+  and the Fedora 580xx mapping are gone. `kmod` gains `GPU()`, the
   generation check's answer, and `Choice()` (`reconcile_fedora_nvidia.go`).
 - **`ryoku update --system` waits for the NVIDIA build on Fedora.** When the
   system lane installs a new kernel on a machine with `akmod-nvidia`, it runs
