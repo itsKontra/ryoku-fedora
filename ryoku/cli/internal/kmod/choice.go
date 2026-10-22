@@ -20,7 +20,9 @@ const (
 // ChoicePath sits beside the channel intent in Ryoku's state directory.
 const ChoicePath = "/var/lib/ryoku/nvidia-choice"
 
-func (m *Machine) choice() Choice {
+// Choice is the recorded NVIDIA choice; it reads a world-readable file, so it
+// needs no root.
+func (m *Machine) Choice() Choice {
 	data, err := os.ReadFile(m.path(ChoicePath))
 	if err != nil {
 		return ChoiceNone
