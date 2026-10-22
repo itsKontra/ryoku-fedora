@@ -2,7 +2,8 @@
 #
 # Static checks for the Ryoku Fedora ISO, runnable anywhere without root or
 # network: script syntax, the rendered kickstart for every Fedora release, and
-# the choices and package plans post/provision picks on the installed system.
+# the choices, package plans and module signing steps post/provision runs on
+# the installed system.
 # --online also asks Fedora's repositories, through dnf5, whether every group
 # and environment the kickstart names exists in each release.
 #
@@ -116,6 +117,92 @@ while IFS= read -r compositor; do
     fi
   done
 done < <(choice_ids compositor)
+
+# Module signing, against stand-ins for ryoku-host, dkms and modinfo that log
+# their calls: the key comes first, DKMS builds for the kernel the machine boots
+# (grubby's default, not the installer's uname -r), failures only warn, and a
+# queued enrollment leaves the shell installer's notice for Anaconda.
+signing=$work/signing
+mkdir -p "$signing/modules/7.0.9-100.fc44.x86_64" "$signing/modules/7.0.10-100.fc44.x86_64" "$signing/modules/6.99.0-installer"
+touch "$signing/modules/7.0.9-100.fc44.x86_64/vmlinuz" "$signing/modules/7.0.10-100.fc44.x86_64/vmlinuz"
+boot=7.0.9-100.fc44.x86_64
+
+# installer_notice <password>: enrollmentSummary()'s lines in the shell installer.
+installer_notice() {
+  sed -n '/^func enrollmentSummary/,/^}/p' "$repo/ryoku-shell-installer/fedora_modulesigning.go" |
+    sed -n 's/.*i18n\.Tf\{0,1\}("\([^"]*\)".*/\1/p' | sed "s/%s/$1/"
+}
+
+# signing_run <secure boot> <failing calls>: runs sign_modules in a subshell
+# and leaves its calls, output and handoff under $signing/run.
+signing_run() {
+  rm -rf "$signing/run"
+  mkdir -p "$signing/run"
+  (
+    # shellcheck disable=SC2034 # provision reads them
+    kernel_modules=$signing/modules handoff=$signing/run/handoff efi_dir=$signing/no-efi
+    fake_secure_boot=$1 fake_failing=$2
+    called() { printf '%s\n' "$*" >>"$signing/run/calls"; [[ " $fake_failing " != *" $1:$2 "* ]]; }
+    uname() { printf '6.99.0-installer\n'; }
+    grubby() { [[ $1 == --default-kernel ]] && printf '/boot/vmlinuz-%s\n' "$boot"; }
+    mount() { called mount "$@"; }
+    ryoku-host() {
+      called ryoku-host "$2" || return 1
+      local enrollment=not_queued
+      [[ $2 == queue-enrollment && $fake_secure_boot == enforcing ]] && enrollment=queued
+      printf 'action=x\nkey=present\nsecure_boot=%s\nenrollment=%s\npassword=sesame\n' "$fake_secure_boot" "$enrollment"
+    }
+    dkms() {
+      called dkms "$@" || return 1
+      [[ $1 != status ]] || printf 'hid-xpadneo/v0.10.4, %s, x86_64: installed\n' "$boot"
+    }
+    modinfo() { called modinfo "$@" && printf 'DKMS module signing key\n'; }
+    sign_modules
+  ) >"$signing/run/out" 2>&1
+  printf '%s\n' "$?" >"$signing/run/status"
+}
+
+signing_run enforcing ""
+expect "signing order" "ryoku-host prepare-key; dkms status -k $boot; dkms unbuild -m hid-xpadneo -v v0.10.4 -k $boot; dkms autoinstall -k $boot; modinfo -k $boot -F signer hid_xpadneo; ryoku-host queue-enrollment" \
+  "$(sed -z 's/\n$//; s/\n/; /g' "$signing/run/calls" 2>/dev/null)"
+expected_notice=$(installer_notice sesame)
+[[ $(wc -l <<<"$expected_notice") == 2 ]] || fail "the shell installer's enrollmentSummary() has no two notice lines"
+if [[ $(cat "$signing/run/handoff/enrollment-notice" 2>/dev/null) == "$expected_notice" ]]; then
+  pass "the enrollment notice for Anaconda is the shell installer's"
+else
+  fail "the enrollment notice for Anaconda is the shell installer's"
+fi
+if grep -qxF "$(head -n1 <<<"$expected_notice")" "$signing/run/out"; then
+  pass "the install log carries the enrollment notice"
+else
+  fail "the install log carries the enrollment notice"
+fi
+expect "ryoku-host's answer for Anaconda" "queued" "$(sed -n 's/^enrollment=//p' "$signing/run/handoff/enrollment" 2>/dev/null)"
+
+signing_run off ""
+if [[ -e $signing/run/handoff/enrollment-notice ]]; then
+  fail "Secure Boot off leaves no enrollment notice"
+else
+  pass "Secure Boot off leaves no enrollment notice"
+fi
+
+signing_run enforcing "ryoku-host:prepare-key dkms:autoinstall"
+expect "a failed key or build does not stop the install" 0 "$(cat "$signing/run/status")"
+if grep -q '^ryoku-host queue-enrollment$' "$signing/run/calls"; then
+  pass "the enrollment is queued after a failed build"
+else
+  fail "the enrollment is queued after a failed build"
+fi
+if grep -q 'warning:' "$signing/run/out"; then pass "a failed build warns"; else fail "a failed build warns"; fi
+
+signing_run off "ryoku-host:queue-enrollment"
+expect "a failed queue does not stop the install" 0 "$(cat "$signing/run/status")"
+
+grubby() { return 1; }
+# shellcheck disable=SC2034 # boot_kernel reads it
+kernel_modules=$signing/modules
+expect "without grubby, the newest installed kernel" 7.0.10-100.fc44.x86_64 "$(boot_kernel)"
+unset -f grubby
 
 if command -v shellcheck >/dev/null; then
   if shellcheck -x -S warning "$here"/build.sh "$here"/fetch-base.sh "$here"/post/stage "$here"/post/provision "$here"/tests/check.sh; then

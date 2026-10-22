@@ -5,13 +5,15 @@
 # keyboard and timezone the user picked. It repeats the shell installer's
 # Fedora steps (ryoku-shell-installer/engine.go) without a session or sudo:
 # the signed Ryoku repository and its COPRs, the resolved desktop package
-# plan, the SDDM greeter and services, the snapper root config and the
+# plan, the module signing key and xpadneo built with it, the key's
+# enrollment, the SDDM greeter and services, the snapper root config and the
 # per-account seeds. Each account's config tree is laid by `ryoku materialize`
 # at its first login (the SDDM session wrapper and ryoku-bootstrap.service).
 #
 # Inputs, one directory up: ryoku-iso.conf (written by build.sh), facts
 # (written by stage from the installer environment) and payload/, the repo
-# files this needs, at their repo paths.
+# files this needs, at their repo paths. Output: handoff/, which stage passes
+# on to Anaconda.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -21,6 +23,10 @@ translations=$payload/fedora/packages/translations.tsv
 coprs=$payload/fedora/packages/coprs.tsv
 resolve=$payload/system/packages/resolve
 key_path=/etc/pki/rpm-gpg/RPM-GPG-KEY-ryoku
+kernel_modules=/usr/lib/modules
+efi_dir=/sys/firmware/efi
+# what stage hands on to Anaconda after this run; stage deletes $here itself
+handoff=$here/handoff
 dnf=dnf
 command -v dnf5 >/dev/null 2>&1 && dnf=dnf5
 
@@ -178,6 +184,91 @@ install_packages() {
   "$dnf" upgrade -y --refresh
   log "installing ${#plan[@]} packages"
   "$dnf" install -y "${plan[@]}"
+}
+
+# boot_kernel prints the kernel the installed system boots by default, not
+# the installer's own (uname -r): grubby's default entry, else the newest one.
+boot_kernel() {
+  local kernel
+  kernel=$(grubby --default-kernel 2>/dev/null) || kernel=
+  kernel=${kernel#/boot/vmlinuz-}
+  if [[ -z $kernel || ! -e $kernel_modules/$kernel/vmlinuz ]]; then
+    kernel=$(find "$kernel_modules" -mindepth 2 -maxdepth 2 -name vmlinuz -printf '%h\n' 2>/dev/null |
+      sed 's|.*/||' | sort -V | tail -n1) || kernel=
+  fi
+  printf '%s\n' "$kernel"
+}
+
+# build_modules <kernel> builds every DKMS module (xpadneo) for that kernel,
+# signed through the shipped try_sign_modules drop-in. A module the package
+# scriptlet already built may predate the key, and DKMS never rebuilds an
+# installed module, so those are unbuilt first.
+build_modules() {
+  local kernel=$1 module signer
+  log "building the DKMS modules for kernel $kernel"
+  while IFS= read -r module; do
+    dkms unbuild -m "${module%/*}" -v "${module#*/}" -k "$kernel" || return 1
+  done < <(dkms status -k "$kernel" | awk -F', ' 'NF >= 3 { print $1 }')
+  dkms autoinstall -k "$kernel" || return 1
+  signer=$(modinfo -k "$kernel" -F signer hid_xpadneo 2>/dev/null) || signer=
+  [[ -n $signer ]] || return 1
+  log "xpadneo for $kernel is signed by $signer"
+}
+
+# with_efivars runs a command with efivarfs mounted in the target. Anaconda
+# mounts it on UEFI machines; without it ryoku-host would read Secure Boot as
+# unsupported and queue nothing.
+with_efivars() {
+  local vars=$efi_dir/efivars mounted=0 status=0
+  if [[ -d $efi_dir ]] && ! mountpoint -q "$vars"; then
+    if mount -t efivarfs efivarfs "$vars"; then mounted=1; else warn "could not mount efivarfs"; fi
+  fi
+  "$@" || status=$?
+  ((mounted == 0)) || umount "$vars"
+  return "$status"
+}
+
+# enrollment_notice <password>: what the user meets at the next boot, worded
+# as enrollmentSummary() in the shell installer words it.
+enrollment_notice() {
+  printf '%s\n' \
+    "Secure Boot: at the next reboot a blue MokManager screen asks you to approve this machine's module signing key. It waits until you do." \
+    "Choose 'Enroll MOK', then 'Continue', then 'Yes', and type the password $1. The machine then restarts."
+}
+
+# queue_enrollment asks ryoku-host to queue the key's enrollment, which it does
+# only when Secure Boot is enforcing. Its key=value answer goes to the handoff
+# as enrollment, and the notice as enrollment-notice when one is queued.
+queue_enrollment() {
+  local answer password
+  answer=$(with_efivars ryoku-host kmod queue-enrollment) || return 1
+  install -d "$handoff"
+  printf '%s\n' "$answer" >"$handoff/enrollment"
+  if [[ $(sed -n 's/^enrollment=//p' <<<"$answer") != queued ]]; then
+    log "no enrollment queued (Secure Boot: $(sed -n 's/^secure_boot=//p' <<<"$answer"))"
+    return 0
+  fi
+  password=$(sed -n 's/^password=//p' <<<"$answer")
+  enrollment_notice "$password" | tee "$handoff/enrollment-notice"
+}
+
+# sign_modules mirrors the shell installer's prepareFedoraModuleSigning: the
+# machine's module signing key, the DKMS modules built for the kernel it
+# boots, then the key's enrollment. Every step only warns; ryoku doctor
+# finishes the job on the first boot.
+sign_modules() {
+  local kernel
+  log "preparing the module signing key"
+  ryoku-host kmod prepare-key ||
+    warn "could not prepare the module signing key; DKMS creates one, ryoku doctor fixes it"
+  kernel=$(boot_kernel)
+  if [[ -z $kernel ]]; then
+    warn "found no installed kernel to build xpadneo for; it builds at the first boot"
+  elif ! build_modules "$kernel"; then
+    warn "xpadneo is not built and signed for kernel $kernel; it builds at the first boot"
+  fi
+  queue_enrollment ||
+    warn "could not queue the module signing key's enrollment; ryoku doctor queues it"
 }
 
 # with_systemd_dir runs a command with /run/systemd/system present, the marker
@@ -369,6 +460,7 @@ main() {
 
   configure_repositories
   install_packages
+  sign_modules
   configure_session
   configure_snapshots
   local user
