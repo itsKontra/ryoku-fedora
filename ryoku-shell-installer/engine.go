@@ -231,7 +231,7 @@ var sparsePaths = []string{
 }
 
 type plan struct {
-	nvidia      bool   // proprietary NVIDIA driver setup
+	nvidia      bool   // NVIDIA driver setup (Fedora: RPM Fusion's, signed on the machine)
 	switchDM    bool   // disable current DM, enable SDDM
 	switchNet   bool   // disable other network stacks, enable NetworkManager
 	rivals      bool   // remove rival shell packages
@@ -275,7 +275,7 @@ func defaultPlanWithEdition(f *facts, edition editionCompositorPlan, compositorC
 	nvidia := f.hasNvidia && !(f.secureBoot && !f.sbctlSigned)
 	aur := true
 	if f.distro != nil && f.distro.id == "fedora" {
-		nvidia = false
+		nvidia = f.hasNvidia && f.nvidiaGeneration == gpuSupported
 		aur = false
 	}
 	p := &plan{
@@ -493,6 +493,9 @@ type engine struct {
 	state           *runState
 	freshAccount    bool
 	installedPkg    func(string) bool
+	// enrollmentPassword is set, from ryoku-host's answer, once an enrollment
+	// waits for MokManager at the next boot; the final summary explains it.
+	enrollmentPassword string
 
 	steps []estep
 }
@@ -739,6 +742,31 @@ func sudoArgv(args []string, guarded bool) []string {
 func (e *engine) sudo(args ...string) error {
 	guarded := e.f != nil && len(e.f.omarchyGuards) > 0
 	return e.cmd("", nil, "sudo", append([]string{"-n"}, sudoArgv(args, guarded)...)...)
+}
+
+// sudoOutput runs a command as root and returns its stdout for the installer
+// to read, logging stdout and stderr like cmd does. A dry run reads nothing.
+func (e *engine) sudoOutput(args ...string) (string, error) {
+	argv := append([]string{"-n"}, args...)
+	line := shellJoin("sudo", argv)
+	if e.dry {
+		e.say("DRYRUN: " + line)
+		return "", nil
+	}
+	e.say("$ " + line)
+	var stderr strings.Builder
+	c := exec.Command("sudo", argv...)
+	c.Stderr = &stderr
+	out, err := c.Output()
+	for _, ln := range strings.Split(string(out)+stderr.String(), "\n") {
+		if ln = cleanTermLine(ln); ln != "" {
+			e.say("  " + ln)
+		}
+	}
+	if err != nil {
+		return string(out), fmt.Errorf("%s: %w", args[0], err)
+	}
+	return string(out), nil
 }
 
 // sudoSh runs a fixed shell snippet as root; only static strings go in here.
@@ -2149,9 +2177,7 @@ func filterByUnmet(pkgs []string, unmetOut string) []string {
 
 func stepDrivers(e *engine) error {
 	if e.d().id == "fedora" {
-		if e.f.hasNvidia {
-			e.say(i18n.T("Fedora keeps NVIDIA on nouveau in this release; no proprietary driver changes are made."))
-		}
+		stepFedoraDrivers(e)
 		return nil
 	}
 	drv := filepath.Join(e.payload, "system/hardware/drivers")

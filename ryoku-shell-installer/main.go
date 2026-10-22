@@ -194,7 +194,9 @@ func buildItems(f *facts, p *plan, editionPlans ...editionCompositorPlan) []plan
 			on:     &p.resume,
 		})
 	}
-	if f.hasNvidia && (f.distro == nil || f.distro.id != "fedora") {
+	if f.fedoraNvidia() {
+		it = append(it, fedoraNvidiaItem(f, p))
+	} else if f.hasNvidia {
 		d := i18n.T("installs the proprietary driver, blacklists nouveau, rebuilds the initramfs")
 		if f.nouveauLive {
 			d = i18n.T("the proprietary driver replaces nouveau after a reboot")
@@ -271,7 +273,7 @@ var planGroups = []struct {
 	title  string
 	labels []string
 }{
-	{"session & hardware", []string{"NVIDIA proprietary drivers", "Switch login to SDDM", "Enable SDDM login", "Ryoku greeter theme", "AZERTY keyboard (French)", "AZERTY keyboard (Belgian)", "Switch to NetworkManager"}},
+	{"session & hardware", []string{"NVIDIA proprietary drivers", "NVIDIA driver", "Switch login to SDDM", "Enable SDDM login", "Ryoku greeter theme", "AZERTY keyboard (French)", "AZERTY keyboard (Belgian)", "Switch to NetworkManager"}},
 	{"migration & cleanup", []string{"Remove rival shells", "Disable conflicting daemons", "Retire the Omarchy repo", "Carry over monitor layout"}},
 	{"extras", []string{"AUR extras", "Developer toolchain"}},
 }
@@ -1008,6 +1010,14 @@ func (m model) viewDone() string {
 	var b strings.Builder
 	b.WriteString(bold(cText, gCheck+" "+i18n.T("The Ryoku desktop is installed")) + "\n\n")
 	b.WriteString(fg(cText, i18n.T("Reboot to land in the Ryoku greeter and your new session.")) + "\n\n")
+	if steps := enrollmentSummary(m.eng); len(steps) > 0 {
+		for _, step := range steps {
+			for _, line := range wrapWords(step, iw) {
+				b.WriteString(bold(cText, line) + "\n")
+			}
+		}
+		b.WriteString("\n")
+	}
 	b.WriteString(bulletRow(i18n.T("updates forever:"), "ryoku update", labelW) + "\n")
 	b.WriteString(bulletRow(i18n.T("health checks:"), "ryoku doctor", labelW) + "\n")
 	if m.eng != nil && m.eng.backupDir != "" {
@@ -1125,6 +1135,9 @@ func runHeadless(dry bool, ref, payload, compositor string, overrides planOverri
 				return 1
 			}
 			fmt.Println(bold(cGreen, i18n.T("the Ryoku desktop is installed; reboot to use it")))
+			for _, line := range enrollmentSummary(e) {
+				fmt.Println(line)
+			}
 			if e.backupDir != "" {
 				fmt.Println(i18n.Tf("old configs: %s (restore.sh inside)", e.backupDir))
 			}
@@ -1284,6 +1297,9 @@ func main() {
 	editionCompositors, err := loadEditionCompositors(client, d, *ref, *payload)
 	if err != nil {
 		die(err.Error())
+	}
+	if d.id == "fedora" {
+		nvidiaQueryScript = loadNvidiaQueryScript(client, *ref, *payload)
 	}
 	if err := validateEditionFlags(overrides, editionCompositors); err != nil {
 		die(err.Error())

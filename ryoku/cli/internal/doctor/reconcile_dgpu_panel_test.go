@@ -154,6 +154,22 @@ func TestDgpuRtd3OffFixMatchesHost(t *testing.T) {
 		}
 	})
 
+	t.Run("Fedora only reboots: the NVIDIA modules are not in its initramfs", func(t *testing.T) {
+		t.Setenv("RYOKU_HOST_PKGMGR", "dnf")
+
+		got := dgpuRtd3OffFix()
+		for _, want := range []string{"NVreg_DynamicPowerManagement=0x02", "reboot"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("Fedora repair advice must mention %q: %q", want, got)
+			}
+		}
+		for _, banned := range []string{"dracut", "mkinitcpio", "initramfs"} {
+			if strings.Contains(got, banned) {
+				t.Errorf("Fedora repair advice must not mention %q: %q", banned, got)
+			}
+		}
+	})
+
 	t.Run("Void uses XBPS and dracut advice", func(t *testing.T) {
 		t.Setenv("RYOKU_HOST_PKGMGR", "xbps")
 

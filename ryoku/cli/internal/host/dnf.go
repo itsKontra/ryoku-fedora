@@ -17,17 +17,18 @@ const (
 
 // DNFCommand returns the DNF implementation available on this host.
 func DNFCommand() string {
-	return selectDNFCommand(func(name string) bool {
+	return SelectDNFCommand(func(name string) bool {
 		_, err := exec.LookPath(name)
 		return err == nil
 	})
 }
 
 func (a *App) dnfCommand() string {
-	return selectDNFCommand(a.cfg.Runner.LookPath)
+	return SelectDNFCommand(a.cfg.Runner.LookPath)
 }
 
-func selectDNFCommand(lookPath func(string) bool) string {
+// SelectDNFCommand picks dnf5 when lookPath finds it, else dnf.
+func SelectDNFCommand(lookPath func(string) bool) string {
 	if lookPath("dnf5") {
 		return "dnf5"
 	}

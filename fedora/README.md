@@ -84,6 +84,14 @@ The Ryoku Plymouth splash shows from GRUB to the login screen: `ryoku-desktop`
 pulls in the script and label plugins it draws with, and `ryoku-plymouth-apply`
 (`system/boot/ryoku-plymouth-apply`) makes it the default and rebuilds the dracut
 images on install. Later updates rebuild only while it is still the default.
-NVIDIA stays on nouveau. Wayfire is unavailable because Fedora ships
+On a Turing or newer NVIDIA GPU the shell installer installs the NVIDIA
+driver by default: RPM Fusion's `akmod-nvidia`, pulled in by Ryoku's
+`ryoku-nvidia-support` package and built and signed on the machine with its one
+module signing key (`ryoku-host kmod install-driver`). RPM Fusion free and
+nonfree are enabled for that alone, after their keys are checked against pinned
+fingerprints (ADR 0002). Turn the plan's "NVIDIA driver" item off to stay on
+nouveau; older cards always stay on nouveau. The Fedora ISO installs the driver
+the same way; boot it with `ryoku.nvidia=0` to stay on nouveau. The choice is
+recorded in `/var/lib/ryoku/nvidia-choice` for doctor. Wayfire is unavailable because Fedora ships
 0.10.1 and Ryoku requires 0.11. AUR-only extras such as Zen Browser, LocalSend,
 Voxtype, Looking Glass, and SteamCMD are not shipped in the Fedora lane.

@@ -15,6 +15,7 @@ The backend that implements the automatic half lives in
 - [Graphics](#graphics)
 - [Intel VMD / RST hides the NVMe](#intel-vmd--rst-hides-the-nvme)
 - [Secure Boot vs unsigned Limine](#secure-boot-vs-unsigned-limine)
+- [Fedora with Secure Boot: the MokManager screen](#fedora-with-secure-boot-the-mokmanager-screen)
 - [NVIDIA black or garbled screen](#nvidia-black-or-garbled-screen)
 - [Dual-boot (Windows or another Linux)](#dual-boot-windows-or-another-linux)
 - [Broadcom Wi-Fi](#broadcom-wi-fi)
@@ -75,8 +76,21 @@ the right driver is picked for the detected hardware at install time:
   cards. On the stock kernel Ryoku installs the prebuilt module, so there is no
   DKMS build to fail on first boot.
 
-Fedora is the exception: the installer leaves NVIDIA on nouveau and does not
-add a proprietary driver repository.
+On Fedora, Turing and newer cards get RPM Fusion's `akmod-nvidia` (the open
+modules), built and signed on the machine; turn the installer's "NVIDIA driver"
+item off to stay on nouveau. RPM Fusion is enabled only on those machines, only
+for the driver. Older NVIDIA cards stay on nouveau on Fedora. A Fedora machine
+already on nouveau with a Turing or newer card can move to the driver with
+`sudo ryoku-host kmod install-driver`, the command `ryoku doctor` names; doctor
+never runs it for you, and stops naming it once you chose nouveau at install.
+Doctor keeps the driver's setup in shape: Ryoku's NVIDIA package, RPM Fusion's
+nouveau blacklist on the kernel command line, and `nvidia-fallback.service`.
+
+If a Fedora kernel boots without an NVIDIA module (a driver fallback), the
+desktop comes up on nouveau. `ryoku doctor`, which `ryoku update` runs, builds
+the module for the running kernel and asks for a reboot. If the build fails, it
+names the newest installed kernel that still has the driver, to pick from the
+GRUB menu. Ryoku never holds a kernel back and never changes the boot default.
 
 On a hybrid laptop with two GPUs, Ryoku ranks them and pins the strongest as the
 primary renderer on a desktop, while a laptop keeps the integrated GPU primary
@@ -126,6 +140,52 @@ their own keys.
 **What the user must do.** Enter firmware setup, disable Secure Boot, reboot the
 installer. Set the override only if you have enrolled your own keys and know
 Limine will pass.
+
+## Fedora with Secure Boot: the MokManager screen
+
+**Symptom.** After converting a Fedora machine, the first reboot stops at a blue
+MokManager screen before Fedora starts. Or, if that screen was skipped, an
+out-of-tree module such as xpadneo is built but the kernel refuses to load it.
+
+**Cause.** Fedora keeps Secure Boot on, and Secure Boot loads only modules
+signed by a key the firmware trusts. Modules Ryoku builds on the machine
+(xpadneo through DKMS, and the NVIDIA driver on NVIDIA machines) are signed with
+the machine's own module signing key, DKMS's `/var/lib/dkms/mok.key`. Ryoku
+holds no key of its own. The firmware trusts that key only after one
+enrollment, approved at the console.
+
+**What the installer does.** On every Fedora machine the shell installer makes
+sure the module signing key exists (it creates it with DKMS's own parameters if
+DKMS has not yet) and sets its permissions. When Secure Boot is enforcing and the
+key is not enrolled yet, it queues the enrollment with the fixed enrollment
+password `enroll` and tells MokManager to wait for you instead of timing out.
+The installer's final summary repeats the steps below. With Secure Boot off,
+nothing is queued; the key still signs, so turning Secure Boot on later needs
+only the enrollment. Ryoku's Fedora desktop also makes DKMS sign modules it
+builds inside an installer chroot, where it would otherwise leave them unsigned.
+
+**What the user must do.** At the first reboot, in MokManager:
+
+1. Choose **Enroll MOK**. **View key** shows the certificate first; it is this
+   machine's own "DKMS module signing key".
+2. Choose **Continue**, then **Yes**.
+3. Type the password `enroll`. It is the same on QWERTY, QWERTZ, AZERTY and
+   Turkish Q keyboards, and it only proves someone is at the console.
+4. Choose **Reboot**.
+
+One enrollment covers xpadneo and the NVIDIA driver, now and after every
+kernel update. If the screen was skipped, or Secure Boot was turned on after the
+install, run `ryoku doctor` (`ryoku update` runs it too): it queues the
+enrollment again and tells you to reboot and approve it. It also puts the key's
+permissions back when they drift, for example after DKMS regenerates it, and
+points akmods' key paths back at it when akmods made a key of its own; after
+either fix it rebuilds the NVIDIA module with the key.
+
+The private key stays on disk, readable only by root and, on NVIDIA machines,
+by the `akmods` group that builds the driver: the same exposure as RPM Fusion's
+own akmods key. Disk encryption is not required for it. Someone holding an
+unencrypted disk can already rewrite its root filesystem and initramfs, so the
+key gives them nothing more.
 
 ## NVIDIA black or garbled screen
 
@@ -292,11 +352,9 @@ this, `ryoku update` installs both; the ERTM change needs a reboot, or
 `modprobe -r btusb && modprobe btusb` to take effect without one. A pad paired
 while ERTM was on should be removed and re-paired.
 
-On Fedora with Secure Boot enabled, DKMS signs xpadneo with
-`/var/lib/dkms/mok.key`. Enroll its public certificate with
-`sudo mokutil --import /var/lib/dkms/mok.pub`, set the one-time password, reboot,
-and choose Enroll MOK on the firmware screen. Until that enrollment is complete,
-the module is built and signed but the kernel will refuse to load it.
+On Fedora with Secure Boot on, xpadneo loads only once the machine's module
+signing key is enrolled; see
+[Fedora with Secure Boot: the MokManager screen](#fedora-with-secure-boot-the-mokmanager-screen).
 
 ## Bluetooth headphones connect, then disconnect a few seconds later
 

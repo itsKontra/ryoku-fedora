@@ -39,7 +39,11 @@ type facts struct {
 	gpus        []string
 	hasNvidia   bool
 	nouveauLive bool
-	ucodePkg    string
+	// Fedora only: the driver script's --query answer and ryoku-host's
+	// enrollment password when ryoku-host is already installed.
+	nvidiaGeneration   gpuGeneration
+	enrollmentPassword string
+	ucodePkg           string
 
 	currentDM string   // enabled display-manager unit ("" = none)
 	otherNet  []string // enabled network stacks other than NetworkManager
@@ -295,6 +299,7 @@ func detect() *facts {
 	}
 
 	f.detectGPUs()
+	f.detectFedoraNvidia()
 	f.detectUcode()
 	f.detectSecureBoot()
 

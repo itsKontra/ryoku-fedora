@@ -9,6 +9,12 @@ func normalizeRPMEVR(value string) string {
 	return value
 }
 
+// CompareEVR orders two [epoch:]version[-release] strings the way RPM does; a
+// kernel's uname -r reads as one.
+func CompareEVR(left, right string) int {
+	return compareRPMEVR(left, right)
+}
+
 func compareRPMEVR(left, right string) int {
 	left = normalizeRPMEVR(left)
 	right = normalizeRPMEVR(right)
