@@ -30,6 +30,9 @@ func (m *Machine) GPU() GPU {
 	return gpu
 }
 
+// queryGPU reads nvidia.sh's --query exit codes, a contract the shell
+// installer (a separate Go module) reads too: 0 supported, 3 unsupported,
+// 4 absent, anything else unknown.
 func (m *Machine) queryGPU() (GPU, int) {
 	result := m.cfg.Runner.Run(host.Command{Name: "bash", Args: []string{GPUCheckScript, "--query"}})
 	switch result.Code {
