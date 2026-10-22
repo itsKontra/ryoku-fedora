@@ -502,6 +502,15 @@ func TestScreensFitMinimumTerminal(t *testing.T) {
 	check("ack", base.viewAck())
 	check("install", base.viewInstall())
 	check("done", base.viewDone())
+	if strings.Contains(base.viewDone(), "MokManager") {
+		t.Error("done view explains an enrollment that was never queued")
+	}
+	e.enrollmentPassword = "enroll"
+	check("done with an enrollment", base.viewDone())
+	if view := base.viewDone(); !strings.Contains(view, "Enroll MOK") || !strings.Contains(view, "enroll.") {
+		t.Errorf("done view lacks the enrollment steps:\n%s", view)
+	}
+	e.enrollmentPassword = ""
 	check("failed", base.viewFailed())
 	for i, item := range items {
 		if !selectablePlanItem(item) {

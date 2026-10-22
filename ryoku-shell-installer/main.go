@@ -1008,6 +1008,14 @@ func (m model) viewDone() string {
 	var b strings.Builder
 	b.WriteString(bold(cText, gCheck+" "+i18n.T("The Ryoku desktop is installed")) + "\n\n")
 	b.WriteString(fg(cText, i18n.T("Reboot to land in the Ryoku greeter and your new session.")) + "\n\n")
+	if steps := enrollmentSummary(m.eng); len(steps) > 0 {
+		for _, step := range steps {
+			for _, line := range wrapWords(step, iw) {
+				b.WriteString(bold(cText, line) + "\n")
+			}
+		}
+		b.WriteString("\n")
+	}
 	b.WriteString(bulletRow(i18n.T("updates forever:"), "ryoku update", labelW) + "\n")
 	b.WriteString(bulletRow(i18n.T("health checks:"), "ryoku doctor", labelW) + "\n")
 	if m.eng != nil && m.eng.backupDir != "" {
@@ -1125,6 +1133,9 @@ func runHeadless(dry bool, ref, payload, compositor string, overrides planOverri
 				return 1
 			}
 			fmt.Println(bold(cGreen, i18n.T("the Ryoku desktop is installed; reboot to use it")))
+			for _, line := range enrollmentSummary(e) {
+				fmt.Println(line)
+			}
 			if e.backupDir != "" {
 				fmt.Println(i18n.Tf("old configs: %s (restore.sh inside)", e.backupDir))
 			}

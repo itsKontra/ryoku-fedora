@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Fedora machines get their module signing key enrolled.** The drivers step
+  prepares the machine's one module signing key through `ryoku-host kmod` and,
+  with Secure Boot enforcing, queues its enrollment; the final summary says
+  what MokManager will ask at the next reboot and gives the password, so
+  xpadneo loads without a manual `mokutil` step.
 - **The script installer now uses the ISO install catalogue.** It offers the
   file manager, Rashin, Ryoku apps, required edition components, and the
   optional CachyOS layer on plain Arch. Unattended runs can make the same
