@@ -233,7 +233,19 @@ for spec in "$SPECS"/*.spec; do
 done
 ((spec_count > 0)) || fail "no RPM specs found under $SPECS"
 
+# Ryoku's NVIDIA package is installed only on NVIDIA machines, by the driver
+# install in ryoku-host, never through the package plan or another RPM.
+nvidia_package=ryoku-nvidia-support
+[[ -n ${spec_names[$nvidia_package]:-} ]] || fail "missing RPM spec: $nvidia_package"
+[[ -z ${mapped_rpms[$nvidia_package]:-}${spec_refs[$nvidia_package]:-} ]] \
+	|| fail "$nvidia_package must not be pulled in by the translation table or another RPM"
+for dep in akmod-nvidia libva-nvidia-driver; do
+	spec_field "${spec_paths[$nvidia_package]}" Requires | grep -qxF "$dep" \
+		|| fail "$nvidia_package does not require $dep"
+done
+
 for pkg in "${!spec_names[@]}"; do
+	[[ $pkg == "$nvidia_package" ]] && continue
 	[[ -n ${mapped_rpms[$pkg]:-}${spec_refs[$pkg]:-} ]] \
 		|| fail "RPM spec is not referenced by the translation table or another RPM: $pkg"
 done

@@ -1,0 +1,2 @@
+# RPM Fusion ships nvidia-fallback.service without a preset that enables it.
+enable nvidia-fallback.service

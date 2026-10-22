@@ -332,7 +332,11 @@ are supported; Atomic and other rpm-ostree systems are refused.
   GRUB theme and what the **Ryoku snapshots** submenu needs: the `grub.d`
   snippet and its helper, the dracut module for snapshot boots, the snapper
   plugin and the menu units. `snapshots/` has the libdnf5 hook that takes a
-  snapshot pair around every dnf transaction.
+  snapshot pair around every dnf transaction. `hardware/nvidia/` has what
+  `ryoku-nvidia-support` adds to RPM Fusion's NVIDIA driver: a dracut drop-in
+  that keeps nouveau out of the initramfs and the preset that enables
+  `nvidia-fallback.service`. That package is installed only on NVIDIA
+  machines, never as a dependency of `ryoku-desktop`.
 - `.github/workflows/publish-repo-fedora.yml` builds and install-tests every
   supported Fedora release, then publishes moving stable and testing heads,
   frozen releases and unstable builds, and their ledgers below

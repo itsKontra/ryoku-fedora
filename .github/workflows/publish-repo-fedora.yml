@@ -317,6 +317,18 @@ jobs:
           gpg --batch --armor --export "$RYOKU_RPM_FINGERPRINT" > "$stage/RPM-GPG-KEY-ryoku"
           tar -C "$stage" -cf fedora/packages/rpm/fedora-repo.tar .
 
+      - name: Check Ryoku's NVIDIA package
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          rpms=(fedora/packages/rpm/out/ryoku-nvidia-support-[0-9]*.noarch.rpm)
+          ((${#rpms[@]} == 1)) || {
+            echo "::error::Expected one ryoku-nvidia-support RPM, found ${#rpms[@]}"
+            exit 1
+          }
+          bash tests/fedora-nvidia-package.sh "${rpms[0]}"
+
       - name: Save compiler cache
         if: always()
         uses: actions/cache/save@v4
