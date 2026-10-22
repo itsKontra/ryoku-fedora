@@ -424,8 +424,12 @@ desktop sessions, channel health, the keyring unlock policy, compositor config,
 backlights, pending package config, and orphaned packages. Host-specific checks
 stay on their host: pacman lock and progress settings on Arch/CachyOS, Turnstile
 and runit state on Void, and RPM repository metadata, `.rpmnew` and
-`.rpmsave` files, and the module signing key's permissions and enrollment on
-Fedora. Fedora omits the snapper and Limine checks because
+`.rpmsave` files, the module signing key's permissions and enrollment, and the
+NVIDIA driver's setup on Fedora. On an NVIDIA machine doctor installs Ryoku's
+NVIDIA package again, restores RPM Fusion's nouveau blacklist and keeps
+`nvidia-fallback.service` enabled; it only names `sudo ryoku-host kmod
+install-driver` for a supported GPU on nouveau, and reports a hand-installed
+`akmod-nvidia` on a pre-Turing card without removing it. Fedora omits the snapper and Limine checks because
 that edition does not provide them.
 
 Reconcilers retire once every supported install has run them, so the set stays

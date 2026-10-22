@@ -79,7 +79,12 @@ the right driver is picked for the detected hardware at install time:
 On Fedora, Turing and newer cards get RPM Fusion's `akmod-nvidia` (the open
 modules), built and signed on the machine; turn the installer's "NVIDIA driver"
 item off to stay on nouveau. RPM Fusion is enabled only on those machines, only
-for the driver. Older NVIDIA cards stay on nouveau on Fedora.
+for the driver. Older NVIDIA cards stay on nouveau on Fedora. A Fedora machine
+already on nouveau with a Turing or newer card can move to the driver with
+`sudo ryoku-host kmod install-driver`, the command `ryoku doctor` names; doctor
+never runs it for you, and stops naming it once you chose nouveau at install.
+Doctor keeps the driver's setup in shape: Ryoku's NVIDIA package, RPM Fusion's
+nouveau blacklist on the kernel command line, and `nvidia-fallback.service`.
 
 On a hybrid laptop with two GPUs, Ryoku ranks them and pins the strongest as the
 primary renderer on a desktop, while a laptop keeps the integrated GPU primary

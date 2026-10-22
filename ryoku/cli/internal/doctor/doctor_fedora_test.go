@@ -396,52 +396,6 @@ func TestFedoraPendingConfigAndOrphanAdvice(t *testing.T) {
 	assertNoForeignPackageAdvice(t, orphans)
 }
 
-func TestFedoraNvidiaStaysOnNouveauWithManualRPMFusionAdvice(t *testing.T) {
-	stubDoctorDNF(t)
-	oldManager, oldPCI, oldModule := nvidiaPackageManager, nvidiaPCIOutput, nvidiaModuleDir
-	nvidiaPackageManager = func() host.PackageManager { return host.DNF }
-	nvidiaPCIOutput = func() string { return "NVIDIA Corporation AD107M" }
-	nvidiaModuleDir = filepath.Join(t.TempDir(), "nvidia")
-	t.Cleanup(func() {
-		nvidiaPackageManager, nvidiaPCIOutput, nvidiaModuleDir = oldManager, oldPCI, oldModule
-	})
-
-	if pkg := nvidia580Package(); pkg != "akmod-nvidia" {
-		t.Fatalf("Fedora NVIDIA package = %q", pkg)
-	}
-	result := reconcileNvidiaModeset(true)
-	if result.status != recNote || !strings.Contains(result.detail, "Nouveau") ||
-		!strings.Contains(result.remedy, "RPM Fusion") || !strings.Contains(result.remedy, "akmod-nvidia") ||
-		!strings.Contains(result.remedy, "dracut --regenerate-all --force") {
-		t.Fatalf("NVIDIA result = %+v", result)
-	}
-	assertNoForeignPackageAdvice(t, result)
-
-	detail := nvidiaMissingModuleDetail(host.DNF)
-	if !strings.Contains(detail, "keeps Nouveau active") ||
-		strings.Contains(detail, "nvidia-open") || strings.Contains(detail, "mkinitcpio") || strings.Contains(detail, "pacman") {
-		t.Fatalf("Fedora missing-module detail = %q", detail)
-	}
-
-	bin := t.TempDir()
-	log := bin + "/sudo.log"
-	if err := os.WriteFile(bin+"/sudo", []byte("#!/bin/sh\nprintf '%s\\n' \"$*\" >\"$NVIDIA_TEST_LOG\"\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("NVIDIA_TEST_LOG", log)
-	t.Setenv("PATH", bin+":"+os.Getenv("PATH"))
-	if err := rebuildInitramfs(); err != nil {
-		t.Fatalf("Fedora initramfs rebuild: %v", err)
-	}
-	body, err := os.ReadFile(log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := strings.TrimSpace(string(body)); got != "dracut --regenerate-all --force" {
-		t.Fatalf("Fedora initramfs command = %q", got)
-	}
-}
-
 func TestFedoraBootReconcilersSkipWithoutForeignBootAdvice(t *testing.T) {
 	stubDoctorDNF(t)
 	for name, reconcile := range map[string]func(bool) recResult{
@@ -646,27 +600,5 @@ func TestFedoraEmptyStableBeforeTheFirstReleaseIsANote(t *testing.T) {
 	result := reconcileRyokuSyncDB(false)
 	if result.status != recNote || !strings.Contains(result.detail, "first Fedora release") {
 		t.Fatalf("empty pre-release stable result = %+v", result)
-	}
-}
-
-func TestFedoraNvidiaAdviceFollowsTheLoadedModule(t *testing.T) {
-	stubDoctorDNF(t)
-	oldManager, oldPCI, oldInstalled, oldModule := nvidiaPackageManager, nvidiaPCIOutput, nvidiaPackageInstalled, nvidiaModuleDir
-	nvidiaPackageManager = func() host.PackageManager { return host.DNF }
-	nvidiaPCIOutput = func() string { return "NVIDIA Corporation AD107M" }
-	nvidiaPackageInstalled = func(name string) bool { return name == "akmod-nvidia" }
-	nvidiaModuleDir = filepath.Join(t.TempDir(), "nvidia")
-	t.Cleanup(func() {
-		nvidiaPackageManager, nvidiaPCIOutput, nvidiaPackageInstalled, nvidiaModuleDir = oldManager, oldPCI, oldInstalled, oldModule
-	})
-
-	if result := reconcileNvidiaModeset(true); result.status != recNote || !strings.Contains(result.remedy, "dracut") {
-		t.Fatalf("an installed but unloaded driver lost its setup advice: %+v", result)
-	}
-	if err := os.Mkdir(nvidiaModuleDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if result := reconcileNvidiaModeset(true); result.status != recOK || result.remedy != "" {
-		t.Fatalf("a loaded proprietary driver was reported as Nouveau: %+v", result)
 	}
 }
