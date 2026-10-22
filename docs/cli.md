@@ -262,19 +262,42 @@ verbs include:
   or elogind.
 - `time zones` prints the sorted IANA zone list. It uses `timedatectl` under
   systemd and the installed zoneinfo database on other init systems.
-- `kmod <status|prepare-key|queue-enrollment> [--root DIR]` manages Fedora's
-  module signing key (DKMS's `/var/lib/dkms/mok.key`) and its enrollment.
-  `prepare-key` creates the key pair if missing and sets its mode (`0640
-  root:akmods` when the `akmods` group exists, else `0600 root:root`);
-  `queue-enrollment` queues the enrollment only when Secure Boot is enforcing
-  and the key is neither enrolled nor queued. Every verb prints stable,
-  untranslated `key=value` lines, which the installers parse: `action=` first
-  for the two that change something (`created|fixed|unchanged`,
-  `queued|none`), then the status: `key=present|absent`, `key_mode`,
-  `key_owner`, `key_expected_mode`, `key_expected_owner`, `key_ok=yes|no`,
+- `kmod <verb> [--root DIR]` manages Fedora's out-of-tree kernel modules: the
+  module signing key (DKMS's `/var/lib/dkms/mok.key`), its enrollment and the
+  NVIDIA driver. It lives in `internal/kmod` and is run as root.
+  - `prepare-key` creates the key pair if missing, sets its mode (`0640
+    root:akmods` when the `akmods` group exists, else `0600 root:root`) and,
+    where akmods is installed, links akmods' key paths
+    (`/etc/pki/akmods/private/private_key.priv`,
+    `/etc/pki/akmods/certs/public_key.der`) to DKMS's pair.
+  - `queue-enrollment` queues the enrollment only when Secure Boot is enforcing
+    and the key is neither enrolled nor queued.
+  - `record-choice driver|nouveau` records the installer's NVIDIA choice in
+    `/var/lib/ryoku/nvidia-choice`.
+  - `install-driver [--kernel VERSION] [--gpu-supported]` refuses a GPU the
+    driver script's `--query` does not call supported (skipped with
+    `--gpu-supported`, for a caller that already ran it), enables RPM Fusion
+    free and nonfree from their release packages after checking their keys
+    against pinned fingerprints, installs `akmods` and the kernel's headers,
+    prepares the key, installs `ryoku-nvidia-support` (which pulls
+    `akmod-nvidia`), builds for `VERSION` (default: the boot default kernel) and
+    fails unless the module is signed with the machine's key.
+  - `build-for-kernel [--kernel VERSION] [--rebuild]` runs `akmods --force` for
+    one kernel (`--rebuild` also rebuilds an existing module).
+
+  Every verb prints stable, untranslated `key=value` lines, which the
+  installers parse. The verb's own lines come first: `action=` for
+  `prepare-key` (`created|fixed|unchanged`), `queue-enrollment`
+  (`queued|none`) and `install-driver` (`installed`, then `kernel=`);
+  `nvidia_choice=` for `record-choice`; `build=ok|failed`, `kernel=` and
+  `newest_module_kernel=` (the newest installed kernel with an NVIDIA module,
+  empty if none) for `build-for-kernel`, which exits 0 whenever akmods ran.
+  The status follows: `key=present|absent`, `key_mode`, `key_owner`,
+  `key_expected_mode`, `key_expected_owner`, `key_ok=yes|no`,
   `secure_boot=enforcing|off|unsupported`,
-  `enrollment=enrolled|queued|not_queued|unknown` and `password=` (the
-  enrollment password). It lives in `internal/kmod` and is run as root.
+  `enrollment=enrolled|queued|not_queued|unknown`, `password=` (the
+  enrollment password), `akmods_links=ok|missing|dangling|foreign|not_needed`
+  and `nvidia_choice=driver|nouveau|` (empty when none was recorded).
 
 ### `ryoku materialize`
 

@@ -75,6 +75,9 @@ System settings:
 
 Kernel modules (Fedora; see ryoku-host kmod --help):
   kmod <status|prepare-key|queue-enrollment> [--root DIR]
+  kmod record-choice <driver|nouveau> [--root DIR]
+  kmod install-driver [--kernel VERSION] [--gpu-supported] [--root DIR]
+  kmod build-for-kernel [--kernel VERSION] [--rebuild] [--root DIR]
 
 Exit codes: 0 success/true, 1 failure, 2 usage, 3 false, 4 absent, 5 not provided.
 `

@@ -122,7 +122,8 @@ truth for the live desktop.
   runit and pacman, XBPS, or DNF, so scripts, daemons, QML, and other Go modules
   do not grow host checks. `internal/kmod` owns Fedora's out-of-tree kernel
   modules: the machine's one module signing key, its enrollment and the
-  enrollment password; the installers reach it through `ryoku-host kmod`.
+  enrollment password, and the NVIDIA driver install and rebuilds; the
+  installers reach it through `ryoku-host kmod`.
   Per-command reference, user- vs developer-facing, is in `docs/cli.md`.
 - `hub/` Ryoku Settings, the central control-center GUI (`Super + ,`): `backend/`
   (`ryoku-hub`, the Go data plane that reads the keybind legend from the live

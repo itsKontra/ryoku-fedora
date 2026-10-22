@@ -7,6 +7,7 @@ type Status struct {
 	SecureBoot SecureBoot
 	Enrollment Enrollment
 	Password   string
+	Choice     Choice
 }
 
 func (m *Machine) Status() (Status, error) {
@@ -19,5 +20,6 @@ func (m *Machine) Status() (Status, error) {
 		SecureBoot: m.secureBoot(),
 		Enrollment: m.enrollment(key),
 		Password:   EnrollmentPassword,
+		Choice:     m.choice(),
 	}, nil
 }
