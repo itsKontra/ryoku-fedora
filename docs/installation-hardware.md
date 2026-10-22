@@ -161,8 +161,10 @@ builds inside an installer chroot, where it would otherwise leave them unsigned.
 4. Choose **Reboot**.
 
 One enrollment covers xpadneo and the NVIDIA driver, now and after every
-kernel update. If the screen was skipped, queue it again with
-`sudo ryoku-host kmod queue-enrollment` and reboot.
+kernel update. If the screen was skipped, or Secure Boot was turned on after the
+install, run `ryoku doctor` (`ryoku update` runs it too): it queues the
+enrollment again and tells you to reboot and approve it. It also puts the key's
+permissions back when they drift, for example after DKMS regenerates it.
 
 The private key stays on disk, readable only by root and, on NVIDIA machines,
 by the `akmods` group that builds the driver: the same exposure as RPM Fusion's
