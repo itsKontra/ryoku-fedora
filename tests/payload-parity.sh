@@ -290,7 +290,7 @@ adapter_entry() {
       return 1
       ;;
     *:etc/boot/*|*:etc/kernel.d/*|*:usr/lib/initcpio/*|*:usr/share/ryoku/boot/*|\
-    *:usr/bin/ryoku-boot-apply|*:usr/bin/ryoku-windows-entry|\
+    *:usr/bin/ryoku-boot-apply|*:usr/bin/ryoku-windows-entry|*:usr/bin/ryoku-nvidia-guard|\
     fedora:etc/grub.d/15_ryoku_snapshots|fedora:usr/bin/ryoku-grub-menu|fedora:usr/bin/ryoku-plymouth-apply|fedora:usr/share/ryoku/grub/*|\
     fedora:usr/libexec/snapper/plugins/50-ryoku-boot-menu|fedora:usr/lib/dracut/modules.d/90ryoku-snapshot/*)
       return 1
@@ -368,6 +368,12 @@ for pkg in "${packages[@]}"; do
     for edition in arch void fedora fedora-spec; do
       [[ -x $work/staged/$pkg-$edition/usr/bin/ryoku-polkit-reload ]] \
         || fail "ryoku-desktop $edition package is missing the polkit reload helper"
+    done
+    [[ -x $work/staged/$pkg-arch/usr/bin/ryoku-nvidia-guard ]] \
+      || fail "ryoku-desktop Arch package is missing ryoku-nvidia-guard"
+    for edition in fedora fedora-spec; do
+      [[ ! -e $work/staged/$pkg-$edition/usr/bin/ryoku-nvidia-guard ]] \
+        || fail "ryoku-desktop $edition package ships the pacman-only ryoku-nvidia-guard"
     done
   fi
 

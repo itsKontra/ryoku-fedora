@@ -22,7 +22,8 @@ package() {
     "$pkgdir/usr/share/libalpm" \
     "$pkgdir/usr/share/ryoku/boot"
   rm -f "$pkgdir/usr/bin/ryoku-boot-apply" \
-    "$pkgdir/usr/bin/ryoku-windows-entry"
+    "$pkgdir/usr/bin/ryoku-windows-entry" \
+    "$pkgdir/usr/bin/ryoku-nvidia-guard"
 
   install -Dm644 "$_repo/fedora/system/hardware/network/ryoku-wifi-regdom.service" \
     "$pkgdir/usr/lib/systemd/system/ryoku-wifi-regdom.service"
