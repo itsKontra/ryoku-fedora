@@ -129,3 +129,29 @@ func TestPrepareKeyLeavesAkmodsAloneWhereItIsNotInstalled(t *testing.T) {
 		t.Fatalf("prepare without akmods touched /etc/pki/akmods: %v", err)
 	}
 }
+
+// akmods' key directories are 0750 root:akmods, so doctor, which reads the
+// status as the desktop user, cannot see the links at all.
+func TestAkmodsLinksTheCallerCannotReadAreUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads every directory")
+	}
+	fake := newFakeMachine(t)
+	fake.withAkmodsGroup(t)
+	fake.withKey(t, 0o640, 0, testAkmodsGID)
+	fake.link(t, AkmodsKeyPath, KeyPath)
+	fake.link(t, AkmodsCertPath, CertPath)
+	for _, dir := range []string{"etc/pki/akmods/private", "etc/pki/akmods/certs"} {
+		if err := os.Chmod(fake.path(dir), 0); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(fake.path(dir), 0o755) })
+	}
+	status, err := fake.machine().Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Key.Links != LinksUnreadable {
+		t.Fatalf("links = %q, want unreadable", status.Key.Links)
+	}
+}

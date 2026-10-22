@@ -297,7 +297,8 @@ verbs include:
   `secure_boot=enforcing|off|unsupported`,
   `enrollment=enrolled|queued|not_queued|unknown`, `password=` (the
   enrollment password), `akmods_links=ok|missing|dangling|foreign|not_needed`
-  and `nvidia_choice=driver|nouveau|` (empty when none was recorded).
+  (`unreadable` when run as a user who cannot list akmods' `0750` key
+  directories) and `nvidia_choice=driver|nouveau|` (empty when none was recorded).
 
 ### `ryoku materialize`
 
@@ -424,8 +425,11 @@ desktop sessions, channel health, the keyring unlock policy, compositor config,
 backlights, pending package config, and orphaned packages. Host-specific checks
 stay on their host: pacman lock and progress settings on Arch/CachyOS, Turnstile
 and runit state on Void, and RPM repository metadata, `.rpmnew` and
-`.rpmsave` files, and the module signing key's permissions and enrollment on
-Fedora. Fedora omits the snapper and Limine checks because
+`.rpmsave` files, and on Fedora the module signing key's permissions, akmods'
+links to it and its enrollment, then the NVIDIA driver fallback: a rebuild for
+the running kernel when it has no NVIDIA module or after a key fix in the same
+pass, with the newest kernel that still has the driver named when the build
+fails (doctor never holds a kernel or changes the boot default). Fedora omits the snapper and Limine checks because
 that edition does not provide them.
 
 Reconcilers retire once every supported install has run them, so the set stays

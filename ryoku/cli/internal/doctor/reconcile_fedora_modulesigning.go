@@ -3,6 +3,7 @@ package doctor
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -31,26 +32,60 @@ var (
 	}
 )
 
-// moduleSigningChecks run in this order: the key must be readable by akmods
-// before anything is rebuilt with it.
+// moduleSigningChecks run in this order: the key must be readable by akmods,
+// and akmods must sign with it, before anything is rebuilt with it.
 func moduleSigningChecks() []reconciler {
+	pass := &moduleSigningPass{}
 	return []reconciler{
-		{i18n.T("module signing key permissions"), reconcileModuleSigningKey},
+		{i18n.T("module signing key permissions"), pass.track(reconcileModuleSigningKey)},
+		{i18n.T("akmods links to the module signing key"), pass.track(reconcileAkmodsKeyLinks)},
 		{i18n.T("module signing key enrollment"), reconcileModuleSigningEnrollment},
+		{i18n.T("NVIDIA driver fallback"), pass.reconcileDriverFallback},
 	}
 }
 
 func runKmodAsRoot(verb string) error {
-	var stderr bytes.Buffer
-	cmd := exec.Command("sudo", ryokuHostBin(), "kmod", verb)
-	cmd.Stdin, cmd.Stderr = os.Stdin, &stderr
-	if err := cmd.Run(); err != nil {
-		if detail := strings.TrimSpace(stderr.String()); detail != "" {
-			return errors.New(detail)
-		}
-		return err
+	_, _, err := kmodAsRoot(kmodRoot{}, verb)
+	return err
+}
+
+// kmodRoot says how to run `sudo ryoku-host kmod`: NonInteractive adds sudo's
+// -n, for a read that must never prompt; Progress also receives ryoku-host's
+// stderr as it runs, for a build that takes minutes.
+type kmodRoot struct {
+	NonInteractive bool
+	Progress       io.Writer
+}
+
+// kmodAsRoot returns ryoku-host's key=value output and its stderr, which on a
+// failure is also the error.
+func kmodAsRoot(how kmodRoot, args ...string) (string, string, error) {
+	var sudoArgs []string
+	if how.NonInteractive {
+		sudoArgs = append(sudoArgs, "-n")
 	}
-	return nil
+	sudoArgs = append(append(sudoArgs, ryokuHostBin(), "kmod"), args...)
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command("sudo", sudoArgs...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, &stdout, &stderr
+	if how.Progress != nil {
+		cmd.Stderr = io.MultiWriter(&stderr, how.Progress)
+	}
+	err := cmd.Run()
+	if detail := strings.TrimSpace(stderr.String()); err != nil && detail != "" {
+		err = errors.New(detail)
+	}
+	return stdout.String(), stderr.String(), err
+}
+
+// kmodValue reads one key from ryoku-host's key=value output.
+func kmodValue(output, key string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if value, ok := strings.CutPrefix(line, key+"="); ok {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func reconcileModuleSigningKey(checkOnly bool) recResult {

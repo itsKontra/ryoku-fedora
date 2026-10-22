@@ -39,6 +39,12 @@ func (m *Machine) installedKernels() []string {
 	return kernels
 }
 
+// HasDriverModule says whether kernel has an NVIDIA module installed. modinfo
+// needs no root, so doctor asks as the desktop user.
+func (m *Machine) HasDriverModule(kernel string) bool {
+	return m.moduleBuilt(kernel)
+}
+
 func (m *Machine) moduleBuilt(kernel string) bool {
 	result := m.cfg.Runner.Run(host.Command{Name: "modinfo", Args: []string{"-k", kernel, "-F", "filename", "nvidia"}})
 	return result.Code == 0 && strings.TrimSpace(result.Output) != ""

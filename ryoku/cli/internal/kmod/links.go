@@ -1,6 +1,7 @@
 package kmod
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -16,18 +17,20 @@ const (
 	AkmodsCertPath = "/etc/pki/akmods/certs/public_key.der"
 )
 
-// LinkState is where akmods' key paths lead, worst of the two.
+// LinkState is where akmods' key paths lead, worst of the two. Their
+// directories are 0750 root:akmods, so anyone else reads LinksUnreadable.
 type LinkState string
 
 const (
-	LinksNotNeeded LinkState = "not_needed"
-	LinksOK        LinkState = "ok"
-	LinksMissing   LinkState = "missing"
-	LinksDangling  LinkState = "dangling"
-	LinksForeign   LinkState = "foreign"
+	LinksNotNeeded  LinkState = "not_needed"
+	LinksOK         LinkState = "ok"
+	LinksUnreadable LinkState = "unreadable"
+	LinksMissing    LinkState = "missing"
+	LinksDangling   LinkState = "dangling"
+	LinksForeign    LinkState = "foreign"
 )
 
-var linkRank = map[LinkState]int{LinksOK: 0, LinksMissing: 1, LinksDangling: 2, LinksForeign: 3}
+var linkRank = map[LinkState]int{LinksOK: 0, LinksUnreadable: 1, LinksMissing: 2, LinksDangling: 3, LinksForeign: 4}
 
 var akmodsLinks = [][2]string{{AkmodsKeyPath, KeyPath}, {AkmodsCertPath, CertPath}}
 
@@ -46,6 +49,9 @@ func (m *Machine) linkState(akmods bool) LinkState {
 
 func (m *Machine) oneLink(linkPath, want string) LinkState {
 	info, err := os.Lstat(m.path(linkPath))
+	if errors.Is(err, fs.ErrPermission) {
+		return LinksUnreadable
+	}
 	if err != nil {
 		return LinksMissing
 	}
