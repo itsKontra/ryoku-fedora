@@ -3,7 +3,8 @@
 # The kickstart's %post --nochroot step. Copies this directory into the
 # target, records what only the installer environment can see (the GPU
 # vendors and the ryoku.* boot options), lends the target the installer's DNS
-# for the package download, then runs provision inside the target chroot.
+# for the package download, runs provision inside the target chroot, then
+# leaves provision's handoff (the enrollment notice) in /run/ryoku-iso for Anaconda.
 #
 #   stage <target root>
 set -euo pipefail
@@ -52,3 +53,9 @@ fi
 cp -L /etc/resolv.conf "$resolv"
 
 chroot "$root" /usr/bin/bash "$work/post/provision"
+
+# restore deletes $work on exit; Anaconda reads provision's handoff from here.
+if [[ -d $root$work/handoff ]]; then
+  install -d -m755 /run/ryoku-iso
+  cp -a "$root$work/handoff/." /run/ryoku-iso/
+fi

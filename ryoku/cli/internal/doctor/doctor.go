@@ -85,11 +85,7 @@ func failedServices() ([]host.ServiceFailure, error) {
 	if err != nil {
 		return nil, err
 	}
-	hostBin := os.Getenv("RYOKU_HOST_BIN")
-	if hostBin == "" {
-		hostBin = "/usr/bin/ryoku-host"
-	}
-	out, err := sys.RunOut("sudo", "-n", hostBin, "svc", "--system", "failed")
+	out, err := sys.RunOut("sudo", "-n", ryokuHostBin(), "svc", "--system", "failed")
 	if err != nil {
 		return userFailures, errSystemServiceHealthUnavailable
 	}
@@ -98,6 +94,15 @@ func failedServices() ([]host.ServiceFailure, error) {
 		systemFailures = append(systemFailures, host.ServiceFailure{Scope: "--system", Name: name})
 	}
 	return append(systemFailures, userFailures...), nil
+}
+
+// ryokuHostBin is the ryoku-host doctor runs under sudo, by absolute path so
+// sudo never resolves it through the desktop user's PATH.
+func ryokuHostBin() string {
+	if bin := os.Getenv("RYOKU_HOST_BIN"); bin != "" {
+		return bin
+	}
+	return "/usr/bin/ryoku-host"
 }
 
 func pacmanHost(subject string) (recResult, bool) {
@@ -127,11 +132,7 @@ func systemServiceEnabled(name string) bool {
 
 func runSystemService(args ...string) error {
 	if xbpsHost() {
-		hostBin := os.Getenv("RYOKU_HOST_BIN")
-		if hostBin == "" {
-			hostBin = "/usr/bin/ryoku-host"
-		}
-		command := append([]string{hostBin, "svc", "--system"}, args...)
+		command := append([]string{ryokuHostBin(), "svc", "--system"}, args...)
 		return sys.Sudo(command...)
 	}
 	command := append([]string{"systemctl"}, args...)
@@ -234,6 +235,7 @@ func reconcilers() []reconciler {
 			reconciler{i18n.T("Ryoku release key"), reconcileFedoraKeyring},
 			reconciler{i18n.T("revoked Ryoku release keys"), reconcileFedoraRevokedKeys},
 		)
+		checks = append(checks, moduleSigningChecks()...)
 	}
 	if !fedora {
 		checks = append(checks,

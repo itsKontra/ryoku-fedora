@@ -12,6 +12,13 @@
   `prepare-key` now links akmods' key paths to DKMS's pair, `record-choice`
   records driver or nouveau, and the status gains `akmods_links=` and
   `nvidia_choice=`.
+- **Doctor keeps Fedora's module signing key healthy.** Two Fedora-only
+  reconcilers read the key through `internal/kmod` and fix it with
+  `sudo ryoku-host kmod ...`: one sets the key back to its expected mode and
+  owner in either direction (loosened for akmods, tightened when too open); the
+  other queues the enrollment when Secure Boot is enforcing and the key is
+  neither enrolled nor queued, notes a queued one with the password, and waits
+  while Secure Boot is off (`reconcile_fedora_modulesigning.go`).
 - **`ryoku-host kmod` manages Fedora's module signing key.** `status`,
   `prepare-key` and `queue-enrollment` cover DKMS's `/var/lib/dkms/mok.key`:
   its creation with DKMS's own parameters, its mode (`0640 root:akmods` where
