@@ -13,6 +13,9 @@ account, keyboard and time zone choices; the kickstart then runs
 repo.ryoku.dev and its COPRs, the package plan resolved by
 `system/packages/resolve`, SDDM, snapper and per-account seeds. Nothing is
 bundled offline. `ryoku materialize` lays each account's config at first login.
+When provision queued the module signing key's enrollment (Secure Boot on),
+the add-on in the updates image adds a screen after the finished install that
+shows provision's notice, password included, before the user reboots.
 
 | Path | Job |
 |---|---|
@@ -20,6 +23,7 @@ bundled offline. `ryoku materialize` lays each account's config at first login.
 | `fetch-base.sh` | download and verify the Fedora netinst |
 | `kickstart/ryoku.ks` | Anaconda recipe (`@RELEASE@`, `@VOLID@` filled by build.sh) |
 | `anaconda/05-ryoku.conf` | Anaconda drop-in: Btrfs with `/.snapshots`, no root password page |
+| `anaconda/addons/` | Anaconda add-on: before the reboot, shows the enrollment notice provision left |
 | `post/` | the kickstart's scripts: `check-admin`, `stage`, `provision` |
 | `tests/check.sh` | static checks; `--online` also checks the kickstart's groups |
 | `tests/vm-install.sh` | unattended install in QEMU, then checks the installed system |

@@ -121,7 +121,8 @@ done < <(choice_ids compositor)
 # Module signing, against stand-ins for ryoku-host, dkms and modinfo that log
 # their calls: the key comes first, DKMS builds for the kernel the machine boots
 # (grubby's default, not the installer's uname -r), failures only warn, and a
-# queued enrollment leaves the shell installer's notice for Anaconda.
+# queued enrollment leaves the shell installer's notice, which Anaconda's
+# add-on shows before the reboot.
 signing=$work/signing
 mkdir -p "$signing/modules/7.0.9-100.fc44.x86_64" "$signing/modules/7.0.10-100.fc44.x86_64" "$signing/modules/6.99.0-installer"
 touch "$signing/modules/7.0.9-100.fc44.x86_64/vmlinuz" "$signing/modules/7.0.10-100.fc44.x86_64/vmlinuz"
@@ -179,11 +180,23 @@ else
 fi
 expect "ryoku-host's answer for Anaconda" "queued" "$(sed -n 's/^enrollment=//p' "$signing/run/handoff/enrollment" 2>/dev/null)"
 
+# enrollment_screen <handoff>: whether Anaconda's add-on shows its screen
+# before the reboot for that handoff, and its text.
+enrollment_screen() { python3 "$here/tests/enrollment-screen" "$here/anaconda/addons" "$1" 2>&1; }
+expect "Anaconda's screen before the reboot" "shown"$'\n'"$expected_notice" "$(enrollment_screen "$signing/run/handoff")"
+
 signing_run off ""
 if [[ -e $signing/run/handoff/enrollment-notice ]]; then
   fail "Secure Boot off leaves no enrollment notice"
 else
   pass "Secure Boot off leaves no enrollment notice"
+fi
+expect "Anaconda's screen with Secure Boot off" hidden "$(enrollment_screen "$signing/run/handoff")"
+expect "Anaconda's screen without a handoff" hidden "$(enrollment_screen "$signing/no-handoff")"
+if grep -rqw --exclude-dir=tests --exclude-dir=work --exclude-dir=out enroll "$here"; then
+  fail "the ISO hard-codes the enrollment password"
+else
+  pass "the ISO takes the enrollment password from ryoku-host"
 fi
 
 signing_run enforcing "ryoku-host:prepare-key dkms:autoinstall"
