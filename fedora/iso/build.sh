@@ -22,7 +22,8 @@
 #                          and must not be published
 #
 # The ryoku.compositor=, ryoku.browser= and ryoku.shell= boot options override
-# the defaults at install time.
+# the defaults at install time; ryoku.nvidia=0 keeps a supported NVIDIA GPU on
+# nouveau instead of installing the NVIDIA driver.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -83,6 +84,7 @@ mkdir -p "$stage/post" "$out"
 install -m755 "$here/post/stage" "$here/post/provision" "$here/post/check-admin" "$stage/post/"
 for path in \
   system/packages/resolve \
+  system/hardware/drivers/nvidia.sh \
   fedora/packages/translations.tsv \
   fedora/packages/coprs.tsv \
   installation/installerplan/choices.tsv \
@@ -112,10 +114,12 @@ if command -v ksvalidator >/dev/null; then
   ksvalidator -v "F$release" "$kickstart" 2>/dev/null || ksvalidator -v DEVEL "$kickstart"
 fi
 
-say "packing the Anaconda drop-in into an updates image"
+say "packing the Anaconda drop-in and add-on into an updates image"
 updates=$work/updates.img
 rm -rf "$work/updates"
 install -Dm644 "$here/anaconda/05-ryoku.conf" "$work/updates/etc/anaconda/conf.d/05-ryoku.conf"
+install -d "$work/updates/usr/share/anaconda"
+cp -R "$here/anaconda/addons" "$work/updates/usr/share/anaconda/"
 (cd "$work/updates" && find . -mindepth 1 | LC_ALL=C sort | cpio --quiet -o -H newc | gzip -9n) >"$updates"
 
 # boot_layout <iso>: fail unless the image keeps a UEFI El Torito entry and the

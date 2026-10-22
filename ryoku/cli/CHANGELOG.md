@@ -14,6 +14,12 @@
   `akmod-nvidia` without removing it. The old manual RPM Fusion and dracut
   advice and the Fedora 580xx mapping are gone. `kmod` gains `GPU()`, the
   generation check's answer, and `Choice()` (`reconcile_fedora_nvidia.go`).
+- **`ryoku update --system` waits for the NVIDIA build on Fedora.** When the
+  system lane installs a new kernel on a machine with `akmod-nvidia`, it runs
+  `ryoku-host kmod build-for-kernel` for that kernel in the foreground and
+  reports either the driver ready or the build failed, the next boot on
+  nouveau, and the kernel that still has the driver. A plain `dnf5 upgrade`
+  still relies on akmods in the background and at boot (`nvidiabuild.go`).
 - **`ryoku-host kmod` installs the NVIDIA driver on Fedora.** `install-driver`
   enables RPM Fusion free and nonfree (keys checked against pinned
   fingerprints), installs `akmods`, prepares the module signing key, installs
