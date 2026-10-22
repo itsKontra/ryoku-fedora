@@ -39,10 +39,9 @@ type facts struct {
 	gpus        []string
 	hasNvidia   bool
 	nouveauLive bool
-	// Fedora only: the driver script's --query answer (supported,
-	// unsupported, absent, unknown) and ryoku-host's enrollment password when
-	// ryoku-host is already installed.
-	nvidiaGeneration   string
+	// Fedora only: the driver script's --query answer and ryoku-host's
+	// enrollment password when ryoku-host is already installed.
+	nvidiaGeneration   gpuGeneration
 	enrollmentPassword string
 	ucodePkg           string
 

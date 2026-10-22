@@ -275,7 +275,7 @@ func defaultPlanWithEdition(f *facts, edition editionCompositorPlan, compositorC
 	nvidia := f.hasNvidia && !(f.secureBoot && !f.sbctlSigned)
 	aur := true
 	if f.distro != nil && f.distro.id == "fedora" {
-		nvidia = f.hasNvidia && f.nvidiaGeneration == "supported"
+		nvidia = f.hasNvidia && f.nvidiaGeneration == gpuSupported
 		aur = false
 	}
 	p := &plan{

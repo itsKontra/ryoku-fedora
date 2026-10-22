@@ -7,8 +7,10 @@
   "NVIDIA driver" item is on by default; the drivers step runs
   `ryoku-host kmod install-driver` (RPM Fusion's `akmod-nvidia`, built and
   signed with the machine's key) before queueing the enrollment, and records
-  the choice, driver or nouveau, for doctor. Older cards are locked to nouveau
-  with an explanation; Secure Boot never locks the item, and its detail says an
+  the choice for doctor: driver, or nouveau when the item was turned off.
+  Older cards, and a card whose generation cannot be checked, are locked to
+  nouveau with an explanation and record no choice, so doctor can offer the
+  driver later; Secure Boot never locks the item, and its detail says an
   enrollment follows. The GPU check is the driver script's new `--query`.
 - **Fedora machines get their module signing key enrolled.** The drivers step
   prepares the machine's one module signing key through `ryoku-host kmod` and,

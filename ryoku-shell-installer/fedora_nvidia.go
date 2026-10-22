@@ -40,42 +40,59 @@ func loadNvidiaQueryScript(client httpDoer, ref, payload string) []byte {
 	return data
 }
 
+// gpuGeneration is the driver script's --query answer, in the words it prints.
+type gpuGeneration string
+
+const (
+	gpuSupported   gpuGeneration = "supported"
+	gpuUnsupported gpuGeneration = "unsupported" // older than Turing
+	gpuAbsent      gpuGeneration = "absent"
+	gpuUnknown     gpuGeneration = "unknown"
+)
+
 // queryNvidiaGeneration runs the script's --query, which installs nothing,
-// and reads its exit code: supported, unsupported (older than Turing), absent,
-// or unknown.
-func queryNvidiaGeneration(script []byte) string {
+// and reads its exit code. The codes are nvidia.sh's --query contract, which
+// ryoku-cli's kmod package reads too (a separate Go module): 0 supported,
+// 3 unsupported, 4 absent, anything else unknown.
+func queryNvidiaGeneration(script []byte) gpuGeneration {
 	if len(script) == 0 {
-		return "unknown"
+		return gpuUnknown
 	}
 	dir, err := os.MkdirTemp("", "ryoku-nvidia-query-")
 	if err != nil {
-		return "unknown"
+		return gpuUnknown
 	}
 	defer os.RemoveAll(dir)
 	path := filepath.Join(dir, "nvidia.sh")
 	if err := os.WriteFile(path, script, 0o600); err != nil {
-		return "unknown"
+		return gpuUnknown
 	}
 	err = exec.Command("bash", path, "--query").Run()
 	if err == nil {
-		return "supported"
+		return gpuSupported
 	}
 	if exit, ok := err.(*exec.ExitError); ok {
 		switch exit.ExitCode() {
 		case 3:
-			return "unsupported"
+			return gpuUnsupported
 		case 4:
-			return "absent"
+			return gpuAbsent
 		}
 	}
-	return "unknown"
+	return gpuUnknown
+}
+
+// fedoraNvidia is a Fedora machine with an NVIDIA GPU, the one that gets the
+// Fedora NVIDIA driver item.
+func (f *facts) fedoraNvidia() bool {
+	return f.hasNvidia && f.distro != nil && f.distro.id == "fedora"
 }
 
 // detectFedoraNvidia fills in what the Fedora NVIDIA driver item needs: the
 // GPU's generation and, when ryoku-host is already installed, the enrollment
 // password it owns.
 func (f *facts) detectFedoraNvidia() {
-	if !f.hasNvidia || f.distro == nil || f.distro.id != "fedora" {
+	if !f.fedoraNvidia() {
 		return
 	}
 	f.nvidiaGeneration = queryNvidiaGeneration(nvidiaQueryScript)
@@ -93,14 +110,16 @@ func (f *facts) detectFedoraNvidia() {
 func fedoraNvidiaItem(f *facts, p *plan) planItem {
 	item := planItem{label: "NVIDIA driver", on: &p.nvidia}
 	switch f.nvidiaGeneration {
-	case "supported":
+	case gpuSupported:
 		item.detail = i18n.T("installs RPM Fusion's NVIDIA driver, built and signed on this machine; toggle off to stay on nouveau")
-	case "unsupported":
+	case gpuUnsupported:
 		item.detail = i18n.T("held off: this GPU is older than Turing, which the NVIDIA driver Ryoku installs needs; it stays on nouveau")
 		item.locked = true
 		return item
 	default:
-		item.detail = i18n.T("off: the GPU's generation could not be checked (is lspci installed?); toggle on if it is Turing or newer, or run ryoku doctor later")
+		item.detail = i18n.T("held off: the GPU's generation could not be checked (is lspci installed?); it stays on nouveau, and ryoku doctor offers the driver once it can check")
+		item.locked = true
+		return item
 	}
 	if f.secureBoot {
 		if f.enrollmentPassword != "" {
@@ -120,10 +139,13 @@ func installFedoraNvidia(e *engine, host string) bool {
 		return false
 	}
 	if !e.p.nvidia {
-		if e.f.nvidiaGeneration == "unsupported" {
-			e.say(i18n.T("this NVIDIA GPU is older than Turing; it stays on nouveau"))
-		} else {
+		switch e.f.nvidiaGeneration {
+		case gpuSupported:
 			e.say(i18n.T("keeping nouveau for the NVIDIA GPU (the NVIDIA driver item is off)"))
+		case gpuUnsupported:
+			e.say(i18n.T("this NVIDIA GPU is older than Turing; it stays on nouveau"))
+		default:
+			e.say(i18n.T("the NVIDIA GPU's generation could not be checked; it stays on nouveau, and ryoku doctor can install the driver later"))
 		}
 		return false
 	}
@@ -137,13 +159,19 @@ func installFedoraNvidia(e *engine, host string) bool {
 
 // recordFedoraNvidiaChoice tells doctor whether this NVIDIA machine chose the
 // driver or nouveau, so it never pushes the driver on a user who opted out.
+// Only a supported GPU's item is the user's to turn off; a locked item is no
+// choice, so nothing is recorded and doctor stays free to offer the driver.
 func recordFedoraNvidiaChoice(e *engine, host string) {
-	if !e.f.hasNvidia {
+	var choice string
+	switch {
+	case !e.f.hasNvidia:
 		return
-	}
-	choice := "nouveau"
-	if e.p.nvidia {
+	case e.p.nvidia:
 		choice = "driver"
+	case e.f.nvidiaGeneration == gpuSupported:
+		choice = "nouveau"
+	default:
+		return
 	}
 	if err := e.sudo(host, "kmod", "record-choice", choice); err != nil {
 		e.say(i18n.T("warning: could not record the NVIDIA choice for ryoku doctor (continuing)"))

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func fedoraNvidiaFacts(generation string) *facts {
+func fedoraNvidiaFacts(generation gpuGeneration) *facts {
 	return &facts{distro: newFedoraLinux(), distroID: "fedora", hasNvidia: true, nvidiaGeneration: generation}
 }
 
@@ -51,10 +51,16 @@ func TestFedoraNvidiaDriverItemIsLockedOffBeforeTuring(t *testing.T) {
 	}
 }
 
-func TestFedoraNvidiaDriverItemWithAnUnknownGeneration(t *testing.T) {
+// An unknown generation is locked off rather than left to the user: the
+// driver goes only to a GPU the generation check passed, and doctor offers it
+// once the check can run on the installed machine.
+func TestFedoraNvidiaDriverItemIsLockedOffWithAnUnknownGeneration(t *testing.T) {
 	item, p, ok := nvidiaDriverItem(t, fedoraNvidiaFacts("unknown"))
-	if !ok || p.nvidia || item.locked {
+	if !ok || p.nvidia || *item.on || !item.locked {
 		t.Fatalf("unknown generation: shown %v, on %v, locked %v", ok, p.nvidia, item.locked)
+	}
+	if strings.Contains(item.detail, "toggle on") || !strings.Contains(item.detail, "ryoku doctor") {
+		t.Fatalf("detail invites a toggle or does not point at doctor: %q", item.detail)
 	}
 }
 
@@ -82,7 +88,7 @@ func TestFedoraWithoutNvidiaHasNoDriverItem(t *testing.T) {
 }
 
 func TestNvidiaGenerationComesFromTheDriverScriptsQuery(t *testing.T) {
-	for code, want := range map[string]string{"0": "supported", "3": "unsupported", "4": "absent", "5": "unknown", "1": "unknown"} {
+	for code, want := range map[string]gpuGeneration{"0": gpuSupported, "3": gpuUnsupported, "4": gpuAbsent, "5": gpuUnknown, "1": gpuUnknown} {
 		script := "[ \"$1\" = --query ] || exit 9\nexit " + code + "\n"
 		if got := queryNvidiaGeneration([]byte(script)); got != want {
 			t.Errorf("exit %s read as %q, want %q", code, got, want)
@@ -111,7 +117,7 @@ func TestFedoraDriversInstallTheDriverWhenTheItemIsOn(t *testing.T) {
 	home, logPath := fakeKmodHost(t)
 	t.Setenv("ACTION", "queued")
 	t.Setenv("ENROLLMENT", "queued")
-	_, output := runFedoraDriversWith(t, home, true, true)
+	_, output := runFedoraDriversWith(t, home, "supported", true)
 	want := "kmod prepare-key\nkmod install-driver\nkmod queue-enrollment\nkmod record-choice driver"
 	if got := hostCalls(t, logPath); got != want {
 		t.Fatalf("ryoku-host calls = %q, want %q", got, want)
@@ -125,7 +131,7 @@ func TestFedoraDriversRecordNouveauWhenTheItemIsOff(t *testing.T) {
 	home, logPath := fakeKmodHost(t)
 	t.Setenv("ACTION", "none")
 	t.Setenv("ENROLLMENT", "not_queued")
-	runFedoraDriversWith(t, home, true, false)
+	runFedoraDriversWith(t, home, "supported", false)
 	want := "kmod prepare-key\nkmod queue-enrollment\nkmod record-choice nouveau"
 	if got := hostCalls(t, logPath); got != want {
 		t.Fatalf("ryoku-host calls = %q, want %q", got, want)
@@ -137,7 +143,7 @@ func TestFedoraDriversWarnAndContinueWhenTheDriverFails(t *testing.T) {
 	t.Setenv("ACTION", "queued")
 	t.Setenv("ENROLLMENT", "queued")
 	t.Setenv("FAIL_VERB", "install-driver")
-	e, output := runFedoraDriversWith(t, home, true, true)
+	e, output := runFedoraDriversWith(t, home, "supported", true)
 	want := "kmod prepare-key\nkmod install-driver\nkmod queue-enrollment\nkmod record-choice driver"
 	if got := hostCalls(t, logPath); got != want {
 		t.Fatalf("ryoku-host calls = %q, want %q", got, want)
@@ -151,8 +157,24 @@ func TestFedoraDriversRecordNoChoiceWithoutNvidia(t *testing.T) {
 	home, logPath := fakeKmodHost(t)
 	t.Setenv("ACTION", "none")
 	t.Setenv("ENROLLMENT", "not_queued")
-	runFedoraDriversWith(t, home, false, false)
+	runFedoraDriversWith(t, home, "", false)
 	if got := hostCalls(t, logPath); got != "kmod prepare-key\nkmod queue-enrollment" {
 		t.Fatalf("ryoku-host calls = %q", got)
+	}
+}
+
+// Only a supported GPU whose item the user turned off chose nouveau; any other
+// NVIDIA machine made no choice, so doctor stays free to offer the driver.
+func TestFedoraDriversRecordNoChoiceWhenTheUserChoseNothing(t *testing.T) {
+	for _, generation := range []gpuGeneration{gpuUnknown, gpuUnsupported} {
+		t.Run(string(generation), func(t *testing.T) {
+			home, logPath := fakeKmodHost(t)
+			t.Setenv("ACTION", "none")
+			t.Setenv("ENROLLMENT", "not_queued")
+			runFedoraDriversWith(t, home, generation, false)
+			if got := hostCalls(t, logPath); got != "kmod prepare-key\nkmod queue-enrollment" {
+				t.Fatalf("ryoku-host calls = %q", got)
+			}
+		})
 	}
 }

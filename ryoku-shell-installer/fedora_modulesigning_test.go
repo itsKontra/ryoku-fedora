@@ -49,13 +49,15 @@ esac
 
 func runFedoraDrivers(t *testing.T, home string) (*engine, string) {
 	t.Helper()
-	return runFedoraDriversWith(t, home, false, false)
+	return runFedoraDriversWith(t, home, "", false)
 }
 
-func runFedoraDriversWith(t *testing.T, home string, hasNvidia, driver bool) (*engine, string) {
+// runFedoraDriversWith runs the driver step on a Fedora machine whose NVIDIA
+// GPU the generation check answered for; no answer means no NVIDIA GPU.
+func runFedoraDriversWith(t *testing.T, home string, generation gpuGeneration, driver bool) (*engine, string) {
 	t.Helper()
 	events := make(chan any, 256)
-	f := &facts{distro: newFedoraLinux(), homeDir: home, hasNvidia: hasNvidia}
+	f := &facts{distro: newFedoraLinux(), homeDir: home, hasNvidia: generation != "", nvidiaGeneration: generation}
 	e := &engine{f: f, p: &plan{nvidia: driver}, events: events}
 	if err := stepDrivers(e); err != nil {
 		t.Fatal(err)

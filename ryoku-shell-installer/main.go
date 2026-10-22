@@ -194,10 +194,9 @@ func buildItems(f *facts, p *plan, editionPlans ...editionCompositorPlan) []plan
 			on:     &p.resume,
 		})
 	}
-	if f.hasNvidia && f.distro != nil && f.distro.id == "fedora" {
+	if f.fedoraNvidia() {
 		it = append(it, fedoraNvidiaItem(f, p))
-	}
-	if f.hasNvidia && (f.distro == nil || f.distro.id != "fedora") {
+	} else if f.hasNvidia {
 		d := i18n.T("installs the proprietary driver, blacklists nouveau, rebuilds the initramfs")
 		if f.nouveauLive {
 			d = i18n.T("the proprietary driver replaces nouveau after a reboot")
