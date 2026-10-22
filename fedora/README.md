@@ -90,7 +90,8 @@ driver by default: RPM Fusion's `akmod-nvidia`, pulled in by Ryoku's
 module signing key (`ryoku-host kmod install-driver`). RPM Fusion free and
 nonfree are enabled for that alone, after their keys are checked against pinned
 fingerprints (ADR 0002). Turn the plan's "NVIDIA driver" item off to stay on
-nouveau; older cards always stay on nouveau. The choice is recorded in
-`/var/lib/ryoku/nvidia-choice` for doctor. Wayfire is unavailable because Fedora ships
+nouveau; older cards always stay on nouveau. The Fedora ISO installs the driver
+the same way; boot it with `ryoku.nvidia=0` to stay on nouveau. The choice is
+recorded in `/var/lib/ryoku/nvidia-choice` for doctor. Wayfire is unavailable because Fedora ships
 0.10.1 and Ryoku requires 0.11. AUR-only extras such as Zen Browser, LocalSend,
 Voxtype, Looking Glass, and SteamCMD are not shipped in the Fedora lane.
