@@ -73,6 +73,9 @@ System settings:
   keymap <set|apply> <layout> [variant] [options]
   initramfs rebuild
 
+Kernel modules (Fedora; see ryoku-host kmod --help):
+  kmod <status|prepare-key|queue-enrollment> [--root DIR]
+
 Exit codes: 0 success/true, 1 failure, 2 usage, 3 false, 4 absent, 5 not provided.
 `
 

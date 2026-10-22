@@ -120,8 +120,10 @@ truth for the live desktop.
   `/usr/bin/ryoku-host`, the one runtime boundary for init-system and package
   manager operations. Its implementation in `internal/host` selects systemd or
   runit and pacman, XBPS, or DNF, so scripts, daemons, QML, and other Go modules
-  do not grow host checks. Per-command reference, user- vs developer-facing, is
-  in `docs/cli.md`.
+  do not grow host checks. `internal/kmod` owns Fedora's out-of-tree kernel
+  modules: the machine's one module signing key, its enrollment and the
+  enrollment password; the installers reach it through `ryoku-host kmod`.
+  Per-command reference, user- vs developer-facing, is in `docs/cli.md`.
 - `hub/` Ryoku Settings, the central control-center GUI (`Super + ,`): `backend/`
   (`ryoku-hub`, the Go data plane that reads the keybind legend from the live
   Hyprland config, generates the `settings.lua` overlay (in `user_edits`) from JSON, and

@@ -262,6 +262,19 @@ verbs include:
   or elogind.
 - `time zones` prints the sorted IANA zone list. It uses `timedatectl` under
   systemd and the installed zoneinfo database on other init systems.
+- `kmod <status|prepare-key|queue-enrollment> [--root DIR]` manages Fedora's
+  module signing key (DKMS's `/var/lib/dkms/mok.key`) and its enrollment.
+  `prepare-key` creates the key pair if missing and sets its mode (`0640
+  root:akmods` when the `akmods` group exists, else `0600 root:root`);
+  `queue-enrollment` queues the enrollment only when Secure Boot is enforcing
+  and the key is neither enrolled nor queued. Every verb prints stable,
+  untranslated `key=value` lines, which the installers parse: `action=` first
+  for the two that change something (`created|fixed|unchanged`,
+  `queued|none`), then the status: `key=present|absent`, `key_mode`,
+  `key_owner`, `key_expected_mode`, `key_expected_owner`, `key_ok=yes|no`,
+  `secure_boot=enforcing|off|unsupported`,
+  `enrollment=enrolled|queued|not_queued|unknown` and `password=` (the
+  enrollment password). It lives in `internal/kmod` and is run as root.
 
 ### `ryoku materialize`
 

@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **`ryoku-host kmod` manages Fedora's module signing key.** `status`,
+  `prepare-key` and `queue-enrollment` cover DKMS's `/var/lib/dkms/mok.key`:
+  its creation with DKMS's own parameters, its mode (`0640 root:akmods` where
+  akmods exists, else `0600 root:root`), and its enrollment with the fixed
+  password `enroll` when Secure Boot is enforcing. Output is stable
+  `key=value` lines for the installers (`internal/kmod`).
 - **`ryoku-host pkg status` answers a whole batch.** It prints one line per
   package, `name<TAB>installed|available|unavailable<TAB>repo|aur<TAB>reason`,
   on pacman, dnf and xbps alike, with the edition table's sentence as the
