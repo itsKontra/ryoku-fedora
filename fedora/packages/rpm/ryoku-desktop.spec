@@ -101,8 +101,6 @@ Requires:       dracut
 Requires:       kernel-devel
 Requires:       kernel-headers
 Requires:       dkms
-Requires:       mokutil
-Requires:       openssl
 
 Recommends:     power-profiles-daemon
 Suggests:       kitty

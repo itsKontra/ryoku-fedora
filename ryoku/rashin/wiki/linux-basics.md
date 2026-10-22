@@ -44,20 +44,6 @@ cannot boot normally, choose a previous snapshot from the Limine boot menu, boot
 it, and follow `ryoku rollback`'s restore guidance. A rollback of Ryoku packages
 does not roll Arch or its kernel backward.
 
-## Fedora with Secure Boot: approving the module signing key
-
-On Fedora, modules Ryoku builds on the machine (xpadneo, and the NVIDIA driver
-on a Turing or newer NVIDIA GPU) are signed with the machine's own module
-signing key. With Secure Boot on, the firmware loads them only once that key is
-enrolled, so the first reboot after installing stops at a blue MokManager
-screen. Choose **Enroll MOK**, then **Continue** and **Yes**, type the
-enrollment password `enroll`, and choose **Reboot**. The password is the same on
-every machine and keyboard layout; it only proves someone is at the console.
-
-If the screen was skipped, run `ryoku doctor`: it queues the enrollment again
-and tells you to reboot and approve it. The hardware guide's "Fedora with Secure
-Boot: the MokManager screen" section has the details.
-
 ## User services and logs
 
 Desktop daemons run as systemd user services. They belong to your login, so use

@@ -53,13 +53,8 @@ compositor configuration into Ryoku's settings, so they appear in the Hub.
 The login screen, console, and boot prompt then follow the desktop keyboard
 layout.
 
-On Fedora, a Turing or newer NVIDIA GPU gets RPM Fusion's NVIDIA driver, built
-and signed on the machine with its own module signing key; turn the plan's
-"NVIDIA driver" item off to stay on nouveau. Older cards stay on nouveau. With
-Secure Boot on, the first reboot asks you to approve that key in MokManager
-(see [the hardware guide](../docs/installation-hardware.md#fedora-with-secure-boot-the-mokmanager-screen)).
-The conversion sets up snapshots on a btrfs root, does not offer Wayfire, and
-has no Fedora ISO.
+Fedora stays on the nouveau NVIDIA driver. The conversion sets up snapshots on
+a btrfs root, does not offer Wayfire, and has no Fedora ISO.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku/main/ryoku-shell-installer/install.sh | bash

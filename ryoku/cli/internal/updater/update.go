@@ -572,14 +572,8 @@ func runSystemLane(pending []updateItem) {
 		command = host.DNFCommand() + " upgrade -y --refresh"
 	}
 	progress.logf(i18n.T("Updating %d system package(s) (%s, kernel included)"), len(pending), command)
-	kernelBefore := newestKernel(modulesDir)
 	if err := runInhibited("System package upgrade", systemUpgradeArgs()); err != nil {
 		fmt.Fprintf(os.Stderr, i18n.T("warning: the system upgrade reported errors: %v\n"), err)
-	}
-	if manager == host.DNF {
-		if note := awaitNvidiaBuild(kernelBefore); note != "" {
-			progress.logf("%s", note)
-		}
 	}
 	if manager == host.Pacman && sys.Has("yay") {
 		progress.at("aur")

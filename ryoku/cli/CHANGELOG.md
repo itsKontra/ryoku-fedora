@@ -3,57 +3,6 @@
 ## Unreleased
 
 ### Added
-- **Doctor heals a driver fallback on Fedora.** On a machine with
-  `akmod-nvidia` whose running kernel has no NVIDIA module, doctor runs
-  `sudo ryoku-host kmod build-for-kernel` for that kernel and asks for a
-  reboot, or, when akmods fails, notes its error and the newest installed
-  kernel that still has the driver, to pick from the GRUB menu. A new
-  reconciler points akmods' key paths back at the module signing key when they
-  are missing, dangling or lead to a key akmods generated, and a key fix in
-  the same pass forces a rebuild for the running kernel. akmods' key
-  directories are root's, so doctor reads the links with `sudo -n` and never
-  prompts just to look (`reconcile_fedora_akmods_links.go`,
-  `reconcile_fedora_driver_fallback.go`).
-- **Doctor keeps the Fedora NVIDIA setup in shape.** Four Fedora-only
-  reconcilers replace the Arch and Void NVIDIA ones there: on a supported GPU
-  with `akmod-nvidia`, doctor installs `ryoku-nvidia-support` again, restores
-  RPM Fusion's `rd.driver.blacklist=nouveau,nova_core
-  modprobe.blacklist=nouveau,nova_core` with grubby on every kernel, and
-  enables `nvidia-fallback.service`. On a supported GPU with no driver and no
-  recorded nouveau choice it notes `sudo ryoku-host kmod install-driver` and
-  never runs it; on a pre-Turing card it reports a hand-installed
-  `akmod-nvidia` without removing it. The old manual RPM Fusion and dracut
-  advice, the initramfs rebuild in the dGPU runtime D3 fix included,
-  and the Fedora 580xx mapping are gone. `kmod` gains `GPU()`, the
-  generation check's answer, and `Choice()` (`reconcile_fedora_nvidia.go`).
-- **`ryoku update --system` waits for the NVIDIA build on Fedora.** When the
-  system lane installs a new kernel on a machine with `akmod-nvidia`, it runs
-  `ryoku-host kmod build-for-kernel` for that kernel in the foreground and
-  reports either the driver ready or the build failed, the next boot on
-  nouveau, and the kernel that still has the driver. A plain `dnf5 upgrade`
-  still relies on akmods in the background and at boot (`nvidiabuild.go`).
-- **`ryoku-host kmod` installs the NVIDIA driver on Fedora.** `install-driver`
-  enables RPM Fusion free and nonfree (keys checked against pinned
-  fingerprints), installs `akmods`, prepares the module signing key, installs
-  `ryoku-nvidia-support` and builds the module for the boot default kernel,
-  then checks it is signed with the machine's key. `build-for-kernel` reruns
-  akmods for one kernel and reports the newest kernel with a module.
-  `prepare-key` now links akmods' key paths to DKMS's pair, `record-choice`
-  records driver or nouveau, and the status gains `akmods_links=` and
-  `nvidia_choice=`.
-- **Doctor keeps Fedora's module signing key healthy.** Two Fedora-only
-  reconcilers read the key through `internal/kmod` and fix it with
-  `sudo ryoku-host kmod ...`: one sets the key back to its expected mode and
-  owner in either direction (loosened for akmods, tightened when too open); the
-  other queues the enrollment when Secure Boot is enforcing and the key is
-  neither enrolled nor queued, notes a queued one with the password, and waits
-  while Secure Boot is off (`reconcile_fedora_modulesigning.go`).
-- **`ryoku-host kmod` manages Fedora's module signing key.** `status`,
-  `prepare-key` and `queue-enrollment` cover DKMS's `/var/lib/dkms/mok.key`:
-  its creation with DKMS's own parameters, its mode (`0640 root:akmods` where
-  akmods exists, else `0600 root:root`), and its enrollment with the fixed
-  password `enroll` when Secure Boot is enforcing. Output is stable
-  `key=value` lines for the installers (`internal/kmod`).
 - **`ryoku-host pkg status` answers a whole batch.** It prints one line per
   package, `name<TAB>installed|available|unavailable<TAB>repo|aur<TAB>reason`,
   on pacman, dnf and xbps alike, with the edition table's sentence as the

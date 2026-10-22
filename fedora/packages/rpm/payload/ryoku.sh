@@ -22,8 +22,4 @@ package() {
     "$pkgdir/usr/libexec/ryoku/ryoku-dnf-snapshot"
   install -Dm644 "$_repo/fedora/system/snapshots/ryoku-snapper.actions" \
     "$pkgdir/etc/dnf/libdnf5-plugins/actions.d/ryoku-snapper.actions"
-  # ryoku-host kmod asks the driver script's --query whether the GPU gets the
-  # NVIDIA driver, so the GSP check stays defined once.
-  install -Dm755 "$_repo/system/hardware/drivers/nvidia.sh" \
-    "$pkgdir/usr/libexec/ryoku/nvidia.sh"
 }

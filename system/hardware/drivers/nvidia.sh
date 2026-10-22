@@ -13,17 +13,13 @@
 set -euo pipefail
 
 RYOKU_DRYRUN="${RYOKU_DRYRUN:-0}"
-QUERY=0
 DRIVER_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 for arg in "$@"; do
   case "$arg" in
     --dry-run) RYOKU_DRYRUN=1 ;;
-    --query) QUERY=1 ;;
     -h | --help)
-      echo "Usage: nvidia.sh [--dry-run | --query]"
+      echo "Usage: nvidia.sh [--dry-run]"
       echo "Install NVIDIA drivers (open for Turing+, proprietary otherwise) if an NVIDIA GPU is present."
-      echo "--query changes nothing; it prints and exits with whether the GPU takes the open modules:"
-      echo "  supported (0), unsupported (3, older than Turing), absent (4), unknown (5, no lspci)."
       exit 0
       ;;
     *)
@@ -81,7 +77,7 @@ has_nvidia() {
   # controller (class 0x03xxxx) made by NVIDIA (vendor 0x10de). works before
   # any driver binds, unlike a DRIVER= uevent match.
   local dev vendor class
-  for dev in "${RYOKU_PCI_DEVICES_DIR:-/sys/bus/pci/devices}"/*/; do
+  for dev in /sys/bus/pci/devices/*/; do
     [[ -r $dev/vendor && -r $dev/class ]] || continue
     read -r vendor <"$dev/vendor" || continue
     [[ $vendor == 0x10de ]] || continue
@@ -139,17 +135,6 @@ turing_userspace() {
   done
   return 0
 }
-
-# Fedora's driver install (ryoku-host kmod) asks this instead of keeping its own
-# list of cards. Without lspci the GSP check cannot see the card's name, so the
-# answer is unknown rather than the install path's "assume modern".
-if (( QUERY )); then
-  if ! has_nvidia; then echo absent; exit 4; fi
-  if ! has_lspci; then echo unknown; exit 5; fi
-  if nvidia_has_gsp; then echo supported; exit 0; fi
-  echo unsupported
-  exit 3
-fi
 
 if ! has_nvidia; then
   echo "nvidia.sh: no NVIDIA GPU detected, nothing to do."
