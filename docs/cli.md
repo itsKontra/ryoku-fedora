@@ -429,7 +429,12 @@ and runit state on Void, and RPM repository metadata, `.rpmnew` and
 links to it and its enrollment, then the NVIDIA driver fallback: a rebuild for
 the running kernel when it has no NVIDIA module or after a key fix in the same
 pass, with the newest kernel that still has the driver named when the build
-fails (doctor never holds a kernel or changes the boot default). Fedora omits the snapper and Limine checks because
+fails (doctor never holds a kernel or changes the boot default), and the NVIDIA
+driver's setup. On an NVIDIA machine doctor installs Ryoku's NVIDIA package
+again, restores RPM Fusion's nouveau blacklist and keeps
+`nvidia-fallback.service` enabled; it only names `sudo ryoku-host kmod
+install-driver` for a supported GPU on nouveau, and reports a hand-installed
+`akmod-nvidia` on a pre-Turing card without removing it. Fedora omits the snapper and Limine checks because
 that edition does not provide them.
 
 Reconcilers retire once every supported install has run them, so the set stays

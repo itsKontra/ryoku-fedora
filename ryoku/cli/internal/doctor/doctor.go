@@ -378,9 +378,17 @@ func reconcilers() []reconciler {
 		{i18n.T("display resolution"), reconcileDisplayModes},
 		{i18n.T("phantom Wayland output"), reconcilePhantomOutput},
 		{i18n.T("fingerprint unlock module"), reconcileFingerprintModule},
-		{i18n.T("Kepler NVIDIA recovery"), reconcileKeplerNvidia},
-		{i18n.T("NVIDIA boot reliability"), reconcileNvidiaModeset},
-		{i18n.T("NVIDIA update guard hook"), reconcileNvidiaGuardHook},
+	}...)
+	if fedora {
+		checks = append(checks, fedoraNvidiaChecks()...)
+	} else {
+		checks = append(checks,
+			reconciler{i18n.T("Kepler NVIDIA recovery"), reconcileKeplerNvidia},
+			reconciler{i18n.T("NVIDIA boot reliability"), reconcileNvidiaModeset},
+			reconciler{i18n.T("NVIDIA update guard hook"), reconcileNvidiaGuardHook},
+		)
+	}
+	checks = append(checks, []reconciler{
 		{i18n.T("NVIDIA sleep units"), reconcileNvidiaSleepUnits},
 		{pendingConfigCheckName(), reconcilePacnew},
 		{i18n.T("orphaned packages"), reconcileOrphans},

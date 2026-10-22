@@ -20,6 +20,6 @@ func (m *Machine) Status() (Status, error) {
 		SecureBoot: m.secureBoot(),
 		Enrollment: m.enrollment(key),
 		Password:   EnrollmentPassword,
-		Choice:     m.choice(),
+		Choice:     m.Choice(),
 	}, nil
 }

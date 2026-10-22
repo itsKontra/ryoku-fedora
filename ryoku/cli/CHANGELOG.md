@@ -14,6 +14,17 @@
   directories are root's, so doctor reads the links with `sudo -n` and never
   prompts just to look (`reconcile_fedora_akmods_links.go`,
   `reconcile_fedora_driver_fallback.go`).
+- **Doctor keeps the Fedora NVIDIA setup in shape.** Four Fedora-only
+  reconcilers replace the Arch and Void NVIDIA ones there: on a supported GPU
+  with `akmod-nvidia`, doctor installs `ryoku-nvidia-support` again, restores
+  RPM Fusion's `rd.driver.blacklist=nouveau,nova_core
+  modprobe.blacklist=nouveau,nova_core` with grubby on every kernel, and
+  enables `nvidia-fallback.service`. On a supported GPU with no driver and no
+  recorded nouveau choice it notes `sudo ryoku-host kmod install-driver` and
+  never runs it; on a pre-Turing card it reports a hand-installed
+  `akmod-nvidia` without removing it. The old manual RPM Fusion and dracut
+  advice and the Fedora 580xx mapping are gone. `kmod` gains `GPU()`, the
+  generation check's answer, and `Choice()` (`reconcile_fedora_nvidia.go`).
 - **`ryoku update --system` waits for the NVIDIA build on Fedora.** When the
   system lane installs a new kernel on a machine with `akmod-nvidia`, it runs
   `ryoku-host kmod build-for-kernel` for that kernel in the foreground and
