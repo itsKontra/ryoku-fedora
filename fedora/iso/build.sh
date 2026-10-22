@@ -22,7 +22,8 @@
 #                          and must not be published
 #
 # The ryoku.compositor=, ryoku.browser= and ryoku.shell= boot options override
-# the defaults at install time.
+# the defaults at install time; ryoku.nvidia=0 keeps a supported NVIDIA GPU on
+# nouveau instead of installing the NVIDIA driver.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -83,6 +84,7 @@ mkdir -p "$stage/post" "$out"
 install -m755 "$here/post/stage" "$here/post/provision" "$here/post/check-admin" "$stage/post/"
 for path in \
   system/packages/resolve \
+  system/hardware/drivers/nvidia.sh \
   fedora/packages/translations.tsv \
   fedora/packages/coprs.tsv \
   installation/installerplan/choices.tsv \

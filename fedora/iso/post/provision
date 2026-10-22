@@ -252,12 +252,49 @@ queue_enrollment() {
   enrollment_notice "$password" | tee "$handoff/enrollment-notice"
 }
 
-# sign_modules mirrors the shell installer's prepareFedoraModuleSigning: the
-# machine's module signing key, the DKMS modules built for the kernel it
-# boots, then the key's enrollment. Every step only warns; ryoku doctor
-# finishes the job on the first boot.
+# nvidia_choice prints what this NVIDIA machine chose, for ryoku doctor:
+# driver for a supported GPU, nouveau when ryoku.nvidia=0 opted out, and
+# nothing when no choice was made.
+nvidia_choice() {
+  [[ -n $nvidia_generation && $nvidia_generation != absent ]] || return 0
+  if [[ $cmdline_nvidia == 0 ]]; then
+    echo nouveau
+  elif [[ $nvidia_generation == supported ]]; then
+    echo driver
+  fi
+}
+
+# nvidia_driver <kernel> installs RPM Fusion's NVIDIA driver, built and signed
+# for that kernel, on the installer environment's word that the GPU is
+# supported: the target may lack lspci, and the GPU check reads a card it
+# cannot name as supported, so it never runs here.
+nvidia_driver() {
+  local kernel=$1
+  case $nvidia_generation in
+    '' | absent) return 0 ;;
+    unsupported) log "this NVIDIA GPU is older than Turing; it stays on nouveau"; return 0 ;;
+    supported) ;;
+    *) log "the NVIDIA GPU's generation could not be checked; it stays on nouveau, and ryoku doctor can install the driver later"; return 0 ;;
+  esac
+  if [[ $(nvidia_choice) == nouveau ]]; then
+    log "keeping nouveau for the NVIDIA GPU (ryoku.nvidia=0)"
+    return 0
+  fi
+  if [[ -z $kernel ]]; then
+    warn "found no installed kernel to build the NVIDIA driver for; the machine boots on nouveau and ryoku doctor offers the driver"
+    return 0
+  fi
+  log "installing the NVIDIA driver from RPM Fusion for kernel $kernel; building it takes several minutes"
+  ryoku-host kmod install-driver --kernel "$kernel" --gpu-supported ||
+    warn "the NVIDIA driver is not built for kernel $kernel; the machine boots on nouveau until akmods or ryoku doctor builds it"
+}
+
+# sign_modules mirrors the shell installer's stepFedoraDrivers: the machine's
+# module signing key, the DKMS modules and the NVIDIA driver built for the
+# kernel it boots, the key's enrollment, then the NVIDIA choice. Every step
+# only warns; akmods and ryoku doctor finish the job on the first boot.
 sign_modules() {
-  local kernel
+  local kernel choice
   log "preparing the module signing key"
   ryoku-host kmod prepare-key ||
     warn "could not prepare the module signing key; DKMS creates one, ryoku doctor fixes it"
@@ -267,8 +304,14 @@ sign_modules() {
   elif ! build_modules "$kernel"; then
     warn "xpadneo is not built and signed for kernel $kernel; it builds at the first boot"
   fi
+  nvidia_driver "$kernel"
   queue_enrollment ||
     warn "could not queue the module signing key's enrollment; ryoku doctor queues it"
+  choice=$(nvidia_choice)
+  if [[ -n $choice ]]; then
+    ryoku-host kmod record-choice "$choice" >/dev/null ||
+      warn "could not record the NVIDIA choice for ryoku doctor"
+  fi
 }
 
 # with_systemd_dir runs a command with /run/systemd/system present, the marker
@@ -446,7 +489,7 @@ relabel() {
 }
 
 main() {
-  gpu_vendors='' cmdline_compositor='' cmdline_browser='' cmdline_shell=''
+  gpu_vendors='' nvidia_generation='' cmdline_nvidia='' cmdline_compositor='' cmdline_browser='' cmdline_shell=''
   # shellcheck source=/dev/null
   source "$here/ryoku-iso.conf"
   # shellcheck source=/dev/null
