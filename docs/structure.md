@@ -338,7 +338,9 @@ are supported; Atomic and other rpm-ostree systems are refused.
   `ryoku-nvidia-support` adds to RPM Fusion's NVIDIA driver: a dracut drop-in
   that keeps nouveau out of the initramfs and the preset that enables
   `nvidia-fallback.service`. That package is installed only on NVIDIA
-  machines, never as a dependency of `ryoku-desktop`.
+  machines, never as a dependency of `ryoku-desktop`. `hardware/dkms/` has the
+  DKMS drop-in, shipped by `ryoku-desktop`, that signs modules even inside an
+  installer chroot.
 - `.github/workflows/publish-repo-fedora.yml` builds and install-tests every
   supported Fedora release, then publishes moving stable and testing heads,
   frozen releases and unstable builds, and their ledgers below

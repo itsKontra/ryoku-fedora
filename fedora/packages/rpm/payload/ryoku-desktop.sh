@@ -29,6 +29,8 @@ package() {
     "$pkgdir/usr/lib/systemd/system/ryoku-wifi-regdom.service"
   install -Dm755 "$_repo/fedora/system/boot/ryoku-plymouth-apply" \
     "$pkgdir/usr/bin/ryoku-plymouth-apply"
+  install -Dm644 "$_repo/fedora/system/hardware/dkms/ryoku-sign-modules.conf" \
+    "$pkgdir/etc/dkms/framework.conf.d/ryoku-sign-modules.conf"
 
   # the boot menu (fedora/system/boot): the Ryoku GRUB theme and the "Ryoku
   # snapshots" submenu, resynced after every snapshot by the snapper plugin and
