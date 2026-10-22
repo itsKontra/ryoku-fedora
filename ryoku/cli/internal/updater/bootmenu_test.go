@@ -47,6 +47,24 @@ func TestEntryOptionsSwapTheSubvolumeOnly(t *testing.T) {
 	}
 }
 
+func TestCompareVersionsOrdersFedoraKernels(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"6.17.1-300.fc44.x86_64", "6.9.12-200.fc44.x86_64", 1},
+		{"6.17.1-300.fc44.x86_64", "6.17.10-300.fc44.x86_64", -1},
+		{"6.17.1-300.fc44.x86_64", "6.17.1-300.fc44.x86_64", 0},
+		{"6.17.1-301.fc44.x86_64", "6.17.1-300.fc44.x86_64", 1},
+	}
+	for _, c := range cases {
+		got := compareVersions(c.a, c.b)
+		if (got > 0) != (c.want > 0) || (got < 0) != (c.want < 0) {
+			t.Errorf("compareVersions(%q, %q) = %d, want sign of %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+
 func writeSnapshot(t *testing.T, dir, num, kind, desc string, kvers ...string) {
 	t.Helper()
 	base := filepath.Join(dir, num)

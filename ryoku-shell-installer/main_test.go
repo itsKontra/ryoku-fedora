@@ -439,11 +439,11 @@ func TestFedoraPlanNeverClaimsSnapshotRollback(t *testing.T) {
 	}
 }
 
-func TestFedoraPlanSkipsArchOnlyItems(t *testing.T) {
+func TestFedoraPlanKeepsNouveauAndSkipsAUR(t *testing.T) {
 	f := &facts{distro: fedoraLinux, hasNvidia: true}
 	p := defaultPlan(f)
 	if p.nvidia {
-		t.Fatal("Fedora must not schedule the NVIDIA driver for a GPU whose generation was never checked")
+		t.Fatal("Fedora must not schedule proprietary NVIDIA driver changes")
 	}
 	if p.aur {
 		t.Fatal("Fedora must not schedule the Arch-only AUR step")
@@ -502,15 +502,6 @@ func TestScreensFitMinimumTerminal(t *testing.T) {
 	check("ack", base.viewAck())
 	check("install", base.viewInstall())
 	check("done", base.viewDone())
-	if strings.Contains(base.viewDone(), "MokManager") {
-		t.Error("done view explains an enrollment that was never queued")
-	}
-	e.enrollmentPassword = "enroll"
-	check("done with an enrollment", base.viewDone())
-	if view := base.viewDone(); !strings.Contains(view, "Enroll MOK") || !strings.Contains(view, "enroll.") {
-		t.Errorf("done view lacks the enrollment steps:\n%s", view)
-	}
-	e.enrollmentPassword = ""
 	check("failed", base.viewFailed())
 	for i, item := range items {
 		if !selectablePlanItem(item) {

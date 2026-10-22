@@ -2,53 +2,37 @@
 #
 # The kickstart's %post --nochroot step. Copies this directory into the
 # target, records what only the installer environment can see (the GPU
-# vendors, the NVIDIA GPU's generation and the ryoku.* boot options), lends the
-# target the installer's DNS for the package download, runs provision inside
-# the target chroot, then leaves provision's handoff (the enrollment notice) in
-# /run/ryoku-iso for Anaconda.
+# vendors and the ryoku.* boot options), lends the target the installer's DNS
+# for the package download, then runs provision inside the target chroot.
 #
 #   stage <target root>
 set -euo pipefail
 
+root=${1:?usage: stage <target root>}
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-payload=${RYOKU_ISO_PAYLOAD:-$here/payload}
 work=/var/tmp/ryoku-iso
-proc_cmdline=/proc/cmdline
-drm_dir=/sys/class/drm
 
 # boot_option <name>: the value of ryoku.<name>= on the installer's command line.
 boot_option() {
   local word words
-  read -ra words <"$proc_cmdline"
+  read -ra words </proc/cmdline
   for word in "${words[@]}"; do
     [[ $word == "ryoku.$1="* ]] && { printf '%s\n' "${word#*=}"; return; }
   done
   return 0
 }
 
-# facts prints what provision reads about this machine. The NVIDIA generation
-# check runs here, where lspci sees the card: the target may lack lspci, and
-# the check reads a card it cannot name as supported.
-facts() {
-  local vendors generation
-  vendors=$(cat "$drm_dir"/card*/device/vendor 2>/dev/null | sort -u | tr '\n' ' ' || true)
-  generation=$(bash "$payload/system/hardware/drivers/nvidia.sh" --query 2>/dev/null) || true
-  printf 'gpu_vendors=%q\n' "$vendors"
-  printf 'nvidia_generation=%q\n' "$generation"
-  printf 'cmdline_nvidia=%q\n' "$(boot_option nvidia)"
-  printf 'cmdline_compositor=%q\n' "$(boot_option compositor)"
-  printf 'cmdline_browser=%q\n' "$(boot_option browser)"
-  printf 'cmdline_shell=%q\n' "$(boot_option shell)"
-}
-
-# tests/check.sh sources this file for facts.
-[[ ${BASH_SOURCE[0]} == "$0" ]] || return 0
-
-root=${1:?usage: stage <target root>}
 rm -rf "${root:?}$work"
 mkdir -p "$root$work"
 cp -a "$here/." "$root$work/"
-facts >"$root$work/facts"
+
+vendors=$(cat /sys/class/drm/card*/device/vendor 2>/dev/null | sort -u | tr '\n' ' ' || true)
+{
+  printf 'gpu_vendors=%q\n' "$vendors"
+  printf 'cmdline_compositor=%q\n' "$(boot_option compositor)"
+  printf 'cmdline_browser=%q\n' "$(boot_option browser)"
+  printf 'cmdline_shell=%q\n' "$(boot_option shell)"
+} >"$root$work/facts"
 
 # Fedora's /etc/resolv.conf points into /run/systemd/resolve, which nothing
 # serves inside the chroot; swap in the installer's resolver until provision ends.
@@ -68,9 +52,3 @@ fi
 cp -L /etc/resolv.conf "$resolv"
 
 chroot "$root" /usr/bin/bash "$work/post/provision"
-
-# restore deletes $work on exit; Anaconda reads provision's handoff from here.
-if [[ -d $root$work/handoff ]]; then
-  install -d -m755 /run/ryoku-iso
-  cp -a "$root$work/handoff/." /run/ryoku-iso/
-fi

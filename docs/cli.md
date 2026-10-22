@@ -262,43 +262,6 @@ verbs include:
   or elogind.
 - `time zones` prints the sorted IANA zone list. It uses `timedatectl` under
   systemd and the installed zoneinfo database on other init systems.
-- `kmod <verb> [--root DIR]` manages Fedora's out-of-tree kernel modules: the
-  module signing key (DKMS's `/var/lib/dkms/mok.key`), its enrollment and the
-  NVIDIA driver. It lives in `internal/kmod` and is run as root.
-  - `prepare-key` creates the key pair if missing, sets its mode (`0640
-    root:akmods` when the `akmods` group exists, else `0600 root:root`) and,
-    where akmods is installed, links akmods' key paths
-    (`/etc/pki/akmods/private/private_key.priv`,
-    `/etc/pki/akmods/certs/public_key.der`) to DKMS's pair.
-  - `queue-enrollment` queues the enrollment only when Secure Boot is enforcing
-    and the key is neither enrolled nor queued.
-  - `record-choice driver|nouveau` records the installer's NVIDIA choice in
-    `/var/lib/ryoku/nvidia-choice`.
-  - `install-driver [--kernel VERSION] [--gpu-supported]` refuses a GPU the
-    driver script's `--query` does not call supported (skipped with
-    `--gpu-supported`, for a caller that already ran it), enables RPM Fusion
-    free and nonfree from their release packages after checking their keys
-    against pinned fingerprints, installs `akmods` and the kernel's headers,
-    prepares the key, installs `ryoku-nvidia-support` (which pulls
-    `akmod-nvidia`), builds for `VERSION` (default: the boot default kernel) and
-    fails unless the module is signed with the machine's key.
-  - `build-for-kernel [--kernel VERSION] [--rebuild]` runs `akmods --force` for
-    one kernel (`--rebuild` also rebuilds an existing module).
-
-  Every verb prints stable, untranslated `key=value` lines, which the
-  installers parse. The verb's own lines come first: `action=` for
-  `prepare-key` (`created|fixed|unchanged`), `queue-enrollment`
-  (`queued|none`) and `install-driver` (`installed`, then `kernel=`);
-  `nvidia_choice=` for `record-choice`; `build=ok|failed`, `kernel=` and
-  `newest_module_kernel=` (the newest installed kernel with an NVIDIA module,
-  empty if none) for `build-for-kernel`, which exits 0 whenever akmods ran.
-  The status follows: `key=present|absent`, `key_mode`, `key_owner`,
-  `key_expected_mode`, `key_expected_owner`, `key_ok=yes|no`,
-  `secure_boot=enforcing|off|unsupported`,
-  `enrollment=enrolled|queued|not_queued|unknown`, `password=` (the
-  enrollment password), `akmods_links=ok|missing|dangling|foreign|not_needed`
-  (`unreadable` when run as a user who cannot list akmods' `0750` key
-  directories) and `nvidia_choice=driver|nouveau|` (empty when none was recorded).
 
 ### `ryoku materialize`
 
@@ -424,17 +387,8 @@ Current reconcilers live in `ryoku/cli/internal/doctor/`. Common checks cover
 desktop sessions, channel health, the keyring unlock policy, compositor config,
 backlights, pending package config, and orphaned packages. Host-specific checks
 stay on their host: pacman lock and progress settings on Arch/CachyOS, Turnstile
-and runit state on Void, and RPM repository metadata, `.rpmnew` and
-`.rpmsave` files, and on Fedora the module signing key's permissions, akmods'
-links to it and its enrollment, then the NVIDIA driver fallback: a rebuild for
-the running kernel when it has no NVIDIA module or after a key fix in the same
-pass, with the newest kernel that still has the driver named when the build
-fails (doctor never holds a kernel or changes the boot default), and the NVIDIA
-driver's setup. On an NVIDIA machine doctor installs Ryoku's NVIDIA package
-again, restores RPM Fusion's nouveau blacklist and keeps
-`nvidia-fallback.service` enabled; it only names `sudo ryoku-host kmod
-install-driver` for a supported GPU on nouveau, and reports a hand-installed
-`akmod-nvidia` on a pre-Turing card without removing it. Fedora omits the snapper and Limine checks because
+and runit state on Void, and RPM repository metadata plus `.rpmnew` and
+`.rpmsave` files on Fedora. Fedora omits the snapper and Limine checks because
 that edition does not provide them.
 
 Reconcilers retire once every supported install has run them, so the set stays

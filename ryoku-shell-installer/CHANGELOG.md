@@ -3,20 +3,6 @@
 ## Unreleased
 
 ### Added
-- **Fedora installs the NVIDIA driver.** On a Turing or newer GPU the plan's
-  "NVIDIA driver" item is on by default; the drivers step runs
-  `ryoku-host kmod install-driver` (RPM Fusion's `akmod-nvidia`, built and
-  signed with the machine's key) before queueing the enrollment, and records
-  the choice for doctor: driver, or nouveau when the item was turned off.
-  Older cards, and a card whose generation cannot be checked, are locked to
-  nouveau with an explanation and record no choice, so doctor can offer the
-  driver later; Secure Boot never locks the item, and its detail says an
-  enrollment follows. The GPU check is the driver script's new `--query`.
-- **Fedora machines get their module signing key enrolled.** The drivers step
-  prepares the machine's one module signing key through `ryoku-host kmod` and,
-  with Secure Boot enforcing, queues its enrollment; the final summary says
-  what MokManager will ask at the next reboot and gives the password, so
-  xpadneo loads without a manual `mokutil` step.
 - **The script installer now uses the ISO install catalogue.** It offers the
   file manager, Rashin, Ryoku apps, required edition components, and the
   optional CachyOS layer on plain Arch. Unattended runs can make the same

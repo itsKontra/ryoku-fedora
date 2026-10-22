@@ -42,7 +42,7 @@ func (a *App) FedoraReleaseStatus() (FedoraReleaseStatus, error) {
 	if path == "" {
 		path = "/etc/os-release"
 	}
-	status := FedoraReleaseStatus{Version: OSReleaseValue(path, "VERSION_ID")}
+	status := FedoraReleaseStatus{Version: osReleaseVersion(path)}
 	if status.Version == "" {
 		return status, fmt.Errorf("Fedora VERSION_ID is missing from %s", path)
 	}

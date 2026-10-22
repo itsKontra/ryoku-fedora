@@ -266,7 +266,7 @@ adapter_entry() {
   normalized_filter=
 
   # This is the complete adapter allow-list. Entries are limited to init wiring,
-  # package-manager hooks and tables, boot and module-signing integration, Fedora's Qt libdir and
+  # package-manager hooks and tables, boot integration, Fedora's Qt libdir and
   # provider mime files, Void's XDG mime location, and Fedora's picker command.
   case "$edition:$source_path" in
     fedora:usr/lib64/qt6/*)
@@ -286,15 +286,13 @@ adapter_entry() {
       return 1
       ;;
     *:usr/share/libalpm/*|*:usr/share/ryoku/packages/void.tsv|*:usr/share/ryoku/packages/fedora.tsv|\
-    fedora:etc/dnf/libdnf5-plugins/*|fedora:usr/libexec/ryoku/ryoku-dnf-snapshot|\
-    fedora:usr/libexec/ryoku/nvidia.sh)
+    fedora:etc/dnf/libdnf5-plugins/*|fedora:usr/libexec/ryoku/ryoku-dnf-snapshot)
       return 1
       ;;
     *:etc/boot/*|*:etc/kernel.d/*|*:usr/lib/initcpio/*|*:usr/share/ryoku/boot/*|\
-    *:usr/bin/ryoku-boot-apply|*:usr/bin/ryoku-windows-entry|*:usr/bin/ryoku-nvidia-guard|\
+    *:usr/bin/ryoku-boot-apply|*:usr/bin/ryoku-windows-entry|\
     fedora:etc/grub.d/15_ryoku_snapshots|fedora:usr/bin/ryoku-grub-menu|fedora:usr/bin/ryoku-plymouth-apply|fedora:usr/share/ryoku/grub/*|\
-    fedora:usr/libexec/snapper/plugins/50-ryoku-boot-menu|fedora:usr/lib/dracut/modules.d/90ryoku-snapshot/*|\
-    fedora:etc/dkms/framework.conf.d/ryoku-sign-modules.conf)
+    fedora:usr/libexec/snapper/plugins/50-ryoku-boot-menu|fedora:usr/lib/dracut/modules.d/90ryoku-snapshot/*)
       return 1
       ;;
     *:usr/share/polkit-1/rules.d/54-ryoku-bluetooth-a2dp.rules|\
@@ -370,21 +368,6 @@ for pkg in "${packages[@]}"; do
     for edition in arch void fedora fedora-spec; do
       [[ -x $work/staged/$pkg-$edition/usr/bin/ryoku-polkit-reload ]] \
         || fail "ryoku-desktop $edition package is missing the polkit reload helper"
-    done
-    [[ -x $work/staged/$pkg-arch/usr/bin/ryoku-nvidia-guard ]] \
-      || fail "ryoku-desktop Arch package is missing ryoku-nvidia-guard"
-    for edition in fedora fedora-spec; do
-      [[ ! -e $work/staged/$pkg-$edition/usr/bin/ryoku-nvidia-guard ]] \
-        || fail "ryoku-desktop $edition package ships the pacman-only ryoku-nvidia-guard"
-      grep -qx 'try_sign_modules="true"' "$work/staged/$pkg-$edition/etc/dkms/framework.conf.d/ryoku-sign-modules.conf" \
-        || fail "ryoku-desktop $edition package does not make DKMS sign modules inside a chroot"
-    done
-  fi
-  if [[ $pkg == ryoku ]]; then
-    for edition in fedora fedora-spec; do
-      cmp -s "$root/system/hardware/drivers/nvidia.sh" "$work/staged/$pkg-$edition/usr/libexec/ryoku/nvidia.sh" \
-        && [[ -x $work/staged/$pkg-$edition/usr/libexec/ryoku/nvidia.sh ]] \
-        || fail "ryoku $edition package does not ship the driver script ryoku-host kmod asks about the GPU"
     done
   fi
 

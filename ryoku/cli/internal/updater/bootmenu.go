@@ -15,7 +15,6 @@ import (
 	"time"
 	"unicode"
 
-	"ryoku-cli/internal/host"
 	"ryoku-cli/internal/sys"
 	i18n "ryoku-i18n"
 )
@@ -297,10 +296,50 @@ func readBootSnapshots(dir string) []bootSnapshot {
 // newestKernel is the highest kernel version under a modules directory that
 // has its vmlinuz, the one that root boots by default.
 func newestKernel(dir string) string {
-	if kernels := host.InstalledKernels(dir); len(kernels) > 0 {
-		return kernels[0]
+	entries, _ := os.ReadDir(dir)
+	best := ""
+	for _, e := range entries {
+		if !sys.Exists(filepath.Join(dir, e.Name(), "vmlinuz")) {
+			continue
+		}
+		if best == "" || compareVersions(e.Name(), best) > 0 {
+			best = e.Name()
+		}
 	}
-	return ""
+	return best
+}
+
+// compareVersions orders kernel versions the way rpm does for the cases
+// Fedora produces: runs of digits compare as numbers, anything else as text.
+func compareVersions(a, b string) int {
+	split := func(s string) []string {
+		var parts []string
+		for len(s) > 0 {
+			i := 0
+			digit := unicode.IsDigit(rune(s[0]))
+			for i < len(s) && unicode.IsDigit(rune(s[i])) == digit {
+				i++
+			}
+			parts = append(parts, s[:i])
+			s = s[i:]
+		}
+		return parts
+	}
+	pa, pb := split(a), split(b)
+	for i := 0; i < len(pa) && i < len(pb); i++ {
+		x, errx := strconv.Atoi(pa[i])
+		y, erry := strconv.Atoi(pb[i])
+		switch {
+		case errx == nil && erry == nil && x != y:
+			if x < y {
+				return -1
+			}
+			return 1
+		case (errx != nil || erry != nil) && pa[i] != pb[i]:
+			return strings.Compare(pa[i], pb[i])
+		}
+	}
+	return len(pa) - len(pb)
 }
 
 // ensureSnapshotKernel keeps a bootable copy of kver on /boot. The initramfs

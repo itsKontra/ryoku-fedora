@@ -21,9 +21,7 @@ ryoku/<pkg>...`) and never runs a system upgrade. The reasons are the design:
 - **The kernel is not ours to move.** Ryoku ships a plain Arch variant and a
   CachyOS variant and publishes neither kernel. A Ryoku release must not decide
   when your box changes kernel, rebuilds its DKMS modules, or rewrites its boot
-  image. A Fedora NVIDIA machine can therefore boot a kernel before its driver
-  exists and fall back to nouveau; `ryoku update --system` waits for the build
-  and says whether the next boot has the driver.
+  image.
 - **A release has to be reversible.** `ryoku rollback` puts the Ryoku set back;
   it does not put the Arch, CachyOS, Void, or Fedora base back. Snapshots cover
   that layer where the edition supports them. An update that moved both was
