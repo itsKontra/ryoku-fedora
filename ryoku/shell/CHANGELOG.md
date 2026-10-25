@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Fixed
+- **A window retitling in the background no longer wakes the shell.** The
+  focused window keeps its object until one of its own fields changes, screen
+  time banks only when the focused app changes, the Sumi rails load only under
+  Sumi, and workspace pills keep their icons when the app set is unchanged
+  (`../ui/Singletons/Wm.qml`, `quickshell/shell/services/ScreenTime.qml`,
+  `quickshell/shell/modules/bar/Frame.qml`,
+  `quickshell/shell/modules/bar/framebars/widgets/RailWorkspaces.qml`).
+- **Bar network speed comes from the shared system sampler.** The bar no
+  longer parses `/proc/net/dev` in QML every two seconds, and sampling stops
+  while the session is locked or the displays are off
+  (`quickshell/shell/services/Network.qml`).
 - **A shell restart no longer undoes an active idle dim.** The brightness
   watcher still publishes the temporary level to the OSD, but does not persist
   it or restore an older user level while `ryoku-idle` owns the panel. The

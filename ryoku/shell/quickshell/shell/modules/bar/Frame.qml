@@ -370,8 +370,8 @@ Scope {
 
             // The animated menu extension is a simple scene-graph primitive;
             // changing its rect stays smooth while the frame path remains static.
-            // The Sumi pieces load only while Sumi is the bar style: kept alive
-            // but hidden, the rails still rebuild on every window change.
+            // Loaded only under Sumi: hidden but alive, the rails still rebuild
+            // on every window change.
             Loader {
                 active: root.sumiActive && root.barEnabled
                 sourceComponent: Rectangle {
