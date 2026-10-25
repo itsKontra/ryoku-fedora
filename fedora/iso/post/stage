@@ -1,0 +1,54 @@
+#!/usr/bin/bash
+#
+# The kickstart's %post --nochroot step. Copies this directory into the
+# target, records what only the installer environment can see (the GPU
+# vendors and the ryoku.* boot options), lends the target the installer's DNS
+# for the package download, then runs provision inside the target chroot.
+#
+#   stage <target root>
+set -euo pipefail
+
+root=${1:?usage: stage <target root>}
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+work=/var/tmp/ryoku-iso
+
+# boot_option <name>: the value of ryoku.<name>= on the installer's command line.
+boot_option() {
+  local word words
+  read -ra words </proc/cmdline
+  for word in "${words[@]}"; do
+    [[ $word == "ryoku.$1="* ]] && { printf '%s\n' "${word#*=}"; return; }
+  done
+  return 0
+}
+
+rm -rf "${root:?}$work"
+mkdir -p "$root$work"
+cp -a "$here/." "$root$work/"
+
+vendors=$(cat /sys/class/drm/card*/device/vendor 2>/dev/null | sort -u | tr '\n' ' ' || true)
+{
+  printf 'gpu_vendors=%q\n' "$vendors"
+  printf 'cmdline_compositor=%q\n' "$(boot_option compositor)"
+  printf 'cmdline_browser=%q\n' "$(boot_option browser)"
+  printf 'cmdline_shell=%q\n' "$(boot_option shell)"
+} >"$root$work/facts"
+
+# Fedora's /etc/resolv.conf points into /run/systemd/resolve, which nothing
+# serves inside the chroot; swap in the installer's resolver until provision ends.
+resolv=$root/etc/resolv.conf
+saved=$root/etc/resolv.conf.ryoku-iso
+restore() {
+  rm -f "$resolv"
+  if [[ -e $saved || -L $saved ]]; then
+    mv -f "$saved" "$resolv"
+  fi
+  rm -rf "${root:?}$work"
+}
+trap restore EXIT
+if [[ -e $resolv || -L $resolv ]]; then
+  mv -f "$resolv" "$saved"
+fi
+cp -L /etc/resolv.conf "$resolv"
+
+chroot "$root" /usr/bin/bash "$work/post/provision"

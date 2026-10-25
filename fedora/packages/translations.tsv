@@ -282,7 +282,7 @@ xdg-user-dirs	xdg-user-dirs	desktop
 xdg-utils	xdg-utils	desktop	
 xorg-xcursorgen	xcursorgen	desktop	
 xorg-xwayland	xorg-x11-server-Xwayland	desktop	
-xpadneo-dkms	xpadneo-dkms	desktop	Ryoku-owned RPM.
+xpadneo-dkms	xpadneo-dkms	optional	Ryoku-owned RPM. Opt-in on Fedora: with Secure Boot on, its DKMS key needs a MokManager enrollment.
 xwayland-satellite	xwayland-satellite	desktop	
 yay	-	optional	AUR helpers do not apply to Fedora.
 yay-bin	-	extra	AUR helpers do not apply to Fedora.
