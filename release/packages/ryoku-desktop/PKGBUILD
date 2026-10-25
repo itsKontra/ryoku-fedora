@@ -27,6 +27,9 @@ depends=(
   # plugin or daemon (a partial upgrade now fails loudly instead of skewing).
   "ryoku-shell=$pkgver"
   "ryoku-hub=$pkgver"
+  # Ryogami's app integrations configure this runtime; installation alone does
+  # not enable its user service or change any application.
+  "ryoku-palette-bridge=$pkgver"
   "ryoku-blobs=$pkgver"
   "ryoku=$pkgver"
   'ryoku-keyring'
@@ -106,13 +109,13 @@ depends=(
   'yt-dlp'
   'wl-clipboard'
   'wl-clip-persist'
-  'cliphist'
   'grim'
   'slurp'
   'cava'
-  # the visualiser's line style is an oscilloscope: wavecap.py (python) drives
-  # pw-record (pipewire) to capture the sink monitor and downsample its waveform.
-  # pactl (already used by the shell's audio-watch) resolves the monitor node.
+  # the visualiser's line style is an oscilloscope: the shell's WaveCapture runs
+  # pw-record (pipewire) on the sink monitor and downsamples it in C++. pactl
+  # (already used by the shell's audio-watch) resolves the monitor node, and
+  # python runs the shell's helper scripts.
   'python'
   'pipewire'
   'jq'
@@ -140,6 +143,8 @@ depends=(
   # official repo, hard depends so they reach existing boxes on `ryoku update`.
   'qt6-multimedia'
   'qt6-declarative'
+  # Qt Quick 3D renders the Stage depth mesh (Ryoku.Spatial3D).
+  'qt6-quick3d'
   # Hub's ISO picker (GPU passthrough VM) shells out to a file chooser
   'zenity'
   # Game Mode wifi power-save toggle (ryoku-wifi-powersave runs iw)

@@ -7,6 +7,9 @@ here; runtime code reaches it through `ryoku-host`.
 Hyprland is not shipped. Ryoku requires Hyprland 0.55+, which requires GCC 15
 and C++26, while Void currently ships GCC 14.
 
+For a stock Void installation followed by Ryoku's one-line installer, see
+[`../docs/install-without-iso.md`](../docs/install-without-iso.md#void-linux).
+
 ## Layout
 
 | Path | Purpose |
@@ -75,6 +78,23 @@ initramfs. It preserves the Snapshots subtree owned by `limine-snapper-sync`.
 The shell installer does not provision a bootloader or snapshot layout on an
 existing Void machine. Snapshot restore works when that machine already has a
 btrfs root and snapper; `ryoku doctor` converges the root snapper config.
+
+## Gaming
+
+The Void ISO has a Gaming question after Rashin. It defaults to No and works
+offline. Choosing Yes installs Steam from Void nonfree plus the 32-bit graphics
+baseline: libgcc, libstdc++, libdrm, libglvnd, libva, Mesa DRI, and the Vulkan
+loader. The existing hardware lanes add the matching 32-bit Vulkan package for
+AMD, Intel, nouveau, or a VM. NVIDIA follows the installed driver's branch and
+adds its matching 32-bit libraries.
+
+The script installer offers the same set interactively, or through `--gaming`
+and `RYOKU_GAMING=1`.
+
+This is Void gaming, not the CachyOS layer. There is no maintained
+`linux-cachyos` XBPS package, and Void's stock kernel has sched-ext disabled, so
+the CachyOS kernel, sched-ext tuning, and Proton-CachyOS are not available.
+Steam uses its own Proton.
 
 ## Remaining limits
 

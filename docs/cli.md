@@ -141,8 +141,8 @@ installs the host toolchain, clones or updates the checkout, and runs
 `ryoku/shell/deploy.sh`; from then on `ryoku update` fast-forwards to the last
 commit the Testing gate passed and redeploys. A stable release tag pins its
 frozen release directory; an unstable build name such as
-`v0.94.1-beta.20.dev.12+g1234567` pins the matching frozen testing build, as
-packages. `ryoku track stable` returns a box to packages; `ryoku track unstable`
+`v1.0.0.dev.12+g1234567` pins the matching frozen testing build as packages.
+`ryoku track stable` returns a box to packages; `ryoku track unstable`
 returns a pinned box to the source lane. Pacman, XBPS, and DNF perform a package
 channel move as one transaction and restore the previous repository if the
 package move fails.
@@ -246,7 +246,7 @@ power-profiles-daemon without replacing the active provider. The host-facing
 verbs include:
 
 - `capabilities` prints the detected package manager and init system plus
-  snapshot and AUR support as one JSON object.
+  snapshot, AUR, and local-user-management support as one JSON object.
 - `pkg why <name>` explains a catalogue package deliberately unavailable on
   Void or Fedora. A package that can be installed or an unknown name produces
   no output and returns the false-condition exit code.
@@ -262,6 +262,14 @@ verbs include:
   or elogind.
 - `time zones` prints the sorted IANA zone list. It uses `timedatectl` under
   systemd and the installed zoneinfo database on other init systems.
+- `users list` and `users caps` return the local human accounts and the
+  permissions/storage facilities this host can manage. Mutating verbs are
+  `users add`, `delete`, `set-role`, `set-perms`, `set-password`, and
+  `set-limit`; call those through `pkexec`. Passwords are one line on standard
+  input, never a command argument. The helper rejects deleting the caller, a
+  signed-in user, or the last Administrator, and refuses to demote the last
+  Administrator. Btrfs homes are individual subvolumes with optional qgroup
+  limits; other filesystems report storage limits as unsupported.
 
 ### `ryoku materialize`
 

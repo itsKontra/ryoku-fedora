@@ -10,7 +10,11 @@ cat >"$tmp/bluetoothctl" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
 
+saw_timeout=0
 while [[ ${1:-} == --agent || ${1:-} == --timeout ]]; do
+  if [[ $1 == --timeout ]]; then
+    saw_timeout=1
+  fi
   shift 2
 done
 
@@ -18,6 +22,15 @@ command=${1:-}
 arg=${2:-}
 state=${BT_FAKE_STATE:?}
 log=${BT_FAKE_LOG:?}
+
+case $command in
+  info|trust|connect)
+    if ((saw_timeout)); then
+      printf 'bluetoothctl %s must return when its command completes\n' "$command" >&2
+      exit 3
+    fi
+    ;;
+esac
 
 case $command in
   scan)

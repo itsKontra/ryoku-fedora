@@ -538,29 +538,32 @@ jobs:
             --run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
 
+  # posts a failed push or release publish to the Discord CI channel; see the
+  # notify-failure job in publish-repo.yml.
   notify-failure:
     name: Announce a failed Void publish
     needs: [build, gate, container-install, publish]
-    if: ${{ failure() && github.event_name == 'push' }}
+    if: ${{ failure() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
     steps:
+      - name: Checkout the notifier
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: bin/ryoku-discord
+          sparse-checkout-cone-mode: false
       - name: Report the failure
         shell: bash
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_CI_WEBHOOK_URL }}
+          CHANNEL: ${{ needs.build.outputs.channel }}
         run: |
           set -euo pipefail
-          channel="${{ needs.build.outputs.channel }}"
-          [[ -n $channel ]] || channel="unknown (build stage did not resolve it)"
+          channel=${CHANNEL:-unknown}
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          msg="Ryoku Void XBPS repo publish FAILED on the ${channel} channel (${GITHUB_REF#refs/heads/}, ${GITHUB_SHA:0:9}). These commits are NOT on the channel; boxes stay on the last good build until this is fixed and re-run. ${run_url}"
-          echo "::error::${msg}"
-          if [[ -z ${DISCORD_WEBHOOK_URL:-} ]]; then
-            echo "::notice::DISCORD_WEBHOOK_URL not configured; failure reported as an annotation only."
-            exit 0
-          fi
-          jq -nc --arg content "$msg" '{content: $content}' \
-            | curl -fsS -X POST -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_URL" \
+          echo "::error::The Void $channel publish failed at ${GITHUB_SHA:0:9}; boxes stay on the last good build until it is fixed and re-run. $run_url"
+          bin/ryoku-discord publish-failed --edition Void --channel "$channel" \
+            --ref "$GITHUB_REF_NAME" --sha "$GITHUB_SHA" --run "$run_url" \
             || echo "::warning::could not post the failure notice to Discord"
 

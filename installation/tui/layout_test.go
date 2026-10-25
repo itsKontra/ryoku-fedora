@@ -46,7 +46,8 @@ func stripSGR(s string) string {
 // whole-disk erase, matching the state in the bug report.
 func wizardAt(key string, w, h int) model {
 	m := reviewModel()
-	m.state, m.flow = "wizard", steps()
+	m.variant, m.netOnline, m.cpuV3 = "plain", true, true
+	m.state, m.flow = "wizard", stepsForVariant("plain")
 	m.picks["disk"] = "whole" // the destructive path, as in the bug report
 	m.diskDev, m.kept, m.diskG = "/dev/nvme0n1", nil, 240
 	m.w, m.h = w, h
@@ -68,6 +69,25 @@ func TestFrameNeverExceedsGrid(t *testing.T) {
 				t.Errorf("step %s at %dx%d rendered %dx%d (over by %+d cols, %+d rows)",
 					s.key, w, h, gw, gh, gw-w, gh-h)
 			}
+		}
+	}
+}
+
+func TestUnavailableGamingFitsCompactGrids(t *testing.T) {
+	for _, sz := range gridSizes {
+		w, h := sz[0], sz[1]
+		m := wizardAt("gaming", w, h)
+		m.picks["gaming"] = "1"
+		m.netOnline, m.cpuV3 = false, true
+		m.loadStep()
+		m.enterPos = 1
+		frame := m.fittedFrame()
+		gw, gh := frameBox(frame)
+		if gw > w || gh > h {
+			t.Errorf("offline gaming at %dx%d rendered %dx%d", w, h, gw, gh)
+		}
+		if !strings.Contains(stripSGR(frame), "offline") {
+			t.Errorf("offline gaming at %dx%d dropped its unavailable reason", w, h)
 		}
 	}
 }
@@ -162,11 +182,11 @@ func TestBoxLinesPadsAndTruncates(t *testing.T) {
 // and the clamp then cut off the card's title and the step being asked.
 func TestShortGridScrollsTheRail(t *testing.T) {
 	for _, sz := range [][2]int{{80, 24}, {80, 25}, {100, 24}} {
-		for _, key := range []string{"keyboard", "rashin", "username"} {
+		for _, key := range []string{"keyboard", "rashin", "gaming", "administrator"} {
 			m := wizardAt(key, sz[0], sz[1])
 			got := stripSGR(m.fittedFrame())
 			for _, want := range []string{m.cur().title, "install steps", key} {
-				if !strings.Contains(got, want) {
+				if !strings.Contains(strings.ToLower(got), strings.ToLower(want)) {
 					t.Errorf("%s at %dx%d dropped %q", key, sz[0], sz[1], want)
 				}
 			}

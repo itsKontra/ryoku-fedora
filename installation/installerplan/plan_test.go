@@ -248,11 +248,12 @@ func TestComponentAvailabilityByEdition(t *testing.T) {
 	for _, test := range []struct {
 		edition      string
 		aurAvailable bool
-		cachyosLayer bool
+		gamingID     string
+		needsNetwork bool
 	}{
-		{edition: "arch", aurAvailable: true, cachyosLayer: true},
-		{edition: "cachyos", aurAvailable: true},
-		{edition: "void"},
+		{edition: "arch", aurAvailable: true, gamingID: "cachyos-layer", needsNetwork: true},
+		{edition: "cachyos", aurAvailable: true, gamingID: "cachyos-gaming"},
+		{edition: "void", gamingID: "void-gaming"},
 		{edition: "fedora"},
 	} {
 		t.Run(test.edition, func(t *testing.T) {
@@ -274,12 +275,16 @@ func TestComponentAvailabilityByEdition(t *testing.T) {
 					t.Errorf("%s availability = %+v, want available %v", id, availability, test.aurAvailable)
 				}
 			}
-			layer, ok := plan.Component("cachyos-layer")
-			if !ok || layer.Available != test.cachyosLayer {
-				t.Errorf("cachyos layer = %+v, want available %v", layer, test.cachyosLayer)
-			}
-			if test.cachyosLayer && (!layer.Component.NeedsNetwork || layer.Component.DefaultOn) {
-				t.Errorf("cachyos layer flags = network:%v default:%v", layer.Component.NeedsNetwork, layer.Component.DefaultOn)
+			gaming, ok := plan.GamingComponent()
+			if test.gamingID == "" {
+				if ok {
+					t.Errorf("gaming component = %+v, want none", gaming)
+				}
+			} else if !ok || gaming.Component.ID != test.gamingID ||
+				gaming.Component.Step != StepGaming ||
+				gaming.Component.DefaultOn ||
+				gaming.Component.NeedsNetwork != test.needsNetwork {
+				t.Errorf("gaming component = %+v, want id=%q network=%v", gaming, test.gamingID, test.needsNetwork)
 			}
 			rashin, ok := plan.Component("rashin")
 			if !ok || !rashin.Available || rashin.Locked || !rashin.Component.DefaultOn {
@@ -289,6 +294,57 @@ func TestComponentAvailabilityByEdition(t *testing.T) {
 			if !ok || !terminal.Available || !terminal.Locked ||
 				terminal.Reason != "the Ryoku terminal role: the launcher, Settings, and open in terminal use it" {
 				t.Errorf("required terminal row = %+v", terminal)
+			}
+		})
+	}
+}
+
+func TestGamingComponentPackagesAndDrops(t *testing.T) {
+	tests := []struct {
+		edition  string
+		id       string
+		packages string
+		dropNo   bool
+	}{
+		{
+			edition: "arch", id: "cachyos-layer",
+			packages: "linux-cachyos,linux-cachyos-headers,cachyos-settings,scx-scheds,cachyos-gaming-meta,steam",
+		},
+		{
+			edition: "cachyos", id: "cachyos-gaming",
+			packages: "steam,cachyos-gaming-meta", dropNo: true,
+		},
+		{
+			edition: "void", id: "void-gaming",
+			packages: "steam,lib32-mesa,lib32-vulkan-icd-loader,lib32-gcc-libs,lib32-libglvnd,lib32-libdrm,lib32-libva", dropNo: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.edition, func(t *testing.T) {
+			plan := ResolveSource(test.edition)
+			gaming, ok := plan.GamingComponent()
+			if !ok || gaming.Component.ID != test.id {
+				t.Fatalf("gaming component = %+v, want %s", gaming, test.id)
+			}
+			if got := strings.Join(gaming.Component.Packages, ","); got != test.packages {
+				t.Fatalf("packages = %q, want %q", got, test.packages)
+			}
+			no := plan.DefaultComponents()
+			no[test.id] = false
+			gotNo := strings.Join(plan.DropComponentPackages(no), ",")
+			if test.dropNo && !strings.Contains(gotNo, test.packages) {
+				t.Errorf("No drop list = %q, want gaming packages %q", gotNo, test.packages)
+			}
+			if !test.dropNo && strings.Contains(gotNo, "linux-cachyos") {
+				t.Errorf("network-only Arch gaming package appears in No drops: %q", gotNo)
+			}
+			yes := plan.DefaultComponents()
+			yes[test.id] = true
+			gotYes := strings.Join(plan.DropComponentPackages(yes), ",")
+			for _, pkg := range gaming.Component.Packages {
+				if strings.Contains(","+gotYes+",", ","+pkg+",") {
+					t.Errorf("Yes drop list %q contains %s", gotYes, pkg)
+				}
 			}
 		})
 	}

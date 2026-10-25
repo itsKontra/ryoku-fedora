@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"ryoku-cli/internal/host"
 	"ryoku-cli/internal/sys"
@@ -308,6 +309,7 @@ func reconcilers() []reconciler {
 		{i18n.T("retired wallpaper-engine keys"), reconcileRetiredPaperKeys},
 		{i18n.T("retired filter bar keys"), reconcileRetiredFilterBarKeys},
 		{i18n.T("window width cycle"), reconcileWidthCycle},
+		{i18n.T("Ryogami user paths"), reconcileRyogamiHome},
 		{i18n.T("ryogami wallpaper daemon"), reconcileRyogamiWallpaper},
 		{i18n.T("ryowalls app leftovers"), reconcileRyowallsRemoval},
 		{i18n.T("duplicate launcher entries"), reconcileLauncherDuplicates},
@@ -328,6 +330,7 @@ func reconcilers() []reconciler {
 		{i18n.T("Vesktop palette preservation"), reconcileVesktopPalette},
 		{i18n.T("Ryoku Discord theme"), reconcileDiscordTheme},
 		{i18n.T("flatpak app channel"), reconcileFlatpakRemote},
+		{i18n.T("Shelly Flatpak support"), reconcileShellyFlatpak},
 		{i18n.T("browser theme host"), reconcileBrowserTheme},
 		{i18n.T("zen browser policy"), reconcileZen},
 		{i18n.T("zen browser animations"), reconcileZenUserChrome},
@@ -1697,8 +1700,8 @@ func reconcileShellConfig(checkOnly bool) recResult {
 // reconcileDockStore converges retired dock stores onto shell.json's top-level
 // dock object and removes Stage Editor widget keys retired from its schema. The
 // shell store carries old QS and Python settings plus frame-bar pins; Stage
-// carries the former iRiS pins. Pins keep source order, aliases are normalised
-// to desktop ids, and old keys are removed after merge.
+// carries the former iRiS pins and Shima appearance. Pins keep source order,
+// current universal values win, and retired keys are removed after merge.
 func reconcileDockStore(checkOnly bool) recResult {
 	path := filepath.Join(sys.ConfigHome(), "ryoku", "shell.json")
 	raw, err := os.ReadFile(path)
@@ -1718,9 +1721,10 @@ func reconcileDockStore(checkOnly bool) recResult {
 	stageRaw, stageErr := os.ReadFile(stagePath)
 	var stageMigrated []byte
 	var stagePins []string
+	var stageShima map[string]json.RawMessage
 	stageChanged := false
 	if stageErr == nil {
-		stageMigrated, stagePins, stageChanged, err = migrateStageDockStore(stageRaw)
+		stageMigrated, stagePins, stageShima, stageChanged, err = migrateStageDockStore(stageRaw)
 		if err != nil {
 			return warnRes(i18n.T("stage-editor.json does not parse (%v); Stage falls back to defaults"), err).
 				withFix(i18n.T("delete %s to re-seed it"), stagePath)
@@ -1736,12 +1740,20 @@ func reconcileDockStore(checkOnly bool) recResult {
 		}
 		shellChanged = shellChanged || merged
 	}
+	if len(stageShima) > 0 {
+		var merged bool
+		migrated, merged, err = mergeLegacyShimaDock(migrated, stageShima)
+		if err != nil {
+			return warnRes(i18n.T("shell.json does not parse (%v); the shell falls back to defaults"), err)
+		}
+		shellChanged = shellChanged || merged
+	}
 	if !shellChanged && !stageChanged {
 		return okRes(i18n.T("Stage and dock settings use their current stores"))
 	}
 	if checkOnly {
 		return wouldRes(i18n.T("retired Stage Editor or dock settings still exist")).
-			withFix(i18n.T("ryoku doctor removes them and merges retired pins into shell.json"))
+			withFix(i18n.T("ryoku doctor moves custom Shima styling and retired pins into shell.json"))
 	}
 	if shellChanged {
 		tmp := path + ".ryoku-tmp"
@@ -2010,23 +2022,67 @@ func deleteJSONPath(object map[string]json.RawMessage, path []string) (bool, err
 	return true, err
 }
 
-func migrateStageDockStore(raw []byte) ([]byte, []string, bool, error) {
+var retiredIrisDockDefaults = map[string]json.RawMessage{
+	"enable":        json.RawMessage(`true`),
+	"autoHide":      json.RawMessage(`false`),
+	"reserveSpace":  json.RawMessage(`true`),
+	"blur":          json.RawMessage(`false`),
+	"material":      json.RawMessage(`"inherit"`),
+	"notch":         json.RawMessage(`true`),
+	"iconSize":      json.RawMessage(`40`),
+	"magnification": json.RawMessage(`false`),
+	"magnifySize":   json.RawMessage(`150`),
+	"badges":        json.RawMessage(`true`),
+	"launcher":      json.RawMessage(`true`),
+	"revealOnEmpty": json.RawMessage(`true`),
+	"position":      json.RawMessage(`"auto"`),
+}
+
+var universalDockDefaults = map[string]json.RawMessage{
+	"enabled":  json.RawMessage(`false`),
+	"autohide": json.RawMessage(`false`),
+	"size":     json.RawMessage(`44`),
+	"magnify":  json.RawMessage(`true`),
+	"edge":     json.RawMessage(`"auto"`),
+}
+
+var shimaDockDefaults = map[string]json.RawMessage{
+	"shape":         json.RawMessage(`"auto"`),
+	"notch":         json.RawMessage(`true`),
+	"material":      json.RawMessage(`"inherit"`),
+	"magnifySize":   json.RawMessage(`150`),
+	"launcher":      json.RawMessage(`true`),
+	"reserveSpace":  json.RawMessage(`true`),
+	"revealOnEmpty": json.RawMessage(`true`),
+	"badges":        json.RawMessage(`true`),
+	"blur":          json.RawMessage(`false`),
+}
+
+func jsonValuesEqual(left, right json.RawMessage) bool {
+	var a, b any
+	if json.Unmarshal(left, &a) != nil || json.Unmarshal(right, &b) != nil {
+		return bytes.Equal(bytes.TrimSpace(left), bytes.TrimSpace(right))
+	}
+	return reflect.DeepEqual(a, b)
+}
+
+func migrateStageDockStore(raw []byte) ([]byte, []string, map[string]json.RawMessage, bool, error) {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &top); err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
 	changed := false
 	for _, path := range retiredStageEditorPaths {
 		removed, err := deleteJSONPath(top, path)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, nil, false, err
 		}
 		changed = changed || removed
 	}
 
 	dock, err := decodeObject(top["dock"])
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
 	var pins []string
 	if oldPins, ok := dock["pinnedApps"]; ok {
@@ -2034,18 +2090,121 @@ func migrateStageDockStore(raw []byte) ([]byte, []string, bool, error) {
 		delete(dock, "pinnedApps")
 		top["dock"], err = encodeObject(dock)
 		if err != nil {
-			return nil, nil, false, err
+			return nil, nil, nil, false, err
 		}
 		changed = true
 	}
+
+	legacyShima := map[string]json.RawMessage{}
+	iris, err := decodeObject(top["iris"])
+	if err != nil {
+		return nil, nil, nil, false, err
+	}
+	irisDock, err := decodeObject(iris["dock"])
+	if err != nil {
+		return nil, nil, nil, false, err
+	}
+	for key, fallback := range retiredIrisDockDefaults {
+		if value, ok := irisDock[key]; ok {
+			if !jsonValuesEqual(value, fallback) {
+				legacyShima[key] = value
+			}
+			delete(irisDock, key)
+			changed = true
+		}
+	}
+	if value, ok := irisDock["shape"]; ok {
+		legacyShima["shape"] = value
+		delete(irisDock, "shape")
+		changed = true
+	}
+	if _, hadIrisDock := iris["dock"]; hadIrisDock {
+		if len(irisDock) == 0 {
+			delete(iris, "dock")
+		} else {
+			iris["dock"], err = encodeObject(irisDock)
+			if err != nil {
+				return nil, nil, nil, false, err
+			}
+		}
+		if len(iris) == 0 {
+			delete(top, "iris")
+		} else {
+			top["iris"], err = encodeObject(iris)
+			if err != nil {
+				return nil, nil, nil, false, err
+			}
+		}
+	}
+
 	if !changed {
-		return nil, nil, false, nil
+		return nil, nil, nil, false, nil
 	}
 	out, err := json.MarshalIndent(top, "", "  ")
 	if err != nil {
-		return nil, nil, false, err
+		return nil, nil, nil, false, err
 	}
-	return append(out, '\n'), pins, true, nil
+	return append(out, '\n'), pins, legacyShima, true, nil
+}
+
+func mergeLegacyShimaDock(raw []byte, legacy map[string]json.RawMessage) ([]byte, bool, error) {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &top); err != nil {
+		return nil, false, err
+	}
+	dock, err := decodeObject(top["dock"])
+	if err != nil {
+		return nil, false, err
+	}
+	shima, err := decodeObject(dock["shima"])
+	if err != nil {
+		return nil, false, err
+	}
+	changed := false
+	shared := map[string]string{
+		"enable": "enabled", "autoHide": "autohide", "iconSize": "size",
+		"magnification": "magnify", "position": "edge",
+	}
+	for old, current := range shared {
+		value, ok := legacy[old]
+		if !ok {
+			continue
+		}
+		existing, present := dock[current]
+		if present && !jsonValuesEqual(existing, universalDockDefaults[current]) {
+			continue
+		}
+		dock[current] = value
+		changed = true
+	}
+	for _, key := range []string{"shape", "notch", "material", "magnifySize", "launcher", "reserveSpace", "revealOnEmpty", "badges", "blur"} {
+		value, ok := legacy[key]
+		if !ok {
+			continue
+		}
+		existing, present := shima[key]
+		if present && !jsonValuesEqual(existing, shimaDockDefaults[key]) {
+			continue
+		}
+		shima[key] = value
+		changed = true
+	}
+	if !changed {
+		return raw, false, nil
+	}
+	dock["shima"], err = encodeObject(shima)
+	if err != nil {
+		return nil, false, err
+	}
+	top["dock"], err = encodeObject(dock)
+	if err != nil {
+		return nil, false, err
+	}
+	out, err := json.MarshalIndent(top, "", "  ")
+	if err != nil {
+		return nil, false, err
+	}
+	return append(out, '\n'), true, nil
 }
 
 func mergeDockPins(raw []byte, extra []string) ([]byte, bool, error) {
@@ -3687,7 +3846,7 @@ func reconcileBrandLogo(checkOnly bool) recResult {
 	return fixedRes(i18n.T("cleared the broken brand image (%s); the mark falls back to the text seal"), img)
 }
 
-// ---- reconciler: decor art (Pictures/ryodecors) ------------------------------
+// ---- reconciler: decor art (<Pictures>/ryodecors) ----------------------------
 
 // ryodecorsSource is where the shipped decor art set lives: the repo checkout on
 // a dev box (ryoku deploy records it), else /usr/share/ryoku/ryodecors from the
@@ -3705,8 +3864,8 @@ func ryodecorsSource() string {
 	return ""
 }
 
-// reconcileRyodecors keeps the shipped decor art present in ~/Pictures/ryodecors,
-// the folder the Decor and Placard components render from (beside Wallpapers and
+// reconcileRyodecors keeps the shipped decor art present in <Pictures>/ryodecors
+// (~/Pictures, or the localized XDG folder such as ~/Imágenes), the folder the Decor and Placard components render from (beside Wallpapers and
 // livewalls). The installer seeds it on a fresh install; this delivers it -- and
 // any art a later release adds -- to a box that updated before it shipped, or one
 // where a file went missing. Missing-only: a file the user swapped or added is
@@ -3720,7 +3879,7 @@ func reconcileRyodecors(checkOnly bool) recResult {
 	if err != nil {
 		return okRes(i18n.T("decor art source unreadable (%v)"), err)
 	}
-	dst := filepath.Join(sys.Home(), "Pictures", "ryodecors")
+	dst := filepath.Join(sys.PicturesDir(), "ryodecors")
 	var missing []string
 	for _, e := range entries {
 		if e.IsDir() {
@@ -4429,13 +4588,13 @@ func reconcileFailedUnits(checkOnly bool) recResult {
 	if initSystem == host.Runit {
 		return reconcileRunitFailures()
 	}
-	// Clear the lingering transient app scopes (safe: the app is already gone)
+	// Clear lingering transient app launch units (safe: the app is already gone)
 	// and the TPM units that failed only for want of NvPCRs (reconcile_tpm_nvpcr.go),
 	// then report whatever real failures remain.
 	var reset int
 	if !checkOnly {
 		for _, u := range failedUnits("--user") {
-			if transientAppScope(u) && userUnitLoaded(u) &&
+			if transientAppUnit(u) && userUnitLoaded(u) &&
 				doctorService("--user", "reset-failed", u) == host.ExitOK {
 				reset++
 			}
@@ -4444,16 +4603,12 @@ func reconcileFailedUnits(checkOnly bool) recResult {
 	}
 	var failed []string
 	failed = append(failed, failedUnits()...)
-	for _, u := range failedUnits("--user") {
-		if checkOnly && transientAppScope(u) {
-			failed = append(failed, u+i18n.T(" (user, clearable)"))
-		} else {
-			failed = append(failed, u+i18n.T(" (user)"))
-		}
+	for _, u := range reportableFailedUnits(failedUnits("--user")) {
+		failed = append(failed, u+i18n.T(" (user)"))
 	}
 	if len(failed) == 0 {
 		if reset > 0 {
-			return fixedRes(i18n.T("cleared %d failed unit(s) with nothing left wrong (stale app scopes, TPM NvPCR setup)"), reset)
+			return fixedRes(i18n.T("cleared %d failed unit(s) with nothing left wrong (stale app launch units, TPM NvPCR setup)"), reset)
 		}
 		return okRes(i18n.T("no failed services"))
 	}
@@ -4921,12 +5076,33 @@ func reconcileConflictingRyokuFiles(checkOnly bool) recResult {
 		len(stray), strings.Join(stray, ", "))
 }
 
-// transientAppScope reports whether a --user unit is a transient GUI app-launch
-// scope (app-<id>-<n>.scope). systemd creates one per app launch; it lingers
-// "failed" after the app exits or is killed, and reset-failed clears the dead
-// record. A real .service failure never matches, so it stays reported.
-func transientAppScope(unit string) bool {
-	return strings.HasPrefix(unit, "app-") && strings.HasSuffix(unit, ".scope")
+// transientAppUnit reports whether a --user unit is a systemd GUI app launch.
+// XDG autostart and desktop launches use either app-*.scope or the generated
+// app-<name>@<instance>.service form. A named service without an instance never
+// matches, so a real daemon failure stays visible.
+func transientAppUnit(unit string) bool {
+	if !strings.HasPrefix(unit, "app-") {
+		return false
+	}
+	if strings.HasSuffix(unit, ".scope") {
+		return true
+	}
+	name, ok := strings.CutSuffix(unit, ".service")
+	if !ok {
+		return false
+	}
+	at := strings.LastIndexByte(name, '@')
+	return at > len("app-") && at < len(name)-1
+}
+
+func reportableFailedUnits(units []string) []string {
+	reportable := make([]string, 0, len(units))
+	for _, unit := range units {
+		if !transientAppUnit(unit) {
+			reportable = append(reportable, unit)
+		}
+	}
+	return reportable
 }
 
 func userUnitLoaded(unit string) bool {

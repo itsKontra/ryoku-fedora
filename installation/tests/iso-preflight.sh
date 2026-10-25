@@ -150,6 +150,7 @@ language_gate() {
 gate "shell syntax" syntax_gate
 gate "shellcheck" shellcheck_gate
 gate "package lists" packages_gate
+gate "ISO variant staging" suite_gate iso-variant-stage cachyos-repo-placement
 gate "offline install path" suite_gate install-offline install-hooks offline-repo-integrity \
   install-noninteractive
 gate "boot menu" suite_gate limine-bootloader limine-windows

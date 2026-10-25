@@ -38,6 +38,8 @@ public:
 
     // False when every tile is pinned by the last two frames.
     bool admit(TierImage &&image);
+    // Grows the logical atlas before uploads begin, capped by the tier's memory budget.
+    void reserve(int tiles);
     // Evicts one key without disturbing any other resident texture.
     bool invalidate(const QString &key);
 

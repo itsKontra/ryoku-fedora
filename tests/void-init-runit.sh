@@ -66,10 +66,13 @@ EOF
 }
 for b in ryoku-shell ryoku-qylock-activate ryoku-power-cutover ryoku-hub ryogami \
 	ryoku-idle ryoku-clamshell pipewire bluetoothctl ryoku-rashin prowl \
-	ryoku-palette-bridge ryoku claude-usage codex-usage opencode-usage nmcli \
+	ryoku-palette-bridge ryoku \
+	claude-usage codex-usage opencode-usage nmcli \
 	dbus-update-activation-environment ryoku-reload-cover ryoku-host; do
 	mkstub "$b"
 done
+cp /repo/ryoku/rashin/usage/ryoku-ai-usage "$WORK/bin/ryoku-ai-usage"
+chmod +x "$WORK/bin/ryoku-ai-usage"
 
 # argument-aware stubs: a binary that is both a pre-start hook and the daemon
 # must exit for the hook and stay up for the daemon.
@@ -136,12 +139,22 @@ esac
 EOF
 chmod +x "$WORK/bin/ryoku-idle"
 
-# hook-only and loop-collector stubs must return, never sleep.
+# hook-only and collector stubs must return, never sleep.
 for b in ryoku-qylock-activate ryoku-power-cutover ryoku-hub ryoku \
 	claude-usage codex-usage opencode-usage nmcli \
 	dbus-update-activation-environment ryoku-reload-cover ryoku-host; do
 	echo exit0 > "$WORK/ctl/$b"
 done
+
+# Data-only installations remain collectable, and a colocated guard finds the
+# matching collectors without a package-path override.
+mkdir -p "$HOME/.claude" "$HOME/.codex" "$HOME/.local/share/opencode/storage"
+printf '{}\n' >"$HOME/.claude/.credentials.json"
+"$WORK/bin/ryoku-ai-usage"
+for collector in claude-usage codex-usage opencode-usage; do
+	[ "$(grep -c "^$collector" "$LOG")" -eq 1 ] || fail "data-only guard skipped $collector"
+done
+: >"$LOG"
 
 # the ai-usage loop must not actually sleep 45s/300s in the test
 export RYOKU_AI_USAGE_INITIAL=0 RYOKU_AI_USAGE_PERIOD=1

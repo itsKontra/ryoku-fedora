@@ -177,8 +177,7 @@ func TestShippedBaselineIsHonest(t *testing.T) {
 	// a desktop that never starts.
 	session, _ := doc.get("autostart", "0_session")
 	for _, want := range []string{
-		"dbus-update-activation-environment --systemd --all",
-		"ryoku-power-cutover session-start-logged",
+		"ryoku-host session start",
 		"xdg-desktop-portal-wlr.service",
 	} {
 		if !strings.Contains(session, want) {

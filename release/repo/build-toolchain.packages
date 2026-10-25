@@ -32,12 +32,14 @@ meson
 gradle
 libusb
 
-# Qt: Blobs plays video, so qt6-multimedia joins the QML plugin's own modules.
+# Qt: Blobs plays video, so qt6-multimedia joins the QML plugin's own modules,
+# and Ryoku.Spatial3D builds the Stage depth mesh against Qt Quick 3D.
 # The Ryogami picker also compiles against the Vulkan headers to list GPUs.
 qt6-base
 qt6-declarative
 qt6-shadertools
 qt6-multimedia
+qt6-quick3d
 vulkan-headers
 
 # rashin-app: pkg-config discovers the GTK3 and WebKit2GTK 4.1 host libraries.

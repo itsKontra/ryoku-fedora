@@ -16,6 +16,7 @@ BuildRequires:  cmake
 BuildRequires:  ninja-build
 BuildRequires:  gcc-c++
 Requires:       ryoku-desktop = %{version}-%{release}
+Requires(post): ryoku = %{version}-%{release}
 Requires:       uv
 Requires:       nodejs24
 Requires:       gcc
@@ -40,3 +41,13 @@ cp -a stage/. %{buildroot}/
 find %{buildroot} -type f -o -type l | sed 's|^%{buildroot}||' > rpm-files
 
 %files -f rpm-files
+
+%post
+if [ -x /usr/bin/ryoku-host ]; then
+  RYOKU_HOST_INIT=systemd /usr/bin/ryoku-host svc reconcile --system >/dev/null 2>&1 || :
+fi
+
+%postun
+if [ "$1" -eq 0 ]; then
+  systemctl --global disable ryoku-rashin.service ryoku-ai-usage.timer >/dev/null 2>&1 || :
+fi

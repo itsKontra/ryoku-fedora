@@ -22,6 +22,7 @@ type planOverrides struct {
 	shell        string
 	fileManager  string
 	rashin       bool
+	gaming       bool
 	cachyosLayer bool
 	without      []string
 }
@@ -95,6 +96,15 @@ func validateEditionFlags(overrides planOverrides, plan editionCompositorPlan) e
 			return err
 		}
 	}
+	if overrides.gaming {
+		component, ok := plan.choices.GamingComponent()
+		if !ok || component.Component.ID == "cachyos-layer" {
+			return fmt.Errorf(i18n.T("--gaming is unavailable on %s"), plan.edition)
+		}
+		if err := validateComponentFlag(component.Component.ID, true, plan); err != nil {
+			return err
+		}
+	}
 	for _, id := range overrides.without {
 		if err := validateComponentFlag(id, false, plan); err != nil {
 			return err
@@ -132,6 +142,11 @@ func applyPlanOverrides(p *plan, overrides planOverrides) {
 	p.setComponent("rashin", overrides.rashin)
 	if overrides.cachyosLayer {
 		p.setComponent("cachyos-layer", true)
+	}
+	if overrides.gaming {
+		if component, ok := p.choiceEdition().GamingComponent(); ok && component.Component.ID != "cachyos-layer" {
+			p.setComponent(component.Component.ID, true)
+		}
 	}
 	for _, id := range overrides.without {
 		p.setComponent(id, false)

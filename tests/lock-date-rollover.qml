@@ -4,7 +4,7 @@ ShellRoot {
     id: root
     property var keyboard: ({numLock: false})
     property var config: ({})
-    property var sddm: ({fingerprintHint: true})
+    property var sddm: ({hostName: "sandbox", fingerprintHint: true})
     property int phase: 0
     readonly property date yesterday: new Date(Date.now() - 86400000)
     Loader {
@@ -25,16 +25,26 @@ ShellRoot {
                 if (theme.item.curDate === undefined) {
                     console.error("FAIL: theme has no reactive curDate property"); Qt.quit(); return;
                 }
+                if (theme.item.softwareCursorEnabled === undefined || theme.item.softwareCursorEnabled) {
+                    console.error("FAIL: in-session lock enabled the greeter software cursor"); Qt.quit(); return;
+                }
                 theme.item.curDate = root.yesterday;
                 if (!root.hasText(theme.item, root.day(root.yesterday))) {
                     console.error("FAIL: date label does not follow curDate"); Qt.quit(); return;
                 }
                 root.phase++;
+            } else if (root.phase === 1) {
+                if (!root.hasText(theme.item, root.day(root.yesterday))) {
+                    console.error("FAIL: lockscreen repainted its clock before one second"); Qt.quit(); return;
+                }
+                root.phase++;
+            } else if (root.phase < 4) {
+                root.phase++;
             } else {
                 if (!root.hasText(theme.item, root.day(new Date())) || root.hasText(theme.item, root.day(root.yesterday))) {
                     console.error("FAIL: date label stayed on " + root.day(root.yesterday)); Qt.quit(); return;
                 }
-                console.log("PASS: lockscreen date rolls from " + root.day(root.yesterday) + " to " + root.day(new Date())); Qt.quit();
+                console.log("PASS: lockscreen clock rests between one-second updates and rolls the date"); Qt.quit();
             }
         }
     }

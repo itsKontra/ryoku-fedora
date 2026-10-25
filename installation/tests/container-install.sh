@@ -116,10 +116,16 @@ pacman -Qq ryoku-desktop-hyprland >/dev/null 2>&1 \
   || die "ryoku-desktop did not pull ryoku-desktop-hyprland (compositor-split auto-pull broken)"
 [[ -x /usr/bin/ryoku-wm-hyprland ]] || die "ryoku-desktop-hyprland did not ship the ryoku-wm-hyprland provider"
 [[ -x /usr/bin/ryoku ]] || die "the ryoku CLI was not installed"
-# the config bootstrap: a package install lays nothing into ~/.config, so the
-# first login after one boots a bare compositor unless this unit runs first.
-[[ -f /usr/lib/systemd/user/ryoku-bootstrap.service ]] || die "ryoku-desktop did not ship the config bootstrap unit"
-
+# Session-critical units live in the system user-unit path and are globally
+# enabled, so accounts created after package installation inherit the desktop.
+for unit in ryoku-bootstrap.service ryogami.service ryoku-shell.service \
+  ryoku-idle.service ryoku-clamshell.service; do
+  [[ -f /usr/lib/systemd/user/$unit ]] || die "system user unit is missing: $unit"
+  systemctl --global is-enabled --quiet "$unit" \
+    || die "new users do not inherit $unit"
+done
+[[ -f /usr/lib/systemd/user/ryoku-session.target ]] \
+  || die "system user session target is missing"
 # 4. materialize as a throwaway user, forcing HOME/USER like deploy.sh's
 #    ryoku_deploy_materialize (runuser keeps root's env otherwise).
 id "$TESTUSER" &>/dev/null || useradd --create-home "$TESTUSER"

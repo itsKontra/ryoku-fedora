@@ -149,6 +149,12 @@ for item in profiledef.sh packages.x86_64 pacman.conf airootfs efiboot syslinux 
 done
 AIROOTFS=$PROFILE_STAGE/airootfs
 
+# Keep the committed profile generic. Edition-specific package, boot, and
+# branding changes are made only in this throwaway copy.
+# shellcheck source=stage-variant.sh
+source "$PROFILE_DIR/stage-variant.sh"
+ryoku_stage_variant "$VARIANT" "$PROFILE_STAGE"
+
 # reproducible package set (opt-in). the default build pulls whatever the live
 # mirrors currently serve, so two builds weeks apart differ by upstream package
 # churn. RYOKU_ISO_REPRO=1 repoints the STAGED pacman.conf's [core]/[extra] at
@@ -230,12 +236,13 @@ log "Building ryoku-hub from $REPO_ROOT/ryoku/hub/backend"
 install -d "$AIROOTFS/usr/share/ryoku/ryoku/hub/backend"
 ( cd "$REPO_ROOT/ryoku/hub/backend" && CGO_ENABLED=0 go build -trimpath -ldflags '-s -w -buildid=' -o "$AIROOTFS/usr/share/ryoku/ryoku/hub/backend/ryoku-hub" . )
 
-# 4c. prebuild the Ryoku.Blobs QML plugin (the frame's blob renderer) into
-#     the payload, same model as ryoku-shell. target has no build toolchain;
-#     build deps live on the build host only.
-command -v cmake >/dev/null 2>&1 || die "cmake is required to build the Ryoku.Blobs plugin (pacman -S cmake ninja qt6-shadertools)"
-command -v ninja >/dev/null 2>&1 || die "ninja is required to build the Ryoku.Blobs plugin (pacman -S cmake ninja)"
-log "Building Ryoku.Blobs plugin from $REPO_ROOT/ryoku/shell/plugin"
+# 4c. prebuild the Ryoku.Blobs and Ryoku.Spatial3D QML plugins (the frame
+#     renderer and the Stage depth mesh) into the payload, same model as
+#     ryoku-shell. target has no build toolchain; build deps live on the build
+#     host only.
+command -v cmake >/dev/null 2>&1 || die "cmake is required to build the Ryoku QML plugins (pacman -S cmake ninja qt6-shadertools qt6-quick3d)"
+command -v ninja >/dev/null 2>&1 || die "ninja is required to build the Ryoku QML plugins (pacman -S cmake ninja)"
+log "Building Ryoku.Blobs and Ryoku.Spatial3D plugins from $REPO_ROOT/ryoku/shell/plugin"
 RYOKU_BLOBS_BUILD="$STAGE_DIR/blobs-build" \
   "$REPO_ROOT/ryoku/shell/plugin/build.sh" \
   "$AIROOTFS/usr/share/ryoku/ryoku/shell/plugin/dist"
@@ -273,6 +280,7 @@ if [[ $STAGE_ONLY -eq 1 ]]; then
   exit 0
 fi
 
+
 # 6. assemble. mkarchiso needs root + the archiso package.
 if ! command -v mkarchiso >/dev/null 2>&1; then
   cat >&2 <<EOF
@@ -288,6 +296,12 @@ or, equivalently, from inside the staged profile:
 
 EOF
   exit 1
+fi
+if [[ $VARIANT == cachyos ]]; then
+  # CachyOS's own buildiso requires host trust too. A local CachyOS build
+  # therefore populates the build host keyring before mkarchiso resolves it.
+  log "Populating CachyOS signing trust on the build host"
+  ryoku_trust_cachyos_build_host
 fi
 
 # mkarchiso reuses a populated work dir: with a completed build already there it

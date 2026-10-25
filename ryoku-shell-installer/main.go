@@ -170,6 +170,17 @@ func buildItems(f *facts, p *plan, editionPlans ...editionCompositorPlan) []plan
 			on:     p.components["rashin"], locked: availability.Locked,
 		})
 	}
+	if availability, ok := edition.choices.GamingComponent(); ok {
+		component := availability.Component
+		detail := i18n.T(component.Detail)
+		if component.ID == "cachyos-layer" {
+			detail = i18n.T("requires a network connection and x86-64-v3; installs the CachyOS kernel, tuning, sched-ext, Steam and Proton-CachyOS; the Arch kernel stays as a boot fallback")
+		}
+		it = append(it, planItem{
+			label: i18n.T(component.Label), detail: detail,
+			on: p.components[component.ID], locked: availability.Locked,
+		})
+	}
 	for _, availability := range edition.choices.Components() {
 		component := availability.Component
 		if !availability.Available || component.Step != installerplan.ComponentApps || component.Group == devToolchainGroup {
@@ -178,13 +189,6 @@ func buildItems(f *facts, p *plan, editionPlans ...editionCompositorPlan) []plan
 		it = append(it, planItem{
 			label: i18n.T(component.Label), detail: i18n.T(component.Detail),
 			group: i18n.T(component.GroupLabel), on: p.components[component.ID], locked: availability.Locked,
-		})
-	}
-	if availability, ok := edition.choices.Component("cachyos-layer"); ok && availability.Available {
-		it = append(it, planItem{
-			label:  i18n.T("CachyOS kernel and tuning"),
-			detail: i18n.T("adds the CachyOS repositories, kernel, tuning, schedulers and Proton; the Arch kernel stays installed as a boot fallback"),
-			group:  i18n.T("CachyOS layer"), on: p.components["cachyos-layer"],
 		})
 	}
 	if f.prevRun != nil {
@@ -1095,10 +1099,11 @@ func runHeadless(dry bool, ref, payload, compositor string, overrides planOverri
 	}
 	// A machine-readable plan dump keeps unattended runs auditable.
 	selectedApps := selectedComponentIDs(p, installerplan.ComponentApps)
-	fmt.Printf("plan: compositor=%s browser=%s shell=%s file-manager=%s rashin=%v ryoku-apps=%s cachyos-layer=%v components=%s without=%s nvidia=%v sddm=%v greeter-theme=%v networkmanager=%v remove-shells=%v aur=%v devtools=%v omarchy-cleanup=%v monitor-pins=%v azerty-fr=%v azerty-be=%v\n",
+	selectedGaming := selectedComponentIDs(p, installerplan.StepGaming)
+	fmt.Printf("plan: compositor=%s browser=%s shell=%s file-manager=%s rashin=%v ryoku-apps=%s gaming=%s cachyos-layer=%v components=%s without=%s nvidia=%v sddm=%v greeter-theme=%v networkmanager=%v remove-shells=%v aur=%v devtools=%v omarchy-cleanup=%v monitor-pins=%v azerty-fr=%v azerty-be=%v\n",
 		p.compositor, p.browser, p.shell, p.fileManager, p.componentOn("rashin"),
-		strings.Join(selectedComponentGroupIDs(p, "ryoku-apps"), ","), p.componentOn("cachyos-layer"),
-		strings.Join(selectedApps, ","), strings.Join(deselectedComponentIDs(p), ","),
+		strings.Join(selectedComponentGroupIDs(p, "ryoku-apps"), ","), strings.Join(selectedGaming, ","),
+		p.componentOn("cachyos-layer"), strings.Join(selectedApps, ","), strings.Join(deselectedComponentIDs(p), ","),
 		p.nvidia, p.switchDM, p.greeter, p.switchNet, p.rivals, p.aur, p.devtools,
 		p.omarchy, p.monPins, p.azertyFR, p.azertyBE)
 	if notice := editionNotice(f, editionCompositors); len(notice) > 0 {
@@ -1219,6 +1224,10 @@ func main() {
 	if err != nil {
 		die(err.Error())
 	}
+	gamingDefault, err := envToggle("RYOKU_GAMING", false)
+	if err != nil {
+		die(err.Error())
+	}
 
 	yes := flag.Bool("yes", false, i18n.T("run non-interactively with the default plan"))
 	dry := flag.Bool("dry-run", false, i18n.T("print every command instead of running it"))
@@ -1230,7 +1239,8 @@ func main() {
 	shell := flag.String("shell", os.Getenv("RYOKU_LOGIN_SHELL"), i18n.T("login shell"))
 	fileManager := flag.String("file-manager", os.Getenv("RYOKU_FILE_MANAGER"), i18n.T("file manager to install"))
 	rashin := flag.Bool("rashin", rashinDefault, i18n.T("install Ryoku's Rashin AI agent"))
-	cachyosLayer := flag.Bool("cachyos-layer", cachyosDefault, i18n.T("add the CachyOS kernel and tuning on plain Arch"))
+	gaming := flag.Bool("gaming", gamingDefault, i18n.T("install this edition's Steam gaming bundle on CachyOS or Void"))
+	cachyosLayer := flag.Bool("cachyos-layer", cachyosDefault, i18n.T("install Gaming with CachyOS on Arch (network and x86-64-v3 required; Steam + Proton-CachyOS)"))
 	without := flag.String("without", os.Getenv("RYOKU_WITHOUT"), i18n.T("comma-separated optional components to leave out"))
 	flag.Parse()
 	withoutIDs, err := parseWithout(*without)
@@ -1239,7 +1249,7 @@ func main() {
 	}
 	overrides := planOverrides{
 		browser: *browser, shell: *shell, fileManager: *fileManager,
-		rashin: *rashin, cachyosLayer: *cachyosLayer, without: withoutIDs,
+		rashin: *rashin, gaming: *gaming, cachyosLayer: *cachyosLayer, without: withoutIDs,
 	}
 
 	initGlyphs()

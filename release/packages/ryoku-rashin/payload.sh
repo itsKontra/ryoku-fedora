@@ -44,10 +44,9 @@ install)
 		"$destdir/usr/share/applications/rashin-app.desktop"
 	install -Dm644 "$RYOKU_SRC/ryoku/rashin/app/logo.svg" \
 		"$destdir/usr/share/icons/hicolor/scalable/apps/rashin-app.svg"
-	# The AI-usage collectors refresh the ~/.cache/{claude,codex,opencode}-usage.json
-	# caches the qsbar AI pill reads. They are python3 stdlib-only and each no-ops
-	# when its tool, credentials or database are absent.
-	for collector in claude-usage codex-usage opencode-usage; do
+	# The guard runs a collector only for a tool that is installed or has its
+	# local data, so an idle box with none of them launches nothing.
+	for collector in ryoku-ai-usage claude-usage codex-usage opencode-usage; do
 		install -Dm755 "$RYOKU_SRC/ryoku/rashin/usage/$collector" "$destdir/usr/bin/$collector"
 	done
 	if [ "$init" = systemd ]; then

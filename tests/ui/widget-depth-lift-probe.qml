@@ -5,8 +5,8 @@ import "modules/stage/Singletons" as Stage
 
 // widget-depth-lift-probe: the per-widget `Depth` row (built-in menu, plugin
 // tile menu, and the visualiser's own menu scope) lifts the named widget above
-// the in-front stage cut-outs via the shared `front` list on stage.json, shows
-// only while the monitor's wallpaper actually has a cut, and persists the
+// the in-front stage cut-outs via the mode's `front` list on stage.json, shows
+// only while the monitor's wallpaper is in Depth or Parallax, and persists the
 // choice.
 // Loads the real shell components against the mirrored shell tree, the way
 // center-popout-probe does. Commit nothing.
@@ -52,6 +52,7 @@ ShellRoot {
 
     readonly property string wall: "/tmp/ryoku-probe-wall.png"
     readonly property string other: "/tmp/ryoku-probe-plain.png"
+    readonly property string spatialWall: "/tmp/ryoku-probe-spatial.png"
 
     // Feed StageBackend the frame the daemon would publish for this wallpaper:
     // depth effect, one subject layer behind the widgets.
@@ -63,8 +64,12 @@ ShellRoot {
             layers: [{ out: "/tmp/ryoku-probe-sub.png", label: "Subject",
                        enabled: true, front: false, depth: 0.5 }]
         };
+        walls[spatialWall] = {
+            effect: "spatial", subject: "", background: "",
+            depth: "/tmp/ryoku-probe-depth.png", rev: 1, layers: []
+        };
         Stage.StageBackend.apply(JSON.stringify({
-            current: wall, busy: false, stage: "", percent: 0, walls: walls
+            current: wall, job: null, last: null, walls: walls
         }));
     }
 
@@ -79,14 +84,22 @@ ShellRoot {
 
     function run() {
         armStage();
-        check("backend active for the cut wall", Stage.StageBackend.isActiveFor(wall) === true);
-        check("backend inactive for a plain wall", Stage.StageBackend.isActiveFor(other) === false);
+        check("backend active for the cut wall",
+            Stage.StageBackend.isActiveFor(wall) === true);
+        check("backend recognizes a cut mode",
+            Stage.StageBackend.isCutModeFor(wall) === true);
+        check("backend inactive for a plain wall",
+            Stage.StageBackend.isActiveFor(other) === false);
 
-        // front list round-trips and lifts are idempotent.
-        Stage.Config.setFront("clock", true);
-        check("isFront after lift", Stage.Config.isFront("clock") === true);
-        Stage.Config.setFront("clock", true);
-        check("lift is idempotent", Stage.Config.front.length === 1);
+        // Each mode's front list round-trips and lifts are idempotent.
+        Stage.Config.setFront("depth", "clock", true);
+        check("isFront after lift",
+            Stage.Config.isFront("depth", "clock") === true);
+        Stage.Config.setFront("depth", "clock", true);
+        check("lift is idempotent",
+            Stage.Config.frontList("depth").length === 1);
+        check("parallax list stays separate",
+            Stage.Config.isFront("parallax", "clock") === false);
 
         // The widget menu builds its Depth row only while the wall cuts; the
         // row toggles its own scope and the card stays open.
@@ -96,14 +109,19 @@ ShellRoot {
         check("row visible while stage on", row && row.visible === true);
         check("lifted row reads In front", row && row.value === "In front");
         row.triggered();
-        check("trigger unlifts", Stage.Config.isFront("clock") === false
-            && widgetMenu.lifted === false);
+        check("trigger unlifts",
+            Stage.Config.isFront("depth", "clock") === false
+                && widgetMenu.lifted === false);
         check("row value follows", row.value === "Behind");
         row.triggered();
-        check("trigger re-lifts", Stage.Config.isFront("clock") === true
-            && widgetMenu.lifted === true);
+        check("trigger re-lifts",
+            Stage.Config.isFront("depth", "clock") === true
+                && widgetMenu.lifted === true);
         widgetMenu.wall = other;
         check("row hides without a cut", widgetMenu.stageActive === false
+            && row.visible === false);
+        widgetMenu.wall = spatialWall;
+        check("row hides for Spatial", widgetMenu.stageActive === false
             && row.visible === false);
 
         // The plugin tile menu keys the lift off the tile id.
@@ -114,7 +132,7 @@ ShellRoot {
         check("plugin row gated on its wall", prow && prow.visible === true);
         prow.triggered();
         check("plugin trigger lifts the tile id",
-            Stage.Config.isFront("probe.tile") === true);
+            Stage.Config.isFront("depth", "probe.tile") === true);
 
         // The visualiser wears the same row: its scope opens the built-in
         // menu shape with the visualiser's id, and the lift keys off that id.
@@ -124,14 +142,14 @@ ShellRoot {
         check("visualiser row gated on its wall", vrow && vrow.visible === true);
         vrow.triggered();
         check("visualiser trigger lifts the look",
-            Stage.Config.isFront("visualizer") === true);
+            Stage.Config.isFront("depth", "visualizer") === true);
         vrow.triggered();
         check("second trigger drops it back",
-            Stage.Config.isFront("visualizer") === false);
+            Stage.Config.isFront("depth", "visualizer") === false);
 
         // Final state: clock + tile lifted, visualizer behind. The coalesced
-        // stage.json write lands ~400 ms after the last setFront; the harness
-        // greps the file after we exit.
+        // stage.json write lands after the last setFront; the harness checks
+        // the file after exit.
         console.log(failures === 0 ? "PROBE-CHECKS-PASS" : "PROBE-CHECKS-FAIL " + failures);
         finish.restart();
     }

@@ -5,7 +5,7 @@ void_configure() {
   void_cfg_keymap
   void_cfg_timezone
   void_cfg_hostname
-  void_cfg_user
+  ryoku_accounts_create
   void_cfg_sudo
   ryoku_dracut_crypttab
 }
@@ -54,20 +54,6 @@ void_cfg_hostname() {
   write_file /mnt/etc/hostname <<EOF
 $RYOKU_HOSTNAME
 EOF
-}
-
-void_cfg_user() {
-  local shell=/usr/bin/$RYOKU_LOGIN_SHELL
-  [[ $RYOKU_LOGIN_SHELL != fish ]] || shell=/usr/bin/fish
-  if [[ -z ${RYOKU_DRYRUN:-} && ! -x /mnt$shell ]]; then
-    die 'login shell %s is missing from the target' "$shell"
-  fi
-  log 'user: %s (wheel,audio,video,input,kvm; shell %s)' "$RYOKU_USERNAME" "$shell"
-  void_chroot useradd -m -G wheel,audio,video,input,kvm -s "$shell" "$RYOKU_USERNAME"
-  printf '%s:%s\n' "$RYOKU_USERNAME" "$RYOKU_PASSWORD_HASH" | run_secret \
-    "chroot /mnt chpasswd -e (user:hash via stdin)" chroot /mnt chpasswd -e
-  printf 'root:%s\n' "$RYOKU_PASSWORD_HASH" | run_secret \
-    "chroot /mnt chpasswd -e (root:hash via stdin)" chroot /mnt chpasswd -e
 }
 
 void_cfg_sudo() {

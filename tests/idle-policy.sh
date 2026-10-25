@@ -24,6 +24,10 @@ cat >"$bin/ryoku-hw-laptop" <<'EOF'
 #!/usr/bin/env bash
 [[ ${1:-} == is-laptop ]]
 EOF
+cat >"$bin/ryoku-hw-backlight" <<'EOF'
+#!/usr/bin/env bash
+printf 'intel_backlight\n'
+EOF
 cat >"$bin/ryoku" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"$RYOKU_IDLE_WM_LOG"
@@ -38,6 +42,46 @@ if [[ $* == "wm act output.power on" ]]; then
   fi
 fi
 EOF
+cat >"$bin/brightnessctl" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+operation=""
+value=""
+while (( $# )); do
+  case "$1" in
+    --device=*) device="${1#*=}" ;;
+    --device|-d) shift; device="${1:-}" ;;
+    get|max) operation="$1" ;;
+    set) operation=set; shift; value="${1:-}" ;;
+  esac
+  shift
+done
+[[ ${device:-} == intel_backlight ]]
+case "$operation" in
+  get)
+    cat "$RYOKU_IDLE_TEST_BACKLIGHT/brightness"
+    ;;
+  max)
+    cat "$RYOKU_IDLE_TEST_BACKLIGHT/max_brightness"
+    ;;
+  set)
+    current="$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")"
+    case "$value" in
+      *-)
+        next=$((current - ${value%-}))
+        (( next >= 0 )) || next=0
+        ;;
+      *)
+        next="$value"
+        ;;
+    esac
+    printf '%s\n' "$next" >"$RYOKU_IDLE_TEST_BACKLIGHT/brightness"
+    ;;
+  *)
+    exit 2
+    ;;
+esac
+EOF
 chmod +x "$bin"/*
 
 export PATH="$bin:$PATH"
@@ -48,6 +92,11 @@ export RYOKU_IDLE_OUTPUT_STATE_DIR="$tmp/output-state"
 export RYOKU_IDLE_WM_LOG="$tmp/wm.log"
 export RYOKU_IDLE_WM_COUNT="$tmp/wm.count"
 export RYOKU_OUTPUT_ON_RETRY_DELAY=0.05
+export RYOKU_IDLE_BRIGHTNESS_STATE_DIR="$tmp/brightness-state"
+export RYOKU_IDLE_TEST_BACKLIGHT="$tmp/backlight/intel_backlight"
+mkdir -p "$RYOKU_IDLE_TEST_BACKLIGHT"
+printf '100\n' >"$RYOKU_IDLE_TEST_BACKLIGHT/max_brightness"
+printf '50\n' >"$RYOKU_IDLE_TEST_BACKLIGHT/brightness"
 export RYOKU_IDLE_TEST_POLICY='{"enabled":false,"onDesktops":false}'
 "$helper" render
 
@@ -78,11 +127,13 @@ fi
 sway_bin="$tmp/sway-bin"
 sway_log="$tmp/swayidle.argv"
 mkdir -p "$sway_bin"
-for tool in bash dirname id jq mkdir mktemp mv; do
+for tool in bash chmod dirname flock id jq mkdir mktemp mv rm; do
   ln -s "$(command -v "$tool")" "$sway_bin/$tool"
 done
 ln -s "$bin/ryoku-power" "$sway_bin/ryoku-power"
 ln -s "$bin/ryoku-hw-laptop" "$sway_bin/ryoku-hw-laptop"
+ln -s "$bin/ryoku-hw-backlight" "$sway_bin/ryoku-hw-backlight"
+ln -s "$bin/brightnessctl" "$sway_bin/brightnessctl"
 cat >"$sway_bin/swayidle" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >"$RYOKU_IDLE_SWAY_LOG"
@@ -97,14 +148,14 @@ lock
 ryoku-shell lock
 timeout
 120
-ryoku-idle on-battery && brightnessctl -s set 20%
+ryoku-idle on-battery && ryoku-idle brightness-dim
 resume
-brightnessctl -r
+ryoku-idle brightness-restore
 timeout
 300
-ryoku-idle on-ac && brightnessctl -s set 20%
+ryoku-idle on-ac && ryoku-idle brightness-dim
 resume
-brightnessctl -r
+ryoku-idle brightness-restore
 timeout
 300
 ryoku-idle on-battery && ryoku-shell lock
@@ -129,6 +180,41 @@ timeout
 ryoku-idle on-ac && ryoku-shell suspend
 EOF
 cmp "$tmp/swayidle-default.expected" "$sway_log"
+
+# Dimming below the fixed target is a no-op, including across duplicate
+# listener edges, and resume restores the same exact raw level.
+printf '10\n' >"$RYOKU_IDLE_TEST_BACKLIGHT/brightness"
+"$helper" brightness-dim
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 10 ]]
+"$helper" brightness-dim
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 10 ]]
+"$helper" brightness-restore
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 10 ]]
+[[ ! -e $RYOKU_IDLE_BRIGHTNESS_STATE_DIR/state ]]
+
+# A second listener must not save the already-dimmed level. Only the first
+# resume restores, and repeated resumes are harmless.
+printf '80\n' >"$RYOKU_IDLE_TEST_BACKLIGHT/brightness"
+"$helper" brightness-dim
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 20 ]]
+"$helper" brightness-dim
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 20 ]]
+"$helper" brightness-restore
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 80 ]]
+"$helper" brightness-restore
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 80 ]]
+
+# Repeated idle cycles recompute the raw 20% target and preserve a non-round
+# user level exactly.
+printf '101\n' >"$RYOKU_IDLE_TEST_BACKLIGHT/max_brightness"
+printf '37\n' >"$RYOKU_IDLE_TEST_BACKLIGHT/brightness"
+"$helper" brightness-dim
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 20 ]]
+"$helper" brightness-restore
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 37 ]]
+"$helper" brightness-dim
+"$helper" brightness-restore
+[[ "$(<"$RYOKU_IDLE_TEST_BACKLIGHT/brightness")" == 37 ]]
 
 # An active policy with every stage switched off still carries swayidle's lock
 # event, but emits no timeout or resume pairs.
@@ -180,6 +266,20 @@ export RYOKU_IDLE_WM_FAIL_ON_COUNT=2
 "$helper" output-on
 unset RYOKU_IDLE_WM_FAIL_ON_COUNT
 [[ $(grep -Fxc 'wm act output.power on' "$RYOKU_IDLE_WM_LOG") == 3 ]]
+[[ ! -e $RYOKU_IDLE_OUTPUT_STATE_DIR/generation ]]
+
+# A failed wake still clears its own generation: output-on means the user is
+# back, and stale dark state must not hide visible shell surfaces.
+: >"$RYOKU_IDLE_WM_LOG"
+rm -f "$RYOKU_IDLE_WM_COUNT"
+"$helper" output-off
+touch "$tmp/fail-on"
+export RYOKU_IDLE_WM_FAIL_ALWAYS="$tmp/fail-on"
+if "$helper" output-on; then
+  printf 'an exhausted output-on retry unexpectedly succeeded\n' >&2
+  exit 1
+fi
+unset RYOKU_IDLE_WM_FAIL_ALWAYS
 [[ ! -e $RYOKU_IDLE_OUTPUT_STATE_DIR/generation ]]
 
 # A newer off edge cancels an older wake generation between bounded retries;

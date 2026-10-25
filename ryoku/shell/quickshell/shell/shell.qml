@@ -36,6 +36,7 @@ import "modules/ask"
 import "modules/confirm"
 import Ryoku.Ui.Singletons
 import stage.modules.common as StageIsland
+import stage as Stage
 
 /**
  * The single resident Ryoku shell instance.
@@ -58,6 +59,10 @@ import stage.modules.common as StageIsland
  */
 ShellRoot {
     id: root
+    // Keep native surfaces until Gokko's root has completed, not merely while
+    // its outer Store Scene exists; a nested load error must still fall back.
+    readonly property bool gokkoRunning: Config.barStyle === "gokko"
+        && BarProducts.gokkoReady
     // One deferred-build wave for the cheap event-driven surfaces (the OSDs and
     // the notification column), armed 1.5 s into boot so a keypress or an
     // arriving toast never waits on a component build. Everything heavier is
@@ -196,6 +201,8 @@ ShellRoot {
                 screen: perScreen.modelData
                 active: true
                 widgetsEnabled: Tokens.widgetsEnabledFor(perScreen.modelData.name)
+                    && !root.gokkoRunning
+                gokkoActive: root.gokkoRunning
                 wallpaperUrl: wallpaper.wallpaperUrl
                 wallpaperPath: wallpaper.wallpaperPath
                 wallpaperFit: wallpaper.fit
@@ -297,11 +304,15 @@ ShellRoot {
             }
             Timer { id: askHold; interval: 15000 }
 
-            AskBubble {
-                screen: perScreen.modelData
-                enabled: Config.askBubble.enabled
+            LazyLoader {
+                id: askBubbleLoader
+                activeAsync: Config.askBubble.enabled
                     && Config.askBubble.screen === perScreen.modelData.name
-                suppressed: perScreen.st ? perScreen.st.askOpen : false
+                AskBubble {
+                    screen: perScreen.modelData
+                    enabled: true
+                    suppressed: perScreen.st ? perScreen.st.askOpen : false
+                }
             }
 
             // One cheap host per monitor loads only the selected dock design.
@@ -312,6 +323,7 @@ ShellRoot {
             UniversalDockHost {
                 id: dockLoader
                 screen: perScreen.modelData
+                surfaceVisible: !root.gokkoRunning
             }
 
             // The dock's right-click context menu: a full-screen overlay on the
@@ -319,7 +331,8 @@ ShellRoot {
             // The Ryoku design and docks installed from RyoStore share it.
             LazyLoader {
                 id: dockMenuLoader
-                property bool open: (Dock.design === "ryoku" || Dock.storeDesign)
+                property bool open: !root.gokkoRunning
+                    && (Dock.design === "ryoku" || Dock.storeDesign)
                     && Dock.menuOpen && Dock.menuScreen === perScreen.modelData.name
                 activeAsync: open || dockMenuHold.running
                 onOpenChanged: if (!open && active) dockMenuHold.restart()
@@ -529,17 +542,31 @@ ShellRoot {
         }
     }
 
-    // The Stage Editor: the ported desktop chrome, mounted once (it is
-    // per-screen inside) and driven by the Edit widgets session. Built only
-    // while that session is on (docs/stage.md).
-    StageEditor.StageEditorHost {
+    // Keep the edit chrome alive through its closing transition, then release
+    // its component graph until another edit session starts.
+    LazyLoader {
+        id: stageEditorLoader
+        activeAsync: StageCfg.StageSession.widgets
+            || Stage.GlobalStates.editMode
+            || Stage.GlobalStates.editProgress > 0
+        onItemChanged: {
+            if (!item || !StageCfg.StageSession.widgets)
+                return;
+            Stage.GlobalStates.openEditMode(StageCfg.StageSession.monitor);
+            item.showSection();
+        }
+        StageEditor.StageEditorHost {}
     }
 
-    // The ii dock design: the ported illogical-impulse dock, its live-draw
-    // overlay, alarm popup, clock app and settings page, mounted once (the
-    // design repeats itself per screen inside) while the shared store
-    // selects it.
-    IiDockHost {
+    // The ii host publishes actions and mounts its auxiliary surfaces only for
+    // the selected, enabled design. Other docks do not instantiate the port.
+    LazyLoader {
+        active: !root.gokkoRunning
+            && Dock.design === "ii" && Dock.cfg("enabled", false)
+        LazyLoader {
+            activeAsync: true
+            IiDockHost {}
+        }
     }
 
 
@@ -586,7 +613,7 @@ ShellRoot {
                 st.clipboardOpen = !st.clipboardOpen;
             break;
         case "screenshot":
-            Quickshell.execDetached(["sh", "-c", "flock -n -o /tmp/ryoshot.lock qs -c ryoshot"]);
+            Quickshell.execDetached(["ryoku-cmd-ryoshot"]);
             break;
         case "ask":
             ShellState.requestSurfaceActive("ask", undefined);
@@ -743,21 +770,24 @@ ShellRoot {
         value: Session.wallIsVideo ? Session.livePoster : Session.wallpaper
     }
 
-    // Compositor-level idle inhibitor, mapped only while Keep-Awake is on. It
+    // Compositor-level idle inhibitor, created only while Keep-Awake is on. It
     // dies with the shell; the external caffeine bridge above keeps the durable
     // one. (pill 202-214)
-    PanelWindow {
-        id: inhibitWin
-        visible: Flags.keepAwake
-        implicitWidth: 1
-        implicitHeight: 1
-        color: "transparent"
-        exclusionMode: ExclusionMode.Ignore
-        WlrLayershell.layer: WlrLayer.Background
-        WlrLayershell.namespace: "ryoku-frame-inhibit"
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-        anchors { top: true; left: true }
-        IdleInhibitor { window: inhibitWin; enabled: Flags.keepAwake }
+    LazyLoader {
+        active: Flags.keepAwake
+        PanelWindow {
+            id: inhibitWin
+            visible: true
+            implicitWidth: 1
+            implicitHeight: 1
+            color: "transparent"
+            exclusionMode: ExclusionMode.Ignore
+            WlrLayershell.layer: WlrLayer.Background
+            WlrLayershell.namespace: "ryoku-frame-inhibit"
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            anchors { top: true; left: true }
+            IdleInhibitor { window: inhibitWin; enabled: true }
+        }
     }
 
     // keyboard-return bounce. The frame overlay never unmaps, and dropping an
@@ -773,17 +803,19 @@ ShellRoot {
         interval: 90
         onTriggered: root.kbBounce = false
     }
-    PanelWindow {
-        id: kbBounceWin
-        visible: root.kbBounce
-        implicitWidth: 1
-        implicitHeight: 1
-        color: "transparent"
-        exclusionMode: ExclusionMode.Ignore
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.namespace: "ryoku-frame-kbfocus"
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-        anchors { top: true; left: true }
+    LazyLoader {
+        active: root.kbBounce
+        PanelWindow {
+            visible: true
+            implicitWidth: 1
+            implicitHeight: 1
+            color: "transparent"
+            exclusionMode: ExclusionMode.Ignore
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.namespace: "ryoku-frame-kbfocus"
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            anchors { top: true; left: true }
+        }
     }
     Connections {
         target: ShellState
@@ -911,76 +943,54 @@ ShellRoot {
     // service. The Hub never becomes a second writer for stage.json.
     IpcHandler {
         target: "stage-settings"
-        function setQuality(value: string): string {
-            if (["draft", "standard", "fine"].indexOf(value) < 0)
-                return "Quality must be draft, standard or fine";
-            StageCfg.Config.setQuality(value);
+        function setCutModel(mode: string, id: string): string {
+            StageCfg.Config.setCutModel(mode, id);
             return "ok";
         }
-        function setEdge(value: real): string {
-            if (!isFinite(value) || value < 0 || value > 1)
-                return "Edge softness must be between 0 and 1";
-            StageCfg.Config.setEdge(value);
+        function setCutMatting(mode: string, value: bool): string {
+            StageCfg.Config.setCutMatting(mode, value);
             return "ok";
         }
-        function setShadow(value: real): string {
-            if (!isFinite(value) || value < 0 || value > 1)
-                return "Shadow must be between 0 and 1";
-            StageCfg.Config.setShadow(value);
+        function setEdge(mode: string, value: real): string {
+            StageCfg.Config.setEdge(mode, value);
             return "ok";
         }
-        function setShadowAngle(value: real): string {
-            if (!isFinite(value) || value < 0 || value > 360)
-                return "Shadow angle must be between 0 and 360";
-            StageCfg.Config.setShadowAngle(value);
+        function setShadow(mode: string, value: real): string {
+            StageCfg.Config.setShadow(mode, value);
             return "ok";
         }
-        function resetLook(): string { StageCfg.Config.resetLook(); return "ok"; }
-        function setAmount(value: string): string {
-            if (["subtle", "normal", "strong"].indexOf(value) < 0)
-                return "Amount must be subtle, normal or strong";
-            StageCfg.Config.setAmount(value);
+        function setShadowAngle(mode: string, value: real): string {
+            StageCfg.Config.setShadowAngle(mode, value);
             return "ok";
         }
-        function setIdle(value: string): string {
-            if (["none", "float", "breathe", "sway"].indexOf(value) < 0)
-                return "Idle motion must be none, float, breathe or sway";
-            StageCfg.Config.setIdle(value);
+        function resetLook(mode: string): string {
+            StageCfg.Config.resetLook(mode);
             return "ok";
         }
-        function setMusic(value: bool): string { StageCfg.Config.setMusic(value); return "ok"; }
-        function setMouse(value: bool): string { StageCfg.Config.setMouse(value); return "ok"; }
-        function setSpeed(value: real): string {
-            if (!isFinite(value) || value < 0.25 || value > 2)
-                return "Idle speed must be between 0.25 and 2";
-            StageCfg.Config.setSpeed(value);
+        function setMotion(mode: string, key: string, value: var): string {
+            StageCfg.Config.setMotion(mode, key, value);
             return "ok";
         }
-        function setMusicLevel(value: real): string {
-            if (!isFinite(value) || value < 0 || value > 1)
-                return "Music intensity must be between 0 and 1";
-            StageCfg.Config.setMusicLevel(value);
+        function resetMotion(mode: string): string {
+            StageCfg.Config.resetMotion(mode);
             return "ok";
         }
-        function setSensitivity(value: real): string {
-            if (!isFinite(value) || value < 0 || value > 2)
-                return "Pointer sensitivity must be between 0 and 2";
-            StageCfg.Config.setSensitivity(value);
+        function applyPreset(name: string): string {
+            StageCfg.Config.applyPreset(name);
             return "ok";
         }
-        function setRange(value: real): string {
-            if (!isFinite(value) || value < 0 || value > 2)
-                return "Pointer range must be between 0 and 2";
-            StageCfg.Config.setRange(value);
+        function setSpatialModel(id: string): string {
+            StageCfg.Config.setSpatialModel(id);
             return "ok";
         }
-        function setBackdrop(value: real): string {
-            if (!isFinite(value) || value < 0 || value > 1)
-                return "Backdrop drift must be between 0 and 1";
-            StageCfg.Config.setBackdrop(value);
+        function setDepthBackdrop(value: bool): string {
+            StageCfg.Config.setDepthBackdrop(value);
             return "ok";
         }
-        function setVisualizerFront(value: bool): string { StageCfg.Config.setFront("visualizer", value); return "ok"; }
+        function setVisualizerFront(mode: string, value: bool): string {
+            StageCfg.Config.setFront(mode, "visualizer", value);
+            return "ok";
+        }
     }
 
     // Enter or leave the desktop-widget editor without the right-click menu, so

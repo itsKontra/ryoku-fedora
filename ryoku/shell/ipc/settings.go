@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/sys/unix"
+
 	wm "ryoku-wm"
 )
 
@@ -25,12 +27,12 @@ import (
 // The daemon owns a typed schema for the reference namespaces plus Ryoku's Ask
 // and Controls state. Those are validated: enum membership and integer ranges
 // are rejected, float strength/contrast/opacity values clamp into range, and
-// Controls drops unknown or duplicate layout identifiers. Every other top-level
-// key in the file (the Ryoku-native look knobs frameRadius, frameBars,
-// weatherLocation, language, and the rest) is carried through verbatim as
-// passthrough: echoed in the frame and merged on patch, but not validated,
-// because the daemon has no schema for them. Passthrough keeps the daemon the
-// sole writer without having to model keys other surfaces own.
+// Controls drops unknown or duplicate layout identifiers. Other top-level keys
+// in the file (the Ryoku-native look knobs frameRadius, frameBars,
+// weatherLocation, language, and the rest) are carried through verbatim as
+// passthrough, except for shared leaves such as dock.edgeGap that need one
+// daemon-enforced contract. Passthrough keeps the daemon the sole writer without
+// forcing it to model settings owned by individual surfaces.
 //
 // The frame is the whole file as one JSON object, so a subscriber sees both the
 // validated schema and the passthrough keys and can drop its own file reader.
@@ -60,6 +62,12 @@ var contractKeys = map[string]bool{
 	"sounds":           true,
 }
 
+const (
+	dockEdgeGapDefault = 0
+	dockEdgeGapMin     = 0
+	dockEdgeGapMax     = 64
+)
+
 // Value domains, in the display order of contract 14 section 8. Stored as stable
 // identifiers (no spaces); the label a user sees is the UI's concern. None name
 // the reference project: the widget ids reference Hyprland (the compositor) and
@@ -78,6 +86,7 @@ var (
 	orientationValues     = []string{"Horizontal", "Vertical"}
 	locQueryTypeValues    = []string{"Coordinates", "City"}
 	controlSectionIDs     = []string{"vitals", "connections", "powerProfile", "media", "levels", "bottomControls"}
+	controlPositionValues = []string{"top-left", "top-right", "center"}
 	controlElementIDs     = []string{
 		"identity", "cpu", "cpuTemperature", "liveGraph", "memory", "gpu", "network", "disk", "battery",
 		"wifi", "bluetooth", "ethernet", "vpn",
@@ -359,6 +368,8 @@ type phoneAlarmSettings struct {
 }
 
 type controlsSettings struct {
+	Position string            `json:"position"`
+	EdgeGap  *int              `json:"edgeGap"`
 	Sections []controlsSection `json:"sections"`
 	Hidden   []string          `json:"hidden"`
 }
@@ -462,7 +473,12 @@ func defaultSettings() *settings {
 			Microphone: phoneMicrophoneSettings{Enabled: false, MicGain: 100, Monitor: false, SetDefault: false},
 			Alarm:      phoneAlarmSettings{Enabled: true, PollMinutes: 10, ClockApps: []string{}, IgnorePackages: []string{}},
 		},
-		Controls:      controlsSettings{Sections: controls, Hidden: []string{}},
+		Controls: controlsSettings{
+			Position: "top-left",
+			EdgeGap:  ip(12),
+			Sections: controls,
+			Hidden:   []string{},
+		},
 		BatteryAlerts: batteryAlertsSettings{Enabled: true, WarningEnabled: true, CriticalEnabled: true, WarningPercent: 25, CriticalPercent: 10},
 		Sounds:        defaultSoundsSettings(),
 	}
@@ -549,7 +565,7 @@ func (s *settings) normalize(strict bool) error {
 	s.Wallpaper.normalize(v)
 	s.Ask.normalize(v)
 	s.Phone.normalize(v)
-	s.Controls.normalize()
+	s.Controls.normalize(v)
 	s.BatteryAlerts.normalize(v)
 	s.Sounds.normalize(v)
 	return v.err
@@ -718,7 +734,22 @@ func (p *phoneSettings) normalize(v *validator) {
 	v.rangeI("phone.alarm.pollMinutes", &p.Alarm.PollMinutes, 1, 1440)
 }
 
-func (c *controlsSettings) normalize() {
+func (c *controlsSettings) normalize(v *validator) {
+	if !inSet(controlPositionValues, c.Position) {
+		if v.strict {
+			v.enum("controls.position", c.Position, controlPositionValues)
+		} else {
+			c.Position = "top-left"
+		}
+	}
+	if c.EdgeGap == nil {
+		if v.strict && v.err == nil {
+			v.err = fmt.Errorf("controls.edgeGap: must be an integer")
+		}
+		c.EdgeGap = ip(12)
+	}
+	v.rangeI("controls.edgeGap", c.EdgeGap, 0, 96)
+
 	defaults := defaultSettings().Controls.Sections
 	allowedSections := make(map[string]bool, len(controlSectionIDs))
 	for _, id := range controlSectionIDs {
@@ -753,6 +784,39 @@ func (c *controlsSettings) normalize() {
 		}
 	}
 	c.Hidden = hidden
+}
+
+// normalizeDockSettings validates the daemon-owned leaves inside the otherwise
+// passthrough dock store. Keeping the rest of the object untouched lets each
+// design retain its own settings while shared geometry gets one contract.
+func normalizeDockSettings(raw map[string]any, strict bool) error {
+	dock, ok := raw["dock"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	value, ok := dock["edgeGap"]
+	if !ok {
+		return nil
+	}
+	b, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("dock.edgeGap: %w", err)
+	}
+	var gap int
+	if err := json.Unmarshal(b, &gap); err != nil {
+		if strict {
+			return fmt.Errorf("dock.edgeGap: %w", err)
+		}
+		dock["edgeGap"] = dockEdgeGapDefault
+		return nil
+	}
+	v := &validator{strict: strict}
+	v.rangeI("dock.edgeGap", &gap, dockEdgeGapMin, dockEdgeGapMax)
+	if v.err != nil {
+		return v.err
+	}
+	dock["edgeGap"] = gap
+	return nil
 }
 
 // splitPath breaks a dotted patch path into segments, rejecting an empty path or
@@ -967,6 +1031,7 @@ type settingsStore struct {
 	raw      map[string]any
 	cur      *settings
 	mtime    time.Time
+	inode    uint64
 	onChange func([]byte)
 	caps     map[string]bool
 	deadKeys []string
@@ -977,10 +1042,20 @@ type settingsStore struct {
 	nomarchyLifecycle func(bool) error
 }
 
+func settingsInode(fi os.FileInfo) uint64 {
+	if stat, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return stat.Ino
+	}
+	return 0
+}
+
 func newSettingsStore(path string) *settingsStore {
 	s := &settingsStore{path: path}
 	raw, cur, mtime := loadSettingsFile(path)
 	s.raw, s.cur, s.mtime = raw, cur, mtime
+	if fi, err := os.Stat(path); err == nil {
+		s.inode = settingsInode(fi)
+	}
 	return s
 }
 
@@ -1033,6 +1108,9 @@ func loadSettingsFile(path string) (map[string]any, *settings, time.Time) {
 		}
 		return settingsToMap(def), def, mtime
 	}
+	if err := normalizeDockSettings(raw, false); err != nil {
+		log.Printf("ryoku-shell: normalize dock settings: %v", err)
+	}
 	cur, err := buildSettings(raw, false)
 	if err != nil {
 		cur = def
@@ -1060,6 +1138,9 @@ func loadSettingsPatchBase(path string, fallback map[string]any) (map[string]any
 			err = fmt.Errorf("root must be an object")
 		}
 		return nil, nil, fmt.Errorf("parse settings: %w", err)
+	}
+	if err := normalizeDockSettings(raw, false); err != nil {
+		return nil, nil, fmt.Errorf("validate dock settings: %w", err)
 	}
 	cur, err := buildSettings(raw, false)
 	if err != nil {
@@ -1153,11 +1234,11 @@ var designTransactionKeys = map[string]string{
 	"sidebar":      "ryoStoreSidebarTransaction",
 }
 
-// patch sets one leaf. A schema path is validated and clamped; native
-// passthrough paths are merged without validation. Retired settings namespaces
-// are rejected rather than silently resurrected. The change is persisted before
-// it is committed in memory, so a write failure cannot leave memory and disk
-// disagreeing.
+// patch sets one leaf. Schema paths and selected shared native leaves are
+// validated and clamped; other native passthrough paths are merged without
+// validation. Retired settings namespaces are rejected rather than silently
+// resurrected. The change is persisted before it is committed in memory, so a
+// write failure cannot leave memory and disk disagreeing.
 func (s *settingsStore) patch(path string, value json.RawMessage) error {
 	segs, err := splitPath(path)
 	if err != nil {
@@ -1185,6 +1266,9 @@ func (s *settingsStore) patch(path string, value json.RawMessage) error {
 	full := deepCopyMap(diskRaw)
 	contract := contractKeys[segs[0]]
 	if err := setByPath(full, segs, value, !contract); err != nil {
+		return err
+	}
+	if err := normalizeDockSettings(full, true); err != nil {
 		return err
 	}
 	if len(segs) == 1 && segs[0] == "barStyle" {
@@ -1286,6 +1370,7 @@ func (s *settingsStore) persistLocked(full map[string]any) error {
 	}
 	if fi, e := os.Stat(s.path); e == nil {
 		s.mtime = fi.ModTime()
+		s.inode = settingsInode(fi)
 	}
 	return nil
 }
@@ -1315,6 +1400,7 @@ func (s *settingsStore) reload() {
 	if badFile {
 		if fi, e := os.Stat(s.path); e == nil {
 			s.mtime = fi.ModTime()
+			s.inode = settingsInode(fi)
 		}
 		s.mu.Unlock()
 		return
@@ -1331,6 +1417,7 @@ func (s *settingsStore) reload() {
 	}
 	if fi, e := os.Stat(s.path); e == nil {
 		s.mtime = fi.ModTime()
+		s.inode = settingsInode(fi)
 	}
 	s.raw, s.cur = raw, cur
 	frame := s.frameLocked()
@@ -1343,30 +1430,190 @@ func (s *settingsStore) reload() {
 	}
 }
 
-// settingsPollInterval is how often the watcher checks the file's mtime. The file
-// changes rarely (only hand edits, since the daemon is otherwise the sole
-// writer), so a poll is simpler and more robust across editor rename-and-replace
-// than an inotify watch, at a negligible idle cost.
-const settingsPollInterval = 500 * time.Millisecond
+const settingsFallbackInterval = 5 * time.Minute
 
-// watch reloads the file whenever its mtime changes from what the store last
-// wrote or read, so an external hand-edit retunes the shell live. It runs until
-// the daemon quits.
-func (s *settingsStore) watch(quit <-chan struct{}) {
+func (s *settingsStore) settingsChanged() bool {
+	fi, err := os.Stat(s.path)
+	if err != nil {
+		return false
+	}
+	s.mu.Lock()
+	same := fi.ModTime().Equal(s.mtime) && settingsInode(fi) == s.inode
+	s.mu.Unlock()
+	return !same
+}
+
+func (s *settingsStore) watchFallback(quit <-chan struct{}) {
+	timer := time.NewTimer(settingsFallbackInterval)
+	defer timer.Stop()
 	for {
 		select {
 		case <-quit:
 			return
-		case <-time.After(settingsPollInterval):
+		case <-timer.C:
+			if s.settingsChanged() {
+				s.reload()
+			}
+			timer.Reset(settingsFallbackInterval)
 		}
-		fi, err := os.Stat(s.path)
-		if err != nil {
-			continue
+	}
+}
+
+func nearestExistingDir(path string) (string, error) {
+	path = filepath.Clean(path)
+	for {
+		info, err := os.Stat(path)
+		if err == nil {
+			if !info.IsDir() {
+				return "", fmt.Errorf("%s is not a directory", path)
+			}
+			return path, nil
 		}
-		s.mu.Lock()
-		same := fi.ModTime().Equal(s.mtime)
-		s.mu.Unlock()
-		if !same {
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			return "", err
+		}
+		path = parent
+	}
+}
+
+// watch follows the parent because editors and the daemon both replace the
+// file atomically. If the config tree is absent, it follows the closest live
+// ancestor down until the real parent appears.
+func (s *settingsStore) watch(quit <-chan struct{}, ready chan struct{}) {
+	announce := func() {
+		if ready != nil {
+			close(ready)
+			ready = nil
+		}
+	}
+	fd, err := unix.InotifyInit1(unix.IN_CLOEXEC | unix.IN_NONBLOCK)
+	if err != nil {
+		log.Printf("ryoku-shell: settings watch unavailable, using slow reconciliation: %v", err)
+		announce()
+		s.watchFallback(quit)
+		return
+	}
+	defer unix.Close(fd)
+
+	targetDir := filepath.Dir(s.path)
+	watchedDir := ""
+	watchFD := -1
+	mask := uint32(unix.IN_CLOSE_WRITE | unix.IN_CREATE | unix.IN_MOVED_TO |
+		unix.IN_DELETE_SELF | unix.IN_MOVE_SELF)
+	resetWatch := func() error {
+		for {
+			dir, err := nearestExistingDir(targetDir)
+			if err != nil {
+				return err
+			}
+			if watchFD >= 0 && watchedDir == dir {
+				return nil
+			}
+			next, err := unix.InotifyAddWatch(fd, dir, mask)
+			if err != nil {
+				return err
+			}
+			old := watchFD
+			watchFD, watchedDir = next, dir
+			if old >= 0 {
+				_, _ = unix.InotifyRmWatch(fd, uint32(old))
+			}
+			deepest, err := nearestExistingDir(targetDir)
+			if err != nil {
+				return err
+			}
+			if deepest == watchedDir {
+				return nil
+			}
+		}
+	}
+	if err := resetWatch(); err != nil {
+		log.Printf("ryoku-shell: settings watch unavailable, using slow reconciliation: %v", err)
+		announce()
+		s.watchFallback(quit)
+		return
+	}
+
+	stopFD, stopQuitWake, err := quitEventFD(quit)
+	if err != nil {
+		log.Printf("ryoku-shell: settings watch unavailable, using slow reconciliation: %v", err)
+		announce()
+		s.watchFallback(quit)
+		return
+	}
+	defer func() {
+		stopQuitWake()
+		unix.Close(stopFD)
+	}()
+	announce()
+
+	buf := make([]byte, 4096)
+	for {
+		pfds := []unix.PollFd{
+			{Fd: int32(fd), Events: unix.POLLIN | unix.POLLERR},
+			{Fd: int32(stopFD), Events: unix.POLLIN | unix.POLLERR},
+		}
+		if _, err := unix.Poll(pfds, -1); err != nil {
+			if err == unix.EINTR {
+				continue
+			}
+			log.Printf("ryoku-shell: settings watch failed, using slow reconciliation: %v", err)
+			s.watchFallback(quit)
+			return
+		}
+		if pfds[1].Revents != 0 {
+			return
+		}
+
+		reload, forceReload, rewatch := false, false, false
+		for {
+			n, err := unix.Read(fd, buf)
+			if err != nil {
+				break
+			}
+			for _, event := range decodeFileEvents(buf[:n]) {
+				if event.mask&unix.IN_Q_OVERFLOW != 0 {
+					reload, forceReload = true, true
+					continue
+				}
+				if event.watch != int32(watchFD) {
+					continue
+				}
+				if event.mask&(unix.IN_IGNORED|unix.IN_DELETE_SELF|unix.IN_MOVE_SELF) != 0 {
+					watchFD = -1
+					rewatch = true
+					continue
+				}
+				if watchedDir != targetDir {
+					rewatch = true
+					continue
+				}
+				if event.name != filepath.Base(s.path) {
+					continue
+				}
+				reload = true
+				if event.mask&(unix.IN_CLOSE_WRITE|unix.IN_MOVED_TO) != 0 {
+					// A reconciliation can race a newly-created file while it is
+					// still being written. The bad-file path records its final
+					// stat after the read, so the close must not be filtered out
+					// as unchanged.
+					forceReload = true
+				}
+			}
+		}
+		if rewatch {
+			if err := resetWatch(); err != nil {
+				log.Printf("ryoku-shell: settings watch failed, using slow reconciliation: %v", err)
+				s.watchFallback(quit)
+				return
+			}
+			reload = true
+		}
+		if reload && (forceReload || s.settingsChanged()) {
 			s.reload()
 		}
 	}
@@ -1442,7 +1689,7 @@ func (d *daemon) startSettings() {
 		return nil, store.reset(a.Path)
 	})
 
-	go store.watch(d.quit)
+	go store.watch(d.quit, nil)
 }
 
 // capsMap is every capability with an explicit boolean for the active provider,

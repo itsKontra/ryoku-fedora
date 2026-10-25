@@ -7,7 +7,7 @@ import Quickshell.Wayland
 import Ryoku.Ui.Singletons
 import Quickshell.Bluetooth
 import Quickshell.Networking
-import shell.services
+import shell.services as RyokuServices
 import "WindowRegistry.js" as Registry
 import "notifications" as Notifs
 
@@ -113,13 +113,13 @@ PanelWindow {
             }
 
             if (cmd === "airplane" || targetWidget === "airplane" || cmd === "flight" || targetWidget === "flight") {
-                let isAirplane = !Networking.wifiEnabled && !BluetoothPower.enabled;
+                let isAirplane = !Networking.wifiEnabled && !RyokuServices.BluetoothPower.enabled;
                 if (isAirplane) {
                     Networking.wifiEnabled = true;
-                    BluetoothPower.setEnabled(true);
+                    RyokuServices.BluetoothPower.setEnabled(true);
                 } else {
                     Networking.wifiEnabled = false;
-                    BluetoothPower.setEnabled(false);
+                    RyokuServices.BluetoothPower.setEnabled(false);
                 }
                 return;
             }

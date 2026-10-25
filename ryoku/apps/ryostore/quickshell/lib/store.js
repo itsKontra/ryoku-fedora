@@ -101,12 +101,40 @@ function matchesQuery(item, query) {
     return terms.every(function(term) { return haystack.indexOf(term) !== -1; });
 }
 
+const subshellIds = ["gokko", "caelestia", "tansu", "python"];
+function isSubshell(item) {
+    return Boolean(item && item.category === "barstyles"
+        && subshellIds.indexOf(String(item.id || "")) >= 0);
+}
+
+function barCategories(categories, items) {
+    const source = Array.isArray(items) ? items : [];
+    const subshellCount = source.filter(isSubshell).length;
+    const barCount = source.filter(item => item.category === "barstyles" && !isSubshell(item)).length;
+    const result = [];
+    for (const category of sortCategories(categories)) {
+        if (String(category.id) !== "barstyles") {
+            result.push(category);
+            continue;
+        }
+        if (subshellCount > 0) result.push({ id: "subshells", name: "Subshells", group: category.group,
+            count: subshellCount, description: "Complete shell experiences, docks, panels and tools." });
+        if (barCount > 0) result.push(Object.assign({}, category, { count: barCount }));
+    }
+    return result;
+}
+
 function filter(items, options) {
     var source = Array.isArray(items) ? items : [];
     var opts = options || {};
     return source.filter(function(item) {
-        if (opts.category && item.category !== opts.category)
+        if (opts.category === "subshells") {
+            if (!isSubshell(item)) return false;
+        } else if (opts.category === "barstyles") {
+            if (item.category !== "barstyles" || isSubshell(item)) return false;
+        } else if (opts.category && item.category !== opts.category) {
             return false;
+        }
         if (opts.installedOnly && !isInstalled(item))
             return false;
         if (opts.updatesOnly && !item.updateAvailable)
@@ -265,4 +293,4 @@ function sortCategories(categories) {
 }
 
 if (typeof module !== "undefined" && module.exports)
-    module.exports = { statusLabels, isInstalled, isDownloadPaused, downloadPauseReason, isUnavailable, unavailableLabel, unavailableReason, pluginKind, searchText, matchesQuery, filter, groupSearch, featured, installed, itemKey, sortOmarchyPlugins, collection, selectionKey, categoryPlates, primaryAction, secondaryAction, sortCategories, shuffleSeeded };
+    module.exports = { statusLabels, isInstalled, isDownloadPaused, downloadPauseReason, isUnavailable, unavailableLabel, unavailableReason, pluginKind, searchText, matchesQuery, filter, groupSearch, featured, installed, itemKey, sortOmarchyPlugins, collection, selectionKey, categoryPlates, primaryAction, secondaryAction, sortCategories, shuffleSeeded, isSubshell, barCategories };

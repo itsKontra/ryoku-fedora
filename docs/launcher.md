@@ -99,6 +99,29 @@ with a `Main.qml` runtime root and, optionally, a `Preview.qml`.
   shipped six with a STORE tag, previews each with its own `Preview.qml` (or the
   store art when it has none), and offers UPDATE and BROWSE RYOSTORE. Picking and
   saving one is the same as picking a shipped variant.
+- A store launcher opts into Settings controls with a `settings.json` beside its
+  `Main.qml`, which the install carries like any other file of the folder.
+  `capabilities` names what it honours; `sections` lists at most 64 groups it
+  files apps under, for the `sections` capability. Section ids use lowercase
+  letters, digits and dashes, and labels are non-empty text of at most 80
+  characters. Settings reads the descriptor as data with
+  `hub/quickshell/LauncherSettings.js`; it ignores unknown names and rejects
+  malformed or oversized files, so content there is never executed.
+
+  | Capability | Settings card | `launcher.json` keys |
+  | --- | --- | --- |
+  | `background` | Backdrop frost | `bgBlur` |
+  | `overlay` | Overlay | `overlayOpacity` (0.3 to 1) |
+  | `hiddenApps` | Hidden apps | `hiddenApps` (desktop entry ids) |
+  | `grid` | Grid | `columns`, `matWidth` (px) |
+  | `sections` | Sections | `sectionOrder`, `hiddenSections` (section ids) |
+  | `pinnedApps` | Favorites | `pinnedApps` (desktop entry ids) |
+
+  The launcher reads these keys itself from `launcher.json`, with
+  `Quickshell.Io`'s `FileView` and `JsonAdapter`, and must fall back to the
+  defaults when one is absent. It never writes the file: Settings owns it, and
+  a write from here would drop the keys the launcher does not know.
+  The shipped Hero and Main honour `hiddenApps` through `shared/providers/apps`.
 - Removing the launcher in use resets `variant` to `""`, the default, inside the
   same journaled Store transaction. The shipped ids (`main`, `hero`, `okshell`,
   `kairos`, `spotlight`, `python`) are reserved: the Store refuses to install,
@@ -130,7 +153,7 @@ never by an edit to the routing.
 | apps | (default), `>` | launch desktop apps, fuzzy + launch-frequency ranked |
 | calc | `=`, leading digit | qalc: math, units, currency |
 | actions | `/` | system actions (lock, wallpaper, screenshot, night light, media keys, settings) in category tabs |
-| clipboard | `;` | cliphist history, copy or delete |
+| clipboard | `;` | Ryoku clipboard history, copy or delete |
 | windows | (default) | switch Hyprland windows |
 | web | `?` | web search with `!bang` site shortcuts, plus an inline DuckDuckGo instant answer |
 | files | (default, 3+ chars) | fd file search, open or reveal |

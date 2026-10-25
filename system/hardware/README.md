@@ -167,8 +167,10 @@ the foreground shell and compositor bindings are ready. By default timers run
 on laptops only; `idle.onDesktops` opts a desktop in, and `idle.enabled` false
 turns them off. Each stage has a battery-aggressive and an AC-relaxed timeout
 (shipped defaults: dim 2/5 min, lock 5/10, screen off 5.5/11, suspend 15/30),
-and a stage set to 0 is dropped. The screen-off stage reaches the display
-through `ryoku wm act output.power`, so the config names no compositor.
+and a stage set to 0 is dropped. Dimming lowers a panel above 20%, never raises
+one already below it, and restores the exact pre-idle raw level on input. The
+screen-off stage reaches the display through `ryoku wm act output.power`, so
+the config names no compositor.
 Edit the timeouts from the Hub's Machine page or with `ryoku-power idle set`; a
 change runs `ryoku-idle apply`. The shell's Keep Awake toggle uses Wayland idle
 inhibition, so hypridle stays paused while that toggle is on.

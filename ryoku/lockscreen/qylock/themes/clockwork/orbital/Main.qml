@@ -19,24 +19,23 @@ Rectangle {
     color: root.bgColor
 
     property bool isQuickshell: typeof sddm === "undefined" || sddm.hostName === undefined
+    readonly property bool isSessionLock: (typeof sddm !== "undefined") && sddm.fingerprintHint === true
+    readonly property bool softwareCursorEnabled: !isQuickshell && !isSessionLock
 
     // --- Software cursor for the SDDM login screen --------------------------
-    // weston (the greeter's compositor) implements no wp_cursor_shape, and its
-    // wl_pointer.set_cursor fallback never renders on this hybrid GPU, so the
-    // login pointer is invisible (issue #191). Draw one in the scene instead: a
-    // passive HoverHandler tracks the pointer without stealing clicks or hover,
-    // and an arrow follows it. Only under the SDDM greeter -- the in-session lock
-    // runs on the shell's own compositor, which draws a real cursor, so off there.
+    // The shim identifies the in-session lock through fingerprintHint. It also
+    // supplies hostName for SDDM skin compatibility, so isQuickshell alone
+    // cannot distinguish the two surfaces.
     HoverHandler {
         id: swPointer
-        enabled: !root.isQuickshell
+        enabled: root.softwareCursorEnabled
     }
     Canvas {
         id: swCursor
         width: 26 * root.s
         height: 26 * root.s
         z: 2000000
-        visible: !root.isQuickshell && swPointer.hovered
+        visible: root.softwareCursorEnabled && swPointer.hovered
         x: swPointer.point.position.x
         y: swPointer.point.position.y
         antialiasing: true
@@ -61,13 +60,11 @@ Rectangle {
         }
     }
 
-    // The 60fps clock timer below only feeds the smooth second-hand, so keep it
-    // awake only while this surface is on screen. Under the SDDM greeter that is
-    // when the window is focused; a backgrounded or orphaned greeter then stops
-    // waking the CPU ~60x/s for a clock nobody can see. The in-session lock shim
-    // (which alone defines sddm.fingerprintHint) lives only while shown, so it
-    // always animates.
-    readonly property bool clockAwake: ((typeof sddm !== "undefined") && sddm.fingerprintHint === true) || Window.active
+    // The clock rings sample wall time once per second. Sampling every 16 ms
+    // rebuilt both 60-item rings and submitted a full-screen frame while idle,
+    // competing with software cursor composition on high-refresh displays.
+    // Backgrounded greeters still stop the timer entirely.
+    readonly property bool clockAwake: root.isSessionLock || Window.active
 
     // ── fingerprint sensor hint ─────────────────────────────────────────────
     // Driven by the lock shim's carry-over props (fingerprintHint,
@@ -113,6 +110,7 @@ Rectangle {
     readonly property real marginR: 80 * s
 
     property bool clock24h: true
+    property var clockLocale: Qt.locale()
 
     // Time Logic
     property int curH: new Date().getHours()
@@ -123,7 +121,7 @@ Rectangle {
     readonly property real localTimeMS: (curH * 3600000) + (curM * 60000) + (curS * 1000) + curMS
 
     Timer {
-        interval: 16; running: root.clockAwake; repeat: true
+        interval: 1000; running: root.clockAwake; repeat: true
         onTriggered: {
             var d = new Date()
             root.curH = d.getHours(); root.curM = d.getMinutes(); root.curS = d.getSeconds(); root.curMS = d.getMilliseconds()
@@ -310,9 +308,9 @@ Rectangle {
             }
             Column {
                 anchors.left: indicatorPill.right; anchors.leftMargin: 110 * s; anchors.verticalCenter: parent.verticalCenter; spacing: 5 * s
-                Text { visible: !root.clock24h; text: root.curH < 12 ? "AM" : "PM"; font.family: outfitFont.name; font.pixelSize: 18 * s; color: root.mainText }
-                Text { text: Qt.formatDate(root.curDate, "dd MMM yyyy").toUpperCase(); font.family: outfitFont.name; font.pixelSize: 13 * s; font.letterSpacing: 4 * s; color: root.subColor }
-                Text { text: Qt.formatDate(root.curDate, "dddd").toUpperCase(); font.family: outfitFont.name; font.pixelSize: 18 * s; font.letterSpacing: 8 * s; font.weight: Font.Bold; color: root.mainText }
+                Text { visible: !root.clock24h; text: root.curH < 12 ? root.clockLocale.amText : root.clockLocale.pmText; font.family: outfitFont.name; font.pixelSize: 18 * s; color: root.mainText }
+                Text { text: root.curDate.toLocaleDateString(root.clockLocale, "dd MMM yyyy").toUpperCase(); font.family: outfitFont.name; font.pixelSize: 13 * s; font.letterSpacing: 4 * s; color: root.subColor }
+                Text { text: root.curDate.toLocaleDateString(root.clockLocale, "dddd").toUpperCase(); font.family: outfitFont.name; font.pixelSize: 18 * s; font.letterSpacing: 8 * s; font.weight: Font.Bold; color: root.mainText }
             }
         }
     }

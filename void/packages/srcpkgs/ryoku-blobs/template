@@ -3,16 +3,16 @@ pkgname=ryoku-blobs
 version=0.1.0
 revision=1
 archs="x86_64"
-short_desc="Ryoku.Blobs SDF metaball QML plugin"
+short_desc="Ryoku.Blobs and Ryoku.Spatial3D: the frame and Stage 3D QML plugins"
 maintainer="Ryoku <releases@ryoku.dev>"
 license="GPL-3.0-or-later"
 homepage="https://ryoku.dev"
 hostmakedepends="cmake ninja qt6-base qt6-declarative-devel qt6-shadertools"
 makedepends="qt6-base-devel qt6-declarative-devel qt6-multimedia-devel
- qt6-shadertools-devel"
+ qt6-quick3d-devel qt6-shadertools-devel"
 # Pin Qt so generated shlib requirements match the build-host ABI.
 depends="qt6-base>=6.11.2 qt6-declarative>=6.11.2
- qt6-multimedia>=6.11.2"
+ qt6-multimedia>=6.11.2 qt6-quick3d>=6.11.2"
 distfiles="https://repo.ryoku.dev/sources/ryoku-${version}.tar.gz"
 checksum=SKIP
 wrksrc="ryoku-${version}"

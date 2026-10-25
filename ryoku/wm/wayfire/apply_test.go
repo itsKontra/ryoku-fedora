@@ -450,11 +450,13 @@ command_shell_voice = ryoku-shell voice
 binding_shell_voice = <super> KEY_GRAVE
 command_shell_settings = ryoku-shell hub open
 binding_shell_settings = <super> KEY_COMMA
-command_shell_screenshot = env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml" flock -n -o /tmp/ryoshot.lock qs -c ryoshot
+command_shell_stage_editor = ryoku-shell hub open widgets
+binding_shell_stage_editor = <super> <shift> KEY_D
+command_shell_screenshot = env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml" ryoku-cmd-ryoshot
 binding_shell_screenshot = <super> <shift> KEY_S
-command_shell_screenshot_print = env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml" flock -n -o /tmp/ryoshot.lock qs -c ryoshot
+command_shell_screenshot_print = env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml" ryoku-cmd-ryoshot
 binding_shell_screenshot_print = KEY_PRINT
-command_shell_screenshot_monitor = env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml" flock -n -o /tmp/ryoshot.lock env RYOSHOT_MODE=monitor qs -c ryoshot
+command_shell_screenshot_monitor = env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml" RYOSHOT_MODE=monitor ryoku-cmd-ryoshot
 binding_shell_screenshot_monitor = <shift> KEY_PRINT
 command_shell_color_picker = ryoku-cmd-color-picker
 binding_shell_color_picker = <super> <shift> KEY_C

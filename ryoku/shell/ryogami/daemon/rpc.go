@@ -4,6 +4,21 @@ import "fmt"
 
 const daemonVersion = "0.3.0"
 
+func focusedOutputName() string {
+	wmCache.mu.Lock()
+	name := wmCache.focusedOutput
+	wmCache.mu.Unlock()
+	if name != "" {
+		return name
+	}
+	for _, output := range outputs.list() {
+		if output.Focused {
+			return output.Name
+		}
+	}
+	return ""
+}
+
 // dispatchRequest routes one JSON-RPC request. The method set and response
 // shapes are the wire contract the picker parses.
 func (d *daemon) dispatchRequest(req *request) response {
@@ -18,14 +33,7 @@ func (d *daemon) dispatchRequest(req *request) response {
 	// wm.focusedOutput: the picker opens on the display in use, which no Wayland
 	// protocol reports to a client.
 	case "wm.focusedOutput":
-		name := ""
-		for _, o := range outputs.list() {
-			if o.Focused {
-				name = o.Name
-				break
-			}
-		}
-		return ok(req.ID, map[string]interface{}{"name": name})
+		return ok(req.ID, map[string]interface{}{"name": focusedOutputName()})
 
 	case "state.get":
 		if v, okKey := d.store.stateGet(strParam(p, "key", "")); okKey {
@@ -185,8 +193,13 @@ func (d *daemon) dispatchRequest(req *request) response {
 		d.setAudio(mute, volume, strsParam(p, "outputs"))
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
-	case "picker.hidden":
-		go d.ui.refreshIfStale()
+	case "picker.state":
+		visible := boolParam(p, "visible", false)
+		busy := boolParam(p, "busy", false)
+		d.ui.updateState(visible, busy)
+		if !visible {
+			go d.ui.refreshIfStale()
+		}
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
 	case "wall.random_start":

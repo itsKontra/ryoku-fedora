@@ -75,9 +75,11 @@ prepare_prebuilt() {
       fake_binary "$dir/ryoku-wm-hyprland"
       ;;
     ryoku-blobs)
-      mkdir -p "$dir/qml/Ryoku/Blobs"
+      mkdir -p "$dir/qml/Ryoku/Blobs" "$dir/qml/Ryoku/Spatial3D"
       printf 'module Ryoku.Blobs\n' > "$dir/qml/Ryoku/Blobs/qmldir"
       fake_binary "$dir/qml/Ryoku/Blobs/libryoku-blobs.so"
+      printf 'module Ryoku.Spatial3D\n' > "$dir/qml/Ryoku/Spatial3D/qmldir"
+      fake_binary "$dir/qml/Ryoku/Spatial3D/libryoku-spatial3d.so"
       ;;
     ryogami)
       fake_binary "$dir/ryogami"
@@ -281,8 +283,8 @@ adapter_entry() {
     *:usr/lib/systemd/*|*:usr/lib/tmpfiles.d/ryoku.conf|*:usr/share/ryoku/config/systemd/*|\
     *:usr/share/ryoku/palette-bridge/packaging/systemd/*|\
     *:usr/lib/environment.d/99-ryoku-session.conf|\
-    *:usr/lib/ryoku/runit/*|*:etc/sv/*|*:etc/profile.d/ryoku-environment-d.sh|\
-    *:etc/sudoers.d/ryoku-service-health)
+    *:usr/lib/ryoku/runit/*|*:etc/sv/*|*:etc/skel/.config/service/*|\
+    *:etc/profile.d/ryoku-environment-d.sh|*:etc/sudoers.d/ryoku-service-health)
       return 1
       ;;
     *:usr/share/libalpm/*|*:usr/share/ryoku/packages/void.tsv|*:usr/share/ryoku/packages/fedora.tsv|\

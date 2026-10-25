@@ -76,6 +76,14 @@
   `linux-cachyos`, and wires the CachyOS repos into the target. `build-iso.yml`
   and `build-iso-cachyos.yml` call a shared reusable workflow; each keeps its own
   run counter (plain `r164`, cachyos `r1`) and publishes its own `latest*.json`.
+- **The CachyOS ISO is a CachyOS live system as well as a CachyOS installer.**
+  `stage-variant.sh` changes only the throwaway profile: it boots
+  `linux-cachyos`, puts generic `[cachyos]` above `[core]`, adds CachyOS's
+  keyring, mirrorlists, hooks and `chwd`, and labels the boot menu and motd as
+  the CachyOS edition. Before `mkarchiso`, the build host fetches
+  `cachyos-keyring` over TLS, checks its repository checksum and pinned full
+  fingerprint, and populates trust without a keyserver. Plain staging remains
+  unchanged, and `tests/iso-variant-stage.sh` guards both paths.
 - **The live installer kiosk now shows the Ryoku (Bibata) cursor.** The live set
   gains `ryoku-cursors` from the `[ryoku]` repo and `ryoku-installer-session`
   exports `XCURSOR_THEME=Bibata-Modern-Ice`, so cage/wlroots draws the real

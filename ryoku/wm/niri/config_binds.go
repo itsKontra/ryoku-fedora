@@ -91,11 +91,13 @@ func shippedBinds() map[string]niriBind {
 		"column.center":        {action: "center-column"},
 		"window.focusPrevious": {action: "focus-window-previous"},
 
-		// Focus
-		"focus.left":   {action: "focus-column-left"},
-		"focus.right":  {action: "focus-column-right"},
-		"focus.up":     {action: "focus-window-up"},
-		"focus.down":   {action: "focus-window-down"},
+		// Focus. The combined actions behave like the plain directional actions
+		// while a neighbour exists, then carry the same arrow onto the adjacent
+		// monitor instead of stopping at the workspace edge.
+		"focus.left":   {action: "focus-column-or-monitor-left"},
+		"focus.right":  {action: "focus-column-or-monitor-right"},
+		"focus.up":     {action: "focus-window-or-monitor-up"},
+		"focus.down":   {action: "focus-window-or-monitor-down"},
 		"column.first": {action: "focus-column-first"},
 		"column.last":  {action: "focus-column-last"},
 
@@ -176,9 +178,10 @@ func shippedBinds() map[string]niriBind {
 		"shell.visualizerPlace":   {action: spawnArgs("ryoku-shell", "visualizer-place")},
 		"shell.voice":             {action: spawnArgs("ryoku-shell", "voice")},
 		"shell.settings":          {action: spawnArgs("ryoku-shell", "hub", "open")},
-		"shell.screenshot":        {action: spawnSh(wm.QmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
-		"shell.screenshotPrint":   {action: spawnSh(wm.QmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
-		"shell.screenshotMonitor": {action: spawnSh(wm.QmlEnv + " flock -n -o /tmp/ryoshot.lock env RYOSHOT_MODE=monitor qs -c ryoshot")},
+		"shell.stageEditor":       {action: spawnArgs("ryoku-shell", "hub", "open", "widgets")},
+		"shell.screenshot":        {action: spawnSh(wm.QmlEnv + " ryoku-cmd-ryoshot")},
+		"shell.screenshotPrint":   {action: spawnSh(wm.QmlEnv + " ryoku-cmd-ryoshot")},
+		"shell.screenshotMonitor": {action: spawnSh(wm.QmlEnv + " RYOSHOT_MODE=monitor ryoku-cmd-ryoshot")},
 		"shell.colorPicker":       {action: spawnArgs("hyprpicker", "-a")},
 		"shell.restartAudio":      {action: spawnArgs("ryoku-restart-audio")},
 		"shell.inhibitShortcuts":  {action: "toggle-keyboard-shortcuts-inhibit"},

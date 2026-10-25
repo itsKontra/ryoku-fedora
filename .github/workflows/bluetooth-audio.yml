@@ -26,6 +26,10 @@ on:
       - 'system/hardware/bluetooth/ryoku-bluetooth-reset.service'
       - 'void/init/user/ryoku-bluetooth-reset/**'
       - 'tests/bluetooth-power-persist.sh'
+      - 'system/hardware/bluetooth/ryoku-bluetooth-tune'
+      - 'ryoku/shell/scripts/ryoku-bluetooth-link'
+      - 'tests/bluetooth-tune.sh'
+      - 'tests/bluetooth-link.sh'
       - '.github/workflows/bluetooth-audio.yml'
   push:
     branches:
@@ -40,6 +44,10 @@ on:
       - 'system/hardware/bluetooth/ryoku-bluetooth-reset.service'
       - 'void/init/user/ryoku-bluetooth-reset/**'
       - 'tests/bluetooth-power-persist.sh'
+      - 'system/hardware/bluetooth/ryoku-bluetooth-tune'
+      - 'ryoku/shell/scripts/ryoku-bluetooth-link'
+      - 'tests/bluetooth-tune.sh'
+      - 'tests/bluetooth-link.sh'
       - '.github/workflows/bluetooth-audio.yml'
   workflow_dispatch:
 
@@ -64,6 +72,12 @@ jobs:
       - name: Bluetooth power choice
         shell: bash
         run: bash tests/bluetooth-power-persist.sh
+
+      - name: Bluetooth bonding and link completion
+        shell: bash
+        run: |
+          bash tests/bluetooth-tune.sh
+          bash tests/bluetooth-link.sh
 
       # Needs pw-config and WirePlumber's base config to merge against. The test
       # skips itself when pw-config is absent, so this stays honest on a runner

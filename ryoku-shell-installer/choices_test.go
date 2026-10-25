@@ -167,6 +167,10 @@ func TestChoiceValidationAndEnvironmentDefaults(t *testing.T) {
 	if _, err := envToggle("RYOKU_CACHYOS_LAYER", false); err == nil {
 		t.Fatal("invalid CachyOS layer environment value was accepted")
 	}
+	t.Setenv("RYOKU_GAMING", "yes")
+	if _, err := envToggle("RYOKU_GAMING", false); err == nil {
+		t.Fatal("invalid gaming environment value was accepted")
+	}
 	without, err := parseWithout("ryotunes, ryoport,ryotunes")
 	if err != nil || strings.Join(without, ",") != "ryotunes,ryoport" {
 		t.Fatalf("parsed --without = %v, %v", without, err)
@@ -243,8 +247,19 @@ func TestShellFrontendMatchesSharedEditionPlan(t *testing.T) {
 			gotDrops := strings.Join(choiceDropPackages(p), ",")
 			wantDrops := installerplan.DropPackages(p.browser, p.shell)
 			wantDrops = append(wantDrops, installerplan.DropPackagesFor(installerplan.FileManager, p.fileManager)...)
+			wantDrops = append(wantDrops, plan.choices.DropComponentPackages(p.componentSelections())...)
+			wantDrops = uniquePackages(wantDrops)
 			if gotDrops != strings.Join(wantDrops, ",") {
 				t.Fatalf("choice drops = %q, want %q", gotDrops, strings.Join(wantDrops, ","))
+			}
+			if gaming, ok := plan.choices.GamingComponent(); ok {
+				p.setComponent(gaming.Component.ID, true)
+				drops := packageSet(choiceDropPackages(p))
+				for _, pkg := range gaming.Component.Packages {
+					if drops[pkg] {
+						t.Errorf("selected gaming package %s was dropped", pkg)
+					}
+				}
 			}
 		})
 	}
@@ -355,9 +370,22 @@ func TestComponentsOfferedPerEdition(t *testing.T) {
 					t.Errorf("%s row is missing", label)
 				}
 			}
-			_, hasLayer := byLabel["CachyOS kernel and tuning"]
-			if hasLayer != (name == "arch") {
-				t.Errorf("CachyOS layer row present=%v", hasLayer)
+			gaming, hasGaming := edition.choices.GamingComponent()
+			if name == "fedora" {
+				if hasGaming {
+					t.Fatal("Fedora plan exposes gaming")
+				}
+			} else {
+				if !hasGaming {
+					t.Fatal("gaming row is missing")
+				}
+				item, ok := byLabel[gaming.Component.Label]
+				if !ok || item.on == nil {
+					t.Fatalf("%s gaming toggle is missing", gaming.Component.Label)
+				}
+				if *item.on || p.componentOn(gaming.Component.ID) {
+					t.Fatal("gaming must default off")
+				}
 			}
 			if byLabel["Rashin"].locked {
 				t.Errorf("Rashin is locked on %s", name)
@@ -441,16 +469,62 @@ func TestPlanOverridesValidateAndApplyComponents(t *testing.T) {
 		t.Fatalf("overrides were not applied: file manager=%s components=%v", p.fileManager, p.componentSelections())
 	}
 
-	for name, bad := range map[string]planOverrides{
-		"unknown component": {browser: "firefox", rashin: true, without: []string{"not-a-component"}},
-		"layer on CachyOS":  {browser: "firefox", rashin: true, cachyosLayer: true},
+	if err := validateEditionFlags(planOverrides{
+		browser: "firefox", rashin: true, without: []string{"not-a-component"},
+	}, edition); err == nil {
+		t.Fatal("unknown component was accepted")
+	}
+
+	cachyos := sourceEditionChoices("CachyOS")
+	gaming := planOverrides{browser: "firefox", rashin: true, gaming: true}
+	if err := validateEditionFlags(gaming, cachyos); err != nil {
+		t.Fatal(err)
+	}
+	cachyosPlan := defaultPlanForEdition(&facts{}, cachyos)
+	applyPlanOverrides(cachyosPlan, gaming)
+	if !cachyosPlan.componentOn("cachyos-gaming") {
+		t.Fatal("--gaming did not select the CachyOS gaming component")
+	}
+
+	voidData, err := os.ReadFile(filepath.Join("..", "void", "packages", "translations.tsv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	voidEdition, err := parseEditionCompositors(voidData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateEditionFlags(gaming, voidEdition); err != nil {
+		t.Fatal(err)
+	}
+	voidPlan := defaultPlanForEdition(&facts{}, voidEdition)
+	applyPlanOverrides(voidPlan, gaming)
+	if !voidPlan.componentOn("void-gaming") {
+		t.Fatal("--gaming did not select the Void gaming component")
+	}
+	if err := validateEditionFlags(planOverrides{browser: "firefox", rashin: true, gaming: true}, edition); err == nil {
+		t.Fatal("--gaming was accepted on Arch instead of --cachyos-layer")
+	}
+	for name, target := range map[string]editionCompositorPlan{
+		"CachyOS": cachyos,
+		"Void":    voidEdition,
 	} {
-		target := edition
-		if name == "layer on CachyOS" {
-			target = sourceEditionChoices("CachyOS")
+		if err := validateEditionFlags(planOverrides{browser: "firefox", rashin: true, cachyosLayer: true}, target); err == nil {
+			t.Errorf("--cachyos-layer was accepted on %s", name)
 		}
-		if err := validateEditionFlags(bad, target); err == nil {
-			t.Errorf("%s was accepted", name)
-		}
+	}
+	fedoraData, err := os.ReadFile(filepath.Join("..", "fedora", "packages", "translations.tsv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fedoraEdition, err := parseEditionCompositors(fedoraData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateEditionFlags(planOverrides{browser: "firefox", rashin: true, cachyosLayer: true}, fedoraEdition); err == nil {
+		t.Fatal("--cachyos-layer was accepted on Fedora")
+	}
+	if err := validateEditionFlags(gaming, fedoraEdition); err == nil {
+		t.Fatal("--gaming was accepted on Fedora")
 	}
 }

@@ -26,9 +26,8 @@ KDE Plasma, Server, and spin systems with systemd and either dnf5 or dnf. It
 refuses rpm-ostree editions. Before sudo or any system change, it checks that
 the selected Ryoku channel publishes repository metadata for the running
 release. `RYOKU_RPM_REPO` skips that check for local repository tests.
-The stable channel has no Fedora packages until Ryoku's first Fedora release;
-until then the default `main` ref stops there, and `--ref unstable-dev`
-installs the testing packages.
+Ryoku 1.0 publishes stable packages for Fedora 44 and 45. The default `main`
+ref installs that stable channel. `--ref unstable-dev` selects testing instead.
 
 The installer imports the verified Ryoku release key, writes
 `/etc/yum.repos.d/ryoku.repo`, adds the package-restricted COPRs from the

@@ -550,6 +550,20 @@ func matugenFollows() bool {
 	return matchWallpaperOn() && !staticThemeActive()
 }
 
+// refreshFolderIcons retints the folder icons to the palette the shell just
+// committed. Folder icons are a desktop surface, not a Qt or optional
+// app-theme template. The rebuild takes a few hundred milliseconds and waits
+// on its own lock, so it runs beside the template fan-out instead of in front
+// of it. The helper reads colors.json once it holds that lock, so a burst of
+// palette changes always ends on the newest one.
+func refreshFolderIcons() {
+	go func() {
+		if err := runCommand("ryoku-cmd-folders"); err != nil {
+			fmt.Fprintf(os.Stderr, "matugen: folder icons: %v\n", err)
+		}
+	}()
+}
+
 // matugenApply runs the whole pipeline for one image: generate the scheme with
 // the configured knobs, author the shell palette, fan it into the app templates,
 // and nudge the toolkits to repaint. A video wallpaper is sampled to a still
@@ -574,6 +588,7 @@ func (d *daemon) matugenApply(img string) error {
 	if err := writeJSONFile(matugenColorsPath(), matugenColorsJSON(pal)); err != nil {
 		return fmt.Errorf("matugen colors.json: %w", err)
 	}
+	refreshFolderIcons()
 
 	// Retint the Material pointer now, parallel with the template fan-out below,
 	// so it tracks the wallpaper as promptly as the bar instead of waiting on
@@ -694,6 +709,7 @@ func (d *daemon) matugenApplyStatic(name string) error {
 	if err := writeJSONFile(matugenColorsPath(), matugenColorsJSON(shell)); err != nil {
 		return fmt.Errorf("matugen colors.json (static): %w", err)
 	}
+	refreshFolderIcons()
 	k := readMatugenKnobs()
 	matugenRenderTemplates(matugenShellPalette(shell), k, false)
 	matugenReload(staticPaletteMode(shell), d.kdePaletteEmitter())
@@ -1766,60 +1782,77 @@ func writeKittyFont(mono string, size int) {
 	_ = os.WriteFile(filepath.Join(dir, "current-font.conf"), []byte(body), 0o644)
 }
 
-// watchSunMode retints the desktop when the day/night edge crosses while the
-// mode knob is "sun": resolveMode only runs on a theme pass, and nothing else
-// wakes one at sunrise/sunset. The check compares the resolved value, so a
-// re-observed sun window that does not flip light/dark costs nothing. The
-// cadence matches the night light schedule's: sun times are whole minutes and
-// a few minutes of drift at the edge is invisible next to twilight.
+func (d *daemon) kickSunMode() {
+	select {
+	case d.sunSig <- struct{}{}:
+	default:
+	}
+}
+
+func currentSunWindow(now, sunrise, sunset time.Time) (time.Time, time.Time) {
+	for !sunset.After(now) {
+		sunrise = sunrise.AddDate(0, 0, 1)
+		sunset = sunset.AddDate(0, 0, 1)
+	}
+	return sunrise, sunset
+}
+
+// watchSunMode sleeps on the next actual day/night edge. Knob saves and fresh
+// weather data interrupt that deadline, so every other theme mode stays fully
+// event-driven.
 func (d *daemon) watchSunMode() {
 	last := ""
-	for range time.Tick(nlTickEvery) {
+	for {
 		if readMatugenKnobs().Mode != "sun" {
 			last = ""
+			select {
+			case <-d.quit:
+				return
+			case <-d.sunSig:
+			}
 			continue
 		}
 		sunrise, sunset, ok := daySun.window()
 		if !ok {
-			continue // no window yet: the smart fallback only flips on a real theme pass
-		}
-		got := "dark"
-		if isDaytime(time.Now(), sunrise, sunset) {
-			got = "light"
-		}
-		if last == "" {
-			last = got
+			select {
+			case <-d.quit:
+				return
+			case <-d.sunSig:
+			}
 			continue
 		}
-		if got != last {
-			last = got
+
+		now := time.Now()
+		sunrise, sunset = currentSunWindow(now, sunrise, sunset)
+		got := "dark"
+		next := sunrise
+		if isDaytime(now, sunrise, sunset) {
+			got = "light"
+			next = sunset
+		}
+		if last != "" && got != last {
 			d.scheduleTheme()
+		}
+		last = got
+
+		timer := time.NewTimer(time.Until(next))
+		select {
+		case <-d.quit:
+			timer.Stop()
+			return
+		case <-d.sunSig:
+			timer.Stop()
+		case <-timer.C:
 		}
 	}
 }
 
-// watchMatugenKnobs retints the desktop whenever the knob store changes, so a Hub
-// appearance save (which writes matugen.json and renders nothing itself) takes
-// hold at once, exactly as a wallpaper change does. scheduleTheme coalesces, so
-// a burst of rapid saves themes once. A poll is simpler and more robust across
-// the Hub's rename-and-replace write than an inotify watch, at negligible idle
-// cost. Runs for the life of the daemon.
+// watchMatugenKnobs retints the desktop whenever the knob store changes.
 func (d *daemon) watchMatugenKnobs() {
-	path := matugenKnobsPath()
-	var last time.Time
-	if fi, err := os.Stat(path); err == nil {
-		last = fi.ModTime()
-	}
-	for range time.Tick(500 * time.Millisecond) {
-		fi, err := os.Stat(path)
-		if err != nil {
-			continue
-		}
-		if m := fi.ModTime(); !m.Equal(last) {
-			last = m
-			d.scheduleTheme()
-		}
-	}
+	d.watchFile(matugenKnobsPath(), func() {
+		d.scheduleTheme()
+		d.kickSunMode()
+	})
 }
 
 // --- paths -----------------------------------------------------------------

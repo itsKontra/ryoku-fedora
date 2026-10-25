@@ -7,6 +7,8 @@ source "$here/install-dryrun-harness.sh"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
+extra_users=$tmp/extra-users.tsv
+printf 'alice\tAlice Example\tstandard\taudio\tx\t1073741824\nbob\tBob Example\tadmin\tdevices,virtualization,containers\tx\t0\n' >"$extra_users"
 fail() {
   printf 'installer edition parity: %s\n' "$*" >&2
   exit 1
@@ -14,17 +16,16 @@ fail() {
 
 # These are the only host-adapter differences accepted by the neutral contract.
 # Arch uses arch-chroot and first-login XDG autostart; Void uses chroot and
-# initializes XDG directories eagerly for Turnstile. The runit account recipe
-# carries audio and kvm as edition-specific supplemental groups; the common
-# group set is compared after removing only those two. Boot and package-manager
-# commands are outside the neutral manifest.
+# initializes XDG directories eagerly for Turnstile. Account roles and
+# permissions use the same shared mapping. Boot and package-manager commands
+# are outside the neutral manifest.
 declare -A adapter_allowlist=(
   [arch:target-runner]=arch-chroot
   [void:target-runner]=chroot
   [arch:xdg-driver]=first-login
   [void:xdg-driver]=installer
   [arch:extra-groups]=''
-  [void:extra-groups]='audio kvm'
+  [void:extra-groups]=''
 )
 
 answers=(
@@ -43,6 +44,7 @@ answers=(
   RYOKU_FIRMWARE_MODE=uefi
   RYOKU_ESP_MODE=shared
   RYOKU_SUBVOL_SNAPSHOTS=1
+  RYOKU_EXTRA_USERS_FILE="$extra_users"
 )
 
 for edition in arch void; do
@@ -91,11 +93,18 @@ write_contract() {
   require_fixed "$edition" 'timezone: <auto-timezone>' 'the resolved auto timezone'
   require_fixed "$edition" '/usr/share/zoneinfo/<auto-timezone> /mnt/etc/localtime' 'the timezone link'
 
-  user_line=$(grep -m1 -E 'DRYRUN: .* useradd -m -G [^ ]+ -s /usr/bin/fish ryoku$' "$out") \
+  user_line=$(grep -m1 -E 'DRYRUN: .* useradd -M -U -d /home/ryoku -s /usr/bin/fish -G [^ ]+ ryoku$' "$out") \
     || fail "$edition omitted the primary-user creation plan"
-  groups=${user_line#* useradd -m -G }
-  groups=${groups%% -s *}
+  groups=${user_line#* -G }
+  groups=${groups%% ryoku}
   normalized_groups=$(normalize_groups "$edition" "$groups")
+  require_fixed "$edition" 'DRYRUN: btrfs quota enable /mnt/home' 'Btrfs home quotas'
+  require_fixed "$edition" 'DRYRUN: btrfs subvolume create /mnt/home/alice' 'the standard account home subvolume'
+  require_fixed "$edition" 'useradd -M -U -d /home/alice -s /usr/bin/fish -G input,video,audio -c Alice Example alice' 'the standard account plan'
+  require_fixed "$edition" 'DRYRUN: btrfs qgroup limit 1073741824 /mnt/home/alice' 'the standard account storage limit'
+  require_fixed "$edition" 'DRYRUN: btrfs subvolume create /mnt/home/bob' 'the administrator home subvolume'
+  require_fixed "$edition" 'useradd -M -U -d /home/bob -s /usr/bin/fish -G wheel,input,video,kvm,libvirt,docker -c Bob Example bob' 'the administrator account plan'
+  require_fixed "$edition" "DRYRUN: ${adapter_allowlist[$edition:target-runner]} /mnt passwd -l root" 'the locked root account'
 
   grep -Eq '(^| )xdg-user-dirs( |$)' "$out" \
     || fail "$edition package plan omitted xdg-user-dirs"

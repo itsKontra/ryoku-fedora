@@ -53,12 +53,12 @@ EOF
   chmod +x "$trip/$cmd"
 done
 
-# run_offline <repo> <online>: the backend in dry-run. Leaves output in \$out and
-# the exit code in \$rc. PATH is prefixed with the tripwires.
+# run_offline <repo> <online> [variant]: the backend in dry-run. Leaves output
+# in $out and the exit code in $rc. PATH is prefixed with the tripwires.
 run_offline() {
   rc=0
   out="$(PATH="$trip:$PATH" RYOKU_DRYRUN=1 RYOKU_REPO="$root" \
-    RYOKU_ONLINE="$2" RYOKU_OFFLINE_REPO="$1" \
+    RYOKU_VARIANT="${3:-plain}" RYOKU_ONLINE="$2" RYOKU_OFFLINE_REPO="$1" \
     RYOKU_DISK=/dev/vda RYOKU_PASSWORD_HASH='$6$fake$hash' \
     RYOKU_DISK_STRATEGY=whole RYOKU_ENCRYPT=0 RYOKU_SWAP_GIB=8 \
     bash "$root/installation/backend/ryoku-install" 2>&1)" || rc=$?
@@ -204,7 +204,8 @@ done < <(grep -rnE '^[^#]*run arch-chroot /mnt ryoku-[a-z-]+' "$root/installatio
     headers=$(grep -oE '^\[[a-z0-9_-]+\]' "$conf" | grep -v '^\[options\]$')
     [[ $headers == "${want[$level]}" ]] || fail "$level CachyOS repo order is '$headers'"
     for opt in 'Architecture = auto' Color VerbosePkgLists 'ParallelDownloads = 10' 'DownloadUser = alpm' \
-               'SigLevel    = Required DatabaseOptional'; do
+               'SigLevel    = Required DatabaseOptional' \
+               'NoExtract = etc/skel/.config/autostart/cachyos-hello.desktop'; do
       grep -qxF "$opt" "$conf" || fail "$level CachyOS pacman.conf lacks '$opt'"
     done
   done
@@ -237,5 +238,24 @@ done < <(grep -rnE '^[^#]*run arch-chroot /mnt ryoku-[a-z-]+' "$root/installatio
   ryoku_cachyos_drops
   [[ $RYOKU_DROP_PACKAGES == chromium,linux,yay-bin ]] || fail "CachyOS drops are not idempotent: '$RYOKU_DROP_PACKAGES'"
 )
+
+# ---- 9. CachyOS identity is applied without a second first-login welcome -----
+# cachyos-hooks cannot trigger itself in the pacstrap transaction that installs
+# it. The edition path therefore brands the finished target explicitly and
+# removes cachyos-hello's skel autostart after account creation. Plain Arch must
+# do neither.
+run_offline "$baked" 0 cachyos
+[[ $rc -eq 0 ]] || fail "CachyOS identity dry run exited $rc: $out"
+grep -qF 'run /usr/share/libalpm/scripts/cachyos-branding in the target' <<<"$out" \
+  || fail "CachyOS install did not apply CachyOS branding: $out"
+grep -qF 'remove etc/skel/.config/autostart/cachyos-hello.desktop from the target skel and created home directories' <<<"$out" \
+  || fail "CachyOS install did not suppress CachyOS Welcome autostart: $out"
+
+run_offline "$baked" 0 plain
+[[ $rc -eq 0 ]] || fail "plain identity dry run exited $rc: $out"
+! grep -qF '/usr/share/libalpm/scripts/cachyos-branding' <<<"$out" \
+  || fail "plain install applied CachyOS branding: $out"
+! grep -qF 'cachyos-hello.desktop' <<<"$out" \
+  || fail "plain install suppressed a CachyOS-only autostart: $out"
 
 echo "install-offline: OK"

@@ -13,6 +13,7 @@ func TestSettingsSectionRoutesStoreCategories(t *testing.T) {
 		"plugins":   "addons",
 		"bundles":   "addons",
 		"barstyles": "bar-studio",
+		"subshells": "subshells",
 		"launchers": "launcher",
 		// one Hub page wears all three overlays
 		"osds":          "overlays",
@@ -64,7 +65,7 @@ func TestDockSettingsOpenTheDesktopEditor(t *testing.T) {
 }
 
 func TestStoreSectionIncludesShowroomRoutesAndEveryCategory(t *testing.T) {
-	for _, section := range []string{"discover", "library", "rices", "lockscreens", "barstyles", "docks", "launchers", "fastfetch", "plugins", "bundles", "ryotunes-skins"} {
+	for _, section := range []string{"discover", "library", "rices", "lockscreens", "subshells", "barstyles", "docks", "launchers", "fastfetch", "plugins", "bundles", "ryotunes-skins"} {
 		if !storeSection(section) {
 			t.Fatalf("storeSection(%q) = false", section)
 		}
@@ -93,5 +94,59 @@ func TestDispatchRoutesHandoffCommands(t *testing.T) {
 				t.Fatalf("dispatch(%q): %v", args, err)
 			}
 		})
+	}
+}
+
+func TestSubshellStyleSettingsRouting(t *testing.T) {
+	if section, ok := settingsSection("subshells"); !ok || section != "subshells" {
+		t.Fatalf("subshell settings page = %q, %v", section, ok)
+	}
+	for _, id := range []string{"gokko", "caelestia", "tansu", "python"} {
+		if !subshellStyle(id) {
+			t.Fatalf("%s is not a subshell", id)
+		}
+	}
+	for _, id := range []string{"sumi", "orpheus", "obi", "nacre", "chroma"} {
+		if subshellStyle(id) {
+			t.Fatalf("%s incorrectly classified", id)
+		}
+	}
+}
+
+// Exercise the real CLI handoff without touching a running Hub instance.
+// The fake qs reports each navigation and fake flock bypasses the live lock.
+func TestSubshellSettingsHandoff(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "navigation.log")
+	t.Setenv("RYOKU_TEST_QS_LOG", log)
+	for filename, body := range map[string]string{
+		"flock": "#!/bin/sh\nexit 0\n",
+		"qs":    "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$RYOKU_TEST_QS_LOG\"\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, filename), []byte(body), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	for _, tc := range []struct{ id, expected string }{
+		{"python", "subshells"}, {"gokko", "subshells"},
+		{"tansu", "subshells"}, {"caelestia", "subshells"},
+		{"obi", "bar-studio"},
+	} {
+		if err := runSettings([]string{"barstyles", tc.id}); err != nil {
+			t.Fatalf("settings barstyles %s: %v", tc.id, err)
+		}
+		raw, err := os.ReadFile(log)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "-c hub ipc call nav open " + tc.expected
+		got := strings.TrimSpace(string(raw))
+		if !strings.HasSuffix(got, want) {
+			t.Fatalf("settings barstyles %s routed to %q, want suffix %q", tc.id, got, want)
+		}
+		if err := os.Remove(log); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

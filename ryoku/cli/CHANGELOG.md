@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **`ryoku-host users` manages local accounts on every edition.** The typed
+  JSON API lists human users, roles, curated permissions, sessions and Btrfs
+  home usage; privileged verbs add, remove and edit accounts without putting
+  passwords in argv. It rejects unsafe names, active or self deletion, and
+  deleting or demoting the last Administrator (`internal/host/users.go`).
 - **`ryoku-host pkg status` answers a whole batch.** It prints one line per
   package, `name<TAB>installed|available|unavailable<TAB>repo|aur<TAB>reason`,
   on pacman, dnf and xbps alike, with the edition table's sentence as the
@@ -72,6 +77,56 @@
   what the switch itself installed (`internal/host/phone.go`).
 
 ### Fixed
+- **AUR packages install during updates instead of timing out on sudo.**
+  Doctor's manifest step ran yay through sudo, which put yay's own pacman
+  step on sudo's private terminal where the update's cached credential does
+  not apply, so it asked for a password nobody saw after the builds and
+  nothing landed. The backfill now runs as you, like the other AUR installs
+  (`internal/doctor/reconcile_manifest.go`).
+- **An installed `yay` satisfies `yay-bin`.** Doctor asks pacman whether an
+  AUR `-bin` or `-git` package's base is already provided before handing the
+  batch to yay, so CachyOS's own `yay` no longer cancels every other AUR
+  install, and the skipped packages are named as already provided
+  (`internal/updater/manifest.go`).
+- **Snapshot notes match the filesystem.** On a root that is not btrfs the
+  update says snapshots and rollback are unavailable instead of suggesting
+  doctor can enable them (`internal/updater/update.go`).
+- **App launches are not failed services.** Doctor clears and stops reporting
+  systemd's transient app launch units (`app-<name>@<id>.service`) as well as
+  app scopes (`internal/doctor/doctor.go`).
+- **Updates restore the bar and wallpaper after restart failures.** Deliberate
+  shell and wallpaper restarts clear systemd's start-limit counters immediately
+  before restarting, including the required refresh after session-target
+  activation. The target also clears every desktop service counter before its
+  first start. Deferred lockscreen cutovers retire a stale waiter before staging
+  their runtime helper, stop after three runs in ten minutes, and exit cleanly
+  if that helper disappears (`internal/updater/update.go`,
+  `../../system/hardware/power/ryoku-power-cutover`,
+  `../../tests/power-cutover.sh`). Reported and diagnosed by awake-devel.
+- **The first restart after updating from 0.75 boots straight in.** A 0.75
+  ISO install remembered the flat `Ryoku Linux` boot entry in Limine's
+  `LimineLastBootedEntry` EFI variable; once the update turns that entry into a
+  menu directory, Limine recalled the directory and waited at the menu instead
+  of booting. When the doctor moves the menu default (layout merge, UKI
+  promotion or the autoboot path), it now clears the remembered entry so the
+  next boot falls back to the kernel, and Limine remembers the kernel it boots
+  from then on. The bootguard and the doctor share one clear
+  (`internal/limineefi/remembered.go`, `internal/doctor/reconcile_limine.go`).
+- **An update resumed from an older release reports its real duration.** A
+  0.75 first stage writes no start time, so the second stage measured from 1970
+  and printed "Update complete in 498007h". It keeps its own start time when the
+  previous one is unset (`internal/updater/runstate.go`).
+- **The multilib repair syncs the package databases.** It ran
+  `pacman -Sy multilib`, which pacman reads as a package named multilib, so
+  every update showed "! multilib repository"; it now runs `pacman -Sy`
+  (`internal/doctor/reconcile_multilib.go`).
+- **Doctor seeds the decor art into the localized Pictures folder.** On a
+  desktop whose Pictures folder is `~/Imágenes`, `~/Bilder` and so on, the
+  decor reconciler recreated an English `~/Pictures/ryodecors` on every run, so
+  deleting the stray folder never stuck. It now follows `XDG_PICTURES_DIR`,
+  then `user-dirs.dirs`, and falls back to `~/Pictures` when neither names a
+  usable folder or Pictures is disabled (`internal/sys/paths.go`,
+  `internal/doctor/doctor.go`).
 - **Doctor removes Stage Editor keys retired by the widget settings update.**
   Existing `stage-editor.json` files kept fourteen settings whose controls and
   readers were removed, so Stage reported them after every shell restart.

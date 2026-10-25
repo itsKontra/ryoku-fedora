@@ -394,7 +394,7 @@ Singleton {
             icon: "photo_camera",
             category: "tools",
             keywords: ["screenshot", "capture", "snip", "screen"],
-            execute: () => { Quickshell.execDetached(["sh", "-c", "flock -n -o /tmp/ryoshot.lock qs -c ryoshot"]) }
+            execute: () => { Quickshell.execDetached(["ryoku-cmd-ryoshot"]) }
         },
         {
             id: "color-picker",

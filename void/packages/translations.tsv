@@ -20,10 +20,10 @@ brightnessctl	brightnessctl	desktop
 broadcom-bt-firmware	broadcom-bt-firmware	desktop	
 btop	btop	desktop	
 btrfs-progs	btrfs-progs	system	
+calf	calf	desktop	
 catppuccin-cursors-mocha	catppuccin-cursors-mocha	extra	repo=ryoku
 cava	cava	desktop	
 chromium	chromium	desktop	
-cliphist	cliphist	desktop	
 cmake	cmake	optional	
 cryptsetup	cryptsetup	system	
 curl	curl	desktop	
@@ -36,6 +36,7 @@ docker	docker	desktop
 dolphin	dolphin	optional	
 dualsensectl	dualsensectl	optional	repo=ryoku
 dosfstools	dosfstools	system	
+easyeffects	easyeffects	desktop	
 edk2-ovmf	edk2-ovmf	desktop	
 efibootmgr	efibootmgr	system	
 eza	eza	desktop	
@@ -96,9 +97,13 @@ kdeconnect	kdeconnect	optional
 khal	khal	desktop	
 kitty	kitty	desktop	
 lazygit	lazygit	desktop	
-lib32-mesa	mesa-dri-32bit	optional	repo=multilib
+lib32-gcc-libs	libgcc-32bit libstdc++-32bit	desktop	repo=multilib
+lib32-libdrm	libdrm-32bit	desktop	repo=multilib
+lib32-libglvnd	libglvnd-32bit	desktop	repo=multilib
+lib32-libva	libva-32bit	desktop	repo=multilib
+lib32-mesa	mesa-dri-32bit	desktop	repo=multilib
 lib32-nvidia-utils	-	hardware:nvidia	Deferred with nvidia-utils: the 32-bit libraries follow the proprietary driver.
-lib32-vulkan-icd-loader	vulkan-loader-32bit	optional	repo=multilib
+lib32-vulkan-icd-loader	vulkan-loader-32bit	desktop	repo=multilib
 lib32-vulkan-intel	mesa-vulkan-intel-32bit	hardware:intel	repo=multilib
 lib32-vulkan-nouveau	mesa-vulkan-nouveau-32bit	optional	repo=multilib
 lib32-vulkan-radeon	mesa-vulkan-radeon-32bit	hardware:amd	repo=multilib
@@ -126,6 +131,7 @@ linux-firmware	linux-firmware linux-firmware-intel linux-firmware-nvidia linux-f
 linux-headers	linux-headers	desktop	
 localsend-bin	localsend-bin	extra	repo=ryoku
 looking-glass	-	optional	No Void repository package.
+lsp-plugins-lv2	lsp-plugins-lv2	desktop	
 lua	lua	optional	
 make	make	optional	
 mangohud	MangoHud	desktop	
@@ -185,6 +191,7 @@ qt6-declarative	qt6-declarative	desktop
 qt6-imageformats	qt6-imageformats	desktop	
 qt6-multimedia	qt6-multimedia	desktop	
 qt6-multimedia-ffmpeg	-	desktop	Included in Void qt6-multimedia.
+qt6-quick3d	qt6-quick3d	desktop	
 qt6-svg	qt6-svg	desktop	
 qt6-wayland	qt6-wayland	desktop	
 qt6ct	qt6ct	desktop	
@@ -227,6 +234,7 @@ songrec	songrec	desktop
 spice-gtk	spice-gtk	optional	
 sqlite	sqlite	optional	
 starship	starship	desktop	
+steam	steam	desktop	repo=nonfree
 steamcmd	-	optional	No Void repository package.
 sudo	sudo	system	
 swtpm	swtpm	optional	

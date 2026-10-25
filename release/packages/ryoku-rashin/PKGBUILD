@@ -10,6 +10,7 @@
 # go build reads the committed vendor/ tree (-mod=vendor), so the signed-repo CI
 # builds with no network regardless of whatever GOFLAGS makepkg picked up.
 pkgname=ryoku-rashin
+install=ryoku-rashin.install
 pkgver=${RYOKU_PKGVER:-0.1.0}
 pkgrel=1
 pkgdesc="Ryoku Rashin: local agent OS daemon and dashboard"

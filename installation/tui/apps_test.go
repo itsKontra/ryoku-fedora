@@ -9,38 +9,98 @@ import (
 // collect the shared optional components. Locked rows refuse to toggle and all
 // losing packages reach the backend through one drop list.
 
+func stubGamingProbes(t *testing.T, online, v3 bool) {
+	t.Helper()
+	oldNetwork, oldV3 := probeNetworkOnline, probeX8664V3
+	probeNetworkOnline = func() bool { return online }
+	probeX8664V3 = func() bool { return v3 }
+	t.Cleanup(func() {
+		probeNetworkOnline, probeX8664V3 = oldNetwork, oldV3
+	})
+}
+
 func TestProductStepsExistInOrder(t *testing.T) {
-	f := stepsForVariant("plain")
-	b := flowIndex(f, "browser")
-	s := flowIndex(f, "login-shell")
-	files := flowIndex(f, "file-manager")
-	rashin := flowIndex(f, "rashin")
-	cachyos := flowIndex(f, "cachyos")
-	a := flowIndex(f, "apps")
-	review := flowIndex(f, "review")
-	if b < 0 || s < 0 || files < 0 || rashin < 0 || cachyos < 0 || a < 0 || review < 0 {
-		t.Fatalf("product steps missing: browser=%d shell=%d files=%d rashin=%d cachyos=%d apps=%d review=%d",
-			b, s, files, rashin, cachyos, a, review)
+	stubGamingProbes(t, true, true)
+	for _, variant := range []string{"plain", variantCachyOS, variantVoid} {
+		f := stepsForVariant(variant)
+		b := flowIndex(f, "browser")
+		s := flowIndex(f, "login-shell")
+		files := flowIndex(f, "file-manager")
+		rashin := flowIndex(f, "rashin")
+		gaming := flowIndex(f, "gaming")
+		a := flowIndex(f, "apps")
+		review := flowIndex(f, "review")
+		if b < 0 || s < 0 || files < 0 || rashin < 0 || gaming < 0 || a < 0 || review < 0 {
+			t.Fatalf("%s product steps missing: browser=%d shell=%d files=%d rashin=%d gaming=%d apps=%d review=%d",
+				variant, b, s, files, rashin, gaming, a, review)
+		}
+		if !(b < s && s < files && files < rashin && rashin < gaming && gaming < a && a < review) {
+			t.Fatalf("%s product steps out of order: browser=%d shell=%d files=%d rashin=%d gaming=%d apps=%d review=%d",
+				variant, b, s, files, rashin, gaming, a, review)
+		}
+		if f[b].kind != kSelect || f[s].kind != kSelect || f[files].kind != kSelect ||
+			f[rashin].kind != kConfirm || f[gaming].kind != kConfirm || f[a].kind != kApps {
+			t.Fatalf("%s product step kinds changed", variant)
+		}
+		if !f[b].numbered || !f[s].numbered || !f[files].numbered {
+			t.Fatalf("%s browser, login-shell, and file-manager choices must be numbered", variant)
+		}
 	}
-	if !(b < s && s < files && files < rashin && rashin < cachyos && cachyos < a && a < review) {
-		t.Fatalf("product steps out of order: browser=%d shell=%d files=%d rashin=%d cachyos=%d apps=%d review=%d",
-			b, s, files, rashin, cachyos, a, review)
-	}
-	if f[b].kind != kSelect || f[s].kind != kSelect || f[files].kind != kSelect ||
-		f[rashin].kind != kConfirm || f[cachyos].kind != kConfirm || f[a].kind != kApps {
-		t.Fatal("product step kinds changed")
-	}
-	if !f[b].numbered || !f[s].numbered || !f[files].numbered {
-		t.Fatal("browser, login-shell, and file-manager choices must be numbered")
+	for _, variant := range []string{"fedora", "unknown"} {
+		if i := flowIndex(stepsForVariant(variant), "gaming"); i >= 0 {
+			t.Errorf("%s has gaming step at %d", variant, i)
+		}
 	}
 	m := newModel()
 	if m.picks["browser"] != "firefox" || m.picks["login-shell"] != "fish" ||
-		m.picks["file-manager"] != "nautilus" || m.picks["rashin"] != "1" || m.picks["cachyos"] != "0" {
+		m.picks["file-manager"] != "nautilus" || m.picks["rashin"] != "1" || m.picks["gaming"] != "0" {
 		t.Fatalf("product defaults = %#v", m.picks)
 	}
-	void := stepsForVariant(variantVoid)
-	if flowIndex(void, "cachyos") >= 0 || stepByKey(t, void, "rashin").kind != kConfirm {
-		t.Fatal("Void must omit CachyOS and ask about Rashin")
+}
+
+func TestGamingStepCopyByEdition(t *testing.T) {
+	tests := []struct {
+		variant string
+		title   string
+		copy    []string
+	}{
+		{
+			variant: "plain", title: "Gaming with CachyOS",
+			copy: []string{
+				"Adds the CachyOS kernel, CachyOS tuning and sched-ext schedulers, Steam, and Proton-CachyOS with Wine and umu-launcher.",
+				"The CachyOS kernel boots by default; the Arch kernel stays in the boot menu as a fallback.",
+				"Needs a network connection and an x86-64-v3 CPU. If the download fails, setup goes on; add it later in Ryostore.",
+			},
+		},
+		{
+			variant: variantCachyOS, title: "Gaming",
+			copy: []string{
+				"Installs Steam and CachyOS's gaming packages: Proton-CachyOS, Wine-CachyOS, umu-launcher and winetricks.",
+				"The CachyOS kernel and tuning are already part of this edition. Everything is on this image, no network needed.",
+			},
+		},
+		{
+			variant: variantVoid, title: "Gaming",
+			copy: []string{
+				"Installs Steam with 32-bit graphics support. GameMode, MangoHud and Gamescope are in Apps & tools.",
+				"The CachyOS kernel and Proton-CachyOS are not available on Void; Steam uses its own Proton.",
+				"Everything is on this image, no network needed.",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.variant, func(t *testing.T) {
+			step := stepByKey(t, stepsForVariant(test.variant), "gaming")
+			if step.title != test.title {
+				t.Fatalf("title = %q, want %q", step.title, test.title)
+			}
+			copy := strings.Join(step.desc, " ")
+			for _, want := range test.copy {
+				if !strings.Contains(copy, want) {
+					t.Errorf("gaming copy missing %q: %q", want, copy)
+				}
+			}
+		})
 	}
 }
 
@@ -110,7 +170,7 @@ func TestAppsUseSharedComponentCatalogue(t *testing.T) {
 	}
 	for _, row := range rows {
 		switch row.ID {
-		case "files", "stash-menu", "rashin", "cachyos-layer":
+		case "files", "stash-menu", "rashin", "cachyos-layer", "cachyos-gaming", "void-gaming":
 			t.Errorf("step-owned component %q remains in Apps & tools", row.ID)
 		}
 	}
@@ -212,11 +272,12 @@ func TestRashinIsAChoiceOnEveryEdition(t *testing.T) {
 	}
 }
 
-func TestRashinAndCachyOSStepBehaviour(t *testing.T) {
+func TestRashinAndArchGamingStepBehaviour(t *testing.T) {
 	flow := stepsForVariant("plain")
 	rashin := model{
 		variant: "plain", flow: flow, idx: flowIndex(flow, "rashin"),
-		state: "wizard", picks: map[string]string{"rashin": "1"},
+		state: "wizard", picks: map[string]string{"rashin": "1", "gaming": "0"},
+		netOnline: true, cpuV3: true,
 	}
 	rashin.loadStep()
 	if !rashin.yes {
@@ -224,21 +285,80 @@ func TestRashinAndCachyOSStepBehaviour(t *testing.T) {
 	}
 	next, _ := rashin.onKey("enter")
 	rashin = next.(model)
-	if rashin.picks["rashin"] != "1" || rashin.cur().key != "cachyos" {
+	if rashin.picks["rashin"] != "1" || rashin.cur().key != "gaming" {
 		t.Fatalf("Rashin choice did not advance: pick=%q step=%q", rashin.picks["rashin"], rashin.cur().key)
 	}
 
-	rashin.netOnline = false
-	rashin.loadStep()
-	next, _ = rashin.onKey("y")
-	cachyos := next.(model)
-	if cachyos.yes {
-		t.Fatal("offline CachyOS layer could be enabled")
+	for _, test := range []struct {
+		name       string
+		online     bool
+		v3         bool
+		wantReason string
+	}{
+		{name: "offline", v3: true, wantReason: "Needs a network connection; this machine is offline."},
+		{name: "old CPU", online: true, wantReason: "Needs an x86-64-v3 CPU; this one is older."},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			gaming := wizardAt("gaming", 112, 42)
+			gaming.picks["gaming"] = "1"
+			gaming.netOnline, gaming.cpuV3 = test.online, test.v3
+			gaming.loadStep()
+			gaming.enterPos = 1
+			if gaming.yes || gaming.picks["gaming"] != "0" {
+				t.Fatal("unavailable Arch gaming choice remained enabled")
+			}
+			if body := stripSGR(gaming.viewWizard()); !strings.Contains(body, test.wantReason) {
+				t.Fatalf("unavailable reason missing from gaming step:\n%s", body)
+			}
+			next, _ := gaming.onKey("y")
+			gaming = next.(model)
+			if gaming.yes {
+				t.Fatal("unavailable Arch gaming choice accepted Yes")
+			}
+			next, _ = gaming.onKey("enter")
+			gaming = next.(model)
+			if gaming.picks["gaming"] != "0" || gaming.cur().key != "apps" {
+				t.Fatalf("unavailable gaming choice did not record No and advance: pick=%q step=%q", gaming.picks["gaming"], gaming.cur().key)
+			}
+		})
 	}
-	next, _ = cachyos.onKey("enter")
-	cachyos = next.(model)
-	if cachyos.picks["cachyos"] != "0" || cachyos.cur().key != "apps" {
-		t.Fatalf("offline CachyOS choice did not stay off and advance: pick=%q step=%q", cachyos.picks["cachyos"], cachyos.cur().key)
+
+	gaming := model{
+		variant: "plain", flow: flow, idx: flowIndex(flow, "gaming"),
+		state: "wizard", picks: map[string]string{"gaming": "0"},
+		netOnline: true, cpuV3: true,
+	}
+	gaming.loadStep()
+	next, _ = gaming.onKey("y")
+	gaming = next.(model)
+	next, _ = gaming.onKey("enter")
+	gaming = next.(model)
+	if gaming.picks["gaming"] != "1" || gaming.cur().key != "apps" {
+		t.Fatalf("available gaming choice did not record Yes and advance: pick=%q step=%q", gaming.picks["gaming"], gaming.cur().key)
+	}
+}
+
+func TestOfflineEditionGamingCanBeEnabled(t *testing.T) {
+	for _, variant := range []string{variantCachyOS, variantVoid} {
+		t.Run(variant, func(t *testing.T) {
+			flow := stepsForVariant(variant)
+			gaming := model{
+				variant: variant, flow: flow, idx: flowIndex(flow, "gaming"),
+				state: "wizard", picks: map[string]string{"gaming": "0"},
+				netOnline: false, cpuV3: false,
+			}
+			gaming.loadStep()
+			next, _ := gaming.onKey("y")
+			gaming = next.(model)
+			if !gaming.yes {
+				t.Fatal("offline gaming choice refused Yes")
+			}
+			next, _ = gaming.onKey("enter")
+			gaming = next.(model)
+			if gaming.picks["gaming"] != "1" || gaming.cur().key != "apps" {
+				t.Fatalf("gaming choice did not record Yes and advance: pick=%q step=%q", gaming.picks["gaming"], gaming.cur().key)
+			}
+		})
 	}
 }
 
@@ -323,12 +443,18 @@ func TestInstallEnvCarriesProductChoicesAndDrops(t *testing.T) {
 	}
 	for _, absent := range []string{
 		"firefox", "fish", "nautilus", "nautilus-python", "ryoku-rashin",
-		"linux-cachyos", "cachyos-settings", "proton-cachyos-native",
+		"linux-cachyos", "cachyos-settings", "cachyos-gaming-meta", "steam",
 	} {
 		if defaultSet[absent] {
 			t.Errorf("default drop list %q contains package %s", drops, absent)
 		}
 	}
+
+	m.picks["gaming"] = "1"
+	if env = m.installEnv(); !envHas(env, "RYOKU_CACHYOS_LAYER=1") {
+		t.Errorf("Gaming with CachyOS Yes did not export the Arch layer choice: %v", env)
+	}
+	m.picks["gaming"] = "0"
 
 	for _, tc := range []struct {
 		shell string
@@ -417,10 +543,10 @@ func TestEditionOnlyEnvironmentVariables(t *testing.T) {
 		return false
 	}
 	for _, variant := range []string{variantCachyOS, variantVoid} {
-		m := model{variant: variant, picks: map[string]string{"disk": "whole", "rashin": "0"}}
+		m := model{variant: variant, picks: map[string]string{"disk": "whole", "rashin": "0", "gaming": "0"}}
 		env := m.installEnv()
-		if hasPrefix(env, "RYOKU_CACHYOS_LAYER=") {
-			t.Errorf("%s emitted plain-Arch CachyOS layer variable: %v", variant, env)
+		if hasPrefix(env, "RYOKU_CACHYOS_LAYER=") || hasPrefix(env, "RYOKU_GAMING=") {
+			t.Errorf("%s emitted an edition gaming variable instead of component drops: %v", variant, env)
 		}
 		if !has(env, "RYOKU_RASHIN=0") {
 			t.Errorf("%s did not pass the Rashin choice through: %v", variant, env)
@@ -428,23 +554,87 @@ func TestEditionOnlyEnvironmentVariables(t *testing.T) {
 	}
 }
 
+func TestEditionGamingChoiceControlsDropPackages(t *testing.T) {
+	for _, variant := range []string{variantCachyOS, variantVoid} {
+		t.Run(variant, func(t *testing.T) {
+			plan := installerChoicesForVariant(variant)
+			gaming, ok := plan.GamingComponent()
+			if !ok {
+				t.Fatal("gaming component is unavailable")
+			}
+			drops := func(pick string) map[string]bool {
+				m := model{variant: variant, picks: map[string]string{
+					"disk": "whole", "rashin": "1", "gaming": pick,
+				}}
+				var csv string
+				for _, value := range m.installEnv() {
+					if strings.HasPrefix(value, "RYOKU_DROP_PACKAGES=") {
+						csv = strings.TrimPrefix(value, "RYOKU_DROP_PACKAGES=")
+						break
+					}
+				}
+				set := map[string]bool{}
+				for _, pkg := range strings.Split(csv, ",") {
+					set[pkg] = true
+				}
+				return set
+			}
+			no, yes := drops("0"), drops("1")
+			for _, pkg := range gaming.Component.Packages {
+				if !no[pkg] {
+					t.Errorf("No drop list missing %s", pkg)
+				}
+				if yes[pkg] {
+					t.Errorf("Yes drop list contains %s", pkg)
+				}
+			}
+		})
+	}
+}
+
 func TestReviewNamesProductChoices(t *testing.T) {
 	m := reviewModel()
 	m.variant = "plain"
+	m.flow = stepsForVariant("plain")
 	m.picks["browser"] = "chromium"
 	m.picks["login-shell"] = "zsh"
 	m.picks["file-manager"] = "dolphin"
 	m.picks["rashin"] = "1"
-	m.picks["cachyos"] = "0"
+	m.picks["gaming"] = "0"
 	m.keep = appDefaultsForVariant("plain")
 	m.keep["ryoport"] = false
 	body := stripSGR(m.reviewBody(100))
 	for _, want := range []string{
 		"browser", "Chromium", "shell", "Zsh", "files", "Dolphin",
-		"Rashin", "minus ryoport", "CachyOS", "No",
+		"Rashin", "minus ryoport", "Gaming", "No",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Review does not show %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestGamingReviewAppearsOnlyForGamingEditions(t *testing.T) {
+	for _, variant := range []string{"plain", variantCachyOS, variantVoid} {
+		m := reviewModel()
+		m.variant = variant
+		m.flow = stepsForVariant(variant)
+		m.picks["gaming"] = "1"
+		body := stripSGR(m.reviewBody(100))
+		found := false
+		for _, line := range strings.Split(body, "\n") {
+			found = found || (strings.Contains(line, "Gaming") && strings.Contains(line, "Yes"))
+		}
+		if !found {
+			t.Errorf("%s Review omits Gaming: Yes:\n%s", variant, body)
+		}
+	}
+	for _, variant := range []string{"fedora", "unknown"} {
+		m := reviewModel()
+		m.variant = variant
+		m.flow = stepsForVariant(variant)
+		if body := stripSGR(m.reviewBody(100)); strings.Contains(body, "Gaming") {
+			t.Errorf("%s Review includes Gaming:\n%s", variant, body)
 		}
 	}
 }

@@ -12,6 +12,9 @@ Singleton {
     property string revisionKey: ""
     property var failedStyles: ({})
     property string brokenStyle: ""
+    // The Store-owned Gokko scene publishes its widget canvas here.
+    property var gokkoWidgets: null
+    readonly property bool gokkoReady: gokkoWidgets !== null
 
     function parseRows(raw) {
         try {
@@ -55,7 +58,7 @@ Singleton {
     // A frame-family style owns the whole desktop (island, dock, popups) from
     // one host screen, so it must load even where the user hid the bar.
     function isFrameFamily(id) {
-        return id === "iris" || id === "python" || id === "nomarchy";
+        return id === "iris" || id === "python" || id === "nomarchy" || id === "gokko";
     }
 
 

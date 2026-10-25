@@ -73,14 +73,8 @@ func TestVoidNoticeFollowsWelcome(t *testing.T) {
 	if flowIndex(defaultFlow, "void-notice") >= 0 {
 		t.Fatalf("default flow includes the Void notice: %v", defaultKeys)
 	}
-	var defaultWithoutCachy []string
-	for _, key := range defaultKeys {
-		if key != "cachyos" {
-			defaultWithoutCachy = append(defaultWithoutCachy, key)
-		}
-	}
-	if len(voidKeys) != len(defaultWithoutCachy)+1 || voidKeys[0] != "void-notice" || !reflect.DeepEqual(voidKeys[1:], defaultWithoutCachy) {
-		t.Fatalf("Void flow = %v, want void-notice followed by %v", voidKeys, defaultWithoutCachy)
+	if len(voidKeys) != len(defaultKeys)+1 || voidKeys[0] != "void-notice" || !reflect.DeepEqual(voidKeys[1:], defaultKeys) {
+		t.Fatalf("Void flow = %v, want void-notice followed by %v", voidKeys, defaultKeys)
 	}
 
 	notice := stepByKey(t, voidFlow, "void-notice")

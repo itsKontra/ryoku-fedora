@@ -3,16 +3,27 @@
 ## Unreleased
 
 ### Added
+- **The Arch, CachyOS and Void ISOs have one edition-appropriate Gaming
+  question.** It sits after Rashin, defaults to No, and is absent on Fedora.
+  Arch offers the network-only, x86-64-v3 **Gaming with CachyOS** set and
+  continues installation if it cannot download. CachyOS keeps Steam and its
+  gaming meta-package from the image; Void keeps Steam and its 32-bit graphics
+  baseline from the image (`installerplan/components.tsv`, `tui/main.go`,
+  `backend/lib/cachyos.sh`).
 - **The installers ask which apps to keep.** The Arch, CachyOS and Void ISOs
   pick a file manager (Nautilus recommended), ask about Rashin with a short
   note that its Hermes agent installs at the first login, and list Ryotunes,
-  Ryoport and RyoManager with the other apps and terminal tools. The Arch ISO
-  also offers the CachyOS kernel and tuning while a network connection is up.
-  Anything left out is recorded so updates do not bring it back
-  (`installerplan/components.tsv`, `tui/main.go`, `backend/lib/deploy.sh`,
-  `backend/lib/cachyos.sh`).
+  Ryoport and RyoManager with the other apps and terminal tools. Anything left
+  out is recorded so updates do not bring it back
+  (`installerplan/components.tsv`, `tui/main.go`, `backend/lib/deploy.sh`).
 
 ### Fixed
+- **The Void package check sees what a real install gets.** The Void container
+  image skips `/etc/skel` and other paths through noextract patterns, so the
+  clean-container install could not find the per-user services `ryoku-desktop`
+  seeds for new accounts and failed every Void publish since that seeding
+  landed. The check now drops the image's patterns before installing
+  (`tests/container-install-void.sh`).
 - **Reboot now works on the Void ISO.** The done screen's Reboot now and Power
   off ran `systemctl`, which the Void live medium does not have, so the
   installer dropped to a shell instead. They run plain `reboot` and `poweroff`

@@ -8,7 +8,7 @@ import (
 
 var storeSections = map[string]struct{}{
 	"discover": {}, "library": {}, "rices": {}, "lockscreens": {},
-	"barstyles": {}, "docks": {}, "launchers": {}, "osds": {}, "notifications": {}, "sidebars": {},
+	"subshells": {}, "barstyles": {}, "docks": {}, "launchers": {}, "osds": {}, "notifications": {}, "sidebars": {},
 	"fastfetch": {}, "plugins": {}, "bundles": {}, "decors": {},
 	"launcher-images": {}, "fastfetch-emblems": {}, "ryotunes-skins": {},
 	"vesktop-themes": {},
@@ -29,6 +29,7 @@ func settingsSection(category string) (string, bool) {
 		"plugins":   "addons",
 		"bundles":   "addons",
 		"barstyles": "bar-studio",
+		"subshells": "subshells",
 		"launchers": "launcher",
 		// The overlays are worn on one Hub page.
 		"osds":          "overlays",
@@ -59,6 +60,14 @@ func runOpen(args []string) error {
 	return openConfig("ryostore", "/tmp/ryostore.lock", args[0])
 }
 
+func subshellStyle(id string) bool {
+	switch id {
+	case "gokko", "caelestia", "tansu", "python":
+		return true
+	}
+	return false
+}
+
 func runSettings(args []string) error {
 	if len(args) < 1 || len(args) > 2 {
 		return fmt.Errorf("settings needs <category> [id]")
@@ -67,6 +76,9 @@ func runSettings(args []string) error {
 		return openEditorSection(section)
 	}
 	section, ok := settingsSection(args[0])
+	if args[0] == "barstyles" && len(args) == 2 && subshellStyle(args[1]) {
+		section, ok = "subshells", true
+	}
 	if !ok {
 		return fmt.Errorf("unknown settings category %q", args[0])
 	}

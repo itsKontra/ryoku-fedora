@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # configure the freshly installed system: locale, console keymap, timezone,
-# hostname, primary user, sudo, initramfs HOOKS, and (if encrypting) crypttab.
+# hostname, accounts, sudo, initramfs HOOKS, and (if encrypting) crypttab.
 # files under /mnt are written directly; anything that must run in the target
 # goes through arch-chroot, or $RYOKU_TARGET_CHROOT for the steps another
 # edition reuses.
@@ -13,7 +13,7 @@ ryoku_configure() {
   ryoku_cfg_keymap
   ryoku_cfg_timezone
   ryoku_cfg_hostname
-  ryoku_cfg_user
+  ryoku_accounts_create
   ryoku_cfg_sudo
   ryoku_cfg_initramfs
   ryoku_cfg_crypttab
@@ -88,26 +88,6 @@ EOF
   # editing it makes pacman drop a .pacnew on every filesystem upgrade. The
   # stock nss-myhostname (default in /etc/nsswitch.conf) already resolves
   # localhost and the machine hostname, so the hand-written table is redundant.
-}
-
-ryoku_cfg_user() {
-  local login_shell="/usr/bin/$RYOKU_LOGIN_SHELL"
-  if [[ -z ${RYOKU_DRYRUN:-} && ! -x /mnt$login_shell ]]; then
-    die "login shell %s is missing from the target; refusing to create %s with an unusable shell" "$login_shell" "$RYOKU_USERNAME"
-  fi
-  log 'user: %s (wheel,video,input; shell %s)' "$RYOKU_USERNAME" "$login_shell"
-  # video -> write panel backlight (with 90-ryoku-backlight.rules); input ->
-  # read game controllers / input devices without a per-login logind grant.
-  run "$RYOKU_TARGET_CHROOT" /mnt useradd -m -G wheel,video,input -s "$login_shell" "$RYOKU_USERNAME"
-  # same password on the user + root, so sudo (wheel) and su both work
-  # with what the installer collected. hashes go in on stdin (chpasswd -e
-  # reads name:hash) and never hit the logs.
-  printf '%s:%s\n' "$RYOKU_USERNAME" "$RYOKU_PASSWORD_HASH" | run_secret \
-    "$RYOKU_TARGET_CHROOT /mnt chpasswd -e (user:hash via stdin)" \
-    "$RYOKU_TARGET_CHROOT" /mnt chpasswd -e
-  printf 'root:%s\n' "$RYOKU_PASSWORD_HASH" | run_secret \
-    "$RYOKU_TARGET_CHROOT /mnt chpasswd -e (root:hash via stdin)" \
-    "$RYOKU_TARGET_CHROOT" /mnt chpasswd -e
 }
 
 ryoku_cfg_sudo() {

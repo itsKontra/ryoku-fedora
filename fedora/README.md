@@ -8,9 +8,9 @@ either Hyprland or niri. Atomic and other rpm-ostree systems are refused. Run:
 curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku/main/ryoku-shell-installer/install.sh | bash
 ```
 
-The stable channel has no Fedora packages until Ryoku's first Fedora release,
-so until then that command stops before changing anything. Install the testing
-packages with `bash -s -- --ref unstable-dev`.
+Ryoku 1.0 publishes stable packages for both supported Fedora releases. The
+default command follows that stable channel. Use `bash -s -- --ref
+unstable-dev` only when you intend to install the testing channel.
 
 Before sudo or any system change, the installer requires repository metadata
 for the selected channel and running Fedora release. If Ryoku does not publish

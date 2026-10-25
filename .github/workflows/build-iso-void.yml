@@ -313,3 +313,16 @@ jobs:
             void/iso/out/*.asc
           retention-days: 14
           if-no-files-found: error
+      - name: Notify Discord of the ISO build
+        # runs on success and failure; never fails the build itself.
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_CI_WEBHOOK_URL }}
+          BUILD_STATUS: ${{ job.status }}
+          ISO_NAME: ${{ steps.iso.outputs.name }}
+        shell: bash
+        run: |
+          bin/ryoku-discord iso --status "$BUILD_STATUS" --variant void --image "${ISO_NAME:-}" \
+            --publish true --stage "$RELEASE_STAGE" --ref "${RYOKU_ISO_INSTALLER_REF:-$GITHUB_REF_NAME}" \
+            --tracking "${RYOKU_ISO_TRACKING_ID:-}" --run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

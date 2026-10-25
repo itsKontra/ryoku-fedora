@@ -1,6 +1,7 @@
 #!/bin/sh
 exec 2>&1
 
+# shellcheck disable=SC1091
 . "${RYOKU_INIT_LIB:-/usr/lib/ryoku/runit}/wait-for"
 load_session_env
 BIN=${RYOKU_BIN_DIR:-/usr/bin}
@@ -8,11 +9,9 @@ BIN=${RYOKU_BIN_DIR:-/usr/bin}
 _initial=${RYOKU_AI_USAGE_INITIAL:-45}
 _period=${RYOKU_AI_USAGE_PERIOD:-300}
 
+
 sleep "$_initial"
 while :; do
-	# Missing optional collectors must not stop the timer.
-	"$BIN/claude-usage" >/dev/null 2>&1 || true
-	"$BIN/codex-usage" >/dev/null 2>&1 || true
-	"$BIN/opencode-usage" >/dev/null 2>&1 || true
+	RYOKU_AI_USAGE_BIN_DIR="$BIN" "$BIN/ryoku-ai-usage"
 	sleep "$_period"
 done

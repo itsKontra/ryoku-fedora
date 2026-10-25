@@ -1,0 +1,67 @@
+name: Release Announcement
+
+# Announces a stable release in the Ryoku Discord (#updates), pinging the role in
+# the DISCORD_RELEASE_ROLE_ID variable, through bin/ryoku-discord. publish-repo.yml
+# dispatches it right after the Arch and CachyOS stable channel serves the tag,
+# so nobody is told to update before the update exists.
+#
+# Each tag is announced once: refs/notify/announced/<tag> records it, and a
+# re-run publish never pings twice. Dispatch by hand with force to repeat one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: the v* tag to announce
+        required: true
+        type: string
+      force:
+        description: announce again even if this tag was already announced
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # record refs/notify/announced/<tag>
+
+concurrency:
+  group: release-announcement-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    name: Announce the release in Discord
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+      FORCE: ${{ inputs.force }}
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_UPDATES_WEBHOOK_URL }}
+      DISCORD_RELEASE_ROLE_ID: ${{ vars.DISCORD_RELEASE_ROLE_ID }}
+
+    steps:
+      - name: Checkout the tag (history, no file contents)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Announce
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ $TAG =~ ^v[0-9] ]] || { echo "::error::not a release tag: $TAG"; exit 1; }
+          if [[ -z ${DISCORD_WEBHOOK:-} ]]; then
+            echo "::notice::DISCORD_UPDATES_WEBHOOK_URL not configured; skipping."
+            exit 0
+          fi
+
+          marker="refs/notify/announced/$TAG"
+          if [[ $FORCE != true ]] && git ls-remote --exit-code origin "$marker" >/dev/null 2>&1; then
+            echo "::notice::$TAG was already announced; dispatch with force to post it again."
+            exit 0
+          fi
+
+          bin/ryoku-discord release --tag "$TAG"
+          git push origin "+$(git rev-parse "$TAG^{commit}"):$marker"

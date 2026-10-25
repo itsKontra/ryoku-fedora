@@ -49,7 +49,7 @@ ryoku_mount() {
 
   # dirs must exist on @ before their subvols mount over them.
   run mkdir -p /mnt/var/log "/mnt$RYOKU_PACKAGE_CACHE_DIR" /mnt/boot
-  [[ ${RYOKU_SUBVOL_HOME:-1} == 1 ]] && run mkdir -p /mnt/home
+  run mkdir -p /mnt/home
   [[ ${RYOKU_SUBVOL_SNAPSHOTS:-1} == 1 ]] && run mkdir -p /mnt/.snapshots
   [[ ${RYOKU_SUBVOL_BACKUPS:-0} == 1 ]] && run mkdir -p /mnt/.backups
 

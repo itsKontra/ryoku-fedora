@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# widget-depth-lift-probe: the `Depth` lift row in a desktop widget's right-click
-# menu (WidgetMenu), a plugin tile's menu (PluginWidgetMenu), and the
-# visualiser's own menu scope writes the shared `front` list on stage.json
-# through the stage Config singleton: it toggles the named widget only, hides
-# itself while the wallpaper has no cut-out, keeps the menu card open on trigger, and
-# persists across the seam (the wrapper greps the written file after the run).
+# widget-depth-lift-probe: the lift row in a desktop widget's right-click menu
+# (WidgetMenu), a plugin tile's menu (PluginWidgetMenu), and the visualiser's
+# own menu scope writes the active cut mode's `front` list on stage.json. It
+# toggles only the named widget, hides while the wallpaper has no cut-out, keeps
+# the menu card open on trigger, and persists across the seam.
 # Loads the real components against a mirrored shell/ tree, the way
 # center-popout-probe.sh does. Commit nothing.
 set -euo pipefail
@@ -20,6 +19,8 @@ ln -s "$repo/ryoku/ui" "$work/Ryoku/Ui"
 ln -s "$repo/ryoku/shell/framebars" "$work/Ryoku/FrameBars" 2>/dev/null || true
 # The widget menu's size stepper reads the Stage Editor's island module.
 ln -s "$repo/ryoku/shell/quickshell/stage" "$work/stage"
+# The universal dock service imports the iRiS port's services module.
+ln -s "$repo/ryoku/shell/quickshell/inir" "$work/inir"
 for child in "$src"/*; do
     name="$(basename "$child")"
     [[ "$name" == modules ]] && continue
@@ -43,8 +44,8 @@ if ! grep -q WIDGET-DEPTH-LIFT-PROBE-PASS "$work/probe.log"; then
 fi
 
 # The lift the probe ended with must be the file the next shell start reads:
-# clock and the plugin tile stay lifted, the visualiser was put back behind,
-# and the untouched keys of stage.json survive.
+# clock and the plugin tile stay lifted in Depth, the visualiser was put back
+# behind, and the v3 mode sections survive.
 stage="$work/cfg/ryoku/stage.json"
 if [[ ! -f "$stage" ]]; then
     echo "widget-depth-lift-probe: stage.json was never written" >&2
@@ -56,6 +57,7 @@ if grep -q '"visualizer"' "$stage"; then
     echo "widget-depth-lift-probe: the visualiser stayed lifted in the file" >&2
     exit 1
 fi
-grep -q '"quality"' "$stage" || { echo "widget-depth-lift-probe: stage.json lost its other keys" >&2; exit 1; }
+grep -q '"version": 3' "$stage" || { echo "widget-depth-lift-probe: stage.json is not v3" >&2; exit 1; }
+grep -q '"parallax"' "$stage" || { echo "widget-depth-lift-probe: stage.json lost the parallax section" >&2; exit 1; }
 
 echo "widget-depth-lift-probe: Depth rows lift and unlift their widget, gate on the cut, and persist to stage.json"

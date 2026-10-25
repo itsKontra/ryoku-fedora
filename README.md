@@ -51,7 +51,7 @@ surface: the bar, the panels, the launcher, the lockscreen and the session
 controls move as a single thing, paper and ink, warm bone type on pure black,
 with the frame retinting live from your wallpaper. Click a widget on the bar and
 its controls grow out of the rail; let go and they melt back. It is built from
-small independent surfaces, so it grows with what you actually use: six bar
+small independent surfaces, so it grows with what you actually use: seven bar
 styles, desktop widgets, a store for more, and a plugin host.
 
 Underneath, Ryoku is a distribution, not a config dump. The desktop, the
@@ -61,23 +61,37 @@ community-first passion project led by one maintainer in their spare time and
 improved by generous contributors, and it favours a rich, deliberate desktop on
 capable hardware over a lightweight one.
 
+Ryoku 1.0, Amaterasu, is the first stable release. Arch and CachyOS are the
+stable editions. Void and Fedora ship the same desktop and update path, but
+remain experimental while those editions get wider hardware coverage.
+
 ## Editions
 
 | Edition | Compositors | Get it | Status |
 |---|---|---|---|
-| **Arch Linux** | Hyprland, niri, Wayfire | signed ISO, or the one-liner on an existing install | stable |
-| **CachyOS** | Hyprland, niri, Wayfire | signed ISO, or the one-liner | stable |
-| **Void Linux** glibc, runit | niri | signed ISO, or the one-liner | experimental |
-| **Fedora** 44 and 45 | Hyprland, niri | the one-liner, on Workstation, KDE Plasma, Server or a spin | experimental |
-| **NixOS** | Hyprland, niri | [Ryoku on NixOS](https://aethctl.github.io/Ryoku-on-NixOS/), a port for flake-based systems | community |
+| **Arch Linux** | Hyprland, niri, Wayfire | signed ISO, or the [one-liner on an existing install](docs/install-without-iso.md#existing-arch-linux) | stable |
+| **CachyOS** | Hyprland, niri, Wayfire | signed ISO, or [the one-liner](docs/install-without-iso.md#existing-cachyos) | stable |
+| **Void Linux** glibc, runit | niri | signed ISO, or [the one-liner](docs/install-without-iso.md#void-linux) | experimental |
+| **Fedora** 44 and 45 | Hyprland, niri | [the one-liner, on Workstation, KDE Plasma, Server or a spin](docs/install-without-iso.md#existing-fedora-44-or-45) | experimental |
+| **NixOS** | Hyprland, niri | [Ryoku on NixOS](https://github.com/Ryoku-dev/Ryoku-on-NixOS), a port for flake-based systems | community |
 
 Every edition is `x86_64` and ships the same shell from a signed native
-repository (pacman, XBPS or RPM). Hyprland and niri are the first-class
-compositors; Wayfire 0.11 is the experimental third on Arch and CachyOS, reached
-by switching desktops in the Hub or with `ryoku wm use wayfire`. Void is
-niri-only until it ships GCC 15 ([why](void/README.md)). Fedora converts an
-existing mutable system in place, keeps GRUB with a Ryoku snapshots submenu, and
-leaves NVIDIA on nouveau ([details](fedora/README.md)).
+repository (pacman, XBPS or RPM). The Arch edition keeps an Arch userland and
+can opt into **Gaming with CachyOS** during installation or add the same
+**CachyOS Gaming** bundle from RyoStore later. The CachyOS ISO is CachyOS from
+the live kernel through the installed system: CachyOS repositories, kernels,
+identity, tuning, hooks, and tools with Ryoku as its desktop. The Void ISO can
+add Steam and its 32-bit graphics stack with the installer Gaming question.
+
+Hyprland and niri are the first-class compositors; Wayfire 0.11 is the
+experimental third on Arch and CachyOS, reached by switching desktops in the
+Hub or with `ryoku wm use wayfire`. Void is niri-only until it ships GCC 15
+([why](void/README.md)). Fedora converts an existing mutable system in place,
+keeps GRUB with a Ryoku snapshots submenu, and leaves NVIDIA on nouveau
+([details](fedora/README.md)).
+
+The [no-ISO guide](docs/install-without-iso.md) covers each existing-system
+path, starting from a stock Void installation.
 
 ## The desktop
 
@@ -92,11 +106,11 @@ leaves NVIDIA on nouveau ([details](fedora/README.md)).
 On first login a short welcome walks you through the handful of keybinds that
 open almost everything and lets you pick the interface scale, the bar and the
 desktop widgets. Everything else lives in the Ryoku Hub (`Super + ,`). The bar
-is a choice, not a given: **QS Bar** (the default, in full colour), **Sumi**
-(the monochrome rail), **Kairos** (one island carrying the clock), **Shima**,
-**Python** and **Nomarchy** all ship, and every one of them reads the desktop
-through the same window-manager seam rather than a compositor's own API
-([`docs/barstyles.md`](docs/barstyles.md)).
+is a choice, not a given: **Orpheus** (the default, a liquid top bar), **QS Bar**
+(in full colour), **Sumi** (the monochrome rail), **Kairos** (one island carrying
+the clock), **Shima**, **Python** and **Nomarchy** all ship, and every one of them
+reads the desktop through the same window-manager seam rather than a
+compositor's own API ([`docs/barstyles.md`](docs/barstyles.md)).
 
 <div align="center">
   <a href="https://youtu.be/kx7VW4Mg0m4"><img src="https://img.youtube.com/vi/kx7VW4Mg0m4/maxresdefault.jpg" alt="Ryoku showcase on YouTube" width="560" /></a>
@@ -136,6 +150,9 @@ Append `-s -- --dry-run` after `bash` to see everything it would do first.
 > distribution, and the limits there, are in
 > [`ryoku-shell-installer/`](ryoku-shell-installer/README.md).
 
+The [step-by-step no-ISO guide](docs/install-without-iso.md) starts with a stock
+Void installation and also covers Arch, CachyOS, Fedora and NixOS.
+
 ## Day to day
 
 ```bash
@@ -156,10 +173,10 @@ runs straight from the repo at a TTY:
 curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku/main/bin/ryoku-recovery | bash
 ```
 
-On Arch the CachyOS kernel is one click in the Hub's Extras
-([`docs/kernels.md`](docs/kernels.md)). [`docs/updates.md`](docs/updates.md)
-is how a change reaches you; [`docs/cli.md`](docs/cli.md) is every `ryoku`
-command.
+On Arch, **Gaming with CachyOS** is offered during installation and the same
+bundle is available later in RyoStore ([`docs/kernels.md`](docs/kernels.md)).
+[`docs/updates.md`](docs/updates.md) is how a change reaches you;
+[`docs/cli.md`](docs/cli.md) is every `ryoku` command.
 
 ## Hardware
 
@@ -182,10 +199,11 @@ are in [`docs/installation-hardware.md`](docs/installation-hardware.md).
 
 | Guide | What it covers |
 |---|---|
+| [`docs/install-without-iso.md`](docs/install-without-iso.md) | Install on stock Void or an existing Arch, CachyOS or Fedora system. |
 | [`docs/ryoku.md`](docs/ryoku.md) | What Ryoku is and how the parts fit. |
 | [`docs/structure.md`](docs/structure.md) | The repo map: `ryoku/` is the desktop, `system/` the machine, `installation/`, `void/` and `fedora/` the installers and packaging, `release/` the signed repo. |
 | [`docs/compositors.md`](docs/compositors.md) | The window-manager seam: what each compositor can do, and how to add one. |
-| [`docs/barstyles.md`](docs/barstyles.md) | The six bar styles, and how to ship another. |
+| [`docs/barstyles.md`](docs/barstyles.md) | The seven bar styles, and how to ship another. |
 | [`docs/updates.md`](docs/updates.md) | Channels: `main` is stable, `unstable-dev` is the gated preview, and how a change reaches an installed machine. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The commit gates and how to send a change. |
 

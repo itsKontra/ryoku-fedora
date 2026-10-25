@@ -92,7 +92,18 @@ run_case() {
   [ "$pixman" = 0 ] || weston_expected+=$'--renderer=pixman\n'
   weston_expected+='--config=<generated>'
   assert_log "$tmp/run/weston" "$weston_expected" "$name weston argv"
+  printf 'sddm-greeter-card: %s -> %s%s\n' \
+    "$name" "$card" "$([ "$pixman" = 0 ] || printf ' + pixman')"
 }
+
+# Issue #479: firmware marks the headless NVIDIA card as boot VGA, while the
+# AMD iGPU owns the connected laptop panel. The panel owner must win.
+reset_fixture
+add_card 1 renderD128 1 0x10de
+add_connector 1 HDMI-A-1 disconnected
+add_card 2 renderD129 0 0x1002
+add_connector 2 eDP-1 connected
+run_case 'hybrid AMD panel' card2 eDP-1
 
 # T2 Mac: the USB Touch Bar has a connected KMS output but no render node. The
 # disconnected Intel panel must not beat the AMD card that currently owns eDP.
@@ -114,6 +125,13 @@ add_connector 1 eDP-1 connected
 add_card 2 renderD129 1 0x1002
 add_connector 2 eDP-1 disconnected
 run_case 'T2 Intel panel' card1 eDP-1
+
+# A single NVIDIA GPU keeps its existing software-renderer path while receiving
+# the same explicit card pin.
+reset_fixture
+add_card 0 renderD128 1 0x10de
+add_connector 0 eDP-1 connected
+run_case 'single NVIDIA panel' card0 eDP-1 1
 
 # A render-capable virtual GPU has no internal connector but remains preferred.
 reset_fixture

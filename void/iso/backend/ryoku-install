@@ -35,6 +35,8 @@ source "$SHARED_LIB_DIR/resize.sh"
 source "$SHARED_LIB_DIR/luks.sh"
 # shellcheck source=installation/backend/lib/filesystem.sh
 source "$SHARED_LIB_DIR/filesystem.sh"
+# shellcheck source=installation/backend/lib/accounts.sh
+source "$SHARED_LIB_DIR/accounts.sh"
 # shellcheck source=installation/backend/lib/snapshots.sh
 source "$SHARED_LIB_DIR/snapshots.sh"
 # shellcheck source=installation/backend/lib/network.sh
@@ -139,6 +141,7 @@ fi
   || die "RYOKU_ENCRYPT=1 but RYOKU_LUKS_PASSPHRASE is unset"
 [[ $RYOKU_FIRMWARE_MODE != bios || $RYOKU_DISK_STRATEGY == whole ]] \
   || die "legacy BIOS supports whole-disk installation only"
+ryoku_accounts_validate
 
 main() {
   [[ -z $RYOKU_DRYRUN ]] || log "DRY RUN: no disk is touched; commands are printed only"

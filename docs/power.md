@@ -247,22 +247,40 @@ after the fixes that ship in Onogoro 0.57.8:
 | `bluetoothctl` processes | grew without bound | 0 | The bar widget polled `bluetoothctl` every few seconds even when hidden and with no adapter, and each poll orphaned the last. The widget reads BlueZ over D-Bus now and runs nothing in the background. |
 | `makoctl mode` every 1.5 s | a failing spawn per tick | none | Polled on boxes without mako. Gone. |
 
+The October 2026 pass (`docs/performance.md` has the method and every number)
+took the next layer off. On the same box, an idle desktop went from about 5,800
+process launches a minute to 13, playing music from 81% to 60% of a core for
+the base desktop with Orpheus (64% to 48% for the shell itself), and the RTX
+4060 from 16 W to 10.6 W while music plays. The bar styles, desktop widgets and
+iNiR services share one C++ cava feed (the line visualizer keeps its own), the
+Python waveform capture that ran even in silence is gone, system stats come from
+one native sampler, Orpheus rests at bar height, and a still wallpaper no longer
+loads the video stack (about 60 MB of the shell's memory).
+
+A second pass took the desktop at rest, nothing moving, close to quiet: the
+shell from 5.1% of a core and 172 wakeups a second to 0.4% and 12, its windows
+from 1.8 frames a second to 0.8, the shell daemon from 125 wakeups a second to
+35, and the RTX 4060's utilisation from 5.9% to 0.9%. Hidden surfaces no longer
+redraw once a second, system readouts pause while the screen is locked or off,
+the daemons wait on events instead of polling, and the wallpaper picker frees
+its memory a minute after it closes.
+
 What is left, in the order to take it:
 
-1. The shell process at 700 MB to 1.2 GB. The overlays it keeps warm (launcher,
-   control panel, overview) should follow the picker: build on show, drop on
-   hide. Same pattern, same file per surface.
-2. Thumbnails and previews without `sourceSize`: a 4K wallpaper decoded at full
-   size for a 240 px card costs 60 MB where it should cost 1.
-3. The bar's polling timers (CPU, GPU, thermal, storage) fire on separate
-   clocks; one 5 s tick would halve the wakeups.
+1. Animated content inside a layer presents two frames per change; Orpheus's
+   translucent body and the desktop visualizer pay it while music plays.
+2. The desktop visualizer widget redraws the full-screen desktop surface for
+   every frame it draws.
+3. The shell process holds about 600 MB, and every mapped window adds its own
+   render thread, GL context and swapchain: fewer, smaller surfaces is the lever.
 4. On battery, Perf.qml already freezes the visualizer and the pill; the video
    wallpaper decode rate and the blur behind overlays should follow the same
    `lowPower` flag.
 
-How to measure before claiming a win: `for p in $(pgrep -f 'quickshell|^qs');
-do grep VmRSS /proc/$p/status; done`, `df -h $XDG_RUNTIME_DIR`, `pgrep -c
-bluetoothctl`, and `top -H -p $(pgrep -x qs)` for the thread that is awake.
+How to measure before claiming a win: `bin/ryoku-dev-perf-baseline` (per
+process PSS, CPU, wakeups, GPU and power; `--spawns` for launches, `--surfaces`
+for frames per surface), `df -h $XDG_RUNTIME_DIR` for the log tmpfs, and
+`top -H -p $(pgrep -x qs)` for the thread that is awake.
 
 ## What Ryoku deliberately does not ship
 

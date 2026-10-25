@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 // newTestStore builds a settings store over a fresh temp shell.json path. The
@@ -95,6 +96,41 @@ func TestPhoneDefaultsMatchContract(t *testing.T) {
 	}
 }
 
+func TestDockEdgeGapValidation(t *testing.T) {
+	if got := defaultDock()["edgeGap"]; got != dockEdgeGapDefault {
+		t.Fatalf("default dock.edgeGap = %v, want %d", got, dockEdgeGapDefault)
+	}
+	store := newTestStore(t)
+	if err := store.patch("dock.edgeGap", rm("24")); err != nil {
+		t.Fatal(err)
+	}
+	if got := frameNum(t, store.frameLocked(), "dock.edgeGap"); got != 24 {
+		t.Fatalf("dock.edgeGap = %v, want 24", got)
+	}
+	for _, value := range []string{"-1", "65", "1.5", `"wide"`} {
+		if err := store.patch("dock.edgeGap", rm(value)); err == nil {
+			t.Fatalf("dock.edgeGap accepted %s", value)
+		}
+		if got := frameNum(t, store.frameLocked(), "dock.edgeGap"); got != 24 {
+			t.Fatalf("rejected patch changed dock.edgeGap to %v", got)
+		}
+	}
+	if err := store.patch("dock", rm(`{"edgeGap":65}`)); err == nil {
+		t.Fatal("whole dock patch accepted an out-of-range edge gap")
+	}
+	if got := frameNum(t, store.frameLocked(), "dock.edgeGap"); got != 24 {
+		t.Fatalf("rejected dock object changed dock.edgeGap to %v", got)
+	}
+
+	raw := map[string]any{"dock": map[string]any{"edgeGap": float64(80)}}
+	if err := normalizeDockSettings(raw, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := raw["dock"].(map[string]any)["edgeGap"]; got != dockEdgeGapMax {
+		t.Fatalf("lenient dock.edgeGap = %v, want %d", got, dockEdgeGapMax)
+	}
+}
+
 // TestPatchRejectsInvalidSchemaValues checks bad schema values and retired
 // namespaces are rejected without touching the file. The daemon commits only
 // after a clean validation and persist.
@@ -122,6 +158,9 @@ func TestPatchRejectsInvalidSchemaValues(t *testing.T) {
 		{"bad phone fps", "phone.webcam.fps", `0`, "out of range"},
 		{"bad phone gain", "phone.microphone.micGain", `201`, "out of range"},
 		{"bad phone alarm interval", "phone.alarm.pollMinutes", `0`, "out of range"},
+		{"bad controls position", "controls.position", `"left"`, "is not one of"},
+		{"controls gap too high", "controls.edgeGap", `97`, "out of range"},
+		{"controls gap is null", "controls.edgeGap", `null`, "must be an integer"},
 		{"retired sidebar layout", "sidebars.layout", `"classic"`, "sidebars settings are retired"},
 		{"retired sidebar subtree", "sidebars.left.width", `930`, "sidebars settings are retired"},
 		{"retired sidebar root", "sidebars", `{"layout":"modern"}`, "sidebars settings are retired"},
@@ -623,6 +662,35 @@ func TestControlsNormalization(t *testing.T) {
 	if len(hidden) != 1 || hidden[0] != "liveGraph" {
 		t.Fatalf("normalized hidden = %v, want [liveGraph]", hidden)
 	}
+
+	if controls["position"] != "top-left" {
+		t.Fatalf("missing controls position = %v, want top-left", controls["position"])
+	}
+	if controls["edgeGap"] != float64(12) {
+		t.Fatalf("missing controls edgeGap = %v, want 12", controls["edgeGap"])
+	}
+}
+
+func TestControlsGeometrySettings(t *testing.T) {
+	s := newTestStore(t)
+	if got := frameGet(t, s.frameLocked(), "controls.position"); got != "top-left" {
+		t.Fatalf("controls.position default = %v, want top-left", got)
+	}
+	if got := frameNum(t, s.frameLocked(), "controls.edgeGap"); got != 12 {
+		t.Fatalf("controls.edgeGap default = %v, want 12", got)
+	}
+	if err := s.patch("controls.position", rm(`"top-right"`)); err != nil {
+		t.Fatalf("patch controls position: %v", err)
+	}
+	if err := s.patch("controls.edgeGap", rm(`0`)); err != nil {
+		t.Fatalf("patch controls edge gap: %v", err)
+	}
+	if got := frameGet(t, s.frameLocked(), "controls.position"); got != "top-right" {
+		t.Fatalf("controls.position = %v, want top-right", got)
+	}
+	if got := frameNum(t, s.frameLocked(), "controls.edgeGap"); got != 0 {
+		t.Fatalf("controls.edgeGap = %v, want 0", got)
+	}
 }
 
 // TestFrameBarsPatchPreservesSubtrees enforces the subtree-preservation
@@ -916,5 +984,140 @@ func TestSettingsBoolAt(t *testing.T) {
 	}
 	if s.boolAt("clipboard.pruneWeekly") {
 		t.Error("boolAt still true after the key was patched off")
+	}
+}
+
+func startSettingsWatch(t *testing.T, s *settingsStore) {
+	t.Helper()
+	quit := make(chan struct{})
+	ready := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.watch(quit, ready)
+	}()
+	<-ready
+	t.Cleanup(func() {
+		close(quit)
+		<-done
+	})
+}
+
+func TestSettingsWatchFollowsRenameReplace(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.patch("weatherLocation", rm(`"before"`)); err != nil {
+		t.Fatal(err)
+	}
+	changed := make(chan []byte, 1)
+	s.onChange = func(frame []byte) { changed <- frame }
+	startSettingsWatch(t, s)
+
+	body, err := os.ReadFile(s.path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	doc["weatherLocation"] = "after"
+	body, err = json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp := s.path + ".editor"
+	if err := os.WriteFile(tmp, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, s.path); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case frame := <-changed:
+		if got := frameGet(t, frame, "weatherLocation"); got != "after" {
+			t.Fatalf("weatherLocation = %v, want after", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("rename-replaced shell.json did not reload")
+	}
+}
+
+func TestSettingsWatchFollowsMissingParent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing", "ryoku", "shell.json")
+	s := newSettingsStore(path)
+	changed := make(chan []byte, 1)
+	s.onChange = func(frame []byte) { changed <- frame }
+	startSettingsWatch(t, s)
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"weatherLocation":"after"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case frame := <-changed:
+		if got := frameGet(t, frame, "weatherLocation"); got != "after" {
+			t.Fatalf("weatherLocation = %v, want after", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("shell.json under a newly-created parent did not reload")
+	}
+}
+
+func TestSettingsWatchReloadsAFinishedRewriteThatKeepsItsStat(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "shell.json")
+	s := newSettingsStore(path)
+	changed := make(chan []byte, 2)
+	s.onChange = func(frame []byte) { changed <- frame }
+	startSettingsWatch(t, s)
+
+	if err := os.WriteFile(path, []byte(`{"weatherLocation":"alpha"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-changed:
+	case <-time.After(time.Second):
+		t.Fatal("initial shell.json did not load")
+	}
+	// the create and the finished write can each publish; settle first
+settle:
+	for {
+		select {
+		case <-changed:
+		case <-time.After(50 * time.Millisecond):
+			break settle
+		}
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp := fi.ModTime()
+
+	// rewrite in place and put the old mtime back before closing: the watcher
+	// only sees the finished write, with the stat it already latched
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(`{"weatherLocation":"bravo"}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, stamp, stamp); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case frame := <-changed:
+		if got := frameGet(t, frame, "weatherLocation"); got != "bravo" {
+			t.Fatalf("weatherLocation = %v, want bravo", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("a finished rewrite under the latched stat did not reload")
 	}
 }

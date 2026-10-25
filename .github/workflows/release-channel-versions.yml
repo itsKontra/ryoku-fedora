@@ -90,7 +90,9 @@ jobs:
 
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git fetch --tags origin
+          # Release Notes force-moves the "unstable" tag, so a plain fetch
+          # refuses to clobber the checkout's stale copy and fails the job.
+          git fetch --force --tags origin
           git tag -f -a "$tag" -m "Ryoku $UNSTABLE_VERSION from $short_sha" "$GITHUB_SHA"
           git push --force origin "refs/tags/$tag"
 

@@ -153,13 +153,11 @@ func missingDepth(f ryogamiFrame) bool {
 	return false
 }
 
-// consumeRyogamiFrames mirrors ryogami's wallpaper topic into d.ryoWall and
-// wakes the workers: a changed picture reschedules the stage cutout AND the
-// palette pass (the dynamic matugen pipeline follows the wallpaper), while a
-// frame that merely lost its subject fold re-arms the stage worker alone. That
-// worker only reuses or clears on such a wake (it never auto-recuts), so a
-// spurious wake settles immediately: an unchanged publish is suppressed by
-// ryogami's topic and the chain goes quiet.
+// consumeRyogamiFrames mirrors ryogami's wallpaper topic into d.ryoWall. A
+// changed picture wakes the Stage publication pass and the palette worker; a
+// frame that lost its subject fold wakes only Stage. Stage derives and
+// republishes existing state here, but model probes and engine work remain
+// exclusive to explicit job verbs, so the topic chain settles without retrying.
 func (d *daemon) consumeRyogamiFrames(r io.Reader) {
 	sc := bufio.NewScanner(r)
 	for sc.Scan() {

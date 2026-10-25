@@ -35,6 +35,8 @@ source "$LIB_DIR/resize.sh"
 source "$LIB_DIR/luks.sh"
 # shellcheck source=lib/filesystem.sh
 source "$LIB_DIR/filesystem.sh"
+# shellcheck source=lib/accounts.sh
+source "$LIB_DIR/accounts.sh"
 # shellcheck source=lib/pacstrap.sh
 source "$LIB_DIR/pacstrap.sh"
 # shellcheck source=lib/mirrors.sh
@@ -163,6 +165,7 @@ fi
 # an encrypt request can't wipe + partition + luksFormat only to die at `open`.
 # luks.sh keeps the same check as defense in depth for a direct backend call.
 [[ ${RYOKU_ENCRYPT:-} != 1 || -n $RYOKU_LUKS_PASSPHRASE ]] || die "RYOKU_ENCRYPT=1 but RYOKU_LUKS_PASSPHRASE is unset"
+ryoku_accounts_validate
 
 main() {
   [[ -n $RYOKU_DRYRUN ]] && log "DRY RUN: no disk is touched; commands are printed only"

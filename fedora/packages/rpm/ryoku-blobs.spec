@@ -15,10 +15,12 @@ BuildRequires:  gcc-c++
 BuildRequires:  qt6-qtbase-devel
 BuildRequires:  qt6-qtdeclarative-devel
 BuildRequires:  qt6-qtmultimedia-devel
+BuildRequires:  qt6-qtquick3d-devel
 BuildRequires:  qt6-qtshadertools-devel
 Requires:       qt6-qtbase
 Requires:       qt6-qtdeclarative
 Requires:       qt6-qtmultimedia
+Requires:       qt6-qtquick3d
 
 %description
 ryoku-blobs, built from the shared Ryoku source and package payload recipe.

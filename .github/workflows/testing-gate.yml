@@ -1,7 +1,8 @@
 name: Testing gate
 
 # Advances the testing source pointer only after every required check on an
-# unstable-dev push completes successfully.
+# unstable-dev push completes successfully, then tells Discord: a failed gate
+# goes to the CI channel, and passing work gathers into the unstable roundup.
 
 on:
   push:
@@ -20,6 +21,8 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      failing: ${{ steps.failed.outputs.failing }}
     env:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -59,12 +62,99 @@ jobs:
             --run "$RUN_URL" --checks "$checks"
 
       - name: Mark checks failed
+        id: failed
         if: failure()
         run: |
           set -euo pipefail
           checks=""
+          failing=""
           if [[ -s $RUNNER_TEMP/testing-gate.json ]]; then
             checks=$(jq -r '.checks[].name' "$RUNNER_TEMP/testing-gate.json" | paste -sd,)
+            failing=$(jq -r '[.checks[] | select(.conclusion | IN("success", "skipped", "neutral") | not)
+              | "\(.name) (\(.conclusion))"] | join(",")' "$RUNNER_TEMP/testing-gate.json" || true)
           fi
+          echo "failing=$failing" >> "$GITHUB_OUTPUT"
           bin/ryoku-checked-pointer "Ryoku:$R2_BUCKET" failed "$GITHUB_SHA" \
             --run "$RUN_URL" --checks "$checks"
+
+  gate-alert:
+    name: Report a failed gate
+    needs: gate
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout the notifier
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: bin/ryoku-discord
+          sparse-checkout-cone-mode: false
+      - name: Post to the CI channel
+        shell: bash
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_CI_WEBHOOK_URL }}
+          FAILING: ${{ needs.gate.outputs.failing }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bin/ryoku-discord gate-failed --sha "$GITHUB_SHA" --run "$RUN_URL" --checks "$FAILING"
+
+  # Tells #updates what reached unstable, at most about once a day: a roundup
+  # goes out once MAX_HOURS have passed since the last commit it covered, or
+  # sooner when MAX_NOTES notes are waiting. refs/notify/unstable-digest marks
+  # that commit and only moves after a successful post.
+  unstable-digest:
+    name: Post the unstable roundup
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # advance refs/notify/unstable-digest
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_UPDATES_WEBHOOK_URL }}
+      EVENT_BEFORE: ${{ github.event.before }}
+      MAX_NOTES: "25"
+      MAX_HOURS: "20"
+    steps:
+      - name: Checkout (full history, no file contents)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Post the roundup when it is due
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z ${DISCORD_WEBHOOK:-} ]]; then
+            echo "::notice::DISCORD_UPDATES_WEBHOOK_URL not configured; skipping."
+            exit 0
+          fi
+
+          state=refs/notify/unstable-digest
+          git fetch origin "+$state:$state" >/dev/null 2>&1 || true
+          last=$(git rev-parse -q --verify "$state^{commit}" || true)
+          if [[ -z $last ]]; then
+            # first run: the roundup starts at the commit this push began from
+            last=$EVENT_BEFORE
+            if [[ -z $last || $last =~ ^0+$ ]] || ! git cat-file -e "$last^{commit}" 2>/dev/null; then
+              git push origin "+$GITHUB_SHA:$state"
+              exit 0
+            fi
+            git push origin "+$last:$state"
+          fi
+          if ! git merge-base --is-ancestor "$last" "$GITHUB_SHA"; then
+            echo "History rewritten; the next roundup starts at ${GITHUB_SHA:0:9}."
+            git push origin "+$GITHUB_SHA:$state"
+            exit 0
+          fi
+
+          notes=$(bin/ryoku-release-notes "$last" "$GITHUB_SHA" | grep -c '^- ' || true)
+          hours=$((($(date +%s) - $(git log -1 --format=%ct "$last")) / 3600))
+          echo "$notes note(s) since ${last:0:9}, which landed ${hours}h ago."
+          if ((notes == 0 || (notes < MAX_NOTES && hours < MAX_HOURS))); then
+            echo "Not due yet."
+            exit 0
+          fi
+
+          bin/ryoku-discord unstable --from "$last" --to "$GITHUB_SHA"
+          git push origin "+$GITHUB_SHA:$state"

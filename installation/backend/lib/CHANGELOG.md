@@ -26,18 +26,22 @@
   HTTP, HTTPS, and HTML handlers plus `desktop.apps.browser`; absent fallback
   values resolve to Firefox rather than Zen.
 - `bootloader`: **the install records the kernel it boots**, in
-  `/etc/ryoku/default-kernel` (`linux-cachyos` on the CachyOS variant, `linux`
-  on plain). On a live box a kernel package the user added later is
-  indistinguishable from the one the install was built around, which is why the
-  doctor used to sniff for "cachyos" in the entry names and repointed
-  `default_entry` on plain installs that had simply added a second kernel. The
-  doctor now reads this file first.
+  `/etc/ryoku/default-kernel` (`linux-cachyos` on the CachyOS variant or the
+  optional Arch Gaming layer, `linux` on plain otherwise). On a live box a
+  kernel package the user added later is indistinguishable from the one the
+  install was built around, which is why the doctor used to sniff for "cachyos"
+  in the entry names and repointed `default_entry` on plain installs that had
+  simply added a second kernel. The doctor now reads this file first.
 - `bootloader`: **`ryoku_limine_autoboot` picks the kernel the install chose, by
   the name it already knows.** It used to scan the generated menu for any entry
-  containing "cachyos" and prefer that, which is a guess where the variant is a
-  fact: it now matches `RYOKU_VARIANT`'s kernel (`linux` or `linux-cachyos`)
+  containing "cachyos" and prefer that, which is a guess where the selected
+  default is a fact: it now matches that kernel (`linux` or `linux-cachyos`)
   exactly, and falls back to the first kernel in the menu. Mirrors the doctor's
   `pickKernelPath`, which no longer prefers a brand either.
+- `bootloader`/`cachyos`: **Gaming with CachyOS makes its kernel the default
+  without removing Arch's fallback.** On NVIDIA it first installs or verifies a
+  working module for `linux-cachyos`; if that fails, Arch `linux` stays the
+  default.
 - `chroot`/`deploy`: **the initramfs stops carrying the denylisted nouveau
   driver.** The shipped HOOKS drop-in now names `ryoku-gpu-trim` between
   `autodetect` and `kms` (`system/boot/mkinitcpio/install/ryoku-gpu-trim`),
@@ -51,6 +55,12 @@
   normal install.
 
 ### Fixed
+- `cachyos`: **a new install identifies as CachyOS immediately.** The installer
+  runs CachyOS's own branding script after the package transaction, rather than
+  waiting for a later hook-triggering update. CachyOS Welcome remains in the
+  launcher, but its copied and skel autostart files are removed and the target
+  `pacman.conf` blocks them with `NoExtract`, leaving Ryoku Welcome as the only
+  first-login welcome.
 - `cachyos`: **the target gets CachyOS's own pacman.conf.** The installer edited
   Arch's stock file with sed, knew only the v3 repos and left out CachyOS's
   options, so CachyOS's `pacman.conf` landed as a `.pacnew`. It now writes

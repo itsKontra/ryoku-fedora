@@ -3,6 +3,13 @@
 ## Unreleased
 
 ### Added
+- **Installers create every planned local account with private storage.** The
+  Arch, CachyOS and Void backends share account-plan validation, make each home
+  a mode-0700 Btrfs subvolume, apply requested qgroup limits, map administrator
+  and curated permissions only to groups present in the target, and either lock
+  root or set its separately collected password. The first account remains the
+  desktop owner (`lib/accounts.sh`, `lib/chroot.sh`,
+  `../../void/iso/backend/lib/configure.sh`).
 - **Direct backend calls enforce edition package availability.** Both ISO
   backends read the shared installer manifest through one resolver, compute the
   same browser and login-shell drops, and reject an unavailable browser, shell

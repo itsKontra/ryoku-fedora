@@ -89,7 +89,7 @@ log "Staging Void installer backend"
 install -d "$ROOTFS/usr/local/lib/ryoku/backend/lib" "$ROOTFS/usr/local/lib/ryoku/backend/shared"
 install -m0755 "$BACKEND_DIR/ryoku-install" "$ROOTFS/usr/local/lib/ryoku/backend/ryoku-install"
 cp -a "$BACKEND_DIR/lib"/. "$ROOTFS/usr/local/lib/ryoku/backend/lib/"
-for library in common i18n choices preflight disk resize luks filesystem snapshots network deploy lanes dracut; do
+for library in common i18n choices preflight disk resize luks filesystem accounts snapshots network deploy lanes dracut; do
 	install -m0644 "$SHARED_BACKEND/$library.sh" \
 		"$ROOTFS/usr/local/lib/ryoku/backend/shared/$library.sh"
 done

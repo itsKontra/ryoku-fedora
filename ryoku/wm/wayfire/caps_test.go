@@ -145,18 +145,18 @@ func TestClaimsConfigReload(t *testing.T) {
 	}
 }
 
-// focusFollowsMouse has no option to read or write in wayfire's input
-// section, and a gameMode strip could never restore the user's own colours
-// through the runtime-only set-config-options, so the capability behind both
-// actions stays denied.
+// Wayfire has no runtime settings for focus-follows-mouse, reversible game
+// decoration stripping, or cursor visibility, so their shared capability stays
+// denied.
 func TestDeniesLiveConfigEval(t *testing.T) {
 	c := wm.Caps{Supports: capsManifest}
 	if c.Has(wm.CapLiveConfigEval) {
-		t.Error("wayfire must not claim liveConfigEval: neither action behind it is performable")
+		t.Error("wayfire must not claim liveConfigEval: its actions are not performable")
 	}
 	if wm.ActionFocusFollowsMouse.Capability() != wm.CapLiveConfigEval ||
-		wm.ActionGameMode.Capability() != wm.CapLiveConfigEval {
-		t.Fatal("the shared table changed: these tests pin the pair to liveConfigEval")
+		wm.ActionGameMode.Capability() != wm.CapLiveConfigEval ||
+		wm.ActionCursorVisibility.Capability() != wm.CapLiveConfigEval {
+		t.Fatal("the shared table changed: these actions need liveConfigEval")
 	}
 }
 

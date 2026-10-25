@@ -3,6 +3,41 @@
 ## Unreleased
 
 ### Fixed
+- **Shelly's Flatpak pages work on CachyOS.** CachyOS split the Flatpak
+  implementation into `shelly-flatpak-backend`, while Ryoku installed only the
+  main package. Fresh installs carry both, and doctor adds the backend to
+  existing Shelly installations (`cli/internal/doctor/reconcile_shelly.go`,
+  `../system/packages/cachyos.packages`).
+- **Super+Arrow focus leaves fullscreen windows for another screen.** From a
+  fullscreen or maximized window, an arrow moves to the screen in that direction
+  when one exists; without one, Hyprland still reaches the neighbouring window
+  on the same tape. niri now carries the same arrows across a screen edge, while
+  ordinary tiled-window focus stays unchanged (`hyprland/modules/binds.lua`,
+  `wm/hyprland/legend_test.go`, `wm/niri/config_binds.go`,
+  `wm/niri/config_binds_test.go`).
+- **Palette Bridge settings explain missing prerequisites.** The status action
+  remains available without the bridge package and reports missing installation
+  or recipes. Disabled setup actions name the packages and recipe setting to
+  repair instead of saying only “Not available on this setup”
+  (`shell/ryogami/daemon/palette_bridge.go`, `shell/ryogami/picker/`).
+- **Spotify details and Zen browser chrome follow the active palette.** Active
+  playback icons and dots, track highlights, artist links, Home navigation and
+  tooltips use bridge colours instead of fixed green/gray values. Artist and
+  playlist action areas use palette tints instead of artwork-derived washes. Zen's current
+  toolbar layers and expanded address field use live extension colours without
+  circular CSS variables (`palette-bridge/spicetify/`, `palette-bridge/templates/zen.css`).
+- **A settings edit is never missed mid-write.** The shell could read
+  `shell.json` the moment the writer created it, latch that empty state as
+  current, and then treat the finished write as unchanged, keeping the old
+  settings until the next edit. The finished write now always reloads
+  (`shell/ipc/settings.go`).
+- **The AI usage collectors run only for tools in use.** The five-minute
+  timer launched all three collectors even on a box with none of their tools.
+  One guard, `ryoku-ai-usage`, now runs each collector only when its CLI is on
+  PATH or its local data exists, and launches nothing otherwise. Void's runit
+  service calls the same guard every period instead of the collectors
+  directly (`rashin/usage/ryoku-ai-usage`, `rashin/systemd/`,
+  `void/init/user/ryoku-ai-usage/run`).
 - **Palette Bridge works with the current config and service layout.** Vesktop
   and Zen now use a dedicated supplemental Matugen file instead of forking the
   shipped app roster, setup renders the active carrier immediately without

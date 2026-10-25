@@ -1,6 +1,47 @@
 # Changelog: system/
 
 ## Unreleased
+- **Global user services no longer start in the login greeter.** Every
+  systemd user unit enabled for all accounts rejects system users, so SDDM
+  cannot launch Rashin, take its dashboard port, or start Ryoku's other
+  desktop services before login. The shared unit sources reach Arch,
+  CachyOS, and Fedora 44 and 45 packages.
+- **Palette Bridge starts only when requested.** Its shared service activation
+  policy is on-demand, so installing the runtime does not start or enable it
+  automatically. Existing manual service choices remain untouched by service
+  reconciliation (`services/manifest.tsv`).
+
+- **User changes have a narrow administrator authorization.** `pkexec` selects
+  `dev.ryoku.users.manage` only when `/usr/bin/ryoku-host` receives `users` as
+  its first argument, keeps a successful administrator authentication for the
+  session, and leaves every later argument to the helper's typed validation
+  (`policy/dev.ryoku.users.policy`, `policy/54-ryoku-users.rules`).
+
+- **A failed display wake no longer leaves the displays marked off.** When
+  every `ryoku-idle output-on` retry failed, its generation file stayed
+  behind, and the shell's new presence topic reads that file as "displays
+  off" and pauses its readouts. Exhausted retries now clear their own
+  generation, while a newer output-off still wins
+  (`hardware/power/ryoku-idle`, `tests/idle-policy.sh`).
+
+- **The lid daemon sleeps between events.** `ryoku-clamshell daemon` woke
+  every second to check whether its hardware, lid and login1 monitors were
+  still alive. Each monitor now announces its own exit into the daemon's
+  event pipe, so the main loop blocks for a minute at a time and keeps the
+  owner monitor's 3 s grace as a deadline only while that monitor is down; a
+  monitor killed without a chance to announce is still noticed within the
+  minute (`hardware/power/ryoku-clamshell`, `tests/clamshell-policy.sh`).
+
+- **The lid daemon stops forking while it waits.** `ryoku-clamshell daemon`
+  checked its helpers with `awk` twice a second (about 120 launches a minute
+  on a laptop doing nothing) and read its state files with `cat`, `tr`, `id`
+  and `readlink`. Those reads are bash builtins now, so an idle daemon launches
+  nothing; the lid policy is unchanged (`hardware/power/ryoku-clamshell`,
+  `tests/clamshell-policy.sh`).
+
+- **One Bluetooth codec watcher per login.** `ryoku-bt-audio watch` takes a
+  per-user lock, so a compositor reload or a switch no longer leaves a second
+  `pactl subscribe` behind (`hardware/audio/ryoku-bt-audio`).
 
 - **Logging out fully releases the graphical session.** When login1 removes the
   desktop session, the power lifecycle now stops its graphical session targets

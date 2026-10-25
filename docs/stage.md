@@ -1,12 +1,10 @@
 # Ryostage (舞台)
 
-The desktop as a stage: the wallpaper is the backdrop, the subject and any
-extra cut-outs are the layers, and the clock, widgets and the audio
-visualizer are the cast, arranged in front of or behind them. Depth and
-Parallax used to be two features with two engines, two settings files, two
-sidebar tabs and two artifact folders. They are one thing: **Depth is a
-stage with a single still layer in front of the widgets; Parallax is the
-same stage with motion on.** Ryostage is that one thing.
+The desktop is a stage. The wallpaper is the backdrop, cut-outs are layers,
+and widgets can sit behind or in front of them. Each wallpaper chooses one of
+four modes: **Plain, Depth, Parallax, or Spatial.** Depth is a still cut-out,
+Parallax lets the cut layers drift, and Spatial turns the wallpaper into a 3D
+scene.
 
 Names, so the parts are findable:
 
@@ -14,7 +12,7 @@ Names, so the parts are findable:
 |---|---|---|
 | The feature and editor | **Stage** | `ryoku/shell/quickshell/shell/modules/stage/`, `ryoku/shell/quickshell/stage/` |
 | The cut-out engine helper | **`ryostage`** | `ryoku/shell/scripts/ryostage`, shipped to `/usr/bin` |
-| The daemon module | `stage` topic and verbs | `ryoku/shell/ipc/stage.go` |
+| The daemon module | `stage` topic and verbs | `ryoku/shell/ipc/stage.go`, `stage_job.go` |
 | The settings | `~/.config/ryoku/stage.json` | user-owned, GUI-managed, never materialized |
 | Per-wallpaper scene state | `~/.local/state/ryoku/stage-walls.json` | daemon-owned |
 | Artifacts | `~/Pictures/Stage/<stem>/` | the user's files, one folder per wallpaper |
@@ -27,10 +25,19 @@ migrates all of them (below).
 
 ## The mental model a user needs
 
-One feature: **Depth**. It lifts the wallpaper's subject in front of your
-widgets. **Parallax** is a switch inside Depth: the same cut, the same look,
-now drifting with the pointer over an inpainted backdrop. Nothing is configured
-twice.
+One mode is active for each wallpaper:
+
+- **Plain** draws the wallpaper flat.
+- **Depth** cuts out the subject and holds it still over the original
+  wallpaper. Widgets can sit behind the cut-out.
+- **Parallax** cuts the subject, fills the hole in the wallpaper, and lets the
+  cut layers drift. Its backdrop can also use a Spatial depth map.
+- **Spatial** turns the original wallpaper into a depth-displaced 3D scene.
+  It does not cut out the subject.
+
+Depth and Parallax each choose their own cut model and edge refinement.
+Spatial chooses a Depth Anything model. A Parallax wallpaper uses that Spatial
+model only when its 3D backdrop switch is on.
 
 Two places, each with one job:
 
@@ -55,14 +62,24 @@ The quick row contains **Wallpaper** and **Search**. The single accent row,
 clicked. Quick controls opens the left sidebar, Settings opens Hub, and Reload
 shell reloads the shell.
 
-Plain, Depth, and Parallax are chosen from the Stage Editor's Depth catalogue:
+`Super+Shift+D` opens the Widgets catalogue directly on the focused monitor.
+The shortcut is shared, appears in Kit, and can be changed from the Keybinds
+page.
+
+Plain, Depth, Parallax, and Spatial are chosen from the Stage Editor's Depth
+catalogue:
 
 - Plain: `set-effect off`.
 - Depth: `set-effect depth`.
 - Parallax: `set-effect parallax`.
+- Spatial: `set-effect spatial`.
 
-Depth and Parallax use the same cut-outs. The first enable cuts the current
-wallpaper if necessary; progress and Stop stay visible while the engine runs.
+Choosing a mode only records the choice. Processing never starts from a mode
+change, wallpaper wake, settings change, missing file, or failed job. The scene
+card shows what is ready and starts work only when the user presses Generate,
+Update, Redo, or a per-step Redo action. Depth needs `subject.png`. Parallax
+needs `subject.png` and `background.png`, plus `depth.png` when its 3D backdrop
+is on. Spatial needs only `depth.png`.
 
 ## Catalogue routes
 
@@ -225,23 +242,34 @@ face options, and other appearance settings stay global.
 
 ### Depth catalogue
 
-The Depth catalogue has five tabs:
+The page starts with the current mode, then a **This wallpaper** scene card.
+The card lists each required step and whether it is ready, missing, stale, or
+outdated. It owns Generate, Update, per-step Redo, Redo all, Cancel, and Force
+stop. The mode picker offers Plain, Depth, Parallax, and Spatial.
 
-- **Scene:** a wallpaper preview and Plain, Depth, or Parallax. A running cut
-  shows progress and Stop; a blocked cut shows its notice and Retry. Draft,
-  Standard, or Fine quality offers Download or Remove for its model and Re-cut.
-- **Layers:** **Cut a layer from a picture** and **Add a PNG** file pickers,
-  per-layer cards, and a confirmed Clear cut-outs action. Each layer can be
-  shown, placed behind or in front, given a Parallax distance, or removed. The
-  subject cannot be removed.
-- **Look:** edge softness, shadow strength and direction, and reset.
-- **Motion:** Soft, Cinematic, or Beat presets, amount, idle motion, music
-  response, and pointer follow.
-- **Front:** choose which enabled widgets and plugins rise over the front
-  cut-outs.
+The selected mode decides which tabs are shown:
 
-The picture and PNG pickers live in this catalogue. They do not hand off to the
-Hub.
+- **Plain** has no tabs. It explains that the wallpaper and widgets draw flat.
+- **Depth** has Look, Layers, Front, and Model.
+- **Parallax** has Motion, Look, Layers, Front, and Model.
+- **Spatial** has Camera and Model.
+
+Look controls edge softness, shadow strength, and shadow direction. Parallax
+also has the 3D backdrop switch. Layers can draw a box around something in the
+wallpaper, cut a subject from another picture, add an existing PNG, arrange
+layers, and clear cut-outs. Distance is shown only for Parallax. Front chooses
+which widgets rise over the cut layers.
+
+Parallax Motion has the Soft, Cinematic, and Beat presets, pointer follow,
+idle motion, music response, backdrop drift, and a reset action. Spatial
+Camera has pointer follow, sensitivity, range, strength, widget shadow
+direction, and a reset action.
+
+The Depth and Parallax Model tabs show the cut-out catalogue. Each mode keeps
+its own selected model and Refine edges choice. The Spatial Model tab shows
+Depth Anything V2 Small, Base, and Large. Model tabs download and remove
+models; the scene card owns every processing run. Picture and PNG selection
+stays inside the Stage page rather than opening a separate window.
 
 ## The visualizer in the Stage Editor
 
@@ -283,10 +311,11 @@ qs -c shell ipc call desktop editSection <section>[/<page>] [monitor]
 
 It opens the editor on catalogues such as `visualizer`, `depth`, `wallpaper`,
 or `wallpaper/wallpapers`, using the focused monitor when none is supplied.
-`editWidgets` is an alias for `editSection widgets`. The `visualizer place`
-command and `Super+Alt+M` use the same session path with section
-`visualizer`. When the editor is already open on that monitor, another request
-switches its catalogue in place.
+`ryoku-shell hub open widgets` and its `Super+Shift+D` shortcut use that route
+for the Widgets catalogue. `editWidgets` is an alias for `editSection widgets`.
+The `visualizer place` command and `Super+Alt+M` use the same session path with
+section `visualizer`. When the editor is already open on that monitor, another
+request switches its catalogue in place.
 
 Entering the session opens the chrome through `StageEditorHost`; leaving either
 side closes the other. `escapeStep()` unwinds the panel, the selection, and the
@@ -297,30 +326,52 @@ session in that order.
 `ryostage` owns the curated list, and the UI renders it instead of hardcoding
 model cards:
 
-| id | Catalogue label | Suggested tier | Download | Licence | Upstream |
+| id | Catalogue label | Use | Download | Licence | Upstream |
 |---|---|---|---:|---|---|
-| `u2netp` | U2Net Portable | Draft | 4.6 MB | Apache-2.0 (mirrored weights) | [U-2-Net](https://github.com/xuebinqin/U-2-Net) |
-| `silueta` | Silueta · Fast | Draft | 44.2 MB | MIT | [Silueta model](https://github.com/xuebinqin/U-2-Net/issues/295) |
-| `birefnet-general-lite` | BiRefNet General Lite | Fine | 224 MB | MIT | [BiRefNet](https://github.com/ZhengPeng7/BiRefNet) |
-| `birefnet-general` | BiRefNet General · Best | Fine | 973 MB | MIT | [BiRefNet](https://github.com/ZhengPeng7/BiRefNet) |
-| `birefnet-portrait` | BiRefNet Portrait · People | Fine | 973 MB | MIT | [BiRefNet](https://github.com/ZhengPeng7/BiRefNet) |
+| `u2netp` | U2Net Portable | Fast default | 4.6 MB | Apache-2.0 (mirrored weights) | [U-2-Net](https://github.com/xuebinqin/U-2-Net) |
+| `silueta` | Silueta · Fast | Fast general cut | 44.2 MB | MIT | [Silueta model](https://github.com/xuebinqin/U-2-Net/issues/295) |
+| `birefnet-general-lite` | BiRefNet General Lite | Fine general cut | 224 MB | MIT | [BiRefNet](https://github.com/ZhengPeng7/BiRefNet) |
+| `birefnet-general` | BiRefNet General · Best | Best general cut | 973 MB | MIT | [BiRefNet](https://github.com/ZhengPeng7/BiRefNet) |
+| `birefnet-portrait` | BiRefNet Portrait · People | Portrait cut | 973 MB | MIT | [BiRefNet](https://github.com/ZhengPeng7/BiRefNet) |
 
 These are rembg session ids. Although rembg's release assets use longer source
 names for the BiRefNet files, each session saves its download as `<id>.onnx`;
 that is the name `ryostage check <id>` and `remove <id>` look up.
 
-Draft, Standard and Fine remain stable presets. Their defaults are `u2netp`,
-`u2netp` with alpha matting, and `birefnet-general-lite` with alpha matting.
-The model picker below the presets can replace the model for any one tier
-without changing its matting behaviour. It shows each model's download size,
-licence and installed state, and offers Download or Remove in place. A model
-choice is stored in `stage.json`; changing it re-cuts an active scene, and the
-model recorded in `.index.json` prevents an old cut from being reused.
+Depth and Parallax each store one model id and one Refine edges switch.
+Refinement enables alpha matting and is slower. The picker shows download size,
+licence, installed state, and Download or Remove in place. `.index.json`
+records the model and refinement that made `subject.png`, so a different pick
+is reported as outdated until the user explicitly updates or redoes the cut.
 
 The runtime (`rembg[cpu]`, MIT, on ONNX Runtime, MIT) installs once, on the
 first download, into the shared cache. Nothing ML ships in the base image.
 The engine header and this table keep the model provenance visible to
 packagers.
+
+### Depth estimators
+
+The 3D backdrop's depth map comes from a second, separate opt-in catalogue of
+Depth Anything V2 ONNX exports from
+[Depth-Anything-ONNX](https://github.com/fabio-sim/Depth-Anything-ONNX). Each
+is one file pinned by SHA-256 so a download is verifiable. The upstream
+[Depth Anything V2 licence](https://github.com/DepthAnything/Depth-Anything-V2#license)
+licenses only the Small model under Apache-2.0; Base and Large are
+CC-BY-NC-4.0 and therefore non-commercial:
+
+| id | Label | Download | Licence | Pins |
+|---|---|---:|---|---|
+| `small` | Depth Anything V2 Small | 99 MB | Apache-2.0 | ViT-S, ~1.2 s at 1080p on CPU |
+| `base` | Depth Anything V2 Base | 389 MB | CC-BY-NC-4.0 | ViT-B, finer structure |
+| `large` | Depth Anything V2 Large | 1.34 GB | CC-BY-NC-4.0 | ViT-L, best gradients |
+
+`depth-check --json [--model <id>]` reports each model's size, licence,
+upstream, selection and installed state for the Stage tab to render.
+`depth-install`, `depth-remove` and `depth` all take `--model` and default to
+`small`, so the legacy one-model invocations keep working. `stage.json` stores
+the pick at `spatial.model` (default `small`). The daemon uses that exact model
+for Spatial and Parallax's optional 3D backdrop. A model choice only changes
+readiness; downloading it never starts a depth build.
 
 ## Engine: `ryostage`
 
@@ -334,138 +385,237 @@ rembg's range, `uv` provisioning a managed 3.13 otherwise).
 | `models [--json]` | the curated ids one per line, or full catalogue metadata as JSON |
 | `install [model...]` | provision the runtime and fetch the named models (default `u2netp`); opt-in, streams progress |
 | `remove <model>` | drop a cached model |
-| `cut <in> <out.png> [--model id] [--matting]` | the subject as an alpha-matted PNG; never writes a partial file |
-| `inpaint <image> <mask> <out.png>` | fill the cut-out's hole with the surrounding colour (the parallax backdrop) |
+| `cut <in> <out.png> [--model id] [--matting] [--region nx,ny,nw,nh]` | cut the full picture, or cut a normalized region and place it on a full-size transparent canvas; never write a partial file |
+| `inpaint <image> <mask> <out.png>` | fill the cut-out's hole with surrounding colour at a bounded working size for the Parallax backdrop |
 
 Cache: `~/.local/state/ryoku/ryostage/{venv,models}`. On first run the
 helper adopts a pre-split `~/.local/state/ryoku/depth` or `.../parallax` tree by
 rename (same filesystem, no re-download); a leftover second tree is reported
 by the doctor as reclaimable space.
 
-`inpaint` makes the Parallax backdrop from the one cut: the subject's hole
-(the matte grown outward so no subject pixel seeds the fill) is filled from its
-surroundings by normalized convolution, growing inward until covered, then the
-whole image is softened as the far plane (a 4 px blur, a touch darker). A
-drifting subject therefore reveals the colours around it, never a flat plate
-or its own silhouette. Half resolution above 1600 px keeps a 4K wallpaper at a
-few seconds. Backdrops made before this land are regenerated by a re-cut or
-Refresh.
+`inpaint` makes the Parallax backdrop from one cut. It builds the same half-size
+base above 1600 px, grows the matte so subject pixels cannot seed the fill, then
+runs the iterative fill at a working size whose longest side is at most 1280
+px. Only the filled colour is scaled back and composited into the hole. The
+existing final upscale, 4 px blur, and 0.90 dim remain unchanged, so pixels away
+from the hole keep the established look while 4K and 8K processing stays
+bounded.
 
-## Daemon: `ipc/stage.go`
+## Daemon: `ipc/stage.go` and `ipc/stage_job.go`
 
-One worker, one registry (below), one topic.
+The coalescing Stage worker is a pure registry and publication pass. It derives
+layers, evaluates readiness, updates Ryogami's Depth pixel-lock hand-off, saves
+dirty registry state, and publishes. It never probes models or starts the
+engine. `stage_job.go` owns the one explicit job that may run at a time.
 
-- **Artifacts** `~/Pictures/Stage/<stem>/`: `subject.png` (the cut),
-  `background.png` (the inpainted backdrop, made once the first time
-  Parallax is chosen for that wallpaper), `layer-NN.png` (added layers),
-  `.index.json` (source + model/matting provenance).
-- **Topic** `stage`: `{ current, busy, stage: "cut"|"inpaint"|"", percent,
-  notice, walls: { <path>: { effect, subject, background, rev, layers: [...] } } }`,
-  published on every change and on each generation phase. QML renders from it
-  and nothing else. `subject`/`background` are absolute paths ("" until fresh);
-  `rev` is the max mtime across the wall's `subject.png`/`background.png`/
-  `layer-NN.png`, so the shell busts every url with the one revision. The frame
-  layers carry `{out, label, enabled, front, depth}` and no per-layer rev, and
-  `layers[0]` is always the subject slot. `notice` names why the last reconcile
-  could not produce a cut (the engine's reason, e.g. `model u2netp missing`);
-  it is "" whenever the pipeline is fine, and the UI shows it instead of a
-  silently dead toggle.
-- **Verbs** (`ryoku-shell stage ...`): `set-effect <off|depth|parallax>`,
-  `set-layer <index> <json>` (enabled/front/depth), `add-layer <png>`,
-  `cut-layer <picture>` (runs the engine on another picture and adds the
-  result), `remove-layer <index>`, `refresh` (re-cut), `cancel`, `clear`
-  (delete the current wall's cut-outs and take the wall back to Plain),
-  `status`, `models`.
-- **Rules**: a wallpaper switch reconciles and never generates; a stage is
-  per wallpaper; videos are skipped; an effect switch never re-cuts (only
-  Parallax's first use on a wallpaper adds the inpaint); a wall left on whose
-  artifacts vanished is re-cut by the next wake (the registry is the intent);
-  a blocked or failed cut keeps the effect recorded, logs the reason, and
-  publishes it as the frame's `notice`. The subject is still handed to ryogami
-  as `depth` for the Depth effect only, unchanged on the wire.
+- **Artifacts** live in `~/Pictures/Stage/<stem>/`. `subject.png` is the cut,
+  `background.png` is Parallax's filled backdrop, `depth.png` is the Spatial
+  map, `layer-NN.png` files are manual layers, and `.index.json` records cut and
+  depth-model provenance.
+- **Transactions** write every step to `<wall dir>/.job-<id>/`. Only a fully
+  successful job moves its outputs and provenance into place. Failure or
+  cancellation removes the transaction and leaves earlier artifacts untouched.
+  Startup removes abandoned `.job-*` folders and stray engine process groups.
+- **Readiness** is published per wall in `steps`. Missing means no artifact;
+  stale means the wallpaper, or for a fill its subject, is newer; outdated means
+  the artifact is usable but its recorded model differs from the current pick;
+  ready means current. Unknown provenance is usable. Rendering publishes a
+  Depth subject only when its cut is usable, a Parallax scene only when cut is
+  usable and fill is ready, and a Spatial map when depth is usable. A change to
+  `stage.json` republishes at once, so a new model pick shows as outdated
+  without waiting for any other event.
+- **Topic** `stage` publishes `{ current, busy, job, last, walls }`. `job` names
+  the running or stopping job, ordered steps, current step and model, source
+  picture or region, and start times. `last` records the most recent `done`,
+  `failed`, or `cancelled` result with a stable error code and bounded engine
+  detail. The old synthetic `stage`, `percent`, and `notice` fields do not
+  exist.
+- **Jobs** are `generate`, `refresh [cut|fill|depth]`, `depth-refresh`,
+  `cut-layer`, and `cut-region`. Generate runs only steps not ready. Refresh
+  reruns the selected step or all mode steps; refreshing a Parallax cut also
+  refills its background. `depth-refresh` remains an alias for
+  `refresh depth`.
+- **Cancellation** uses `cancel` for SIGTERM and a `stopping` frame. `cancel
+  --force` sends SIGKILL, records cancellation, removes the transaction, frees
+  the runner immediately, prevents a late child exit from committing, and
+  kills user-owned orphan engine groups whose command mentions the Stage root.
+- **Wall scope** appends ` -- <wall path>` to any wall-owned verb. Without it,
+  the current default wallpaper is used. Paths may contain spaces, so the
+  daemon splits the raw line at the first ` -- `.
+- **Clear** force-cancels a job for that wall, removes `subject.png`,
+  `background.png`, and `.index.json`, keeps manual layers and `depth.png`, and
+  changes Depth or Parallax to Plain.
+
+The complete intent verbs are:
+
+```text
+stage set-effect <off|depth|parallax|spatial> [-- wall]
+stage generate [-- wall]
+stage refresh [cut|fill|depth] [-- wall]
+stage depth-refresh [-- wall]
+stage cancel [--force]
+stage cut-layer <picture> [-- wall]
+stage cut-region <nx> <ny> <nw> <nh> [-- wall]
+stage add-layer <png> [-- wall]
+stage remove-layer <index> [-- wall]
+stage set-layer <index> <json> [-- wall]
+stage clear [-- wall]
+stage status
+stage models
+stage depth-sample <wall> <nx> <ny> <width> <height> <fit>
+```
+
+Cut and depth steps have 20 minute limits; fill has a 5 minute limit. A job
+probes every cut or depth model it needs before its first processing step.
 
 ## Settings: `~/.config/ryoku/stage.json`
 
-Global only; anything per-wallpaper is in the registry.
+The v3 file keeps editor choices at the top and gives each mode its own block:
 
-| Key | Default | What it is |
-|---|---|---|
-| `quality` | `draft` | `draft` / `standard` / `fine`, which sets the matting behaviour and selects one `models` slot |
-| `models` | `{"draft":"u2netp","standard":"u2netp","fine":"birefnet-general-lite"}` | selected rembg model id for each quality tier |
-| `edge` | `0.15` | edge softness of every cut-out (0..1) |
-| `shadow` | `0` | drop shadow behind every layer (0..1) |
-| `shadowAngle` | `90` | shadow direction in degrees, 0 = right, 90 = down |
-| `motion.amount` | `normal` | `subtle` / `normal` / `strong`: cursor drift, and the idle amplitude |
-| `motion.idle` | `none` | `none` / `float` / `breathe` / `sway` |
-| `motion.music` | `false` | layers react to the shared spectrum |
-| `motion.musicLevel` | `0.6` | how hard the music pushes (0..1) |
-| `motion.speed` | `1.0` | idle motion speed (0.25..2) |
-| `motion.mouse` | `true` | Parallax follows the pointer at all |
-| `motion.sensitivity` | `1.0` | the pointer's pull (0..2) |
-| `motion.range` | `1.0` | how far a layer may travel (0..2) |
-| `motion.backdrop` | `0` | the inpainted backdrop's own drift (0..1); above 0 a sliver of the base wallpaper shows at the trailing edge |
-| `front` | `[]` | widget and plugin ids drawn above the layers marked "in front"; written by the Depth catalogue's **Front** tab |
+```json
+{
+  "version": 3,
+  "editGridSize": 32,
+  "editGridSnap": true,
+  "depth": {
+    "cut": { "model": "u2netp", "matting": false },
+    "edge": 0.15, "shadow": 0, "shadowAngle": 90, "front": []
+  },
+  "parallax": {
+    "cut": { "model": "u2netp", "matting": false },
+    "edge": 0.15, "shadow": 0, "shadowAngle": 90, "front": [],
+    "depthBackdrop": true,
+    "motion": {
+      "amount": "normal", "idle": "none", "music": false,
+      "musicLevel": 0.6, "speed": 1.0, "mouse": true,
+      "sensitivity": 1.0, "range": 1.0, "backdrop": 0.5
+    }
+  },
+  "spatial": {
+    "model": "small",
+    "shadowAngle": 90,
+    "motion": {
+      "amount": "normal", "mouse": true, "sensitivity": 1.0, "range": 1.0
+    }
+  }
+}
+```
 
-The daemon reads `quality`; the shell reads the rest. On the first start after
-v2 a v1 `stage.json` (one still carrying `feather`, `lift`, `preset` or the
-`motion.{mouse,sensitivity,range,wallpaper}` sub-knobs) is folded once and
-rewritten atomically: `feather` -> `edge`, `lift` and `preset` dropped, and the
-motion sub-knobs reduce to `motion.amount` (`mouse: false` -> `subtle`,
-else `sensitivity >= 1.5` -> `strong`, else `normal`) with `motion.idle`/
-`motion.music` defaulted. An already-v2 file is left alone; the daemon never
-creates the GUI-owned file. A stable box that skipped v1 has no `stage.json` but
-still carries the retired `depth.json`/`parallax.json`; those are folded instead
-(model+matting -> `quality`, higher tier winning; `feather` -> `edge`;
-`shadow`/`shadowAngle` scalars kept, per-layer arrays skipped).
+Depth and Parallax can use different cut models and front lists. Their edge and
+shadow controls are also independent. Parallax owns drifting, idle motion,
+music response, and its optional 3D backdrop. Spatial owns the camera controls
+and its `small`, `base`, or `large` depth model.
+
+The daemon first completes the safe v2 fold, then runs the
+`ryostage-v3-modes` migration. A v2 quality choice becomes the same initial cut
+model and refinement in Depth and Parallax. Look and front settings are copied
+to both. The complete old motion object moves to Parallax; amount, pointer
+follow, sensitivity, and range are also copied to Spatial. `depthModel` becomes
+`spatial.model`. Editor and unknown keys stay in place. Retired v2 keys are
+removed. A malformed file is left untouched, and a second successful run does
+nothing.
 
 ## Registry: per-wallpaper stage
 
 `~/.local/state/ryoku/stage-walls.json`:
 
-```
-{ "current": "<path>",
-  "walls": { "<path>": {
-      "effect": "off|depth|parallax",
-      "layers": [ { "out": "<png>", "label": "Subject", "enabled": true,
-                    "front": true, "depth": 0.5 }, ... ] } } }
+```json
+{
+  "version": 3,
+  "current": "<path>",
+  "walls": {
+    "<path>": {
+      "effect": "off|depth|parallax|spatial",
+      "layers": [
+        {
+          "out": "<png>", "label": "Subject", "enabled": true,
+          "front": true, "depth": 0.5
+        }
+      ]
+    }
+  }
+}
 ```
 
-`layers[0]` is always the subject the engine cut (`subject.png`); every
-later entry is a picture the user added (`layer-NN.png`, cut from a picture
-or dropped in as a PNG). `front` is behind/in front of the widgets; `depth`
-0..1 is near..far for Parallax drift. The v1 registry is folded once, gated by
-`~/.local/state/ryoku/migrations/ryostage-v2`: `effect: subject` becomes
-`depth`, a `scene` order reduces to each layer's `front` (a layer listed after
-any `widget:*` token is `front: true`), a v1 `depthFactor` becomes `depth`, and
-`mode`, `scene` and the other per-layer knobs are dropped. A v1 manual wall's
-`layer-NN.png` entries are kept after a prepended subject slot. Under the same
-marker and before the v1 fold, the retired Depth (`depth-walls.json` +
-`~/Pictures/Depth`) and Parallax (`layers.pz` + `~/Pictures/Parallax`) state a
-stable box still carries is folded in for walls v1 has not claimed, its
-artifacts moved by rename into `~/Pictures/Stage/<stem>/`, so both upgrade paths
-converge on one registry.
+The layer list belongs to the two cut modes. Its first entry is
+`subject.png`; later entries are pictures the user added. `front` places a
+layer behind or in front of widgets. `depth` is its Parallax drift distance.
+
+The old registry had no version field, so a missing version means v2. The v3
+migration resolves the old `depth` wire by inspecting the wall folder. A wall
+with `depth.png` becomes Spatial. With only `subject.png` it becomes
+Depth. With neither it becomes Spatial. The older v1 and retired
+`depth-walls.json` folds are known static cut-outs and go straight to Depth.
+Parallax and Plain stay unchanged. The migration marker is written only after
+both the settings and registry have persisted.
 
 ## Rendering: `modules/stage/`
 
-One surface, one stack. The desktop surface draws, back to front:
-`StageBackdrop.qml` (Parallax only: the inpainted `background.png`, framed by
-`WallpaperFramedPlane` with the wallpaper's zoom, offset, rotation, and mirror),
-then the layers marked behind the widgets (z 2), then the widgets (z 3), then
-the layers marked in front (`StageLayer.qml`, also framed by
-`WallpaperFramedPlane`: edge, shadow and angle from the global look, drift by
-the layer's `depth` x the shared motion Amount x Sensitivity x Range while
-Follow mouse is on, idle and music; z 4), then any widget the user lifted into
-`front` (z 5). Taking the same framing keeps the subject and added cut-outs
-registered with the shown picture.
+The desktop starts with the normal wallpaper. Each mode adds only its own
+pieces:
 
-Depth is the same stack with `motionEnabled: false` and no backdrop, so the
-still cut is pixel-locked over the wallpaper's own subject. While the stage is
-on and a visualizer is `On desktop`, the desktop hosts it inside this stack
-(`InlineVisualizer` at z 1.5: above the backdrop, below every cut-out and
-widget) and its own surface is suppressed (cava keeps running); `Above windows`
-keeps that surface outside the editor. There is no second subject renderer and
-no path that can draw the subject twice. While the engine cuts, the subject
-layer dims and draws its own progress ring.
+- **Plain** adds nothing.
+- **Depth** draws the still cut stack over the original wallpaper. Ryogami also
+  receives the finished subject on its stable `depth` wire so the wallpaper and
+  subject stay pixel-locked.
+- **Parallax** draws `background.png`, then the cut stack. The layers drift from
+  their saved distance and Parallax motion settings. With 3D backdrop on and a
+  map available, `StageSpatialScene.qml` turns the backdrop into a mesh.
+- **Spatial** uses the original wallpaper and `depth.png` in
+  `StageSpatialScene.qml`. It has no cut stack or front list.
+
+`WallpaperFramedPlane` keeps cut layers and backdrops aligned with wallpaper
+zoom, offset, rotation, and mirror. Cover uses one centre-cropped UV mapping
+for the texture, depth map, matte, and depth picker. Fill stretches them across
+the complete source. `DepthMeshGeometry` builds its adaptive grid on a worker
+thread and publishes only the newest generation.
+
+For Depth and Parallax, layers behind widgets draw at z 2, widgets draw at z 3,
+layers in front draw at z 4, and widgets selected in that mode's Front tab draw
+at z 5. Only Parallax applies layer motion. Spatial projects each widget through
+the same camera as the wallpaper mesh.
+
+An `On desktop` visualizer stays above the backdrop and below cut layers and
+widgets. `Above windows` keeps its separate surface outside the editor. While a
+cut runs, the subject layer dims and shows progress.
+
+### Widgets in Spatial depth
+
+With the Spatial model installed, desktop widgets can hold their own place in
+the 3D scene instead of staying flat on the desk. Each widget carries a "wall
+depth" from 0 to 1, with `0.5` as the map's pivot plane and the extremes nearest
+and farthest. Its laid-out centre becomes a fixed world point on the wallpaper
+plane, pushed toward or away from the camera by that depth. The point is
+projected through the same camera the backdrop mesh uses
+(`StageSpatialScene.updateCamera`: orbit radius R, yaw 2.5° and pitch 1.8° per
+pointer extreme, gain clamped at 1.5).
+
+The editor's 2D slot stays the layout truth; projection is the render.
+`StageBackend.widgetSceneAt()` shares the math with built-in and extension
+widget slots. Within the Spatial widget band, a nearer widget stacks above a
+farther one.
+
+A widget in Spatial also throws a depth-scaled shadow. Its direction comes from
+`spatial.shadowAngle`; nearer widgets use a wider, softer shadow. Outside
+Spatial the normal flat lift remains.
+
+The depth is set from the widgets page: a slider for the current value and a
+Pick that opens `StageDepthPick.qml`, a tinted read-out of `depth.png` with a
+crosshair and live sample; a click commits the sampled value. Built-in and
+iris/python extension faces keep depth beside their position and size in the
+output-keyed `monitors` map in `widgets.json`, so one widget can sit at a
+different depth on each display. A legacy value in the top-level
+`widgetDepths` map remains the fallback until that output gets its own value.
+Plugin tiles' placements carry their own `depth` in the plugin store instead.
+Maps are written as a whole because JsonAdapter cannot observe in-place edits.
+
+A hovered widget settles gently to 0.85 opacity and back. The pointer's
+parallax never pauses: the camera, layers and widgets follow one smoothed
+cursor shared in `StageBackend`, fed by whichever hover target currently owns
+the pointer (the backdrop over empty desktop, each widget slot when the pointer
+rests on it), so resting on a widget keeps the scene tracking
+continuously. The camera ride itself is unfiltered, so widgets register with
+the mesh without trailing behind it.
 
 The Stage Editor is the only UI writer for composition. Typed stage updates go
 to the shell's canonical `modules/stage/Singletons/Config.qml`; per-wallpaper

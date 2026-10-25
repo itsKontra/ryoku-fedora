@@ -534,7 +534,7 @@ func newEngine(f *facts, p *plan, dry bool, ref, payloadOverride string) *engine
 		{"repo", i18n.T("Trusting the [ryoku] package repository"), stepRepo},
 		{"conflicts", i18n.T("Clearing conflicting shells and daemons"), stepConflicts},
 		{"packages", i18n.T("Installing the Ryoku desktop"), stepPackages},
-		{"cachyos-layer", i18n.T("Adding the CachyOS kernel and tuning"), stepCachyosLayer},
+		{"cachyos-layer", i18n.T("Gaming with CachyOS (Steam + Proton-CachyOS)"), stepCachyosLayer},
 		{"fonts", i18n.T("Installing Ryoku fonts and cursors"), stepFonts},
 		{"drivers", i18n.T("Setting up GPU drivers"), stepDrivers},
 		{"build", i18n.T("Building the Ryoku desktop from source"), stepBuild},
@@ -1804,9 +1804,9 @@ func hardwareLanes(f *facts) []string {
 	}
 }
 
-// selectedInstallPackages names the chosen packages the edition's own package
-// sets do not carry: the file manager, the Ryoku apps and Rashin. The other
-// catalogue rows only ever remove packages from those sets.
+// selectedInstallPackages names chosen packages the edition's package sets do
+// not carry: the file manager, Ryoku apps, Rashin, and offline gaming bundles.
+// Arch's network-only CachyOS bundle has its own guarded install step.
 func selectedInstallPackages(p *plan) []string {
 	var packages []string
 	if choice, ok := installerplan.ChoiceByID(installerplan.FileManager, p.fileManager); ok {
@@ -1817,7 +1817,8 @@ func selectedInstallPackages(p *plan) []string {
 		if !availability.Available || !p.componentOn(component.ID) {
 			continue
 		}
-		if component.Group == "ryoku-apps" || component.Step == installerplan.ComponentRashin {
+		if component.Group == "ryoku-apps" || component.Step == installerplan.ComponentRashin ||
+			(component.Step == installerplan.StepGaming && !component.NeedsNetwork) {
 			packages = append(packages, component.Packages...)
 		}
 	}
@@ -1852,6 +1853,9 @@ func translatedEditionPackages(path string, packages []string) ([]string, error)
 		default:
 			translated = append(translated, strings.Fields(fields[1])...)
 		}
+		if repository := voidRepositoryPackage(fields[3]); repository != "" {
+			translated = append(translated, repository)
+		}
 	}
 	for pkg := range wanted {
 		if !found[pkg] {
@@ -1859,6 +1863,19 @@ func translatedEditionPackages(path string, packages []string) ([]string, error)
 		}
 	}
 	return uniquePackages(translated), nil
+}
+
+func voidRepositoryPackage(note string) string {
+	switch note {
+	case "repo=multilib":
+		return "void-repo-multilib"
+	case "repo=nonfree":
+		return "void-repo-nonfree"
+	case "repo=multilib-nonfree":
+		return "void-repo-multilib-nonfree"
+	default:
+		return ""
+	}
 }
 
 func (e *engine) readEditionPackages(edition string) ([]string, error) {
@@ -1999,12 +2016,12 @@ func stepCachyosLayer(e *engine) error {
 		e.say(i18n.Tf("DRYRUN: probe %s", cachyosMirrorDB))
 	} else {
 		if !cachyosV3Supported() {
-			e.say(i18n.T("CachyOS layer skipped: this CPU lacks x86-64-v3 support. Install it later from Ryostore > CachyOS Layer."))
+			e.say(i18n.T("Gaming with CachyOS skipped: this CPU lacks x86-64-v3 support. Run the installer again with --cachyos-layer on a supported machine."))
 			return nil
 		}
 		client := &http.Client{Timeout: 8 * time.Second}
 		if !cachyosMirrorReachable(client) {
-			e.say(i18n.T("CachyOS layer skipped: the CachyOS mirror is unreachable. Try again from Ryostore > CachyOS Layer."))
+			e.say(i18n.T("Gaming with CachyOS skipped: the CachyOS mirror is unreachable. Run the installer again with --cachyos-layer when the network is available."))
 			return nil
 		}
 	}
@@ -2023,7 +2040,20 @@ func stepCachyosLayer(e *engine) error {
 	}
 	args := []string{"pacman", "-Syu", "--needed", "--noconfirm"}
 	args = append(args, availability.Component.Packages...)
-	return e.sudo(args...)
+	if err := e.sudo(args...); err != nil {
+		return err
+	}
+	installCachyosNvidiaModule(e)
+	return nil
+}
+
+func installCachyosNvidiaModule(e *engine) {
+	if !e.packageInstalled("nvidia-open") {
+		return
+	}
+	if err := e.sudo("pacman", "-S", "--needed", "--noconfirm", "linux-cachyos-nvidia-open"); err != nil {
+		e.say(i18n.T("warning: the CachyOS kernel has no NVIDIA module; boot the Arch kernel until linux-cachyos-nvidia-open can be installed"))
+	}
 }
 
 func installPackagePlan(e *engine, d *distro, pkgs []string) error {

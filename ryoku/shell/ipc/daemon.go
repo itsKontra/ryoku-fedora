@@ -113,14 +113,16 @@ type daemon struct {
 	sup          map[string]bool      // components that already have a supervisor goroutine
 	proc         map[string]*exec.Cmd // current live process per component
 	paintSig     chan struct{}        // coalescing wake for the palette/border worker
-	stageSig     chan struct{}        // coalescing wake for the unified stage worker
-	stageForce   atomic.Bool          // a pending forced regenerate (effect/quality change, refresh, re-cut)
-	stageGen     atomic.Bool          // a pending enable: reuse an existing cut, else generate
-	stageBusy    atomic.Bool          // a cut/inpaint is in flight (for the status/topic)
-	stageNotice  atomic.Value         // why the last reconcile could not produce a cut ("" when fine)
-	ledsSig      chan struct{}        // coalescing wake for the OpenRGB worker
-	widgetSig    chan struct{}        // coalescing wake for the widget-occupancy gate
-	guardKick    chan struct{}        // coalescing wake for the qylock fallback-guard watcher
+	stageSig     chan struct{}        // coalescing wake for the Stage publish worker
+	stageJobMu   sync.Mutex
+	stageJob     *stageJobRun
+	stageLast    *stageJobResult
+	stageJobNext int64
+	ledsSig      chan struct{} // coalescing wake for the OpenRGB worker
+	widgetSig    chan struct{} // coalescing wake for the widget-occupancy gate
+	guardKick    chan struct{} // coalescing wake for the qylock fallback-guard watcher
+	parkSig      chan struct{} // coalescing wake for palette idle deadlines and saver changes
+	sunSig       chan struct{} // wakes the sun-mode worker on knob/window changes
 	quit         chan struct{}
 	closed       bool
 	ln           net.Listener
@@ -175,6 +177,13 @@ func (d *daemon) currentSleepCycle() *sleepCycle {
 	d.sleepMu.RLock()
 	defer d.sleepMu.RUnlock()
 	return d.sleep
+}
+
+func (d *daemon) kickQylockGuardWatcher() {
+	select {
+	case d.guardKick <- struct{}{}:
+	default:
+	}
 }
 
 func validSuspendToken(token string) bool {
@@ -253,6 +262,7 @@ func (d *daemon) setSleepCycle(cycle *sleepCycle) {
 	d.sleepMu.Lock()
 	d.sleep = cycle
 	d.sleepMu.Unlock()
+	d.kickQylockGuardWatcher()
 }
 
 func runDaemon() error {
@@ -303,6 +313,8 @@ func runDaemon() error {
 		ledsSig:     make(chan struct{}, 1),
 		widgetSig:   make(chan struct{}, 1),
 		guardKick:   make(chan struct{}, 1),
+		parkSig:     make(chan struct{}, 1),
+		sunSig:      make(chan struct{}, 1),
 		quit:        make(chan struct{}),
 		gateWant:    map[string]bool{},
 		gateWake:    map[string]chan struct{}{},
@@ -437,6 +449,7 @@ func setupQmlImportPath() {
 // components.
 func (d *daemon) bootstrap() {
 	d.startSettings()
+	d.startPresence()
 	d.startKeypress()
 	d.startRecord()
 	d.startMouseMap()
@@ -923,13 +936,27 @@ const jemallocConf = "narenas:2,background_thread:true,dirty_decay_ms:5000,muzzy
 // qsEnv is the environment for a supervised quickshell process: the daemon's own
 // env (which carries the QML import path setupQmlImportPath exports) plus the
 // jemalloc tuning, unless the user already pinned MALLOC_CONF.
+//
+// It also turns off Qt's frame-callback timeout. The compositor sends a hidden
+// surface (the overview backdrop, anything under a fullscreen window, a locked
+// or powered-off screen) one frame callback about once a second. After 100 ms
+// without one Qt marks the window unexposed, and each late callback exposes it
+// again, which rebuilds its swapchain and redraws the same frame: a full-screen
+// render every second, forever, for nothing. Without the timeout a hidden
+// surface with nothing new to draw stays quiet, and one that does still paces
+// itself on the compositor's callbacks.
 func qsEnv() []string {
 	env := nomarchyEnv()
 	if os.Getenv("MALLOC_CONF") == "" {
 		env = append(env, "MALLOC_CONF="+jemallocConf)
 	}
+	if _, set := os.LookupEnv(frameCallbackTimeoutEnv); !set {
+		env = append(env, frameCallbackTimeoutEnv+"=0")
+	}
 	return env
 }
+
+const frameCallbackTimeoutEnv = "QT_WAYLAND_FRAME_CALLBACK_TIMEOUT"
 
 // surfaceLog is where a supervised surface's stderr goes, one file per component
 // so a crash on start is still readable after the respawn.
@@ -1222,12 +1249,6 @@ func (d *daemon) handle(conn net.Conn) {
 		d.serveCalls(conn, r, cmd)
 		return
 	}
-	// A clipboard capture helper streams new selection bytes after its header
-	// line, so they never reach a command line.
-	if strings.HasPrefix(cmd, "clip-ingest ") {
-		fmt.Fprintln(conn, d.clipIngest(cmd, r))
-		return
-	}
 	if strings.HasPrefix(cmd, "clip-copy ") {
 		fmt.Fprintln(conn, d.clipCopy(cmd))
 		return
@@ -1399,12 +1420,16 @@ func (d *daemon) dispatch(line string) string {
 			if args[1] != lockSessionID() {
 				return "err lock: requested login1 session is not owned by this daemon"
 			}
-			return lockSession()
+			reply := lockSession()
+			d.kickQylockGuardWatcher()
+			return reply
 		}
 		if len(args) != 0 {
 			return "err lock: expected no arguments, status, or session <id>"
 		}
-		return lockSession()
+		reply := lockSession()
+		d.kickQylockGuardWatcher()
+		return reply
 	case "unlock-prepare":
 		if len(args) != 2 || args[0] != "session" {
 			return "err unlock-prepare: expected session <id>"
@@ -1419,10 +1444,7 @@ func (d *daemon) dispatch(line string) string {
 		if err := cycle.prepareUnlock(); err != nil {
 			return "err unlock-prepare: " + err.Error()
 		}
-		select {
-		case d.guardKick <- struct{}{}:
-		default:
-		}
+		d.kickQylockGuardWatcher()
 		return "ok"
 	case "sleep-ready":
 		if len(args) != 0 {
@@ -1483,36 +1505,76 @@ func (d *daemon) dispatch(line string) string {
 		}
 		return "err hub: expected open [section] or close"
 	case "stage":
-		// One verb surface for Ryostage (docs/stage.md): set-effect records the
-		// three-way effect per wallpaper; set-layer applies a layer's arrangement
-		// flags (enabled/front/depth); add-layer / cut-layer / remove-layer manage
-		// the manual layers; refresh forces a re-cut; cancel kills a running engine
-		// child; clear drops the current wall's generated artifacts; status
-		// snapshots the topic; models proxies the engine catalogue. QML normally
-		// subscribes to the `stage` topic; these verbs carry intent the other way.
-		if len(args) == 0 {
+		stageLine, wall, scoped := splitStageWall(line)
+		stageFields := strings.Fields(stageLine)
+		if len(stageFields) < 2 {
 			return "err stage: expected a verb"
 		}
-		// Trailing path / json arguments may contain spaces, so recover them from
-		// the raw line by fixed-field split instead of the whitespace args, which
-		// would truncate at the first space.
+		args = stageFields[1:]
+		if !scoped {
+			wall = d.currentWall()
+		}
 		switch args[0] {
 		case "set-effect":
-			if len(args) < 2 {
-				return "err stage set-effect: expected off|depth|parallax"
+			if len(args) != 2 {
+				return "err stage set-effect: expected off|depth|parallax|spatial"
 			}
-			eff := stageEffect(args[1])
-			if eff != stageEffectOff && eff != stageEffectDepth && eff != stageEffectParallax {
-				return "err stage set-effect: expected off|depth|parallax"
+			effect := stageEffect(args[1])
+			if effect != stageEffectOff && effect != stageEffectDepth &&
+				effect != stageEffectParallax && effect != stageEffectSpatial {
+				return "err stage set-effect: expected off|depth|parallax|spatial"
 			}
-			d.stageSetEffect(eff)
+			d.stageSetEffect(wall, effect)
 			return "ok"
+		case "generate":
+			if len(args) != 1 {
+				return "err stage generate: takes no arguments"
+			}
+			reply, err := d.stageGenerate(wall)
+			if err != nil {
+				return "err stage generate: " + err.Error()
+			}
+			return reply
 		case "refresh":
-			d.stageForce.Store(true)
-			d.scheduleStage()
+			if len(args) > 2 {
+				return "err stage refresh: expected [cut|fill|depth]"
+			}
+			var step stageStep
+			if len(args) == 2 {
+				step = stageStep(args[1])
+				if step != stageStepCut && step != stageStepFill && step != stageStepDepth {
+					return "err stage refresh: expected [cut|fill|depth]"
+				}
+			}
+			if err := d.stageRefresh(wall, step); err != nil {
+				return "err stage refresh: " + err.Error()
+			}
 			return "ok"
+		case "depth-refresh":
+			if len(args) != 1 {
+				return "err stage depth-refresh: takes no arguments"
+			}
+			if err := d.stageRefresh(wall, stageStepDepth); err != nil {
+				return "err stage depth-refresh: " + err.Error()
+			}
+			return "ok"
+		case "depth-sample":
+			if len(args) < 7 {
+				return "err stage depth-sample: expected <wall> <nx> <ny> <width> <height> <fit>"
+			}
+			value, err := d.stageDepthSampleCall(
+				strings.Join(args[1:len(args)-5], " "),
+				args[len(args)-5], args[len(args)-4], args[len(args)-3],
+				args[len(args)-2], args[len(args)-1])
+			if err != nil {
+				return "err stage depth-sample: " + err.Error()
+			}
+			return "ok " + value
 		case "cancel":
-			stageCancel()
+			if len(args) > 2 || (len(args) == 2 && args[1] != "--force") {
+				return "err stage cancel: expected [--force]"
+			}
+			d.stageCancel(len(args) == 2)
 			return "ok"
 		case "status":
 			return d.stageStatusJSON()
@@ -1522,16 +1584,31 @@ func (d *daemon) dispatch(line string) string {
 			if len(args) < 2 {
 				return "err stage cut-layer: expected a path"
 			}
-			path, err := d.stageCutLayer(restField(line, 3))
-			if err != nil {
+			if err := d.stageCutLayer(wall, restField(stageLine, 3)); err != nil {
 				return "err stage cut-layer: " + err.Error()
 			}
-			return "ok " + path
+			return "ok"
+		case "cut-region":
+			if len(args) != 5 {
+				return "err stage cut-region: expected <nx> <ny> <nw> <nh>"
+			}
+			var region [4]float64
+			for i, value := range args[1:] {
+				parsed, err := strconv.ParseFloat(value, 64)
+				if err != nil {
+					return "err stage cut-region: expected <nx> <ny> <nw> <nh>"
+				}
+				region[i] = parsed
+			}
+			if err := d.stageCutRegion(wall, region); err != nil {
+				return "err stage cut-region: " + err.Error()
+			}
+			return "ok"
 		case "set-layer":
 			if len(args) < 3 {
 				return "err stage set-layer: expected <index> <json>"
 			}
-			if err := d.stageSetLayer(args[1], restField(line, 4)); err != nil {
+			if err := d.stageSetLayer(wall, args[1], restField(stageLine, 4)); err != nil {
 				return "err stage set-layer: " + err.Error()
 			}
 			return "ok"
@@ -1539,21 +1616,24 @@ func (d *daemon) dispatch(line string) string {
 			if len(args) < 2 {
 				return "err stage add-layer: expected a path"
 			}
-			path, err := d.stageAddLayer(restField(line, 3))
+			path, err := d.stageAddLayer(wall, restField(stageLine, 3))
 			if err != nil {
 				return "err stage add-layer: " + err.Error()
 			}
 			return "ok " + path
 		case "remove-layer":
-			if len(args) < 2 {
+			if len(args) != 2 {
 				return "err stage remove-layer: expected an index"
 			}
-			if err := d.stageRemoveLayer(args[1]); err != nil {
+			if err := d.stageRemoveLayer(wall, args[1]); err != nil {
 				return "err stage remove-layer: " + err.Error()
 			}
 			return "ok"
 		case "clear":
-			d.stageClear()
+			if len(args) != 1 {
+				return "err stage clear: takes no arguments"
+			}
+			d.stageClear(wall)
 			return "ok"
 		}
 		return "err stage: unknown verb " + args[0]

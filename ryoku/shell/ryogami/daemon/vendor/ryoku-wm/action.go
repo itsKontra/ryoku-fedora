@@ -89,6 +89,11 @@ const (
 	// cannot re-assert answers with an error its caller ignores.
 	ActionCursorReassert Action = "cursor.reassert"
 
+	// ActionCursorVisibility is a transient capture guard. "hidden" removes
+	// the pointer from the composed frame and "visible" restores it; the action
+	// prints the previous state so callers can restore exactly what they found.
+	ActionCursorVisibility Action = "cursor.visibility"
+
 	// Transient live overrides, not persisted settings: the launcher suppresses
 	// focus-follows-mouse while it is open and restores it on close.
 	// ActionFocusFollowsMouse prints the PREVIOUS value so the caller can hand
@@ -163,7 +168,7 @@ func (a Action) Capability() Capability {
 		return CapCursorSet
 	case ActionBorderColors:
 		return CapPaletteBorder
-	case ActionFocusFollowsMouse, ActionGameMode:
+	case ActionFocusFollowsMouse, ActionGameMode, ActionCursorVisibility:
 		return CapLiveConfigEval
 	case ActionScreenShader:
 		return CapScreenShader

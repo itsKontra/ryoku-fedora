@@ -9,12 +9,20 @@ legacy_pid=""
 policy_pid=""
 lid_changer_pid=""
 session_probe_pid=""
+daemon_test_pid=""
+monitor_pids_file="$tmp/monitor-pids"
 cleanup() {
   [[ -z $holder ]] || kill "$holder" 2>/dev/null || true
   [[ -z $legacy_pid ]] || kill "$legacy_pid" 2>/dev/null || true
   [[ -z $policy_pid ]] || kill "$policy_pid" 2>/dev/null || true
   [[ -z $lid_changer_pid ]] || kill "$lid_changer_pid" 2>/dev/null || true
   [[ -z $session_probe_pid ]] || kill "$session_probe_pid" 2>/dev/null || true
+  [[ -z $daemon_test_pid ]] || kill "$daemon_test_pid" 2>/dev/null || true
+  if [[ -r $monitor_pids_file ]]; then
+    while read -r child parent; do
+      kill "$child" "$parent" 2>/dev/null || true
+    done <"$monitor_pids_file"
+  fi
   rm -rf "$tmp"
 }
 trap cleanup EXIT
@@ -113,6 +121,11 @@ EOF
 cat >"$bin/busctl" <<'EOF'
 #!/usr/bin/env bash
 if [[ $* == *ListInhibitors* ]]; then
+  if [[ ${INHIBIT_ACCEPT_STATE:-0} == 1 ]] &&
+     read -r pid <"$RYOKU_CLAMSHELL_STATE"; then
+    printf '{"type":"a(ssssuu)","data":[[["handle-lid-switch","ryoku-clamshell","test","block",%s,%s]]]}\n' "$UID" "$pid"
+    exit 0
+  fi
   if [[ -n ${INHIBIT_JSON:-} ]]; then
     printf '%s\n' "$INHIBIT_JSON"
   else
@@ -167,6 +180,7 @@ reset_case() {
   unset UPOWER_LID_STATE || true
   unset RYOKU_SHELL_BLOCK_DIR || true
   unset RYOKU_LID_EDGE_SOURCE || true
+  unset INHIBIT_ACCEPT_STATE || true
 }
 run_helper() { "$helper" "$@" >"$tmp/helper.out" 2>&1; }
 expect_events() {
@@ -712,6 +726,75 @@ kill "$session_probe_pid"
 wait "$session_probe_pid" 2>/dev/null || true
 session_probe_pid=""
 rm -f "$state" "$activity_state" "$event_fifo"
+
+# Monitor exits normally publish into the event FIFO, so recovery does not wait
+# for the silent-death fallback. A SIGKILL still gets noticed at that deadline.
+cat >"$bin/dbus-monitor" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' 'signal sender=org.freedesktop.DBus -> destination=:1.1 interface=org.freedesktop.DBus; member=NameAcquired'
+exec sleep infinity
+EOF
+cat >"$bin/udevadm" <<'EOF'
+#!/usr/bin/env bash
+printf '%s %s\n' "$BASHPID" "$PPID" >>"$CLAMSHELL_MONITOR_PIDS"
+if [[ ${CLAMSHELL_UDEV_MODE:-} == announced ]] &&
+   [[ ! -e $CLAMSHELL_UDEV_ONCE ]]; then
+  : >"$CLAMSHELL_UDEV_ONCE"
+  exit 0
+fi
+exec sleep infinity
+EOF
+chmod +x "$bin/dbus-monitor" "$bin/udevadm"
+
+wait_for_monitor_count() {
+  local wanted=$1 attempts
+  for attempts in {1..120}; do
+    [[ -r $monitor_pids_file ]] &&
+      [[ $(wc -l <"$monitor_pids_file") -ge $wanted ]] && return 0
+    sleep 0.05
+  done
+  return 1
+}
+
+reset_case
+: >"$monitor_pids_file"
+export INHIBIT_ACCEPT_STATE=1
+export CLAMSHELL_MONITOR_PIDS="$monitor_pids_file"
+export CLAMSHELL_UDEV_MODE=announced
+export CLAMSHELL_UDEV_ONCE="$tmp/udev-announced"
+RYOKU_CLAMSHELL_MONITOR_FALLBACK=30 "$helper" daemon >"$tmp/daemon-announced.out" 2>&1 &
+daemon_test_pid=$!
+wait_for_monitor_count 2 || {
+  cat "$tmp/daemon-announced.out" >&2
+  printf 'announced hardware monitor exit waited for the fallback deadline\n' >&2
+  exit 1
+}
+kill "$daemon_test_pid" 2>/dev/null || true
+wait "$daemon_test_pid" 2>/dev/null || true
+daemon_test_pid=""
+
+reset_case
+: >"$monitor_pids_file"
+export INHIBIT_ACCEPT_STATE=1
+export CLAMSHELL_UDEV_MODE=blocked
+RYOKU_CLAMSHELL_MONITOR_FALLBACK=1 "$helper" daemon >"$tmp/daemon-silent.out" 2>&1 &
+daemon_test_pid=$!
+wait_for_monitor_count 1 || {
+  cat "$tmp/daemon-silent.out" >&2
+  printf 'hardware monitor did not start for the silent-exit case\n' >&2
+  exit 1
+}
+read -r silent_child silent_parent <"$monitor_pids_file"
+kill -KILL "$silent_parent" "$silent_child" 2>/dev/null || true
+wait_for_monitor_count 2 || {
+  cat "$tmp/daemon-silent.out" >&2
+  printf 'silently killed hardware monitor missed its fallback deadline\n' >&2
+  exit 1
+}
+kill "$daemon_test_pid" 2>/dev/null || true
+wait "$daemon_test_pid" 2>/dev/null || true
+daemon_test_pid=""
+unset CLAMSHELL_UDEV_MODE CLAMSHELL_UDEV_ONCE CLAMSHELL_MONITOR_PIDS INHIBIT_ACCEPT_STATE
 
 # `stop` adopts a pre-upgrade daemon that has no PID state file, using the
 # exact current-user daemon command line rather than killing unrelated jobs.

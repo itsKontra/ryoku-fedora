@@ -12,6 +12,12 @@ Item {
     required property string category
     required property string wornId
     required property var shippedDesigns
+    property bool onlySubshells: false
+    property string browseCategory: gallery.category
+    readonly property var subshellIds: ["gokko", "caelestia", "tansu", "python"]
+    function isSubshellStyle(id) {
+        return gallery.subshellIds.indexOf(String(id || "")) >= 0;
+    }
     property var catalogueDesigns: []
     readonly property string cardObjectPrefix: gallery.category === "barstyles"
         ? "bar-style-" : "store-design-" + gallery.category + "-"
@@ -38,6 +44,7 @@ Item {
             unavailableReason: "",
             requiredWindowManager: "",
             downloadPaused: false,
+            resourceTier: entry.resourceTier || "",
             downloadPauseReason: ""
         };
     }
@@ -61,11 +68,11 @@ Item {
             seen[item.id] = true;
             out.push(item);
         }
-        return out;
+        return out.filter(card => gallery.isSubshellStyle(card.id) === gallery.onlySubshells);
     }
 
     function browse() {
-        Quickshell.execDetached(["ryostore", "open", gallery.category]);
+        Quickshell.execDetached(["ryostore", "open", gallery.browseCategory]);
     }
 
     function updateDesign(id) {
@@ -105,6 +112,7 @@ Item {
                             unavailableReason: item.unavailableReason || "",
                             requiredWindowManager: item.requiredWindowManager || "",
                             downloadPaused: item.downloadPaused === true,
+                            resourceTier: (item.metadata && item.metadata.resourceTier) || "",
                             downloadPauseReason: item.downloadPauseReason || ""
                         }));
                 } catch (e) {
@@ -142,6 +150,7 @@ Item {
             width: parent.width
             spacing: Tokens.s2
             readonly property int perRow: Math.max(2, Math.floor((width + Tokens.s2) / 210))
+            // Warning markers fit the card corner, so every tile can be compact.
             readonly property int tileH: 64
             readonly property int rowCount: Math.max(1, Math.ceil(cardRepeater.count / perRow))
             height: rowCount * tileH + (rowCount - 1) * spacing
@@ -159,6 +168,10 @@ Item {
                     readonly property bool updatable: designCard.modelData.updateAvailable === true
                         && designCard.modelData.version.length > 0
                         && !designCard.modelData.unavailable && !designCard.modelData.downloadPaused
+                    readonly property bool heavy: designCard.modelData.resourceTier === "heavy"
+                        || (gallery.category === "barstyles"
+                            && ["ricelin", "sukunabikona"].indexOf(
+                                String(designCard.modelData.id || "")) !== -1)
                     readonly property string subText: {
                         if (designCard.updatable) {
                             const current = designCard.modelData.installedVersion.length > 0
@@ -190,6 +203,30 @@ Item {
                     border.color: designCard.worn ? Tokens.bone : Tokens.line
                     objectName: gallery.cardObjectPrefix + designCard.modelData.id
 
+                    // Small pale marker for more resource-intensive designs.
+                    // Give selected (bone-coloured) tiles a dark backdrop.
+                    Rectangle {
+                        id: resourceMark
+                        visible: designCard.heavy
+                        width: 18
+                        height: 18
+                        radius: 3
+                        color: designCard.worn ? Tokens.inkOnBone : "transparent"
+                        anchors.top: parent.top
+                        anchors.right: parent.right
+                        anchors.topMargin: Tokens.s2
+                        anchors.rightMargin: Tokens.s2
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "▲"
+                            color: Tokens.bone
+                            font.family: Tokens.mono
+                            font.pixelSize: 10
+                            font.weight: Font.DemiBold
+                        }
+                    }
+
                     MouseArea {
                         id: cardMouse
                         anchors.fill: parent
@@ -202,7 +239,8 @@ Item {
                     Column {
                         anchors {
                             left: parent.left
-                            right: updateButton.visible ? updateButton.left : parent.right
+                            right: updateButton.visible ? updateButton.left
+                                : (resourceMark.visible ? resourceMark.left : parent.right)
                             margins: Tokens.s3
                             rightMargin: updateButton.visible ? Tokens.s2 : Tokens.s3
                             verticalCenter: parent.verticalCenter

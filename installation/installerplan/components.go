@@ -10,9 +10,9 @@ import (
 type ComponentStep string
 
 const (
-	ComponentApps         ComponentStep = "apps"
-	ComponentRashin       ComponentStep = "rashin"
-	ComponentCachyOSLayer ComponentStep = "cachyos-layer"
+	ComponentApps   ComponentStep = "apps"
+	ComponentRashin ComponentStep = "rashin"
+	StepGaming      ComponentStep = "gaming"
 )
 
 type Component struct {
@@ -84,7 +84,7 @@ func parseComponents(data []byte) ([]Component, error) {
 		if component.ID == "" || component.Label == "" || component.Group == "" || component.GroupLabel == "" {
 			return nil, fmt.Errorf("installer components line %d is incomplete", lineNo+1)
 		}
-		if component.Step != ComponentApps && component.Step != ComponentRashin && component.Step != ComponentCachyOSLayer {
+		if component.Step != ComponentApps && component.Step != ComponentRashin && component.Step != StepGaming {
 			return nil, fmt.Errorf("installer components line %d has unknown step %q", lineNo+1, component.Step)
 		}
 		if fields[6] != "on" && fields[6] != "off" {
@@ -208,6 +208,16 @@ func (p EditionPlan) Component(id string) (ComponentAvailability, bool) {
 	return ComponentAvailability{}, false
 }
 
+// GamingComponent returns the one gaming choice offered by this edition.
+func (p EditionPlan) GamingComponent() (ComponentAvailability, bool) {
+	for _, component := range p.components {
+		if component.Available && component.Component.Step == StepGaming {
+			return component, true
+		}
+	}
+	return ComponentAvailability{}, false
+}
+
 func (p EditionPlan) DefaultComponents() map[string]bool {
 	selected := map[string]bool{}
 	for _, availability := range p.components {
@@ -229,10 +239,14 @@ func componentSelected(availability ComponentAvailability, selected map[string]b
 func (p EditionPlan) DropComponentPackages(selected map[string]bool) []string {
 	var packages []string
 	for _, availability := range p.components {
-		if !availability.Available || !availability.Component.DefaultOn || componentSelected(availability, selected) {
+		component := availability.Component
+		// Offline gaming bundles are baked into their edition images even though
+		// the question defaults to No. The network-only Arch bundle is not.
+		dropWhenOff := component.DefaultOn || (component.Step == StepGaming && !component.NeedsNetwork)
+		if !availability.Available || !dropWhenOff || componentSelected(availability, selected) {
 			continue
 		}
-		packages = append(packages, availability.Component.Packages...)
+		packages = append(packages, component.Packages...)
 	}
 	return packages
 }

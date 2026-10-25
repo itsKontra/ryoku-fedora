@@ -10,7 +10,14 @@ guard=$repo/ryoku/lockscreen/sddm/ryoku-greeter-guard
 manifest=$repo/system/services/manifest.tsv
 payload=$repo/release/packages/ryoku-desktop/payload.sh
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+guard_pid=
+monitor_pid=
+cleanup() {
+  [ -z "$guard_pid" ] || kill "$guard_pid" 2>/dev/null || true
+  [ -z "$monitor_pid" ] || kill "$monitor_pid" 2>/dev/null || true
+  rm -rf "$tmp"
+}
+trap cleanup EXIT
 fail() { printf 'sddm-greeter-guard: %s\n' "$*" >&2; exit 1; }
 
 # delivery: one manifest row on both inits, shipped by the desktop payload.
@@ -50,6 +57,13 @@ once() {
 }
 restarts() { grep -c 'svc --system restart sddm' "$tmp/host" 2>/dev/null || true; }
 clean() { rm -rf "$tmp/state"; : >"$tmp/host"; : >"$tmp/logger"; }
+wait_for_restart() {
+  for _ in {1..100}; do
+    [ "$(restarts)" -ge 1 ] && return 0
+    sleep 0.05
+  done
+  return 1
+}
 
 # --- the greeter is up: nothing happens, no state is kept.
 clean; reset_proc; add_proc 600 sddm; add_proc 745 sddm-helper; add_proc 837 sddm-greeter-qt
@@ -103,5 +117,94 @@ rm -rf "$tmp/proc/745"
 [ "$(grep -c 'after 3 restarts this boot; leaving it' "$tmp/logger")" = 1 ] ||
   fail "giving up was not reported exactly once: $(cat "$tmp/logger")"
 grep -q 'sddm-helper-start-wayland/sddm.log' "$tmp/logger" || fail "the give-up report does not say where to look"
+
+# --- session signals trigger an immediate re-check, and the monitor is reaped
+# with the guard.
+cat >"$bin/dbus-monitor" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$BASHPID" >"$RYOKU_TEST_DBUS_PID"
+exec 3<>"$RYOKU_TEST_DBUS_EVENTS"
+while IFS= read -r event <&3; do
+  printf '%s\n' 'signal interface=org.freedesktop.login1.Manager; member=SessionRemoved'
+done
+STUB
+chmod +x "$bin/dbus-monitor"
+clean; reset_proc; add_proc 600 sddm; add_proc 745 sddm-helper
+mkfifo "$tmp/dbus-events"
+RYOKU_GREETER_GUARD_PROC="$tmp/proc" \
+  RYOKU_GREETER_GUARD_STATE="$tmp/state" \
+  RYOKU_GREETER_GUARD_HOST="$bin/ryoku-host" \
+  RYOKU_GREETER_GUARD_DBUS_MONITOR="$bin/dbus-monitor" \
+  RYOKU_GREETER_GUARD_GRACE=0 \
+  RYOKU_GREETER_GUARD_INTERVAL=0.05 \
+  RYOKU_GREETER_GUARD_FALLBACK=30 \
+  RYOKU_TEST_DBUS_EVENTS="$tmp/dbus-events" \
+  RYOKU_TEST_DBUS_PID="$tmp/dbus-pid" \
+  RYOKU_TEST_HOST_LOG="$tmp/host" \
+  RYOKU_TEST_LOGGER_LOG="$tmp/logger" \
+  PATH="$bin:$PATH" \
+  "$guard" >"$tmp/event-guard.out" 2>&1 &
+guard_pid=$!
+for _ in {1..40}; do [ -r "$tmp/dbus-pid" ] && break; sleep 0.05; done
+[ -r "$tmp/dbus-pid" ] || fail "the login1 event monitor did not start"
+monitor_pid=$(cat "$tmp/dbus-pid")
+rm -rf "$tmp/proc/745"
+printf 'removed\nremoved\n' >"$tmp/dbus-events"
+wait_for_restart || fail "a login1 session event did not wake the guard"
+kill "$guard_pid"
+wait "$guard_pid" 2>/dev/null || true
+guard_pid=
+kill -0 "$monitor_pid" 2>/dev/null && fail "the login1 event monitor leaked after guard exit"
+monitor_pid=
+
+# --- after a restart, keep the short cadence long enough to catch a new
+# greeter that disappears before login1 can publish a session signal.
+clean; reset_proc; add_proc 600 sddm; add_proc 745 sddm-helper
+mkdir -p "$tmp/state"
+printf '%s\n' "$(date +%s)" >"$tmp/state/restarted-at"
+rm -f "$tmp/dbus-pid"
+RYOKU_GREETER_GUARD_PROC="$tmp/proc" \
+  RYOKU_GREETER_GUARD_STATE="$tmp/state" \
+  RYOKU_GREETER_GUARD_HOST="$bin/ryoku-host" \
+  RYOKU_GREETER_GUARD_DBUS_MONITOR="$bin/dbus-monitor" \
+  RYOKU_GREETER_GUARD_GRACE=1 \
+  RYOKU_GREETER_GUARD_INTERVAL=0.05 \
+  RYOKU_GREETER_GUARD_FALLBACK=30 \
+  RYOKU_TEST_DBUS_EVENTS="$tmp/dbus-events" \
+  RYOKU_TEST_DBUS_PID="$tmp/dbus-pid" \
+  RYOKU_TEST_HOST_LOG="$tmp/host" \
+  RYOKU_TEST_LOGGER_LOG="$tmp/logger" \
+  PATH="$bin:$PATH" \
+  "$guard" >"$tmp/restart-grace.out" 2>&1 &
+guard_pid=$!
+for _ in {1..40}; do [ -r "$tmp/dbus-pid" ] && break; sleep 0.05; done
+[ -r "$tmp/dbus-pid" ] || fail "the post-restart login1 monitor did not start"
+monitor_pid=$(cat "$tmp/dbus-pid")
+rm -rf "$tmp/proc/745"
+wait_for_restart || fail "post-restart grace fell back to the long check interval"
+kill "$guard_pid"
+wait "$guard_pid" 2>/dev/null || true
+guard_pid=
+kill -0 "$monitor_pid" 2>/dev/null && fail "the post-restart login1 monitor leaked"
+monitor_pid=
+
+# --- without dbus-monitor the original interval poll remains the fallback.
+clean; reset_proc; add_proc 600 sddm; add_proc 745 sddm-helper
+RYOKU_GREETER_GUARD_PROC="$tmp/proc" \
+  RYOKU_GREETER_GUARD_STATE="$tmp/state" \
+  RYOKU_GREETER_GUARD_HOST="$bin/ryoku-host" \
+  RYOKU_GREETER_GUARD_DBUS_MONITOR="$tmp/no-dbus-monitor" \
+  RYOKU_GREETER_GUARD_GRACE=0 \
+  RYOKU_GREETER_GUARD_INTERVAL=0.05 \
+  RYOKU_TEST_HOST_LOG="$tmp/host" \
+  RYOKU_TEST_LOGGER_LOG="$tmp/logger" \
+  PATH="$bin:$PATH" \
+  "$guard" >"$tmp/poll-guard.out" 2>&1 &
+guard_pid=$!
+rm -rf "$tmp/proc/745"
+wait_for_restart || fail "the no-dbus-monitor fallback stopped polling"
+kill "$guard_pid"
+wait "$guard_pid" 2>/dev/null || true
+guard_pid=
 
 printf 'sddm-greeter-guard: PASS\n'

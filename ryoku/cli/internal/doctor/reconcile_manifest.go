@@ -45,8 +45,12 @@ var (
 	installManifestPkgs = func(pkgs []string) {
 		_ = sys.Sudo(append([]string{"ryoku-host", "pkg", "install"}, pkgs...)...)
 	}
+	// AUR builds run as the user and the helper escalates only its pacman step.
+	// Through sudo that step landed on sudo's own pty, where the credential the
+	// update keeps alive does not apply, so it prompted unseen after the builds
+	// and timed out.
 	installManifestAUR = func(pkgs []string) {
-		_ = sys.Sudo(append([]string{"ryoku-host", "pkg", "install", "--aur"}, pkgs...)...)
+		_ = host.Default().Package(append([]string{"install", "--aur"}, pkgs...))
 	}
 )
 
@@ -80,7 +84,7 @@ func reconcileManifest(checkOnly bool) recResult {
 	if err != nil {
 		return warnRes(i18n.T("could not read the installed set: %v"), err)
 	}
-	installed = updater.SatisfiedByProviders(served, installed)
+	installed, provided := updater.SatisfiedByProviders(served, installed)
 	var prev *ryokumanifest.Manifest
 	prevPresent := map[string]bool{}
 	if applied != nil {
@@ -102,8 +106,10 @@ func reconcileManifest(checkOnly bool) recResult {
 	unavailable = union(unavailable, skipped)
 
 	if checkOnly {
-		return withUnavailablePackages(wouldRes("%s", planSummary(manager, &plan)).
-			withFix(i18n.T("run `ryoku doctor` (or `ryoku update`) to apply")), unavailable)
+		return withUnavailablePackages(withProvidedManifestPackages(
+			wouldRes("%s", planSummary(manager, &plan)).
+				withFix(i18n.T("run `ryoku doctor` (or `ryoku update`) to apply")),
+			provided), unavailable)
 	}
 
 	// The provisioned lane (the deliver-once apps) is reconcileShippedApps'
@@ -144,7 +150,9 @@ func reconcileManifest(checkOnly bool) recResult {
 	// "never delivered" and reinstalled on a later run.
 	if len(missed) == 0 && len(aurMissed) == 0 {
 		if err := updater.SaveApplied(served, updater.StickyPresent(applied, served, installed)); err != nil {
-			return withUnavailablePackages(warnRes(i18n.T("converged, but could not save the manifest: %v"), err), unavailable)
+			return withUnavailablePackages(withProvidedManifestPackages(
+				warnRes(i18n.T("converged, but could not save the manifest: %v"), err),
+				provided), unavailable)
 		}
 	}
 
@@ -176,7 +184,20 @@ func reconcileManifest(checkOnly bool) recResult {
 	default:
 		result = okRes(i18n.T("the box matches the %s manifest"), served.Release)
 	}
-	return withUnavailablePackages(result, unavailable)
+	return withUnavailablePackages(withProvidedManifestPackages(result, provided), unavailable)
+}
+
+func withProvidedManifestPackages(result recResult, packages []string) recResult {
+	if len(packages) == 0 {
+		return result
+	}
+	detail := fmt.Sprintf(i18n.T("already provided by installed packages: %s"), strings.Join(packages, ", "))
+	if result.detail == "" {
+		result.detail = detail
+	} else {
+		result.detail += "; " + detail
+	}
+	return result
 }
 
 // planSummary renders a check-only plan as one line, so `ryoku doctor --check`
@@ -220,7 +241,7 @@ func manifestVerify() (updater.VerifyReport, *ryokumanifest.Manifest, error) {
 	if err != nil {
 		return updater.VerifyReport{}, nil, err
 	}
-	installed = updater.SatisfiedByProviders(served, installed)
+	installed, _ = updater.SatisfiedByProviders(served, installed)
 	explicit, err := updater.PacmanExplicit()
 	if err != nil {
 		return updater.VerifyReport{}, nil, err

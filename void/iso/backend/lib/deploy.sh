@@ -73,13 +73,16 @@ void_deploy_user() {
     'command -v ryoku-rashin >/dev/null 2>&1 || exit 0; exec ryoku-rashin wire'
   ryoku_deploy_qylock
 
-  log 'provisioning Turnstile user services for %s' "$user"
-  run "$RYOKU_TARGET_CHROOT" /mnt chpst -u "$user:$user" \
-    env "HOME=/home/$user" "USER=$user" "LOGNAME=$user" "RYOKU_HOST_INIT=runit" \
-    ryoku-host session ensure --user
-  run "$RYOKU_TARGET_CHROOT" /mnt chpst -u "$user:$user" \
-    env "HOME=/home/$user" "USER=$user" "LOGNAME=$user" "RYOKU_HOST_INIT=runit" \
-    ryoku-host svc reconcile --user
+  local service_user
+  for service_user in "${RYOKU_ACCOUNT_NAMES[@]}"; do
+    log 'provisioning Turnstile user services for %s' "$service_user"
+    run "$RYOKU_TARGET_CHROOT" /mnt chpst -u "$service_user:$service_user" \
+      env "HOME=/home/$service_user" "USER=$service_user" "LOGNAME=$service_user" \
+      "RYOKU_HOST_INIT=runit" ryoku-host session ensure --user
+    run "$RYOKU_TARGET_CHROOT" /mnt chpst -u "$service_user:$service_user" \
+      env "HOME=/home/$service_user" "USER=$service_user" "LOGNAME=$service_user" \
+      "RYOKU_HOST_INIT=runit" ryoku-host svc reconcile --user
+  done
 }
 
 void_services() {

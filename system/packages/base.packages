@@ -132,6 +132,7 @@ qt6-5compat
 qt6-svg
 qt6-multimedia
 qt6-multimedia-ffmpeg
+qt6-quick3d
 gst-plugins-base
 gst-plugins-good
 gst-plugins-bad
@@ -258,7 +259,6 @@ zoxide
 # Ryoku shell (quickshell desktop), its runtime helpers, and the yazi file manager
 quickshell
 cava
-cliphist
 hyprpicker
 imagemagick
 # waifu2x-ncnn-vulkan: GPU AI upscaler behind ryoshot Beautify's HD export and

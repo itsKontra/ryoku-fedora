@@ -8,6 +8,7 @@ PACKAGES="$ROOT/void/packages"
 TABLE="$PACKAGES/translations.tsv"
 RESOLVE="$ROOT/system/packages/resolve"
 SRCPKGS="$PACKAGES/srcpkgs"
+COMPONENTS="$ROOT/installation/installerplan/components.tsv"
 MODE=${1:-}
 
 fail() { echo "void-packages: $*" >&2; exit 1; }
@@ -99,12 +100,32 @@ walk_closure ryoku-desktop-wayfire wayf_hard wayf_opt wayf_seen
 
 declare -A closure=() expected_lanes=()
 lane_order=(desktop dev system extra optional hyprland wayfire hardware:amd hardware:intel hardware:nvidia hardware:vm)
+gaming_arch=(
+	steam
+	lib32-mesa
+	lib32-vulkan-icd-loader
+	lib32-gcc-libs
+	lib32-libglvnd
+	lib32-libdrm
+	lib32-libva
+)
+gaming_packages=$(IFS=,; printf '%s' "${gaming_arch[*]}")
+gaming_row=$(awk -F '\t' '$1 == "void-gaming" {
+	if (++found > 1) exit 1
+	print $5 "|" $7 "|" $8 "|" $9 "|" $10
+}
+END { if (found != 1) exit 1 }' "$COMPONENTS") \
+	|| fail "installer plan must contain exactly one void-gaming component"
+[[ $gaming_row == "$gaming_packages|off|gaming|false|void" ]] \
+	|| fail "void-gaming must be Void-only, offline, default-off, and keep the expected package list"
 
 add_lane() {
 	local pkg=$1 lane=$2 current=${expected_lanes[$1]:-}
 	closure[$pkg]=1
 	[[ $current == *"|$lane|"* ]] || expected_lanes[$pkg]="$current|$lane|"
 }
+
+for pkg in "${gaming_arch[@]}"; do add_lane "$pkg" desktop; done
 
 boot_chain=(base base-devel linux linux-firmware mkinitcpio sudo btrfs-progs cryptsetup dosfstools efibootmgr limine plymouth snapper snap-pac limine-mkinitcpio-hook limine-snapper-sync)
 declare -A boot=()
@@ -145,8 +166,9 @@ add_lane ryoku-keyring desktop
 add_lane ryoku-palette-bridge desktop
 add_lane udev desktop
 for pkg in dualsensectl dbus hidapi libusb; do add_lane "$pkg" optional; done
-# ryoku-gpu-lib32 installs the 32-bit GPU baseline on demand for games.
-for pkg in lib32-mesa lib32-vulkan-icd-loader lib32-vulkan-nouveau; do add_lane "$pkg" optional; done
+# The GPU helper still requests Nouveau on demand; the gaming component owns
+# its baseline Mesa and Vulkan packages.
+add_lane lib32-vulkan-nouveau optional
 
 canonical_lanes() {
 	local encoded=$1 lane out=
@@ -311,11 +333,41 @@ both=$(check_resolve_output --lane desktop --lane dev)
 union=$(printf '%s\n%s\n' "$desktop" "$dev" | awk 'NF' | LC_ALL=C sort -u)
 [[ $both == "$union" ]] || fail "repeated --lane arguments do not resolve their union"
 grep -qxF fish-shell <<< "$desktop" || fail "desktop lane did not translate fish"
-! grep -q '^void-repo-' <<< "$desktop" || fail "desktop lane enabled an unnecessary Void repository"
 grep -qxF ryoku <<< "$desktop" || fail "desktop lane omitted an @repo package"
 grep -qxF prowl <<< "$desktop" || fail "desktop lane omitted a repo=ryoku package"
 grep -qxF gpk <<< "$desktop" || fail "desktop lane omitted the packaged gpk frontend"
 grep -qxF snapper <<< "$desktop" || fail "desktop lane omitted snapper"
+
+declare -A gaming_void=(
+	[steam]=steam
+	[lib32-mesa]=mesa-dri-32bit
+	[lib32-vulkan-icd-loader]=vulkan-loader-32bit
+	[lib32-gcc-libs]='libgcc-32bit libstdc++-32bit'
+	[lib32-libglvnd]=libglvnd-32bit
+	[lib32-libdrm]=libdrm-32bit
+	[lib32-libva]=libva-32bit
+)
+grep -qxF void-repo-nonfree <<< "$desktop" \
+	|| fail "Void gaming did not enable nonfree for Steam"
+grep -qxF void-repo-multilib <<< "$desktop" \
+	|| fail "Void gaming did not enable multilib for 32-bit libraries"
+
+gaming_drop_args=()
+for arch in "${gaming_arch[@]}"; do gaming_drop_args+=(--drop "$arch"); done
+desktop_no_gaming=$(check_resolve_output --lane desktop "${gaming_drop_args[@]}")
+for arch in "${gaming_arch[@]}"; do
+	single_drop=$(check_resolve_output --lane desktop --drop "$arch")
+	for package in ${gaming_void[$arch]}; do
+		grep -qxF "$package" <<< "$desktop" \
+			|| fail "Void gaming omitted $package translated from $arch"
+		! grep -qxF "$package" <<< "$desktop_no_gaming" \
+			|| fail "default-off Void gaming left $package installed"
+		! grep -qxF "$package" <<< "$single_drop" \
+			|| fail "--drop $arch left translated package $package"
+	done
+done
+! grep -q '^void-repo-' <<< "$desktop_no_gaming" \
+	|| fail "default-off Void gaming enabled an unnecessary Void repository"
 system=$(check_resolve_output --lane system)
 grep -qxF snapper <<< "$system" || fail "system lane omitted snapper"
 grep -qxF limine-snapper-sync <<< "$system" || fail "system lane omitted limine-snapper-sync"

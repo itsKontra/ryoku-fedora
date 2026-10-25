@@ -8,6 +8,7 @@ makedepends="gtk+3-devel libwebkit2gtk41-devel"
 depends="
  ryoku-shell>=${version}
  ryoku-hub>=${version}
+ ryoku-palette-bridge>=${version}
  ryoku-blobs>=${version}
  ryoku>=${version}
  ryoku-keyring
@@ -37,7 +38,6 @@ depends="
  yt-dlp
  wl-clipboard
  wl-clip-persist
- cliphist
  grim
  slurp
  cava
@@ -52,6 +52,7 @@ depends="
  curl
  qt6-multimedia
  qt6-declarative
+ qt6-quick3d
  zenity
  iw
  nftables

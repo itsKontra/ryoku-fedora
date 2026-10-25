@@ -5,9 +5,15 @@
 ### Added
 - **The script installer now uses the ISO install catalogue.** It offers the
   file manager, Rashin, Ryoku apps, required edition components, and the
-  optional CachyOS layer on plain Arch. Unattended runs can make the same
+  edition's optional Gaming component. Unattended runs can make the same
   choices with flags or environment variables, and omitted packages stay
   omitted on later updates.
+- **The script installer offers the same Gaming choice as each ISO.** Arch uses
+  `--cachyos-layer` for the network- and x86-64-v3-gated CachyOS kernel,
+  tuning, Steam, and Proton-CachyOS set. CachyOS and Void use `--gaming` or
+  `RYOKU_GAMING=1` for their native Steam bundles. The interactive plan reads
+  all three from the shared installer catalogue alongside its file manager,
+  Rashin, Ryoku apps, and required edition components.
 - **The browser step accepts None.** A machine that brings its own browser
   installs none of the three, and the default-browser step leaves the desktop
   role unset instead of pointing it at an absent package.

@@ -1767,15 +1767,6 @@
       "level": "internal"
     },
     {
-      "id": "ryoku.cliphist-thumbs.sh.refresh",
-      "group": "ryoku-internal",
-      "title": "Refresh clipboard thumbnails",
-      "command": "cliphist-thumbs.sh",
-      "description": "Builds safe cached thumbnails for clipboard images and removes thumbnails for expired history entries.",
-      "tool": "cliphist-thumbs.sh",
-      "level": "internal"
-    },
-    {
       "id": "ryoku.ryoku-restart-audio.restart",
       "group": "ryoku-internal",
       "title": "Restart the audio stack",
@@ -2050,6 +2041,24 @@
       "title": "Check wall power",
       "command": "ryoku-idle on-ac",
       "description": "Returns success when the machine is currently using external power.",
+      "tool": "ryoku-idle",
+      "level": "internal"
+    },
+    {
+      "id": "ryoku.ryoku-idle.brightness-dim",
+      "group": "ryoku-internal",
+      "title": "Dim idle display",
+      "command": "ryoku-idle brightness-dim",
+      "description": "Lowers the panel to at most 20% and records its exact pre-idle level once.",
+      "tool": "ryoku-idle",
+      "level": "internal"
+    },
+    {
+      "id": "ryoku.ryoku-idle.brightness-restore",
+      "group": "ryoku-internal",
+      "title": "Restore idle brightness",
+      "command": "ryoku-idle brightness-restore",
+      "description": "Restores the exact panel level saved by the active idle-dim transaction.",
       "tool": "ryoku-idle",
       "level": "internal"
     },

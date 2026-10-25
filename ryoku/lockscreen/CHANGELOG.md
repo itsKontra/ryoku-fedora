@@ -20,6 +20,39 @@
 - The built-in in-session clockwork lockscreen follows the global 12/24-hour preference, including AM/PM.
 
 ### Fixed
+- **The stock lock screen leaves cursor frames to the compositor.** Its SDDM
+  fallback cursor also ran under the in-session lock, repainting the scene for
+  every pointer event while the compositor drew a second software cursor. The
+  fallback now stays on the login screen, and the two 60-item clock rings update
+  once per second instead of rebuilding the full surface 60 times a second
+  (`qylock/themes/clockwork/orbital/Main.qml`,
+  `tests/lock-date-rollover.qml`).
+- **Sessions stop waiting once logind completes the DRM handoff.** SDDM's
+  wrapper starts the compositor as soon as the user session becomes foreground,
+  even if the retiring Weston process still exists. It keeps the bounded wait
+  while the greeter still owns the seat, preserving the hybrid-GPU protection
+  (`sddm/ryoku-wayland-session`,
+  `../../tests/wayland-session-settle.sh`).
+- **The stock lock screen's date follows Language & Region.** Its day, month
+  and 12-hour meridiem now use the selected regional-format locale. The
+  in-session clock keeps following the desktop's shared 12/24-hour setting,
+  while the sign-in screen uses its system locale by default
+  (`qylock/themes/clockwork/orbital/Main.qml`,
+  `qylock/quickshell-lockscreen/lock_shell.qml`, `tests/lock-time-format.qml`).
+- **The greeter guard waits on login1 instead of polling.** It checked the
+  greeter every five seconds for the life of the machine, a `sleep` launch
+  each time. It now blocks on one filtered `dbus-monitor` for login1's
+  SessionNew and SessionRemoved, checks every five seconds only while a
+  missing greeter's grace window or a restart's grace window is open, and
+  re-checks once a minute in case a signal was missed. Without `dbus-monitor`
+  it polls as before (`sddm/ryoku-greeter-guard`, `tests/sddm-greeter-guard.sh`).
+- **The greeter guard no longer forks for every process on the machine.** Each
+  5 s round read every `/proc/*/comm` through `tr`, twice, so a normal desktop
+  paid about 5,500 process launches a minute for a check that finds nothing to
+  do. The guard now reads them with shell builtins and touches its state
+  files only when SDDM really lost its greeter: zero launches per round on a
+  logged-in box, same rules, same restart cap (`sddm/ryoku-greeter-guard`,
+  `tests/sddm-greeter-guard.sh`).
 - **The lock screen's restart and shut down buttons work again on systemd.**
   Since the init seam they ran `loginctl reboot` and `loginctl poweroff`, verbs
   only elogind's loginctl has; systemd's answers "Unknown command verb" and the

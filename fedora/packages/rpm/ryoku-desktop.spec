@@ -22,6 +22,7 @@ Requires(post): ryoku = %{version}-%{release}
 Requires:       ryoku-shell = %{version}-%{release}
 Requires:       ryogami = %{version}-%{release}
 Requires:       ryoku-hub = %{version}-%{release}
+Requires:       ryoku-palette-bridge = %{version}-%{release}
 Requires:       ryoku-blobs = %{version}-%{release}
 Requires:       ryoku-extras = %{version}-%{release}
 Requires:       ryoku-keyring
@@ -41,6 +42,7 @@ Requires:       qt6-qtsvg
 Requires:       qt6-qtimageformats
 Requires:       qt6-qtmultimedia
 Requires:       qt6-qtdeclarative
+Requires:       qt6-qtquick3d
 Requires:       gtk3
 Requires:       webkit2gtk4.1
 Requires:       weston
@@ -54,7 +56,6 @@ Requires:       mpv
 Requires:       mpv-mpris
 Requires:       yt-dlp
 Requires:       wl-clipboard
-Requires:       cliphist
 Requires:       grim
 Requires:       slurp
 Requires:       cava
@@ -191,6 +192,7 @@ fi
 systemctl daemon-reload >/dev/null 2>&1 || :
 RYOKU_HOST_INIT=systemd /usr/bin/ryoku-host svc reconcile --system >/dev/null 2>&1 || :
 /usr/bin/ryoku-bluetooth-tune >/dev/null 2>&1 || :
+systemctl try-restart bluetooth.service >/dev/null 2>&1 || :
 /usr/bin/ryoku-wifi-regdom apply >/dev/null 2>&1 || :
 
 %posttrans

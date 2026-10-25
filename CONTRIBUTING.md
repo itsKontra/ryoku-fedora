@@ -144,24 +144,25 @@ repo-relative path lives under `release/media/`:
     Note: New: redesigned wallpaper picker | release/media/wallpaper.gif
 
 A note only reaches a release if its commit reaches the tag intact, so `main`
-advances by fast-forward from `unstable-dev`, and a release is the **Stable
-Release** workflow run on `main` (`bump_type: none` tags the version `main`
-carries). Never squash-merge into a release
-branch: squashing collapses commits and drops their notes.
+takes `unstable-dev` through a merge commit, never a squash, and a release is the
+**Stable Release** workflow run on `main` (`bump_type: none` tags the version
+`main` carries). Never squash-merge into a release branch: squashing collapses
+commits and drops their notes.
 
-Nothing is pushed to `main` except that fast-forward, and only when a release
-is ready: work and fixes go to `unstable-dev`. Every push there runs the
-**Testing gate**, which waits for all required checks and then records the
-commit in `channels/testing/checked.json`; testers on `ryoku track unstable`
-build that commit from source on their next `ryoku update`, about six minutes
-after the push. The package publishers run their own gate on the same checks
-before they upload the testing repositories, so a red check never reaches a
-channel. Wait for the Testing gate, not for the publishers. The `pre-push`
-hook refuses any other push to `main`; the release push names itself with
-`RYOKU_RELEASE_PUSH=1 git push origin unstable-dev:main`, and must still be a
-fast-forward onto a commit `origin/unstable-dev` carries. A `VERSION` bump the
-workflow commits on `main` is merged back into `unstable-dev` before the next
-release. The sequence is in `docs/development.md`, "Branches and pushing".
+Nothing reaches `main` except a release, and only when it is ready: work and
+fixes go to `unstable-dev`. Every push there runs the **Testing gate**, which
+waits for all required checks and then records the commit in
+`channels/testing/checked.json`; testers on `ryoku track unstable` build that
+commit from source on their next `ryoku update`, about six minutes after the
+push. The package publishers run their own gate on the same checks before they
+upload the testing repositories, so a red check never reaches a channel. Wait
+for the Testing gate, not for the publishers. GitHub accepts changes to `main`
+only through a pull request: a release merges `unstable-dev` into `main` with a
+merge commit and then fast-forwards `unstable-dev` to it, and the `pre-push` hook
+refuses any direct push to `main` that does not name itself with
+`RYOKU_RELEASE_PUSH=1`. A `VERSION` bump the workflow commits on `main` is merged
+back into `unstable-dev` before the next release. The sequence is in
+`docs/development.md`, "Branches and pushing".
 
 A release line carries a name (`CODENAME`, its story in `release/names.md`);
 the release is titled with it and a line's first release opens with the story.

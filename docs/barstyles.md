@@ -36,6 +36,34 @@ reads the desktop only through the window-manager seam and the daemon's
 settings topic, so it runs on every compositor Ryoku supports.
 Store-installed styles land under the same folder contract.
 
+## Resource cost
+
+Orpheus and Kairos are the optimized styles: their music paths, cards and idle
+timers were measured and trimmed. Bar Studio marks the other built-in styles as
+heavy, so the extra cost is visible before switching; store-installed styles are
+unrated.
+
+Idle readings from one 2560×1600 display at 165 Hz under niri, the shell
+rendering on an RTX 4060 in discrete mode, Performance profile. CPU is a
+percentage of one core for the shell process; see `docs/performance.md` for the
+method and the music numbers.
+
+| style | tier | `qs` CPU at idle | `qs` wakeups/s |
+|---|---|---:|---:|
+| Orpheus | light | 3.1% | 83 |
+| Kairos | light | 1.5% | 27 |
+| QS Bar | heavy | 10.7% | 245 |
+| Python | heavy | 1.6% | 28 |
+| Nomarchy | heavy | 1.5% | 24 |
+| Shima | heavy | 2.1% | 35 |
+| Sumi | heavy | 1.6% | 24 |
+
+At idle most heavy styles now sit beside the light ones; the mark is about what
+happens in use (popups, music, their own surfaces), which only Orpheus and
+Kairos have been measured and tuned for. QS Bar is heavy even at rest: its
+ambient stream draws on the GPU on the Performance profile. These are one
+machine's readings, not a promise for every machine.
+
 **QS Bar wears colour on purpose, and it is the one place the desktop does.** It
 is a port of HANCORE-linux's MIT-licensed
 [Quickshell Rise](https://github.com/HANCORE-linux/quickshell-dots) bar onto

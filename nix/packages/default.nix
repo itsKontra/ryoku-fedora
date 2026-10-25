@@ -257,7 +257,8 @@ let
 
     cp -a \
       ${blobs}/${qmlRoot}/Ryoku/Blobs \
-      "$out/${qmlRoot}/Ryoku/Blobs"
+      ${blobs}/${qmlRoot}/Ryoku/Spatial3D \
+      "$out/${qmlRoot}/Ryoku/"
   '';
 
   bundle = pkgs.symlinkJoin {

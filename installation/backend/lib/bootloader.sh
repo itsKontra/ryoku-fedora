@@ -81,12 +81,12 @@ ryoku_bootloader_finalize() {
     log "limine-mkinitcpio-hook owns the menu: dropping the flat placeholder entry"
     ryoku_boot_limine_promote "$conf"
     [[ ${RYOKU_CACHYOS_LAYER_ACTIVE:-0} != 1 ]] \
-      || ryoku_boot_limine_drop_flat "$conf" "/CachyOS Linux"
+      || ryoku_boot_limine_drop_flat "$conf" "/$(ryoku_boot_layer_secondary_title)"
   elif grep -Eq '^[[:space:]]*//[^/]' "$conf"; then
     log "limine-mkinitcpio-hook adopted the placeholder as the boot tree: repointing the default"
     ryoku_boot_limine_repoint "$conf"
     [[ ${RYOKU_CACHYOS_LAYER_ACTIVE:-0} != 1 ]] \
-      || ryoku_boot_limine_drop_flat "$conf" "/CachyOS Linux"
+      || ryoku_boot_limine_drop_flat "$conf" "/$(ryoku_boot_layer_secondary_title)"
   else
     return 0
   fi
@@ -126,11 +126,11 @@ ryoku_bootloader_finalize_alongside() {
     if grep -q '^/+' "$conf"; then
       ryoku_boot_limine_promote "$conf"
       [[ ${RYOKU_CACHYOS_LAYER_ACTIVE:-0} != 1 ]] \
-        || ryoku_boot_limine_drop_flat "$conf" "/CachyOS Linux"
+        || ryoku_boot_limine_drop_flat "$conf" "/$(ryoku_boot_layer_secondary_title)"
     elif grep -Eq '^[[:space:]]*//[^/]' "$conf"; then
       ryoku_boot_limine_repoint "$conf"
       [[ ${RYOKU_CACHYOS_LAYER_ACTIVE:-0} != 1 ]] \
-        || ryoku_boot_limine_drop_flat "$conf" "/CachyOS Linux"
+        || ryoku_boot_limine_drop_flat "$conf" "/$(ryoku_boot_layer_secondary_title)"
     fi
   else
     log "no limine-mkinitcpio-hook in the target (offline or AUR skipped): the flat /Ryoku Linux seed stays bootable at default_entry 1"
@@ -152,12 +152,35 @@ ryoku_limine_conf_set() {
   mv "$tmp" "$file"
 }
 
+ryoku_boot_default_kernel() {
+  if [[ ${RYOKU_VARIANT:-plain} == cachyos || ${RYOKU_CACHYOS_DEFAULT_KERNEL:-0} == 1 ]]; then
+    printf '%s\n' linux-cachyos
+  else
+    printf '%s\n' linux
+  fi
+}
+
+ryoku_boot_record_default_kernel() {
+  local kver
+  kver=$(ryoku_boot_default_kernel)
+  # A kernel added later is indistinguishable from the install's selected one,
+  # so doctor needs the decision recorded explicitly.
+  run mkdir -p /mnt/etc/ryoku
+  write_file /mnt/etc/ryoku/default-kernel <<<"$kver"
+}
+
+ryoku_boot_layer_secondary_title() {
+  if [[ $(ryoku_boot_default_kernel) == linux-cachyos ]]; then
+    printf '%s\n' 'Arch Linux (fallback)'
+  else
+    printf '%s\n' 'CachyOS Linux'
+  fi
+}
+
 # ryoku_limine_autoboot CONF: point default_entry at the Limine entry-path
-# ("<dir>/<kernel>") of the kernel this install boots -- the one RYOKU_VARIANT
-# chose, which is also what /etc/ryoku/default-kernel records -- else the first
-# kernel nested under the top-level OS directory. No kernel is preferred by
-# name here: the variant is known at install time, so nothing has to be guessed
-# from the menu text.
+# ("<dir>/<kernel>") of the kernel this install selected and recorded in
+# /etc/ryoku/default-kernel, else the first kernel nested under the top-level OS
+# directory. No kernel is guessed from menu text.
 #
 # Limine's numeric default_entry counts TOP-LEVEL entries only, so on the hook's
 # collapsed-directory layout a bare index lands on the sibling "/EFI fallback",
@@ -168,7 +191,8 @@ ryoku_limine_conf_set() {
 # doctored box matches a fresh install.
 ryoku_limine_autoboot() {
   local conf=$1 path tmp
-  local kver=linux; [[ ${RYOKU_VARIANT:-plain} == cachyos ]] && kver=linux-cachyos
+  local kver
+  kver=$(ryoku_boot_default_kernel)
   path=$(awk -v want="$kver" '
     { t = $0; sub(/^[[:space:]]+/, "", t) }
     t ~ /^\/[^\/]/                 { dir = t; sub(/^\/\+?/, "", dir); next }
@@ -362,24 +386,18 @@ ryoku_boot_default_limine() {
   write_file /mnt/etc/default/limine <<<"$content"
 }
 
-# limine_conf: write /boot/limine.conf (the ESP root -- the one location
-# limine-entry-tool manages, so the hook's UKI entries and the snapshot
-# submenu land in the file the firmware actually reads). branding header from
-# the repo (trailing placeholder entry stripped) or a built-in fallback.
-# with_entry appends a plain linux-protocol entry for the mkinitcpio -P path
-# and points default_entry at it (the flat menu has no tree directory to
-# skip); branding_only keeps default_entry: 2 and leaves entries to the
-# limine hook. shadowing candidates are removed either way.
+# limine_conf: write /boot/limine.conf (the ESP root, which
+# limine-entry-tool manages). Branding comes from the repo, with a built-in
+# fallback. with_entry appends the selected default kernel and, for the optional
+# layer, the other kernel as a flat fallback. branding_only leaves entries to
+# the Limine hook.
 ryoku_boot_limine_conf() {
-  local mode=$1
-  # variant kernel: cachyos boots linux-cachyos (linux-cachyos-lts is installed
-  # too and the limine hook lists it as fallback); plain boots stock linux.
-  local kver=linux; [[ ${RYOKU_VARIANT:-plain} == cachyos ]] && kver=linux-cachyos
-  # record it: on a live box a kernel package the user added later looks exactly
-  # like the one the install was built around, so `ryoku doctor` has nothing to
-  # point default_entry at without this (doctor.defaultKernelFile).
-  run mkdir -p /mnt/etc/ryoku
-  write_file /mnt/etc/ryoku/default-kernel <<<"$kver"
+  local mode=$1 kver fallback=
+  kver=$(ryoku_boot_default_kernel)
+  if [[ ${RYOKU_CACHYOS_LAYER_ACTIVE:-0} == 1 ]]; then
+    [[ $kver == linux-cachyos ]] && fallback=linux || fallback=linux-cachyos
+  fi
+  ryoku_boot_record_default_kernel
   local src="$RYOKU_REPO/system/boot/limine/limine.conf"
   local branding
   if [[ -f $src ]]; then
@@ -403,14 +421,14 @@ ryoku_boot_limine_conf() {
     cmdline: $CMDLINE quiet splash
     module_path: boot():/initramfs-$kver.img
 EOF
-      if [[ ${RYOKU_CACHYOS_LAYER_ACTIVE:-0} == 1 ]]; then
+      if [[ -n $fallback ]]; then
         cat <<EOF
 
-/CachyOS Linux
+/$(ryoku_boot_layer_secondary_title)
     protocol: linux
-    kernel_path: boot():/vmlinuz-linux-cachyos
+    kernel_path: boot():/vmlinuz-$fallback
     cmdline: $CMDLINE quiet splash
-    module_path: boot():/initramfs-linux-cachyos.img
+    module_path: boot():/initramfs-$fallback.img
 EOF
       fi
     fi
@@ -546,6 +564,7 @@ ryoku_boot_install_efi() {
 # VM-proven; evidence at .superpowers/sdd/twostage-report.md.
 ryoku_bootloader_alongside() {
   log "building initramfs via mkinitcpio -P (kernels on the XBOOTLDR /boot)"
+  ryoku_boot_record_default_kernel
   # /usr/bin/mkinitcpio: see the wipe branch. The wrapper's prompt would stall the
   # install right here, with the kernels not yet on the boot partition.
   run arch-chroot /mnt /usr/bin/mkinitcpio -P
@@ -666,16 +685,17 @@ default_entry: 1
 EOF
 }
 
-# ryoku_alongside_conf_text <esp_kind> <existing_boot> <esp_partuuid>: the STAGE-2
-# /boot/limine.conf body -- pure (stdout only), so it is generator-testable.
-# branding globals + our flat linux entry (fslabel(RYOKUBOOT) kernels,
-# offline-bootable), then the existing-system chainload entry. this file lives on
-# the XBOOTLDR, so boot() here is the XBOOTLDR: every path to the shared ESP is
-# guid() explicit, never boot():/EFI/... .
+# ryoku_alongside_conf_text <esp_kind> <existing_boot> <esp_partuuid>: the
+# stage-2 /boot/limine.conf body. The selected kernel is the flat default and,
+# for the optional layer, the other kernel follows as a fallback. This file
+# lives on XBOOTLDR, so paths to the shared ESP are guid() explicit.
 ryoku_alongside_conf_text() {
   local esp_kind=$1 esp_boot=$2 esp_partuuid=$3 branding src="$RYOKU_REPO/system/boot/limine/limine.conf"
-  local kver=linux; [[ ${RYOKU_VARIANT:-plain} == cachyos ]] && kver=linux-cachyos
-  local label=${RYOKU_ALONGSIDE_BOOT_LABEL:-RYOKUBOOT}
+  local kver fallback='' label=${RYOKU_ALONGSIDE_BOOT_LABEL:-RYOKUBOOT}
+  kver=$(ryoku_boot_default_kernel)
+  if [[ ${RYOKU_CACHYOS_LAYER_ACTIVE:-0} == 1 ]]; then
+    [[ $kver == linux-cachyos ]] && fallback=linux || fallback=linux-cachyos
+  fi
   if [[ -f $src ]]; then
     branding=$(sed '/^\/Ryoku Linux/,$d' "$src")
   else
@@ -691,14 +711,14 @@ ryoku_alongside_conf_text() {
     cmdline: $CMDLINE quiet splash
     module_path: fslabel($label):/initramfs-$kver.img
 EOF
-  if [[ ${RYOKU_CACHYOS_LAYER_ACTIVE:-0} == 1 ]]; then
+  if [[ -n $fallback ]]; then
     cat <<EOF
 
-/CachyOS Linux
+/$(ryoku_boot_layer_secondary_title)
     protocol: linux
-    kernel_path: fslabel($label):/vmlinuz-linux-cachyos
+    kernel_path: fslabel($label):/vmlinuz-$fallback
     cmdline: $CMDLINE quiet splash
-    module_path: fslabel($label):/initramfs-linux-cachyos.img
+    module_path: fslabel($label):/initramfs-$fallback.img
 EOF
   fi
   ryoku_alongside_existing_entry "$esp_kind" "$esp_boot" "$esp_partuuid"

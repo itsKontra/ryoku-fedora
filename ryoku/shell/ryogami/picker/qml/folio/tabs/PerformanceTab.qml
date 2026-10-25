@@ -91,7 +91,7 @@ FolioTabData {
                   kind: "chips",
                   label: I18n.tr("Keep loaded after closing"),
                   help: I18n.tr("Always keeps the picker ready, so it opens at once. A time frees its memory after the picker has been closed that long; the next open then starts it again."),
-                  options: [{ value: 0, label: I18n.tr("Always") }, { value: 600, label: I18n.tr("10 minutes") }, { value: 3600, label: I18n.tr("1 hour") }, { value: 28800, label: I18n.tr("8 hours") }],
+                  options: [{ value: 0, label: I18n.tr("Always") }, { value: 60, label: I18n.tr("1 minute") }, { value: 600, label: I18n.tr("10 minutes") }, { value: 3600, label: I18n.tr("1 hour") }, { value: 28800, label: I18n.tr("8 hours") }],
                   search: ["performance.releaseAfterHideSeconds", "keep", "loaded", "memory", "release", "reopen", "chips"] }
             ]
         },

@@ -15,6 +15,12 @@ shopt -s nullglob
 plists=("$KEYRING"/*.plist)
 ((${#plists[@]})) || die "no build signing key plist found in $KEYRING"
 
+# The Void container image trims itself with noextract patterns, including
+# /etc/skel*, so the per-user services ryoku-desktop seeds for new accounts
+# would never land. An installed Void system has no such patterns; drop them so
+# the check sees what a real install gets.
+rm -f /etc/xbps.d/noextract.conf
+
 log "Seeding the repository signing key"
 install -d -m755 /var/db/xbps/keys /etc/xbps.d
 for plist in "${plists[@]}"; do install -m644 "$plist" /var/db/xbps/keys/; done
@@ -38,6 +44,15 @@ xbps-query -p pkgver ryoku-desktop-niri >/dev/null \
 
 id "$TESTUSER" >/dev/null 2>&1 || useradd -m "$TESTUSER"
 home=/home/$TESTUSER
+for service in ryoku-shell ryogami ryoku-idle ryoku-clamshell pipewire wireplumber; do
+	[[ -x $home/.config/service/$service/run ]] \
+		|| die "new users do not inherit the $service Turnstile service"
+done
+[[ -L $home/.config/service/dbus/run && -L $home/.config/service/dbus/check ]] \
+	|| die "new users do not inherit the Turnstile D-Bus service"
+grep -q 'core_services="dbus pipewire pipewire-pulse wireplumber"' \
+	"$home/.config/service/turnstile-ready/conf" \
+	|| die "new users do not inherit the Turnstile core-service roster"
 log "Materializing the packaged config as $TESTUSER"
 su -s /bin/sh -c "HOME='$home' USER='$TESTUSER' LOGNAME='$TESTUSER' /usr/bin/ryoku materialize" "$TESTUSER"
 

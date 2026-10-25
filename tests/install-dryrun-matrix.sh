@@ -128,7 +128,7 @@ out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
   bash "$root/installation/backend/ryoku-install" 2>&1)" || fail "default product-choice dry run exited nonzero: $out"
 grep -qF 'DRYRUN: set firefox as the default web browser' <<<"$out" \
   || fail "the empty browser choice did not default to firefox"
-grep -qF 'useradd -m -G wheel,video,input -s /usr/bin/fish ryoku' <<<"$out" \
+grep -qF 'useradd -M -U -d /home/ryoku -s /usr/bin/fish -G wheel,input,video ryoku' <<<"$out" \
   || fail "the empty login-shell choice did not create the user with fish"
 grep -qF 'DRYRUN: write /mnt/home/ryoku/.local/state/ryoku/default-rice-pending:' <<<"$out" \
   || fail "the first-boot default-rice marker write was not narrated"
@@ -149,7 +149,7 @@ out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
   bash "$root/installation/backend/ryoku-install" 2>&1)" || fail "chromium/zsh dry run exited nonzero: $out"
 grep -qF 'DRYRUN: set chromium as the default web browser' <<<"$out" \
   || fail "RYOKU_BROWSER=chromium did not narrate chromium"
-grep -qF 'useradd -m -G wheel,video,input -s /usr/bin/zsh ryoku' <<<"$out" \
+grep -qF 'useradd -M -U -d /home/ryoku -s /usr/bin/zsh -G wheel,input,video ryoku' <<<"$out" \
   || fail "RYOKU_LOGIN_SHELL=zsh did not reach useradd"
 ledger="$(grep -F 'DRYRUN: seed /mnt/home/ryoku/.local/state/ryoku/provisioned with the dropped packages' <<<"$out" | tail -n1)"
 [[ -n $ledger ]] || fail "the drop list did not narrate provisioning-ledger seeding"
@@ -166,7 +166,7 @@ for shell in fish zsh bash; do
   out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
     RYOKU_PASSWORD_HASH='$6$fake$hash' RYOKU_DISK_STRATEGY=whole RYOKU_LOGIN_SHELL="$shell" \
     bash "$root/installation/backend/ryoku-install" 2>&1)" || fail "$shell dry run exited nonzero: $out"
-  grep -qF "useradd -m -G wheel,video,input -s /usr/bin/$shell ryoku" <<<"$out" \
+  grep -qF "useradd -M -U -d /home/ryoku -s /usr/bin/$shell -G wheel,input,video ryoku" <<<"$out" \
     || fail "$shell did not reach useradd"
 done
 
@@ -237,9 +237,9 @@ for bad_env in RYOKU_RASHIN RYOKU_CACHYOS_LAYER; do
     || fail "$bad_env gate did not explain its allowed values"
 done
 
-# The optional CachyOS layer is plain-only and needs a reachable CachyOS mirror,
-# but an offline-base install still completes when the layer cannot be fetched.
-# Its packages are upgraded as one transaction and stock linux stays available.
+# The optional gaming layer is plain-only and network-backed. Its package list
+# comes from the installer component manifest, and a successful layer makes
+# linux-cachyos the default while retaining stock linux as the flat fallback.
 mkdir -p "$tmp/offline-repo"
 : >"$tmp/offline-repo/offline.db"
 out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
@@ -256,12 +256,83 @@ out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
   RYOKU_CACHYOS_LAYER=1 RYOKU_ONLINE=1 \
   bash "$root/installation/backend/ryoku-install" 2>&1)" \
   || fail "plain online CachyOS layer dry run exited nonzero: $out"
-grep -qF 'enable [cachyos-v3] and multilib with the shipped helpers' <<<"$out" \
+grep -qF 'enable [cachyos-v3], [cachyos], and multilib with the shipped helpers' <<<"$out" \
   || fail "plain CachyOS layer did not narrate repository setup"
-grep -qF 'linux-cachyos linux-cachyos-headers cachyos-settings' <<<"$out" \
-  || fail "plain CachyOS layer did not narrate its package set"
-grep -qF '/CachyOS Linux' <<<"$out" \
-  || fail "plain CachyOS layer did not add the CachyOS kernel boot entry"
+grep -qF 'linux-cachyos linux-cachyos-headers cachyos-settings scx-scheds cachyos-gaming-meta steam' <<<"$out" \
+  || fail "plain CachyOS layer did not read its gaming package set from components.tsv"
+grep -qF 'add linux-cachyos-nvidia-open for Arch nvidia-open or verify the DKMS module with modinfo' <<<"$out" \
+  || fail "plain CachyOS layer did not narrate NVIDIA kernel-module safety"
+grep -qF 'feed every installed usr/lib/modules/<ver>/vmlinuz with a pkgbase to /usr/share/libalpm/scripts/mkinitcpio install' <<<"$out" \
+  || fail "plain CachyOS layer did not narrate refreshing every installed kernel boot asset"
+grep -qxF '        |     kernel_path: boot():/vmlinuz-linux-cachyos' <<<"$out" \
+  || fail "plain CachyOS layer did not make linux-cachyos the default flat entry"
+grep -qxF '        | /Arch Linux (fallback)' <<<"$out" \
+  || fail "plain CachyOS layer did not retain Arch linux as the fallback entry"
+grep -qxF '        |     kernel_path: boot():/vmlinuz-linux' <<<"$out" \
+  || fail "plain CachyOS layer fallback does not point at stock linux"
+
+# Pacman's install hook is masked during the layer transaction. Exercise the
+# explicit replay against a fake target and chroot to prove both an upgraded
+# stock kernel and the newly installed CachyOS kernel reach the packaged hook.
+kernel_target="$tmp/kernel-target"
+hook_input="$tmp/mkinitcpio-hook.stdin"
+mkdir -p "$kernel_target/usr/lib/modules/6.12-arch" \
+  "$kernel_target/usr/lib/modules/6.12-cachy" "$kernel_target/boot" \
+  "$kernel_target/etc/mkinitcpio.d"
+printf '%s\n' linux >"$kernel_target/usr/lib/modules/6.12-arch/pkgbase"
+printf '%s\n' linux-cachyos >"$kernel_target/usr/lib/modules/6.12-cachy/pkgbase"
+printf '%s\n' stock-image >"$kernel_target/usr/lib/modules/6.12-arch/vmlinuz"
+printf '%s\n' cachyos-image >"$kernel_target/usr/lib/modules/6.12-cachy/vmlinuz"
+cat >"$tmp/fake-kernel-chroot" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+target=$1
+shift
+[[ $* == '/usr/share/libalpm/scripts/mkinitcpio install' ]]
+cat >"$RYOKU_HOOK_STDIN"
+while IFS= read -r source; do
+  module_dir=${source%/vmlinuz}
+  pkgbase=$(<"$target/$module_dir/pkgbase")
+  cp "$target/$source" "$target/boot/vmlinuz-$pkgbase"
+  : >"$target/etc/mkinitcpio.d/$pkgbase.preset"
+done <"$RYOKU_HOOK_STDIN"
+EOF
+chmod +x "$tmp/fake-kernel-chroot"
+(
+  log() { :; }
+  # shellcheck source=../installation/backend/lib/cachyos.sh
+  source "$root/installation/backend/lib/cachyos.sh"
+  export RYOKU_HOOK_STDIN="$hook_input"
+  RYOKU_DRYRUN='' \
+    RYOKU_CACHYOS_TARGET_ROOT="$kernel_target" \
+    RYOKU_TARGET_CHROOT="$tmp/fake-kernel-chroot" \
+    ryoku_cachyos_refresh_kernel_assets
+) || fail "CachyOS layer kernel hook replay failed"
+grep -qxF 'usr/lib/modules/6.12-arch/vmlinuz' "$hook_input" \
+  || fail "kernel hook replay omitted upgraded stock linux"
+grep -qxF 'usr/lib/modules/6.12-cachy/vmlinuz' "$hook_input" \
+  || fail "kernel hook replay omitted linux-cachyos"
+grep -qxF 'stock-image' "$kernel_target/boot/vmlinuz-linux" \
+  || fail "kernel hook replay did not refresh the stock fallback image"
+grep -qxF 'cachyos-image' "$kernel_target/boot/vmlinuz-linux-cachyos" \
+  || fail "kernel hook replay did not install the CachyOS boot image"
+
+# A missing manifest row disables only the optional layer and leaves the install
+# on its stock kernel instead of silently falling back to a duplicated list.
+missing_components="$tmp/components-without-cachyos-layer.tsv"
+printf 'id\tlabel\tgroup\tgroup_label\tpackages\tdesktop_ids\tdefault\tstep\tneeds_network\teditions\tlock_editions\tlock_reason\tdetail\n' \
+  >"$missing_components"
+out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
+  RYOKU_PASSWORD_HASH='$6$fake$hash' RYOKU_DISK_STRATEGY=whole \
+  RYOKU_CACHYOS_LAYER=1 RYOKU_INSTALLER_COMPONENTS_FILE="$missing_components" \
+  bash "$root/installation/backend/ryoku-install" 2>&1)" \
+  || fail "missing CachyOS component row made the whole install fail: $out"
+grep -qF 'the cachyos-layer package row is missing; skipping the layer' <<<"$out" \
+  || fail "missing CachyOS component row was not reported"
+grep -qxF '        | linux' <<<"$out" \
+  || fail "missing CachyOS component row did not leave stock linux as default"
+grep -qF '        | /Arch Linux (fallback)' <<<"$out" \
+  && fail "missing CachyOS component row still added the layer fallback entry"
 
 # Void applies the same file-manager/apps/hidden-marker/Rashin contract and
 # ignores the CachyOS-only switch.

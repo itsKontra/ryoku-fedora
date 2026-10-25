@@ -1,8 +1,9 @@
 # installation/iso/
 
-The Ryoku live ISO. It is a standard Arch live image (built with `mkarchiso`,
-based on the official `releng` profile) with one job: boot a machine and drop you
-straight into the Ryoku installer.
+The Ryoku live ISOs. The Arch image starts from the official Arch `releng`
+profile; the CachyOS variant stages that same profile into a CachyOS live
+system. Both have one job: boot a machine and drop you straight into the Ryoku
+installer.
 
 ## What it does at boot
 
@@ -35,31 +36,34 @@ by hand (the payload it reads is at `/usr/share/ryoku`).
 
 `build.sh` takes `RYOKU_VARIANT` (default `plain`) and bakes the choice into the
 airootfs at `/usr/share/ryoku/variant`. Both variants are fully offline (the
-package closure is baked into a `file://` `[offline]` repo) and share every code
-path; the switch only decides what the closure carries and what the installer
-does with it:
+package closure is baked into a `file://` `[offline]` repo) and use the same TUI
+and backend:
 
-- **plain** stock Arch: the `linux` kernel, base + drivers + the Ryoku desktop.
-- **cachyos** a CachyOS install with the Ryoku desktop on top. The closure
-  resolves against the generic `[cachyos]` repo above Arch's, where a CachyOS
-  install lists it, so the target starts on CachyOS's builds of what it forks
-  (pacman, mesa, the firmware, the kernel layer) and installs on any x86-64
-  CPU. It adds the CachyOS
-  layer (`system/packages/cachyos.packages`: `linux-cachyos` with
-  `linux-cachyos-lts` as the fallback the Limine hook lists, `cachyos-settings`,
-  `ananicy-cpp` + rules, `scx-scheds`, `proton-cachyos`, CachyOS's own tools)
-  and leaves out what that layer replaces (`cachyos.replaces`: the stock kernel,
-  the AUR's `yay-bin`). An `aur.packages` name a CachyOS repo serves is fetched
-  from it rather than built. The installer boots `linux-cachyos`, writes
-  CachyOS's own `pacman.conf` with the repos for the CPU's tier
-  (`lib/cachyos.sh`). As with CachyOS's own offline install, the first
-  `pacman -Syu` then moves a v3, v4 or Zen 4 CPU onto that tier's builds.
+- **plain** is the Arch edition. Its live system boots `linux`, and its target
+  installs Arch plus the Ryoku desktop.
+- **cachyos** is the CachyOS edition from the live kernel onward. In the
+  throwaway profile, `stage-variant.sh` replaces `linux` with
+  `linux-cachyos`, adds `cachyos-keyring`, the CachyOS mirrorlists,
+  `cachyos-hooks`, and `chwd`, places generic `[cachyos]` above `[core]`, and
+  rewrites the mkinitcpio and UEFI, BIOS, GRUB, and syslinux boot paths. The ISO
+  application name and `/etc/motd` identify the CachyOS edition.
 
-CI builds both from the same tree: `build-iso.yml` (plain) and
-`build-iso-cachyos.yml` (cachyos) each call the reusable `build-iso-reusable.yml`.
-Separate workflows keep independent run counters, so the tracking id is
-per-variant (plain `r164`, cachyos `r1`), and each publishes its own
-`latest*.json` pointer to R2.
+The installed CachyOS target also resolves against generic `[cachyos]` above
+Arch's repositories. It receives the CachyOS kernel pair, repositories, tuning,
+hooks, tools, and identity, with the Ryoku desktop on top. The install remains
+fully offline. On the first full update, CachyOS's target repository
+configuration moves CPUs with a supported optimized tier onto that tier's
+builds.
+
+`stage-variant.sh` only edits the staged profile copy. The committed profile
+remains generic, and staging the plain variant leaves it byte-for-byte
+unchanged.
+
+CI builds both variants from the same tree: `build-iso.yml` (plain) and
+`build-iso-cachyos.yml` (cachyos) each call the reusable
+`build-iso-reusable.yml`. Separate workflows keep independent run counters, so
+the tracking id is per variant (plain `r164`, cachyos `r1`), and each publishes
+its own `latest*.json` pointer to R2.
 
 ## What is baked in
 
@@ -99,13 +103,22 @@ and the backend on `PATH`.
 
 ## Building it
 
-`build.sh` does everything: it stages a throwaway copy of this profile, builds
-the TUI from `../tui`, bakes the TUI, the backend, and the repo into the staged
-airootfs, and then runs `mkarchiso`. The committed profile is never modified.
+`build.sh` does everything: it stages a throwaway copy of this profile, applies
+the selected edition with `stage-variant.sh`, builds the TUI from `../tui`,
+bakes the TUI, backend, and repository into the staged airootfs, and then runs
+`mkarchiso`. The committed profile is never modified.
 
 Requirements on the build host: `go` (the TUI and Go daemons), `cmake`, `ninja`,
-and the Qt6 dev libraries (qt6-base, qt6-declarative, qt6-shadertools; the
-Ryoku.Blobs plugin), `archiso` (for `mkarchiso`), and root (mkarchiso needs it).
+and the Qt6 development libraries (qt6-base, qt6-declarative,
+qt6-shadertools; the Ryoku.Blobs plugin), `archiso` (for `mkarchiso`), `curl`
+and `bsdtar`, and root (mkarchiso needs it).
+
+Before a CachyOS build invokes `mkarchiso`, it establishes CachyOS package trust
+on the build host without a keyserver. It fetches `cachyos-keyring` over TLS,
+checks the package SHA-256 against the generic repository metadata, verifies
+the pinned fingerprint
+`882DCFE48E2051D48E2562ABF3B607488DB35A47`, installs the keyring files, and
+runs `pacman-key --populate cachyos`. A mismatch stops the build.
 
 ```
 cd installation/iso
@@ -137,6 +150,11 @@ Output, work, and staging directories live under `installation/iso/` and are
 git-ignored, as is the package cache the offline bake keeps per variant
 (`offline-cache-plain`, `offline-cache-cachyos`) so a rebuild downloads only
 what changed.
+
+`tests/iso-variant-stage.sh` is the focused gate for this split. It checks that
+plain staging is unchanged and CachyOS staging has the expected packages,
+repository order, kernel boot paths, edition labels, and idempotent output.
+`installation/tests/iso-preflight.sh` runs it with the other ISO gates.
 
 ## Booting it
 

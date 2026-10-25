@@ -17,6 +17,6 @@ check() {
 }
 
 check arch Arch $'ID=arch\nNAME="Arch Linux"\n'
-check cachyos Arch $'ID=cachyos\nID_LIKE="linux arch"\nNAME=CachyOS\n'
+check cachyos CachyOS $'ID=cachyos\nID_LIKE="linux arch"\nNAME=CachyOS\n'
 check void Void $'ID=void\nNAME="Void"\n'
 check missing-name Linux $'ID=unknown\n'

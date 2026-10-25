@@ -36,6 +36,22 @@ func backlightLevelPath() string {
 	return filepath.Join(stateDir(), "ryoku", "backlight")
 }
 
+// idleBrightnessActive is the runtime transaction marker owned by ryoku-idle.
+// A dimmed level is temporary, so it must neither replace the user's saved
+// level nor be raised by that saved level when the shell daemon restarts.
+func idleBrightnessActive() bool {
+	dir := os.Getenv("RYOKU_IDLE_BRIGHTNESS_STATE_DIR")
+	if dir == "" {
+		runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
+		if runtimeDir == "" {
+			runtimeDir = os.TempDir()
+		}
+		dir = filepath.Join(runtimeDir, "ryoku-idle-brightness")
+	}
+	_, err := os.Stat(filepath.Join(dir, "state"))
+	return err == nil
+}
+
 // saveBacklight records the raw sysfs level. Best-effort: a read-only state
 // dir costs persistence, not the session.
 func saveBacklight(level int) {
@@ -46,6 +62,15 @@ func saveBacklight(level int) {
 	_ = os.WriteFile(backlightLevelPath(), []byte(strconv.Itoa(level)), 0o644)
 }
 
+// saveObservedBacklight excludes ryoku-idle's temporary write from the
+// persistent level while still publishing it to the live OSD.
+func saveObservedBacklight(level int) {
+	if idleBrightnessActive() {
+		return
+	}
+	saveBacklight(level)
+}
+
 // restoreBacklight pushes the saved level onto the device before the watcher
 // opens it, so the first published value is the restored one and the OSD and
 // sliders agree with the screen. A level outside [1,max] (the panel changed
@@ -54,6 +79,9 @@ func saveBacklight(level int) {
 // value instead of fought.
 func restoreBacklight(dev string, max int) {
 	if max <= 0 {
+		return
+	}
+	if idleBrightnessActive() {
 		return
 	}
 	b, err := os.ReadFile(backlightLevelPath())
@@ -149,7 +177,7 @@ func (o *osdState) watchBacklight(dev string) {
 	publish := func() {
 		if frac, raw, ok := readBrightnessFraction(dev, maxb); ok {
 			o.publish(frac)
-			saveBacklight(raw)
+			saveObservedBacklight(raw)
 		}
 	}
 	if _, ok := readActual(fd, buf); ok {

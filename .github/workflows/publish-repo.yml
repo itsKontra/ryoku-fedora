@@ -606,6 +606,17 @@ jobs:
               --run "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           fi
 
+      - name: Announce the release
+        # only now that the stable channel serves the tag, so the Discord ping
+        # never lands before `ryoku update` can deliver it; best-effort.
+        if: needs.build.outputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ needs.build.outputs.release }}
+        run: |
+          gh workflow run release-announcement.yml -R "$GITHUB_REPOSITORY" --ref "$RELEASE" -f tag="$RELEASE" \
+            || echo "::warning::could not dispatch the release announcement"
+
   mark-failed:
     name: Mark a failed publish
     needs: [build, container-install, gate, publish]
@@ -648,31 +659,33 @@ jobs:
   # A failed publish strands a whole set of commits on the channel: testers keep
   # running the last good build with no sign anything broke (a wm/niri release sat
   # unpublished for days behind a dependency-gate failure exactly this alert would
-  # have surfaced). Fires on a genuine failure, never on a run the next push
-  # superseded (that reports cancelled, not failed). Best-effort: a missing
-  # webhook downgrades to a workflow error annotation, never masks the failure.
+  # have surfaced). Fires on a genuine failure of a push or a release dispatch,
+  # never on a run the next push superseded (that reports cancelled, not failed),
+  # and posts to the Discord CI channel. Best-effort: a missing webhook leaves the
+  # error annotation, never masks the failure.
   notify-failure:
     name: Announce a failed publish
     needs: [build, container-install, gate, publish]
-    if: ${{ failure() && github.event_name == 'push' }}
+    if: ${{ failure() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
     steps:
+      - name: Checkout the notifier
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: bin/ryoku-discord
+          sparse-checkout-cone-mode: false
       - name: Report the failure
         shell: bash
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_CI_WEBHOOK_URL }}
+          CHANNEL: ${{ needs.build.outputs.channel }}
         run: |
           set -euo pipefail
-          channel="${{ needs.build.outputs.channel }}"
-          [[ -n $channel ]] || channel="unknown (build stage did not resolve it)"
+          channel=${CHANNEL:-unknown}
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          msg="Ryoku [ryoku] repo publish FAILED on the ${channel} channel (${GITHUB_REF#refs/heads/}, ${GITHUB_SHA:0:9}). These commits are NOT on the channel; boxes stay on the last good build until this is fixed and re-run. ${run_url}"
-          echo "::error::${msg}"
-          if [[ -z ${DISCORD_WEBHOOK_URL:-} ]]; then
-            echo "::notice::DISCORD_WEBHOOK_URL not configured; failure reported as an annotation only."
-            exit 0
-          fi
-          jq -nc --arg content "$msg" '{content: $content}' \
-            | curl -fsS -X POST -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_URL" \
+          echo "::error::The Arch and CachyOS $channel publish failed at ${GITHUB_SHA:0:9}; boxes stay on the last good build until it is fixed and re-run. $run_url"
+          bin/ryoku-discord publish-failed --edition "Arch and CachyOS" --channel "$channel" \
+            --ref "$GITHUB_REF_NAME" --sha "$GITHUB_SHA" --run "$run_url" \
             || echo "::warning::could not post the failure notice to Discord"

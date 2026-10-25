@@ -9,7 +9,7 @@ pkgver=$RYOKU_PKGVER
 
 install_runit_payload() {
   local init_root="$_repo/void/init"
-  local src name
+  local src name destination
 
   install -Dm755 "$init_root/lib/wait-for" "$pkgdir/usr/lib/ryoku/runit/wait-for"
   install -Dm755 "$init_root/env/xdg-dirs" "$pkgdir/usr/lib/ryoku/runit/xdg-dirs"
@@ -33,9 +33,22 @@ install_runit_payload() {
   for src in "$init_root/user"/*; do
     [[ -d $src ]] || continue
     name=${src##*/}
-    install -d "$pkgdir/usr/lib/ryoku/runit/user/$name"
-    cp -a "$src/." "$pkgdir/usr/lib/ryoku/runit/user/$name/"
+    for destination in \
+      "$pkgdir/usr/lib/ryoku/runit/user/$name" \
+      "$pkgdir/etc/skel/.config/service/$name"; do
+      install -d "$destination"
+      cp -a "$src/." "$destination/"
+    done
   done
+  install -dm755 \
+    "$pkgdir/etc/skel/.config/service/dbus" \
+    "$pkgdir/etc/skel/.config/service/turnstile-ready"
+  ln -s /usr/share/examples/turnstile/dbus.run \
+    "$pkgdir/etc/skel/.config/service/dbus/run"
+  ln -s /usr/share/examples/turnstile/dbus.check \
+    "$pkgdir/etc/skel/.config/service/dbus/check"
+  printf 'core_services="dbus pipewire pipewire-pulse wireplumber"\n' \
+    >"$pkgdir/etc/skel/.config/service/turnstile-ready/conf"
 }
 
 package() {
@@ -175,8 +188,12 @@ EOF
   # per-app configs
   install -Dm644 "$_repo/ryoku/apps/fish/config.fish"       "$cfg/fish/config.fish"
   install -Dm644 "$_repo/ryoku/apps/fish/conf.d/rashin.fish" "$cfg/fish/conf.d/rashin.fish"
+  install -Dm644 "$_repo/ryoku/apps/fish/conf.d/desktop-display.fish" \
+    "$cfg/fish/conf.d/desktop-display.fish"
   install -Dm644 "$_repo/ryoku/shell/qt6ct/qt6ct.conf"     "$cfg/qt6ct/qt6ct.conf"
   install -Dm644 "$_repo/ryoku/apps/terminal-shell/env.sh"  "$cfg/ryoku-terminal/env.sh"
+  install -Dm644 "$_repo/ryoku/apps/terminal-shell/desktop-display.sh" \
+    "$cfg/ryoku-terminal/desktop-display.sh"
   install -Dm644 "$_repo/ryoku/apps/bash/ryoku.bash"        "$cfg/bash/ryoku.bash"
   install -Dm644 "$_repo/ryoku/apps/bash/rashin.bash"       "$cfg/bash/rashin.bash"
   install -Dm644 "$_repo/ryoku/apps/zsh/ryoku.zsh"          "$cfg/zsh/ryoku.zsh"
@@ -312,17 +329,24 @@ EOF
   fi
 
   if [[ $RYOKU_INIT_MODE == systemd ]]; then
-    # systemd user sources are materialized for the user manager on Arch.
+    # Keep session-critical units in the system user-unit search path so global
+    # enablement reaches accounts that do not exist when the package is installed.
+    local unit
+    for unit in ryoku-bootstrap.service ryoku-session.target ryoku-shell.service \
+      ryoku-idle.service ryoku-clamshell.service; do
+      install -Dm644 "$_repo/ryoku/shell/systemd/user/$unit" \
+        "$pkgdir/usr/lib/systemd/user/$unit"
+    done
+
+    # Materialized copies let a checkout deploy override packaged units.
     install -dm755 "$cfg/systemd/user"
     cp -a "$_repo/ryoku/shell/systemd/user/." "$cfg/systemd/user/"
   fi
 
   # The AI-usage collectors behind the qsbar AI pill ship with ryoku-rashin.
   if [[ $RYOKU_INIT_MODE == systemd ]]; then
-    # the config bootstrap: a package install lays nothing into ~/.config, so the
-    # first login after it boots a bare compositor unless this runs first.
-    install -Dm644 "$_repo/ryoku/shell/systemd/user/ryoku-bootstrap.service" \
-      "$pkgdir/usr/lib/systemd/user/ryoku-bootstrap.service"
+    # The globally enabled bootstrap lays a missing config before the first
+    # compositor reads it; the remaining session units are installed above.
 
     # the same file for every user, so a session that never materialized still has it
     install -Dm644 "$_repo/ryoku/shell/environment.d/ryoku-session.conf" \
@@ -521,6 +545,13 @@ EOF
   # password prompt (same one-click grant pattern as the network rules above).
   install -Dm644 "$_repo/system/policy/52-ryoku-timedate.rules" \
     "$pkgdir/usr/share/polkit-1/rules.d/52-ryoku-timedate.rules"
+
+  # Account changes use their own retained administrator authorization. The
+  # argv1 annotation keeps the grant on the typed users API.
+  install -Dm644 "$_repo/system/policy/dev.ryoku.users.policy" \
+    "$pkgdir/usr/share/polkit-1/actions/dev.ryoku.users.policy"
+  install -Dm644 "$_repo/system/policy/54-ryoku-users.rules" \
+    "$pkgdir/usr/share/polkit-1/rules.d/54-ryoku-users.rules"
 
   install -Dm755 "$_repo/system/policy/ryoku-polkit-reload" \
     "$pkgdir/usr/bin/ryoku-polkit-reload"

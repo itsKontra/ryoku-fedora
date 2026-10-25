@@ -1,0 +1,40 @@
+name: Discord messages
+
+# bin/ryoku-discord builds every message CI posts to the Ryoku Discord. The
+# hermetic test checks the mention rules, Discord's size limits, how untrusted
+# issue and pull request text is shown, and the retry on a rate limit; curl is
+# stubbed, nothing is sent. see tests/ryoku-discord.sh.
+
+on:
+  pull_request:
+    paths:
+      - 'bin/ryoku-discord'
+      - 'bin/ryoku-release-notes'
+      - 'tests/ryoku-discord.sh'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+  push:
+    branches:
+      - main
+      - unstable-dev
+    paths:
+      - 'bin/ryoku-discord'
+      - 'bin/ryoku-release-notes'
+      - 'tests/ryoku-discord.sh'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discord-messages:
+    name: Discord messages fit and ping only by design
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and check every message kind
+        shell: bash
+        run: bash tests/ryoku-discord.sh

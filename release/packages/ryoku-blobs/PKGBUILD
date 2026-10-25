@@ -11,14 +11,14 @@
 pkgname=ryoku-blobs
 pkgver=${RYOKU_PKGVER:-0.1.0}
 pkgrel=1
-pkgdesc="Ryoku.Blobs: SDF metaball QML plugin for the screen frame"
+pkgdesc="Ryoku.Blobs and Ryoku.Spatial3D: the frame and Stage 3D QML plugins"
 arch=('x86_64')
 url="https://ryoku.dev"
 license=('GPL-3.0-or-later')
 # qt6-multimedia backs the CameraFeed item (webcam self-view overlay): it links
 # libQt6Multimedia at runtime and needs the CMake config + headers to build.
-depends=('qt6-base' 'qt6-declarative' 'qt6-multimedia')
-makedepends=('cmake' 'ninja' 'qt6-shadertools' 'qt6-declarative' 'qt6-multimedia')
+depends=('qt6-base' 'qt6-declarative' 'qt6-multimedia' 'qt6-quick3d')
+makedepends=('cmake' 'ninja' 'qt6-shadertools' 'qt6-declarative' 'qt6-multimedia' 'qt6-quick3d')
 source=()
 
 _repo="$startdir/../../.."
@@ -45,5 +45,5 @@ package() {
   # Qt refuses a plugin built against a newer minor than the one running, so
   # keep pacman's package metadata tied to the build host's Qt minor.
   local qt; qt="$(pkg-config --modversion Qt6Core | cut -d. -f1,2)"
-  depends+=("qt6-base>=$qt" "qt6-declarative>=$qt" "qt6-multimedia>=$qt")
+  depends+=("qt6-base>=$qt" "qt6-declarative>=$qt" "qt6-multimedia>=$qt" "qt6-quick3d>=$qt")
 }

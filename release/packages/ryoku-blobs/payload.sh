@@ -24,8 +24,10 @@ install)
 	systemd|runit) ;;
 	*) printf 'payload.sh: unsupported init system: %s\n' "$init" >&2; exit 2 ;;
 	esac
-	install -dm755 "$destdir/usr/lib/qt6/qml/Ryoku/Blobs"
-	cp -a "$RYOKU_BUILD_DIR/qml/Ryoku/Blobs/." "$destdir/usr/lib/qt6/qml/Ryoku/Blobs/"
+	for module in Blobs Spatial3D; do
+		install -dm755 "$destdir/usr/lib/qt6/qml/Ryoku/$module"
+		cp -a "$RYOKU_BUILD_DIR/qml/Ryoku/$module/." "$destdir/usr/lib/qt6/qml/Ryoku/$module/"
+	done
 	chmod -R u=rwX,go=rX "$destdir/usr/lib/qt6"
 	;;
 *)

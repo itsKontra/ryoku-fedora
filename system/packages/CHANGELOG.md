@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Changed
+- `cachyos.packages`: **the CachyOS edition now carries CachyOS's current
+  defaults and identity.** `shelly`, `lsb-release`, and `cachyos-hello` join
+  the kernel pair, repositories, hooks, `chwd`, tuning, schedulers, and desktop
+  tools. Ryoku suppresses CachyOS Welcome's autostart but keeps it in the
+  launcher. Steam and `cachyos-gaming-meta` now follow the installer's
+  default-off Gaming choice instead of landing on every CachyOS install.
+- `cachyos.packages`: **Shelly can manage Flatpak apps on a fresh CachyOS
+  install.** CachyOS split Flatpak support out of `shelly`; the companion
+  `shelly-flatpak-backend` now ships with it instead of leaving visible Flatpak
+  pages whose searches and installs always fail.
+
 ### Added
 - `base.packages`: **khal, vdirsyncer and translate-shell.** The dock's
   calendar reads and syncs calendars through khal and vdirsyncer, and the
@@ -267,6 +279,9 @@
   pacman transactions, wired to the snapper `root` config by the installer.
 
 ### Changed
+- `base.packages`: **cliphist is no longer installed.** Ryoku keeps clipboard
+  history in its own daemon, and the last UIs that read cliphist now read
+  that; existing boxes keep the package until it is removed as an orphan.
 - `aur.packages`: drop `phonto` and `mpvpaper`. The shell's live (video)
   wallpaper backend is now `ryoku-livewall`, which ships in the `ryoku-shell`
   package from the `[ryoku]` repo, so no AUR video daemon is needed. Both old
