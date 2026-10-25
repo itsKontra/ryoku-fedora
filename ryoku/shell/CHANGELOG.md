@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **Switching between empty and busy workspaces no longer rebuilds the desktop
+  frost.** The frost's blur layer stays once it has shown and only its strength
+  changes (`quickshell/shell/modules/desktop/Desktop.qml`).
+- **The frame overlay unmaps when it has nothing to show.** Outside Sumi it maps
+  only while a menu, popout, dock preview or music card is on screen, which
+  frees a full-output buffer the rest of the time
+  (`quickshell/shell/modules/bar/Frame.qml`,
+  `quickshell/shell/modules/bar/FrameMenuManager.qml`,
+  `../hyprland/modules/decoration.lua`).
 - **A shell restart no longer undoes an active idle dim.** The brightness
   watcher still publishes the temporary level to the OSD, but does not persist
   it or restore an older user level while `ryoku-idle` owns the panel. The

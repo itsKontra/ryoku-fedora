@@ -148,10 +148,9 @@ Scope {
         || root.wallpaperLive || root.hostsVisualizer
     readonly property real deckFrostBlur: (Performance.blurDisabled
         || root.deckFrostHasMotion) ? 0 : Math.min(1, root.deckFrost)
-    // Once the glass has been up, keep its layer and blur chain while the
-    // glass stays possible: a workspace switch only moves `blur`, instead of
-    // building and tearing down a full-output FBO each time a workspace
-    // empties or fills. Dropped when the glass cannot show at all.
+    // Once the glass has shown, its layer stays while the glass is possible, so
+    // a workspace switch moves only `blur` instead of rebuilding a full-output
+    // FBO.
     readonly property bool deckFrostGlassPossible: root.deckFrostEnabled
         && !root.gokkoActive && !root.stageComposing && !root.stageEditing
         && !Performance.blurDisabled && !root.deckFrostHasMotion
