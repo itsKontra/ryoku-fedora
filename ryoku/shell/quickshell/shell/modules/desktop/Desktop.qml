@@ -739,7 +739,7 @@ Scope {
             // blur together while a window owns the workspace, scaled by the
             // same depth. Until the glass first shows, a bare desktop pays no
             // texture or blur pass.
-            layer.enabled: root.deckFrostLayered
+            layer.enabled: root.deckFrostLayered && root.deckFrostGlassPossible
             layer.effect: MultiEffect {
                 blurEnabled: true
                 blur: root.deckFrostBlur
@@ -795,7 +795,7 @@ Scope {
             wallpaperPath: root.wallpaperPath
             wallpaperFit: root.wallpaperFit
             spatialEnabled: root.stageSpatial
-            layered: root.deckFrostLayered
+            layered: root.deckFrostLayered && root.deckFrostGlassPossible
             visible: root.stageOn
         }
 
