@@ -241,6 +241,9 @@ Scope {
         onMonFullscreenChanged: if (monFullscreen) frameMenus.closeAll()
 
         screen: root.modelData
+        // Sumi paints its rails here; other styles only host menus and popouts,
+        // so the full-output surface maps only while one of them is showing.
+        visible: root.sumiActive || frameMenus.anyShowing
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Top
