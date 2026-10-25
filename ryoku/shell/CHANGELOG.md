@@ -46,6 +46,17 @@
   (`quickshell/shell/modules/bar/Frame.qml`,
   `quickshell/shell/modules/bar/FrameMenuManager.qml`,
   `../hyprland/modules/decoration.lua`).
+- **A window retitling in the background no longer wakes the shell.** The
+  focused window keeps its object until one of its own fields changes, screen
+  time banks only when the focused app changes, the Sumi rails load only under
+  Sumi, and workspace pills keep their icons when the app set is unchanged
+  (`../ui/Singletons/Wm.qml`, `quickshell/shell/services/ScreenTime.qml`,
+  `quickshell/shell/modules/bar/Frame.qml`,
+  `quickshell/shell/modules/bar/framebars/widgets/RailWorkspaces.qml`).
+- **Bar network speed comes from the shared system sampler.** The bar no
+  longer parses `/proc/net/dev` in QML every two seconds, and sampling stops
+  while the session is locked or the displays are off
+  (`quickshell/shell/services/Network.qml`).
 - **Source updates on Fedora build the Qt plugins.** `ryoku track` installed
   only part of the Qt toolchain, so the first `ryoku update` from source
   stopped at `Failed to find required Qt component "Multimedia"`. It now
